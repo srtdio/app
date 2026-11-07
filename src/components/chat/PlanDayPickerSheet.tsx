@@ -254,7 +254,9 @@ export function PlanDatesSheet(props: {
             ] as const
           ).map(([field, label]) => (
             <div key={field} data-plan-date={field} className="flex w-full min-w-0 flex-col gap-1">
-              <span aria-hidden="true" className="text-md text-fg-3">{label}</span>
+              <span aria-hidden="true" className="text-md text-fg-3">
+                {label}
+              </span>
               <DatePicker
                 label={label}
                 value={draft[field]}

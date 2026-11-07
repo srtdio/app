@@ -99,12 +99,17 @@ async function expectPdfOpen(page: Page): Promise<void> {
   await expect(viewer.locator('[data-page-counter]')).toHaveText(`1 / ${FIXTURE_PDF_PAGES}`);
   expect(await canvas.evaluate((c) => (c as HTMLCanvasElement).width > 0)).toBe(true);
   await expect(viewer.getByText("Couldn't open. Try again.")).toHaveCount(0);
-  expectMinTouchTarget(await viewer.getByRole('button', { name: 'Back', exact: true }).boundingBox());
+  expectMinTouchTarget(
+    await viewer.getByRole('button', { name: 'Back', exact: true }).boundingBox(),
+  );
 }
 
 /** Close the viewer with its X; the page behind is still there. */
 async function closeViewer(page: Page): Promise<void> {
-  await page.locator('[data-file-viewer="pdf"]').getByRole('button', { name: 'Back', exact: true }).click();
+  await page
+    .locator('[data-file-viewer="pdf"]')
+    .getByRole('button', { name: 'Back', exact: true })
+    .click();
   await expect(page.locator('[data-file-viewer]')).toHaveCount(0);
 }
 

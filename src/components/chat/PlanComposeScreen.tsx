@@ -94,7 +94,6 @@ import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { TEXT_ROLE } from '@/components/ui/Text';
 
-
 /** Every new plan is a Draft (audience team); plan_create_with_items makes it so. */
 export const NEW_PLAN_AUDIENCE = 'team';
 

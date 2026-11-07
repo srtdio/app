@@ -96,7 +96,8 @@ afterEach(() => {
   resetPlayerForTests();
 });
 
-const imageOnly = (r: HTMLDivElement): Element | null => r.querySelector('[data-lightbox-pane] img');
+const imageOnly = (r: HTMLDivElement): Element | null =>
+  r.querySelector('[data-lightbox-pane] img');
 
 describe('growTarget (pure)', () => {
   it('no root or no target picker: null (never the root)', () => {

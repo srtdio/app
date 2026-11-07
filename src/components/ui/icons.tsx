@@ -683,7 +683,12 @@ export function DrawnMarkGlyph(props: {
   size?: number;
   className?: string;
 }) {
-  const paths = props.mark === 'tick' ? ['m4.5 12.75 6 6 9-13.5'] : ['M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636'];
+  const paths =
+    props.mark === 'tick'
+      ? ['m4.5 12.75 6 6 9-13.5']
+      : [
+          'M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636',
+        ];
   const extra = props.className !== undefined ? { className: props.className } : {};
   return (
     <Svg size={props.size ?? ICON_SIZE.inline} {...extra}>

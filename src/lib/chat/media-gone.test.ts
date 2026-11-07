@@ -110,9 +110,7 @@ describe('D7: deleted messages never flatten to chip items', () => {
       attachment_asset_ids: [`${id}-a`],
       attachment_meta: { [`${id}-a`]: { mime: 'image/jpeg', name: 'x.jpg', size: 1 } },
     });
-    expect(toAttachmentItems([row('keep'), row('gone')]).map((i) => i.messageId)).toEqual([
-      'keep',
-    ]);
+    expect(toAttachmentItems([row('keep'), row('gone')]).map((i) => i.messageId)).toEqual(['keep']);
     expect(
       toLinkItems([row('keep'), row('gone')], null, APP_ENTITY_ROUTES).map((i) => i.messageId),
     ).toEqual(['keep']);

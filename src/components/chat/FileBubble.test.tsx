@@ -155,7 +155,12 @@ describe('FileBubble height is final before the image loads', () => {
 
 describe('D1: a single video keeps its own ratio (no crop, no clamp)', () => {
   const video = new File(['x'], 'clip.mp4', { type: 'video/mp4' });
-  const base: MessageAttachment = { assetId: 'v-vid', name: 'clip.mp4', mime: 'video/mp4', size: 1 };
+  const base: MessageAttachment = {
+    assetId: 'v-vid',
+    name: 'clip.mp4',
+    mime: 'video/mp4',
+    size: 1,
+  };
   it('a stored or picked size gives the raw height / width, never clamped', () => {
     expect(reservedRatio({ ...base, thumbW: 1080, thumbH: 1920 })).toBeCloseTo(1920 / 1080);
     expect(reservedRatio({ ...base, thumbW: 1920, thumbH: 600 })).toBeCloseTo(600 / 1920);
@@ -177,9 +182,9 @@ describe('D1: a single video keeps its own ratio (no crop, no clamp)', () => {
     expect(reservedRatio(own)).toBe(SENDING_RATIO.video);
   });
   it('the video thumbnail is contained, never cropped', () => {
-    expect(readFileSync(fileURLToPath(new URL('./FileBubble.tsx', import.meta.url)), 'utf8')).toContain(
-      "props.kind === 'video' ? 'object-contain'",
-    );
+    expect(
+      readFileSync(fileURLToPath(new URL('./FileBubble.tsx', import.meta.url)), 'utf8'),
+    ).toContain("props.kind === 'video' ? 'object-contain'");
   });
 });
 

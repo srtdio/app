@@ -437,9 +437,9 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
   });
 
   it('failed: stays in the thread with "Not sent" and Retry', () => {
-    expect(
-      bubbleStatus({ mine: true, state: 'failed', status: 'sent' }, { showTicks: true }),
-    ).toBe('failed');
+    expect(bubbleStatus({ mine: true, state: 'failed', status: 'sent' }, { showTicks: true })).toBe(
+      'failed',
+    );
     const html = renderToStaticMarkup(<FailedActions onRetry={() => {}} onDelete={() => {}} />);
     expect(html).toContain('Not sent');
     expect(html).toContain('Retry');

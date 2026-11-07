@@ -93,7 +93,12 @@ describe('Sheet header', () => {
     root = createRoot(host);
     await act(async () => {
       root?.render(
-        <Sheet open onClose={() => {}} title="Edit" headerAction={<button type="button">Save</button>}>
+        <Sheet
+          open
+          onClose={() => {}}
+          title="Edit"
+          headerAction={<button type="button">Save</button>}
+        >
           <p>body</p>
         </Sheet>,
       );

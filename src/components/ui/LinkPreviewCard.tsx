@@ -366,9 +366,7 @@ function Compact(props: {
         ) : preview.path !== '' ? (
           <Text role="secondary">{preview.path}</Text>
         ) : null}
-        {preview.type === 'login' ? (
-          <Text role="secondary">Sign-in needed to preview</Text>
-        ) : null}
+        {preview.type === 'login' ? <Text role="secondary">Sign-in needed to preview</Text> : null}
       </span>
     </CardLink>
   );

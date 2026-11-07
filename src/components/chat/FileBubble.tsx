@@ -81,8 +81,7 @@ export function reservedRatio(attachment: MessageAttachment): number | null {
     if (size !== null && size.thumbW > 0 && size.thumbH > 0) return size.thumbH / size.thumbW;
     return attachment.local?.file != null ? SENDING_RATIO.video : null;
   }
-  if (kind !== null && attachment.local?.file != null)
-    return SENDING_RATIO[kind === 'video' ? 'video' : 'pdf'];
+  if (kind !== null && attachment.local?.file != null) return SENDING_RATIO.pdf;
   const meta = thumbnailMetaOf(attachment);
   return meta !== null ? thumbRatio(meta.thumbW, meta.thumbH) : null;
 }

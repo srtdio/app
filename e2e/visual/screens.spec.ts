@@ -3832,7 +3832,9 @@ async function photosLoaded(message: Locator, photos: SeededPhoto[]): Promise<vo
 
 /** The DM composer's photo input (Photos) or file input (File). */
 const composerInput = (page: Page, which: 'photo' | 'file'): Locator =>
-  dmComposer(page).locator('input[type="file"]').nth(which === 'photo' ? 0 : 1);
+  dmComposer(page)
+    .locator('input[type="file"]')
+    .nth(which === 'photo' ? 0 : 1);
 
 interface PickedFile {
   name: string;

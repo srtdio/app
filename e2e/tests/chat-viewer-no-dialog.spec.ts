@@ -1,11 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { PEER_NAME } from '../fixtures/chat-data';
-import {
-  ALBUM_BODY,
-  installRemoveFilesRoutes,
-  seedRemovableFiles,
-} from '../fixtures/remove-files';
+import { ALBUM_BODY, installRemoveFilesRoutes, seedRemovableFiles } from '../fixtures/remove-files';
 
 // D2 regression: opening and leaving the photo viewer from a chat bubble never
 // leaves the viewer (or its arrows) behind at the bubble's size. The open grow

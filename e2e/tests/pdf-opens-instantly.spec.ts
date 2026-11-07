@@ -134,7 +134,10 @@ async function expectNoSpinnerNoBlack(page: Page): Promise<void> {
 }
 
 async function closeViewer(page: Page): Promise<void> {
-  await page.locator('[data-file-viewer="pdf"]').getByRole('button', { name: 'Back', exact: true }).click();
+  await page
+    .locator('[data-file-viewer="pdf"]')
+    .getByRole('button', { name: 'Back', exact: true })
+    .click();
   await expect(page.locator('[data-file-viewer]')).toHaveCount(0);
 }
 

@@ -476,7 +476,9 @@ describe('instant send tile (local preview + upload progress)', () => {
     );
     expect(html).toContain('brief.pdf');
     expect(html).toContain('data-file-state="sending"');
-    expect(html).toMatch(/data-upload-ring=""[^>]*data-ring-variant="file"|data-ring-variant="file"[^>]*data-upload-ring=""/);
+    expect(html).toMatch(
+      /data-upload-ring=""[^>]*data-ring-variant="file"|data-ring-variant="file"[^>]*data-upload-ring=""/,
+    );
     expect(html).not.toContain('scaleX');
     const sent = renderToStaticMarkup(
       <MessageAttachments
@@ -752,12 +754,7 @@ describe('D1: a single photo is the whole photo at its own ratio (no grid, no cr
   it('a sized single tile takes its aspect ratio inline, object-contain, no cover, no height cap', () => {
     const { cache } = spiedCache();
     const html = renderToStaticMarkup(
-      <AlbumGrid
-        images={[sized(900, 1600)]}
-        cache={cache}
-        presignEnabled
-        onOpen={() => {}}
-      />,
+      <AlbumGrid images={[sized(900, 1600)]} cache={cache} presignEnabled onOpen={() => {}} />,
     );
     expect(html).toContain('aspect-ratio:900 / 1600');
     expect(html).not.toContain('aspect-[4/3]');
@@ -779,7 +776,9 @@ describe('D1: a single photo is the whole photo at its own ratio (no grid, no cr
       <AlbumGrid images={[own]} cache={cache} presignEnabled onOpen={() => {}} />,
     );
     expect(html).toContain('aspect-ratio:3024 / 4032');
-    expect(html).toMatch(/<img[^>]*src="blob:own"[^>]*object-contain|object-contain[^"]*"[^>]*src="blob:own"/);
+    expect(html).toMatch(
+      /<img[^>]*src="blob:own"[^>]*object-contain|object-contain[^"]*"[^>]*src="blob:own"/,
+    );
     expect(html).not.toContain('object-cover');
   });
 
