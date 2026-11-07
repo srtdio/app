@@ -116,7 +116,7 @@ interface MemberRowProps extends MemberActions {
   canManage: boolean;
   /** Divider under the row (every row but the group's last). */
   divider: boolean;
-  /** The shared minute clock's instant (the list's useMinuteClock): joined reads relative to it. */
+  /** The shared minute clock's instant (the list's useMinuteClock): joined reads as a record (formatAdded) against it. */
   now: Date;
 }
 
