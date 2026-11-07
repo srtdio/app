@@ -6,9 +6,11 @@ import {
   DATED_PLAN_ITEMS,
   DM_CHANNEL,
   ME,
+  PEER,
   PEER_NAME,
   POST_IDS,
   seedDatedPlan,
+  WORKSPACE_ID,
 } from '../fixtures/chat-data';
 import { seedAudit } from '../fixtures/audit-pr-b';
 import { installLinkPreviewStub, TEXT_URL } from '../fixtures/link-previews';
@@ -606,4 +608,100 @@ test('S11 phone: the post comment box stays on screen and its @ list opens above
     expect(geometry.list.bottom).toBeLessThanOrEqual(geometry.field.top);
     expect(geometry.list.top).toBeGreaterThanOrEqual(0);
   }
+});
+
+/** A post comment row for the fixture comments table. */
+function postComment(
+  id: string,
+  author: string,
+  body: string,
+  ago: number,
+): Record<string, unknown> {
+  const row: Record<string, unknown> = {
+    id,
+    workspace_id: WORKSPACE_ID,
+    entity_type: 'post',
+    entity_id: POST_IDS[0] ?? '',
+    author_user_id: author,
+    body,
+    parent_comment_id: null,
+    created_at: new Date(Date.now() - ago).toISOString(),
+  };
+  for (const k of [
+    'attachment_asset_ids',
+    'mentions',
+    'edited_at',
+    'deleted_at',
+    'legacy_author_name',
+    'legacy_author_email',
+    'ledger_seq',
+    'ledger_batch_id',
+    'resolved_at',
+    'resolved_by',
+    'resolved_version_id',
+    'resolution_note',
+    'asked_at',
+    'asked_by',
+    'sent_back_at',
+    'sent_back_by',
+    'closed_at',
+    'closed_by',
+    'accepted_at',
+    'accepted_by',
+    'unaccepted_at',
+    'unaccepted_by',
+  ])
+    row[k] = null;
+  return row;
+}
+
+test('S12 phone: focusing the post comment box or a Reply box never shifts or widens the page', async ({
+  page,
+}) => {
+  test.skip(!isPhone(page), 'phone only');
+  const network = await installHarnessNetwork(page);
+  (network.world.tables.comments ??= []).push(
+    postComment(
+      '0190f200-0000-7000-8000-0000000000f1',
+      PEER,
+      'This is not written in similar manner to the last post. We specifically followed a different style here.',
+      60_000,
+    ),
+  );
+  await page.goto(`/posts/${POST_IDS[0] ?? ''}`);
+
+  const onScreen = async (where: string): Promise<void> => {
+    const g = await page.evaluate((sel) => {
+      const vw = document.documentElement.clientWidth;
+      const box = document.querySelector(sel)?.getBoundingClientRect() ?? null;
+      const wide = Array.from(document.querySelectorAll('body *')).filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && (r.left < -0.5 || r.right > vw + 0.5);
+      }).length;
+      return { vw, sx: window.scrollX, sw: document.documentElement.scrollWidth, box, wide };
+    }, where);
+    expect(g.sx, `${where}: page panned sideways`).toBe(0);
+    expect(g.sw, `${where}: page wider than the screen`).toBeLessThanOrEqual(g.vw);
+    expect(g.wide, `${where}: something past a screen edge`).toBe(0);
+    expect(g.box?.left ?? -1).toBeGreaterThanOrEqual(0);
+    expect(g.box?.right ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(g.vw);
+  };
+
+  // The bottom box: tap it (the card opens) and write a long line.
+  const bottom = page.locator('[data-comments-composer]');
+  const editor = bottom.getByRole('textbox', { name: 'Comment body' });
+  await editor.scrollIntoViewIfNeeded();
+  await editor.click();
+  await expect(bottom.locator('[data-writing-box]').first()).toHaveAttribute('data-shape', 'card');
+  await page.keyboard.type('a long first line that runs past the width of the phone screen ');
+  await onScreen('[data-comments-composer] [data-writing-box]');
+
+  // A Reply box in the thread: open it, a mention chip and words.
+  const reply = page.locator('#post-comments [data-row-action="reply"]').first();
+  await reply.scrollIntoViewIfNeeded();
+  await reply.click();
+  const replyBox = page.locator('#post-comments [data-reply-composer] [data-writing-box]').first();
+  await expect(replyBox).toHaveAttribute('data-shape', 'card');
+  await page.keyboard.type('and a reply that also runs on past the edge ');
+  await onScreen('#post-comments [data-reply-composer] [data-writing-box]');
 });

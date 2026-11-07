@@ -560,8 +560,10 @@ export function WritingBox(props: WritingBoxProps) {
     </RowKey>
   ) : null;
 
+  // overflow-x-clip: nothing inside (a long word, a chip, a key) can make the
+  // box wider than its place; its own focus line still draws outside it.
   const frameClass = cn(
-    'flex min-w-0 border bg-panel-2',
+    'flex min-w-0 max-w-full overflow-x-clip border bg-panel-2',
     BOX_OWNS_FIELD,
     shape === 'pill' && 'min-h-11 items-center gap-2 rounded-full pl-1 pr-1',
     shape === 'line' &&

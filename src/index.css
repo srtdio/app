@@ -512,6 +512,14 @@
       min-height: 100%;
       min-height: 100svh;
     }
+    /* The page never pans sideways: a focused field (Safari reveals the caret)
+       or anything a little too wide clips at the screen edge instead of
+       shifting every row, the bars included. clip, not hidden: no scroll
+       container, so sticky headers keep pinning. */
+    html.scroll-page,
+    html.scroll-page body {
+      overflow-x: clip;
+    }
     html.scroll-page {
       /* The status bar strip the sticky Topbar (and a detail page's own
          header) covers, and the top a sticky section header pins to. */
