@@ -106,13 +106,15 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Select: visible Select at the chip row end on every list + long-press; ui/SelectCheck is the only select circle.
 - Upload: ui/UploadRing on the item (X cancels) and ui/PendingChip for attached files; no bars, no % text.
 - States keep their footprint: Button busy keeps width; Sheet busy is on its button; Composer, upload, pending, Not sent and select mode keep row height and slots.
-- Lighting: one lit-_ height per surface (no shadow-_, drop-shadow, backdrop-blur, dark:); outlines lit-selected/lit-focus/lit-bad/lit-drop/lit-today only.
+- Lighting (flat, 7 Nov 2026): in-content surfaces flat, a --border hairline separates them; only floating layers (lit-float, lit-overlay) keep a soft shadow; all values live in the FLAT LOOK block of src/index.css; outlines lit-selected/lit-focus/lit-bad/lit-drop/lit-today only, a crisp ink line. No shadow-\*, drop-shadow, backdrop-blur, dark: at call sites.
 - Colour: token classes only; greys + amber Review, green Approved, red errors/Reject; no violet/blue, no hex, no text-white. Contrast 4.5:1 text, 3:1 edges.
 - Motion: src/lib/motion only; never fade; instant under Reduce Motion.
 - Icons: ui/icons.tsx only; ICON_SIZE; stroke follows size (strokeFor). One icon per concept.
 - Icon meanings: Copy = two squares (IconCopy, Square2Stack); Reply privately = bubble with arrow (IconReplyPrivately); the person icon (IconUser) = a person only.
 - Words: Activity, file/Assets, Due (never Target), Review, Retry, Alerts. Zero states "{Things} show up here." Errors "Couldn't {action}. {reason}". No em-dashes. Dates via src/lib/time.ts, font-mono tabular-nums.
-- List card (ui/ListCard, every list): 74 tall (1 + 12 + 48 + 12 + 1), 8 apart; 48 picture left, centred (people round, else radius 8). Line 1: title, time on the right. Line 2: one-line preview, one grey Tag, unread dot last; no preview: the tag sits on the right, right under the time; line 2 stays when empty. No line 3.
+- List row (ui/ListCard, every list): flat, 60 tall, rows touching, no divider, no border; bleeds -mx-4 so selected/pressed fill runs edge to edge; 40 picture left (people round, else rounded-picture 10); line 1 title (bold unread, regular read) + time right; line 2 preview, one grey Tag, unread dot last; no preview: tag right under the time. No line 3, no ⋮.
+- Chips and single-choice picks: outline pill, 32 visible / 44 tap; rest hairline + fg-2; picked = ink line + fg, no fill; counts fg-3.
+- Phone nav: centred, as wide as its tabs; 52 at rest (active tab panel-3 fill + label), 44 while scrolling down (labels hide, icons stay), grows on scroll up or at the top (useDockShrunk, MOVE_CLASS.dock); Chat circle shrinks with it, active = ink fill.
 - Card dates are words only (time.ts): due "Today", "Tomorrow", "Fri", "12 Nov"; late "2d late" in the bad token; plans "Mon" ahead, "Live", then the end day. Never "Due", "Overdue", "Starts" on a card.
 - No ⋮ on a list card: long-press (phone) or right-click / Shift / Cmd-click (laptop) selects; actions live on the list's SelectBar (ui/SelectBar). Guard: `src/__tests__/list-card-guard.test.tsx`.
 - Text: fields are ui/Input or ui/Textarea; the format strip is ui/FormatStrip only. Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.

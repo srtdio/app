@@ -72,6 +72,7 @@ Only `src/lib/motion/` moves. Everything else calls one of the nine moves below.
 | Knob, thumb, chevron flip        | X / rotate   | 160 ms                                                                                               | CSS `mv-slide`, `mv-turn`                    |
 | Count badge width                | fill (width) | the pill eases to its new width when the digits change (9 to 10, 99 to 99+), 200 ms, ease-enter      | `widenBadge` (in `CountBadge`)               |
 | Nav icon nudge (Activity, Chat)  | Y, rotate    | lift 4 px and tilt -8deg, swing to +4deg, settle; 320 ms, ease-pop; only when the unread count rises | `useNudgeOnRise`, `nudgeIcon`                |
+| Phone nav dock                   | height, Y    | shrinks to 44 on scroll down (labels hide, icons stay, nudges down 4 px), grows back to 52 on scroll up or near the top; 240 ms (`--dur-back`), ease-enter; no X drift, no rotate, never fade; instant under Reduce Motion | CSS `mv-dock` (`MOVE_CLASS.dock`), `useDockShrunk` |
 
 ## Waits
 
