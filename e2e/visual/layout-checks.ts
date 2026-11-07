@@ -7,6 +7,7 @@ import {
   formatViolations,
   isLiftedLayer,
   layoutMode,
+  movedSideways,
   lineHeightPx,
   listCardViolations,
   MAX_ROLES_PER_PART,
@@ -35,8 +36,8 @@ import {
 //   3 nothing painted (text runs, icons, fields) within 12px of a side edge,
 //     measured on what shows through its overflow clip, except full-bleed
 //     media (img, video, [data-full-bleed]), full-width bars, content that
-//     scrolls under the edge (a horizontal scroller) and aria-hidden /
-//     inert decoration;
+//     scrolls under the edge (a horizontal scroller) or is moved sideways by
+//     a transform (a row mid-swipe) and aria-hidden / inert decoration;
 //   4 no part ([data-part]) holds more than 3 distinct text roles (computed
 //     font size + weight + family);
 //   5 busy-state screens: a control keeps its width from idle to busy
@@ -97,13 +98,18 @@ interface RawPage {
 
 /** Reads every box the checks need in one pass over the page. */
 async function readPage(page: Page): Promise<RawPage> {
-  // isLiftedLayer is pure (layout-checks-core.ts, unit tested); its source
-  // goes into the page so the browser side applies the same rule.
-  return page.evaluate((liftedSource: string): RawPage => {
-    const lifted = new Function(`return (${liftedSource});`)() as (style: {
+  // isLiftedLayer and movedSideways are pure (layout-checks-core.ts, unit
+  // tested); their source goes into the page so the browser side applies the
+  // same rules.
+  const rules = { lifted: isLiftedLayer.toString(), sideways: movedSideways.toString() };
+  return page.evaluate((sources: { lifted: string; sideways: string }): RawPage => {
+    const lifted = new Function(`return (${sources.lifted});`)() as (style: {
       position: string;
       zIndex: string;
     }) => boolean;
+    const sideways = new Function(`return (${sources.sideways});`)() as (
+      transform: string,
+    ) => boolean;
     const vw = document.documentElement.clientWidth || window.innerWidth;
     const vh = window.innerHeight;
 
@@ -328,8 +334,17 @@ async function readPage(page: Page): Promise<RawPage> {
       }
       return false;
     };
+    /** Inside something moved sideways by a transform (a row mid-swipe): moving content. */
+    const slides = (el: Element): boolean => {
+      for (let at: Element | null = el; at !== null; at = at.parentElement) {
+        if (sideways(getComputedStyle(at).transform)) return true;
+      }
+      return false;
+    };
     const bleeds = (el: Element): boolean =>
-      el.closest('img, video, canvas, picture, [data-full-bleed]') !== null || scrollsUnderEdge(el);
+      el.closest('img, video, canvas, picture, [data-full-bleed]') !== null ||
+      scrollsUnderEdge(el) ||
+      slides(el);
     const edges: EdgeItem[] = [];
     for (const node of textNodesOf(document.body)) {
       const parent = node.parentElement;
@@ -403,7 +418,7 @@ async function readPage(page: Page): Promise<RawPage> {
     }
 
     return { viewportWidth: vw, lines, targets, edges, parts, listCards };
-  }, isLiftedLayer.toString());
+  }, rules);
 }
 
 /**

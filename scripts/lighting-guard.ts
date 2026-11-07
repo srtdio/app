@@ -55,6 +55,7 @@ export const MOVED_ONTO_PART: Record<string, Record<string, { count: number; why
  */
 export const PART_CARRIERS: { use: string; roles: string[]; part: string }[] = [
   { use: '<ListCard', roles: ['lit-card'], part: 'src/components/ui/ListCard.tsx' },
+  { use: '<ListCardBox', roles: ['lit-card'], part: 'src/components/ui/ListCard.tsx' },
   { use: '<Card', roles: ['lit-card'], part: 'src/components/ui/Card.tsx' },
   { use: 'cardSurface(', roles: ['lit-card'], part: 'src/components/ui/Card.tsx' },
   { use: '<HeaderBar', roles: ['lit-header'], part: 'src/components/ui/HeaderBar.tsx' },

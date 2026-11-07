@@ -12,6 +12,7 @@ import {
   layoutMode,
   lineCount,
   lineHeightPx,
+  movedSideways,
   LIST_CARD_HEIGHT_PX,
   listCardViolations,
   overlappingPairs,
@@ -277,6 +278,17 @@ describe('side edges', () => {
       vw,
     );
     expect(found).toEqual([]);
+  });
+
+  it('a transform that moves content sideways (a row mid-swipe) is moving content', () => {
+    // chat-tasks-swipe: the task row is held 80 left (translate3d(-80px,0,0)).
+    expect(movedSideways('matrix(1, 0, 0, 1, -80, 0)')).toBe(true);
+    expect(movedSideways('matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 24, 0, 0, 1)')).toBe(true);
+    // A sheet rising on Y, a scale, no transform: not sideways.
+    expect(movedSideways('matrix(1, 0, 0, 1, 0, 120)')).toBe(false);
+    expect(movedSideways('matrix(0.9, 0, 0, 0.9, 0, 0)')).toBe(false);
+    expect(movedSideways('none')).toBe(false);
+    expect(movedSideways('matrix(1, 0, 0, 1, 0.2, 0)')).toBe(false);
   });
 
   it('measures text cut to its overflow clip, not its unclipped run', () => {

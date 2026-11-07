@@ -176,6 +176,20 @@ export interface EdgeItem {
   clip?: Box | null;
 }
 
+/**
+ * Whether a computed transform moves its element sideways (a row mid-swipe,
+ * a pane sliding in): `matrix(a, b, c, d, tx, ty)` or `matrix3d(..., tx, ty,
+ * tz, w)` with tx off zero. What it carries is moving content, like content
+ * scrolling under the edge, and is not held to the side edges.
+ */
+export function movedSideways(transform: string): boolean {
+  const m = /^matrix(3d)?\(([^)]*)\)$/.exec(transform.trim());
+  if (m === null) return false;
+  const values = (m[2] ?? '').split(',').map((v) => Number.parseFloat(v));
+  const tx = m[1] === '3d' ? values[12] : values[4];
+  return tx !== undefined && Number.isFinite(tx) && Math.abs(tx) >= 0.5;
+}
+
 /** Whether a box spans the viewport's full width (a bar: header, nav, dock). */
 export function spansFullWidth(box: Box, viewportWidth: number, tolerance = 1): boolean {
   return box.x <= tolerance && box.x + box.width >= viewportWidth - tolerance;
