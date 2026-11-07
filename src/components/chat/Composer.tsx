@@ -19,7 +19,6 @@ import type {
 import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/Button';
 import { ComposerFrame, composerHint } from '@/components/ui/Composer';
-import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import {
   ICON_SIZE,
@@ -28,7 +27,6 @@ import {
   IconMic,
   IconSend,
   IconTrash,
-  IconX,
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { isCoarsePointer } from '@/lib/use-is-laptop';
@@ -451,7 +449,7 @@ export function composerBars(input: { editing: boolean; reply: boolean; about: b
 
 /**
  * The editing bar: the reply bar's grammar with a 3px warn rule, "Editing your
- * message" over the message's current text, and a 44px X that cancels.
+ * message" over the message's current text, and a ghost "Clear" (44 tall) that cancels.
  */
 export function EditingBar(props: { text: string; onCancel: () => void }): ReactElement {
   return (
@@ -460,9 +458,15 @@ export function EditingBar(props: { text: string; onCancel: () => void }): React
       preview={props.text}
       tone="warn"
       trailing={
-        <IconButton label="Cancel editing" className="shrink-0" onClick={props.onCancel}>
-          <IconX size={ICON_SIZE.control} />
-        </IconButton>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label="Cancel editing"
+          className="shrink-0 px-3"
+          onClick={props.onCancel}
+        >
+          Clear
+        </Button>
       }
     />
   );
@@ -485,7 +489,7 @@ export function composerPlaceholder(about: boolean, replying = false, editing = 
 
 /**
  * The About bar: the reply bar's grammar (3px accent rule, panel-3 box) with a
- * 32px thumbnail, "About" in accent over the title, and a 44px close.
+ * 32px thumbnail, "About" in accent over the title, and a ghost "Clear" (44 tall).
  * With no post yet (its read is in flight) it is a skeleton: "About", a title
  * placeholder and the same close, at the same height. No motion.
  */
@@ -514,9 +518,15 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
           <span aria-hidden="true" className="my-0.5 h-3 w-28 rounded bg-panel-2" />
         )}
       </span>
-      <IconButton label="Close about" className="shrink-0" onClick={props.onCancel}>
-        <IconX size={ICON_SIZE.control} />
-      </IconButton>
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label="Close about"
+        className="shrink-0 px-3"
+        onClick={props.onCancel}
+      >
+        Clear
+      </Button>
     </div>
   );
 }
@@ -557,9 +567,15 @@ export function ReplyBar(props: {
       thumbSource={props.thumbSource}
       className={NO_TOUCH_SELECT}
       trailing={
-        <IconButton label="Cancel reply" className="shrink-0" onClick={props.onCancel}>
-          <IconX size={ICON_SIZE.control} />
-        </IconButton>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label="Cancel reply"
+          className="shrink-0 px-3"
+          onClick={props.onCancel}
+        >
+          Clear
+        </Button>
       }
     />
   );
@@ -568,7 +584,7 @@ export function ReplyBar(props: {
 /**
  * The Reply privately quote above the input: the reply bar's grammar (accent
  * rule, panel-3 box), "<Full name> · <where>" over one line of their words,
- * and the reply bar's 44px X, which removes the quote (the DM stays a DM).
+ * and the reply bar's ghost "Clear", which removes the quote (the DM stays a DM).
  * `preview` is the excerpt's line with mentions already resolved.
  */
 export function PrivateReplyBar(props: {
@@ -584,9 +600,15 @@ export function PrivateReplyBar(props: {
         oneLine
         className={NO_TOUCH_SELECT}
         trailing={
-          <IconButton label="Cancel reply" className="shrink-0" onClick={props.onRemove}>
-            <IconX size={ICON_SIZE.control} />
-          </IconButton>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Cancel reply"
+            className="shrink-0 px-3"
+            onClick={props.onRemove}
+          >
+            Clear
+          </Button>
         }
       />
     </div>

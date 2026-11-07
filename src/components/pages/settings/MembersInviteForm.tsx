@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { run as suggestEmail } from '@zootools/email-spell-checker';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconChevronDown, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronDown, IconTrash } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import type { SelectOption } from '@/components/ui/Select';
 import { useOptionalToast } from '@/components/ui/toast';
@@ -776,7 +776,7 @@ export function MembersInviteForm({
                       disabled={submitting}
                       onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
                     >
-                      <IconX />
+                      <IconTrash size={ICON_SIZE.control} />
                     </IconButton>
                   </div>
                   {invalid ? (

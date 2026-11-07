@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ICON_SIZE, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight, IconPlus, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import {
   ConceptSheet,
@@ -738,7 +738,7 @@ export function ComposeItemRow(props: {
           onClick={props.onRemove}
           className="-my-1.5 -mr-1.5 shrink-0"
         >
-          <IconX size={ICON_SIZE.control} />
+          <IconTrash size={ICON_SIZE.control} />
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (

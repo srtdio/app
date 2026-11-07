@@ -14,7 +14,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
-import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconSearch, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { useToast } from '@/components/ui/toast';
 import { startDmChannel } from '@/components/chat/chat-actions';
@@ -570,7 +570,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
             }
             if (item.type === 'recent') {
               const onRemove = props.onRemoveRecent;
-              // A button cannot hold a button: the row and its X sit side by side.
+              // A button cannot hold a button: the row and its remove sit side by side.
               return (
                 <div key={`${section.label}:${item.id}`} className="flex items-center">
                   <PressableRow
@@ -593,7 +593,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                       onClick={() => onRemove(item.recent)}
                       className="shrink-0 text-fg-3"
                     >
-                      <IconX size={ICON_SIZE.inline} />
+                      <IconTrash size={ICON_SIZE.inline} />
                     </IconButton>
                   ) : null}
                 </div>
@@ -995,12 +995,13 @@ export function CommandPalette({
                 ? { 'aria-activedescendant': paletteOptionId(listId, active) }
                 : {})}
               enterKeyHint="search"
-              className={cn('min-w-0 h-12 pl-12 sm:text-base', query !== '' ? 'pr-12' : 'pr-3')}
+              className={cn('min-w-0 h-12 pl-12 sm:text-base', query !== '' ? 'pr-20' : 'pr-3')}
             />
             {query !== '' ? (
-              <IconButton
+              <Button
                 type="button"
-                label="Clear search"
+                variant="ghost"
+                aria-label="Clear search"
                 data-palette-clear=""
                 // The field keeps focus (and the phone keeps its keyboard).
                 onMouseDown={(event) => event.preventDefault()}
@@ -1008,10 +1009,10 @@ export function CommandPalette({
                   setQuery('');
                   inputRef.current?.focus({ preventScroll: true });
                 }}
-                className="absolute right-0 top-1/2 -translate-y-1/2"
+                className="absolute right-0 top-1/2 -translate-y-1/2 px-3"
               >
-                <IconX size={ICON_SIZE.inline} />
-              </IconButton>
+                Clear
+              </Button>
             ) : null}
           </div>
           <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1 py-0.5">

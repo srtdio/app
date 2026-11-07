@@ -180,7 +180,7 @@ describe('ui rules: one delete rule', () => {
 });
 
 describe('ui rules: one sheet header', () => {
-  // Every sheet header is title left, close X right. Cancel lives in footers,
+  // Every sheet header is the "<" back leading, then the title. Cancel lives in footers,
   // so no <Sheet> takes a header Cancel prop of any name.
   it('no <Sheet> passes a header cancel prop', () => {
     const offenders: string[] = [];

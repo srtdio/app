@@ -81,11 +81,22 @@ describe('BookCallSheet', () => {
 
     await act(async () => button('Another day or time').click());
     expect(document.body.textContent).toContain('Your time zone. We confirm by email.');
-    const date = document.querySelector<HTMLInputElement>('input[type="date"]')!;
+    // The date is ui/DatePicker (never a native date input); days before tomorrow are greyed.
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    const trigger = document.querySelector<HTMLButtonElement>(
+      '[data-book-call-date] button[aria-label="Date"]',
+    )!;
+    expect(trigger).not.toBeNull();
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
     const time = document.querySelector<HTMLInputElement>('input[type="time"]')!;
     expect(time.step).toBe('900');
-    expect(date.min).not.toBe('');
-    await type(date, '2026-10-21');
+    await act(async () => trigger.click());
+    const today = document.querySelector<HTMLButtonElement>('[data-iso="2026-10-17"]')!;
+    expect(today.disabled).toBe(true);
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-iso="2026-10-21"]')!.click(),
+    );
+    expect(trigger.textContent).toContain('October 21, 2026');
     expect(button('Book').disabled).toBe(true);
     await type(time, '14:15');
     expect(button('Book').disabled).toBe(false);

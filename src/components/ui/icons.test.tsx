@@ -93,7 +93,6 @@ const DOCUMENTED = [
   'IconUpload',
   'IconUser',
   'IconVideo',
-  'IconX',
 ];
 
 // 24/solid, filled states only: no stroke.

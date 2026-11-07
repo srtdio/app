@@ -69,6 +69,11 @@ describe('SectionHeader', () => {
     const filled = SectionHeader({ search: { value: 'x', onChange, label: 'Search' } });
     const clears = findAll(filled, (el) => ariaLabel(el) === 'Clear search');
     expect(clears).toHaveLength(1);
+    // The ghost "Clear" text Button, never an X icon.
+    expect(clears[0]!.type).toBe(Button);
+    const props = clears[0]!.props as { variant?: string; children?: ReactNode };
+    expect(props.variant).toBe('ghost');
+    expect(props.children).toBe('Clear');
     (clears[0]!.props as { onClick: () => void }).onClick();
     expect(onChange).toHaveBeenCalledWith('');
   });

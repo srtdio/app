@@ -88,17 +88,29 @@ describe('concept date field (D4)', () => {
     expect(CONCEPT_EDIT_RESET_HINT).not.toContain(String.fromCharCode(0x2014));
   });
 
-  it('empty by default (no clear button); a date shows a 44px clear button', () => {
+  it('empty by default (no Clear); a date shows a 44px ghost "Clear" text button', () => {
     const empty = renderToStaticMarkup(<ConceptDateField value="" onChange={() => undefined} />);
-    expect(empty).toContain('type="date"');
+    // ui/DatePicker, never a native date input.
+    expect(empty).not.toContain('type="date"');
+    expect(empty).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*aria-label="Date \(optional\)"/);
+    expect(empty).toContain('Select a date');
     expect(empty).not.toContain('data-plan-concept-date-clear');
     const set = renderToStaticMarkup(
       <ConceptDateField value="2026-10-14" onChange={() => undefined} />,
     );
-    expect(set).toContain('value="2026-10-14"');
-    const clear = /<button[^>]*data-plan-concept-date-clear[^>]*>/.exec(set)?.[0] ?? '';
+    expect(set).toContain('October 14, 2026');
+    const clear = /<button[^>]*data-plan-concept-date-clear[^>]*>[^<]*<\/button>/.exec(set)?.[0] ?? '';
     expect(clear).toContain('h-11');
-    expect(clear).toContain('w-11');
+    expect(clear).toContain('min-w-11');
+    expect(clear).toContain('lit-hover text-fg-2');
     expect(clear).toContain('aria-label="Clear date"');
+    expect(clear).toMatch(/>Clear<\/button>$/);
+  });
+
+  it('disabled: the fieldset disables the picker trigger and Clear together', () => {
+    const html = renderToStaticMarkup(
+      <ConceptDateField value="2026-10-14" disabled onChange={() => undefined} />,
+    );
+    expect(html).toMatch(/<fieldset[^>]*data-plan-concept-date=""[^>]*disabled=""/);
   });
 });

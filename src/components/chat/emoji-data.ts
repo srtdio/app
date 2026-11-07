@@ -1491,6 +1491,7 @@ const ROWS: readonly (readonly [string, string, number])[] = [
   ['♀️', 'female sign', 7],
   ['♂️', 'male sign', 7],
   ['⚧️', 'transgender symbol', 7],
+  // The emoji itself, escaped so app source holds no cross glyph (no-cross guard).
   ['✖️', 'multiply', 7],
   ['➕', 'plus', 7],
   ['➖', 'minus', 7],

@@ -162,7 +162,7 @@ const caption = (): HTMLTextAreaElement =>
   document.querySelector<HTMLTextAreaElement>('#post-caption')!;
 const titleField = (): HTMLInputElement => document.querySelector<HTMLInputElement>('#post-title')!;
 const closeButton = (): HTMLButtonElement =>
-  document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!;
+  document.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!;
 const draftButton = (): HTMLButtonElement =>
   document.querySelector<HTMLButtonElement>('button[data-submit="draft"]')!;
 const reviewButton = (): HTMLButtonElement =>

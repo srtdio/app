@@ -19,7 +19,7 @@ function buttonTags(html: string): string[] {
 }
 
 describe('Plan screen buttons (design system)', () => {
-  it('rename: Cancel (X) and Done are 44px with the 8px radius', () => {
+  it('rename: a ghost Cancel (text, no cross) and Done are 44px with the 8px radius', () => {
     const html = renderToStaticMarkup(
       <RenameField value="Week" busy={false} onChange={noop} onCancel={noop} onDone={noop} />,
     );
@@ -31,17 +31,27 @@ describe('Plan screen buttons (design system)', () => {
       expect(tag).not.toMatch(OLD);
     }
     expect(tags.find((t) => t.includes('data-plan-rename-done'))).toContain('text-accent');
+    const cancel = tags.find((t) => t.includes('data-plan-rename-cancel')) ?? '';
+    expect(cancel).toContain('aria-label="Cancel rename"');
+    expect(cancel).toContain('lit-hover text-fg-2');
+    expect(html).toMatch(/data-plan-rename-cancel=""[^>]*>Cancel<\/button>/);
     // The field: 44px, 8px radius, panel-2.
     expect(html).toMatch(/<input[^>]*class="[^"]*h-11[^"]*rounded-lg[^"]*bg-panel-2/);
   });
 
-  it('the date clear is the 44x44 icon button', () => {
+  it('the date is ui/DatePicker; its clear is the 44px ghost "Clear" text button', () => {
     const html = renderToStaticMarkup(<ConceptDateField value="2026-10-14" onChange={noop} />);
-    const [tag = ''] = buttonTags(html);
+    const tags = buttonTags(html);
+    expect(tags).toHaveLength(2);
+    // First the DatePicker trigger, then Clear.
+    expect(tags[0]).toContain('aria-haspopup="dialog"');
+    const tag = tags.find((t) => t.includes('data-plan-concept-date-clear')) ?? '';
     expect(tag).toContain('aria-label="Clear date"');
-    expect(tag).toContain('h-11 w-11');
+    expect(tag).toContain('h-11 min-h-11 min-w-11');
     expect(tag).toContain('rounded-lg');
     expect(tag).not.toContain('rounded-full');
+    expect(html).toMatch(/data-plan-concept-date-clear=""[^>]*>Clear<\/button>/);
+    expect(html).not.toContain('type="date"');
   });
 
   it('item, compose and card sources carry no old button recipes', () => {

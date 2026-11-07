@@ -28,8 +28,8 @@
 // The transcript state is read synchronously from the per-device transcript
 // store so first paint is final.
 //
-// While an own note uploads, the play spot holds the UploadRing (tap X cancels
-// the send), drawn in the bubble's own inks and fully inside the 44px slot,
+// While an own note uploads, the play spot holds the UploadRing (its stop
+// square stops the send and removes the pending note), drawn in the bubble's own inks and fully inside the 44px slot,
 // and the wave shows the note's real bars at reduced emphasis (opacity .45);
 // when the upload finishes, the ring scales to 0 (mv-ring-out), play shows in
 // its place and the same bars return to full emphasis at once (never a fade;
@@ -922,7 +922,7 @@ const VOICE_RING_POSITION = 'absolute left-1/2 top-1/2 z-raised -translate-x-1/2
 
 /** An own note's upload: the ring (active) or, once done, play in its place. */
 interface VoiceUpload {
-  /** True while the file still uploads: the X shows, the bars at reduced emphasis. */
+  /** True while the file still uploads: the stop ring shows, the bars at reduced emphasis. */
   active: boolean;
   /** Upload progress 0..1; null while unknown (the ring spins). */
   progress: number | null;

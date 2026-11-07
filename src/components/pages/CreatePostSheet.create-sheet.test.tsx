@@ -134,7 +134,7 @@ const draftButton = (): HTMLButtonElement =>
 const reviewButton = (): HTMLButtonElement =>
   document.querySelector<HTMLButtonElement>('button[data-submit="review"]')!;
 const closeButton = (): HTMLButtonElement =>
-  document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!;
+  document.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!;
 const text = (): string => document.body.textContent ?? '';
 function buttonByText(label: string): HTMLButtonElement | undefined {
   return [...document.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -201,13 +201,13 @@ describe('New post sheet: Title', () => {
 });
 
 describe('New post sheet: header', () => {
-  it('no footer; the header holds "New post", Save draft, Send for review and X in that order', async () => {
+  it('no footer; the header holds the "<" back, "New post", Save draft and Send for review in that order', async () => {
     await renderSheet();
     const head = header();
     const order = [...head.querySelectorAll('button, h2')].map(
       (el) => el.getAttribute('aria-label') ?? (el.textContent ?? '').trim(),
     );
-    expect(order).toEqual(['New post', 'Save draft', 'Send for review', 'Close']);
+    expect(order).toEqual(['Back', 'New post', 'Save draft', 'Send for review']);
     expect(draftButton().className).toContain('h-11');
     expect(reviewButton().className).toContain('bg-accent');
     expect(buttonByText('Cancel')).toBeUndefined();

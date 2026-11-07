@@ -85,11 +85,29 @@ export function resetPressesForTests(): void {
 const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /**
+ * The element a media viewer grows on open: only the media itself, never the
+ * viewer's root, pane or bars. `target` picks it inside `root`; no target, or
+ * a target that finds nothing (the image has not mounted yet, a spinner or an
+ * error card shows), is null: the viewer simply shows, with no move. Growing
+ * the whole viewer from a thumbnail box once left the full viewer, its arrows
+ * and bars, sitting at the bubble's size inside the thread. Pure.
+ */
+export function growTarget<T extends Element>(
+  root: T | null,
+  target: ((root: T) => Element | null) | undefined,
+): Element | null {
+  if (root === null || target === undefined) return null;
+  const el = target(root);
+  return el !== null && el !== root ? el : null;
+}
+
+/**
  * growFromCard for a media viewer: on the first frame after mount (the viewer
- * already painted at its final place), the target grows out of `from` (the
+ * already painted at its final place), the media grows out of `from` (the
  * opener's rect when it has one), else out of the thumbnail the last press hit.
- * No box: no move (the viewer simply shows). `target` picks the element that
- * grows (the media, else the ref'd pane).
+ * No box or no media element (growTarget): no move, the viewer simply shows.
+ * The move runs with fill none (its end pose is the element's own), and is
+ * cancelled on unmount, so nothing can stay at the thumbnail's transform.
  */
 export function useGrowFromThumb<T extends HTMLElement>(
   ref: RefObject<T>,
@@ -99,12 +117,12 @@ export function useGrowFromThumb<T extends HTMLElement>(
   const args = useRef({ from, target });
   args.current = { from, target };
   useBrowserLayoutEffect(() => {
-    const root = ref.current;
-    if (root === null) return;
+    const el = growTarget(ref.current, args.current.target);
+    if (el === null) return;
     const box = args.current.from ?? recentPressBox();
     if (box === null) return;
-    const el = args.current.target?.(root) ?? root;
-    growFromCard(el, box);
+    const played = growFromCard(el, box);
+    return () => played.cancel();
     // Mount only: the ref and args are read at that moment.
   }, []);
 }

@@ -1,11 +1,12 @@
-import { IconAlertTriangle, IconCheck, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { Button } from '@/components/ui/Button';
+import { IconAlertTriangle, IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
 interface ToastProps {
   toast: ToastModel;
   /** True while the card plays its exit before the provider unmounts it. */
   leaving?: boolean;
-  /** The X: the provider treats it as accept (onExpire runs). */
+  /** The "Clear" button: the provider treats it as accept (onExpire runs). */
   onDismiss: (id: string) => void;
   /** The action button. Omitted: runs action.onPress, then onDismiss. */
   onAction?: (id: string) => void;
@@ -15,7 +16,8 @@ interface ToastProps {
  * One presentational toast card. Hookless so it can be unit-tested by walking
  * its element tree (the codebase convention for pure components). The whole
  * content area is the press target when `onPress` is set; the dismiss control
- * is always a separate 44x44 button so the two never nest. An optional action
+ * is always a separate ghost "Clear" Button (44 tall, aria "Dismiss
+ * notification"; no X) so the two never nest. Auto-hide and swipe stay. An optional action
  * (e.g. Undo) is its own 44px button at the card's right end, after the dismiss; pressing it runs the
  * action and dismisses the toast. Undo toasts never render here (UndoStrip).
  * It always renders at rest: the viewport lays the edgeStrip move over it
@@ -83,18 +85,17 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
       ) : (
         <div className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-3 py-2">{body}</div>
       )}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-label="Dismiss notification"
         onClick={() => onDismiss(id)}
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg mv-tint ${
-          error
-            ? 'text-accent-fg lit-hover focus-visible:lit-focus focus-visible:outline-accent-fg'
-            : 'text-fg-2 lit-hover hover:text-fg focus-visible:lit-focus'
+        className={`shrink-0 px-3 ${
+          error ? 'text-accent-fg hover:text-accent-fg focus-visible:outline-accent-fg' : ''
         }`}
       >
-        <IconX />
-      </button>
+        Clear
+      </Button>
       {action !== undefined ? (
         <button
           type="button"

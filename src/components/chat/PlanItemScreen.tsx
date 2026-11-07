@@ -128,7 +128,6 @@ import {
   IconLink,
   IconPlus,
   IconTrash,
-  IconX,
 } from '@/components/ui/icons';
 import { Tag, isTagDot } from '@/components/ui/Tag';
 import { Card } from '@/components/ui/Card';
@@ -1741,15 +1740,16 @@ export function PlanItemScreen(props: {
                   className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-md text-fg-2 lit-card-muted"
                 >
                   <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
-                  <IconButton
+                  <Button
                     type="button"
-                    label="Cancel ask changes"
+                    variant="ghost"
+                    aria-label="Cancel ask changes"
                     data-plan-ask-cancel=""
                     onClick={() => setAskingChanges(false)}
-                    className="shrink-0"
+                    className="shrink-0 px-3"
                   >
-                    <IconX size={ICON_SIZE.control} />
-                  </IconButton>
+                    Clear
+                  </Button>
                 </div>
               ) : null}
               {sendError !== null ? (

@@ -1,10 +1,11 @@
 import type { ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
 
 /**
  * A remove control on a tile's corner: a 44x44 tap area with a small visible
- * circle in its top-right, so it never covers half the tile.
+ * circle in its top-right, so it never covers half the tile. The glyph is the
+ * bin (remove an item), never an X (no-cross guard).
  */
 export function RemoveButton({
   label,
@@ -26,7 +27,7 @@ export function RemoveButton({
         aria-hidden="true"
         className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-overlay-fg lit-media"
       >
-        <IconX size={ICON_SIZE.inline} />
+        <IconTrash size={ICON_SIZE.text} />
       </span>
     </IconButton>
   );

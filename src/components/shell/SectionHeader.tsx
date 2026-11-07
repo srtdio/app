@@ -2,10 +2,9 @@ import type { FocusEvent, ReactNode, SyntheticEvent } from 'react';
 import { cn } from '@/lib/cn';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { IconPlus, IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconPlus, IconSearch, ICON_SIZE } from '@/components/ui/icons';
 import { glideAside } from '@/lib/motion';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
 import { isLaptopNow } from '@/lib/use-is-laptop';
@@ -205,8 +204,8 @@ export function SectionHeader<S extends string = string>({
           >
             <div className="group/sfield relative min-w-0 flex-1">
               {/* Tight insets so the placeholder fits a 360px phone row beside
-                  sort and New: icon 8px in, text 4px after it, and the 44px
-                  right inset is reserved only while the Clear button shows.
+                  sort and New: icon 8px in, text 4px after it, and the 64px
+                  right inset is reserved only while the ghost "Clear" shows.
                   The icon is fg-3 at rest, full ink while the field is the centre. */}
               <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-3 group-focus-within/sfield:text-fg">
                 <IconSearch size={ICON_SIZE.inline} />
@@ -220,20 +219,21 @@ export function SectionHeader<S extends string = string>({
                 onBlur={onSearchBlur}
                 placeholder={search.placeholder}
                 aria-label={search.label}
-                className={cn('min-w-0 pl-7', searching ? 'pr-11' : 'pr-2')}
+                className={cn('min-w-0 pl-7', searching ? 'pr-16' : 'pr-2')}
               />
               {searching ? (
-                <IconButton
+                <Button
                   type="button"
-                  label="Clear search"
+                  variant="ghost"
+                  aria-label="Clear search"
                   onClick={(e) => {
                     search.onChange('');
                     glideBack(e, false);
                   }}
-                  className="absolute right-0 top-1/2 -translate-y-1/2"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 px-3"
                 >
-                  <IconX size={ICON_SIZE.inline} />
-                </IconButton>
+                  Clear
+                </Button>
               ) : null}
             </div>
             {hasControls ? (

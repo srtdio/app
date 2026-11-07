@@ -66,25 +66,26 @@ describe('Chip onClear', () => {
     expect(html).not.toContain('aria-hidden');
   });
 
-  it('set: a sibling 44x44 X labelled "Clear <label> filter" in the chip ink', () => {
+  it('set: a sibling ghost "Clear" Button labelled "Clear <label> filter", no X', () => {
     const html = renderToStaticMarkup(<Chip label="Photos" selected onClear={() => undefined} />);
     expect(html.startsWith('<span data-chip-clearable')).toBe(true);
     const buttons = html.match(/<button[^>]*>/g) ?? [];
     expect(buttons).toHaveLength(2);
-    // Never a button inside a button: the chip closes before the X opens.
+    // Never a button inside a button: the chip closes before Clear opens.
     expect(html.indexOf('</button>')).toBeLessThan(html.lastIndexOf('<button'));
-    const x = buttons[1] ?? '';
-    expect(x).toContain('aria-label="Clear Photos filter"');
-    expect(x).toContain('min-h-11 w-11');
-    expect(x).toContain('text-accent-fg');
-    // The chip keeps its selected look and reserves the glyph's width.
+    const clear = buttons[1] ?? '';
+    expect(clear).toContain('aria-label="Clear Photos filter"');
+    expect(clear).toContain('data-chip-clear');
+    // The shared ghost Button: 44 tall tap area, quiet ink.
+    expect(clear).toContain('h-11 min-h-11 min-w-11');
+    expect(clear).toContain('lit-hover text-fg-2');
+    expect(html).toMatch(/>Clear<\/button><\/span>$/);
+    expect(html).not.toContain('<svg');
+    // The chip keeps its selected look, with no reserved glyph spacer.
     expect(html).toContain('bg-accent text-accent-fg lit-pill');
     expect(buttons[0]).toContain('min-h-11');
     expect(html).toContain('min-h-8 px-3');
-    // The glyph sits 12 in from the visible chip's right end, centred on it.
-    expect(x).toContain('inset-y-0 right-0');
-    expect(x).toContain('pr-3');
-    expect(html).toContain('<span aria-hidden="true" class="w-4 shrink-0"></span>');
+    expect(html).not.toContain('w-4 shrink-0');
   });
 });
 

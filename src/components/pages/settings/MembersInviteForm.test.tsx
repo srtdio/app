@@ -280,3 +280,15 @@ describe('replacePendingInvite (Edit on a pending invite)', () => {
     expect(result).toEqual({ ok: false, code: 'disposable_email', oldCancelled: true });
   });
 });
+
+describe('invite row remove (no-cross)', () => {
+  it('each entered email row removes with the bin, labelled "Remove <email>", never an X', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('./MembersInviteForm.tsx', import.meta.url), 'utf8');
+    const at = src.indexOf('label={`Remove ${row.email}`}');
+    expect(at).toBeGreaterThan(-1);
+    const end = src.indexOf('</IconButton>', at);
+    expect(src.slice(at, end)).toContain('<IconTrash');
+    expect(src).not.toMatch(/\bIconX\b/);
+  });
+});

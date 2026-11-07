@@ -3,7 +3,7 @@
 // "Don't open" (focused by default) and a secondary "Open anyway" that opens the
 // link in a new tab with noopener noreferrer.
 //
-// Closes on Esc, a tap on the scrim, the header's close X, "Don't open", or a
+// Closes on Esc, a tap on the scrim, the header's "<" back, "Don't open", or a
 // downward swipe on the sheet. Motion (docs/motion.md, rise): rendered at rest,
 // it rises from the bottom edge and leaves the same way, the dim tracking it;
 // translateY only, never a fade. Focus is trapped
@@ -15,8 +15,8 @@ import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react
 import { createPortal } from 'react-dom';
 import { buttonClass } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconAlertTriangle, IconX, ICON_SIZE } from '@/components/ui/icons';
-import { TRAILING_PULL } from '@/components/ui/layout';
+import { IconAlertTriangle, IconChevronLeft, ICON_SIZE } from '@/components/ui/icons';
+import { LEADING_PULL } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { dimFor, riseIn, riseOut, usePresence } from '@/lib/motion';
@@ -132,8 +132,8 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
         className="relative flex max-h-[90svh] w-full max-w-lg touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 font-sans text-fg lit-overlay will-change-transform"
       >
-        {/* The swipe-down handle: grabber, then the title left and the close X
-            right (every sheet header). The rest of the sheet scrolls normally
+        {/* The swipe-down handle: grabber, then the "<" back leading and the
+            title (every sheet header). The rest of the sheet scrolls normally
             when it is taller than the screen. */}
         <div
           data-sheet-drag=""
@@ -145,6 +145,9 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         >
           <div aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 rounded-sm bg-border-strong" />
           <div className="flex items-center gap-2">
+            <IconButton label="Back" onClick={onClose} className={cn(LEADING_PULL, 'shrink-0')}>
+              <IconChevronLeft size={ICON_SIZE.control} />
+            </IconButton>
             <h2
               id="unsafe-link-title"
               className="flex min-w-0 flex-1 items-center gap-2 text-lg font-semibold text-warn-ink"
@@ -152,9 +155,6 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
               <IconAlertTriangle size={ICON_SIZE.tray} />
               Check before opening
             </h2>
-            <IconButton label="Close" onClick={onClose} className={cn(TRAILING_PULL, 'shrink-0')}>
-              <IconX size={ICON_SIZE.control} />
-            </IconButton>
           </div>
         </div>
         <p

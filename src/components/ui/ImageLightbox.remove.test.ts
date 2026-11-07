@@ -1,5 +1,5 @@
-// The photo viewer's bin (chat only): it shows left of Download only for an
-// image that carries onRemove, reads "Remove photo" (or the caller's label,
+// The photo viewer's bin (chat only): it shows in the bottom bar only for an
+// image that carries onRemove (Download sits on the top back bar), reads "Remove photo" (or the caller's label,
 // e.g. "Remove video"), and after a tap shows the next image, or closes on
 // the last one. Viewers outside chat pass no onRemove and get no bin.
 import { readFileSync } from 'node:fs';
@@ -66,12 +66,13 @@ describe('indexAfterRemove', () => {
 });
 
 describe('ImageLightbox bin', () => {
-  it('renders only for an image with onRemove, left of Download, labelled "Remove photo" by default', () => {
+  it('renders only for an image with onRemove, in the bottom bar, labelled "Remove photo" by default', () => {
     expect(REMOVE_IMAGE_LABEL).toBe('Remove photo');
     expect(source).toContain('current.onRemove !== undefined ? (');
     expect(source).toContain('aria-label={current.removeLabel ?? REMOVE_IMAGE_LABEL}');
-    // The toolbar's Download is the last one in the file (the comment back bar has its own).
-    expect(source.indexOf('<IconTrash')).toBeLessThan(source.lastIndexOf('<DownloadControl'));
+    // One Download, on the top back bar (D3); the bottom bar carries the bin.
+    expect(source.match(/<DownloadControl/g)).toHaveLength(1);
+    expect(source.indexOf('<DownloadControl')).toBeLessThan(source.lastIndexOf('<IconTrash'));
   });
 
   it('a tap removes, then closes on the last image or moves on', () => {

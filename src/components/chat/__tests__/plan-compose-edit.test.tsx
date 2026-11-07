@@ -20,8 +20,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ConceptSheet, conceptTileDay } from '@/components/chat/ConceptSheet';
 import {
   ComposeItemRow,
-  DATE_FIELD,
-  DATE_FIT,
   composeConceptForm,
   composeConceptFrom,
   composeDayCounts,
@@ -149,21 +147,25 @@ describe('New plan create: one call, never half built', () => {
     expect(src).not.toContain('row.animate(');
   });
 
-  it('From / To live in the dates sheet: shrinkable, WebKit reset, 44px+', () => {
+  it('From / To live in the dates sheet: ui/DatePicker, shrinkable, never a native date', () => {
     expect(src).not.toContain('type="date"');
+    expect(pickerSrc).not.toContain('type="date"');
     expect(pickerSrc).toContain('className="flex w-full min-w-0 flex-col gap-1"');
-    expect(pickerSrc).toContain('className={DATE_FIELD}');
-    // The field look (44px, 8px radius, panel-2, focus) comes from ui/Input.
-    expect(pickerSrc).toMatch(/<Input\s+type="date"\s+data-plan-date=\{field\}/);
-    expect(DATE_FIELD).toContain(DATE_FIT);
-    expect(DATE_FIELD).toContain('font-mono');
-    expect(DATE_FIELD).not.toMatch(/border-border|bg-panel-2|rounded-|\bpx-/);
-    expect(DATE_FIT).toContain('appearance-none');
+    // The field look (44px, 8px radius, panel-2, focus, left-aligned value) comes from ui/DatePicker.
+    expect(pickerSrc).toContain("import { DatePicker } from '@/components/ui/DatePicker';");
+    expect(pickerSrc).toMatch(/data-plan-date=\{field\}[\s\S]*?<DatePicker\s+label=\{label\}/);
     const html = renderToStaticMarkup(
       <PlanDatesSheet open range={RANGE} onSave={() => {}} onClose={() => {}} />,
     );
     expect(html).toContain('Plan dates');
-    expect(html).toContain('value="2026-10-12"');
+    expect(html).not.toContain('type="date"');
+    // The DatePicker triggers show the range's days (44px, left-aligned).
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*aria-label="From"[^>]*class="[^"]*h-11/);
+    expect(html).toMatch(/aria-label="To"/);
+    expect(html).toContain('October 12, 2026');
+    expect(html).toContain('October 18, 2026');
+    // The 5-week rule and its hint stay.
+    expect(html).toContain('Up to 5 weeks. Items on days you drop go back to');
     expect(html).toContain('Save dates');
   });
 
@@ -276,8 +278,11 @@ describe('concept sheet: tiles and soft counter', () => {
     expect(save).not.toMatch(/ disabled=""/);
   });
 
-  it('without a range (item screen edit) the native date field stays', () => {
-    expect(sheet('')).toContain('type="date"');
+  it('without a range (item screen edit) the date field is ui/DatePicker, never native', () => {
+    const html = sheet('');
+    expect(html).toContain('data-plan-concept-date=""');
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*aria-label="Date \(optional\)"/);
+    expect(html).not.toContain('type="date"');
   });
 });
 

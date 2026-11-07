@@ -1,6 +1,8 @@
-// The "<" exit of a full-screen viewer opened from a comment (FileViewer,
-// ImageLightbox backBar mode). Kept in its own file so each viewer file holds
-// one exit kind: the viewers keep their X for chat, this is the "<" one.
+// The one exit of every viewer that opens over the app: "<" (Back) on the
+// leading edge of its top bar. ImageLightbox (chat thread, chat home Photos,
+// comments, plan concepts), FileViewer, PhotoViewer, the post lightbox and the
+// asset lightbox all leave through it; no viewer has an X. The caller passes
+// the 44px bar class for its tone (overlay ink on the dark viewers).
 import type { ReactElement, RefObject } from 'react';
 import { IconChevronLeft, ICON_SIZE } from '@/components/ui/icons';
 

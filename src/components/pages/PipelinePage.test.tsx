@@ -1261,14 +1261,14 @@ describe('select bar actions (the old card ⋮ rows)', () => {
     );
   });
 
-  it('Reject is bad ink; icons: review arrow, approve check, park pause, reject X', async () => {
+  it('Reject is bad ink; icons: review arrow, approve check, park pause, reject ban (no X)', async () => {
     const icons = await import('@/components/ui/icons');
     const rows = actions(makePost('p1', 'review'), 1, { role: 'client', approverFirstNames: [] });
     const byId = new Map(rows.map((a) => [a.id, a]));
     expect(byId.get('open')?.icon).toBe(icons.IconArrowUpRight);
     expect(byId.get('copy-link')?.icon).toBe(icons.IconLink);
     expect(byId.get('move-approved')?.icon).toBe(icons.IconCheck);
-    expect(byId.get('move-rejected')?.icon).toBe(icons.IconX);
+    expect(byId.get('move-rejected')?.icon).toBe(icons.IconBan);
     expect(byId.get('move-rejected')?.tone).toBe('bad');
     expect(byId.get('move-approved')?.tone).toBeUndefined();
     const agency = actions(makePost('p1', 'draft'), 1, { role: 'agency', approverFirstNames: [] });

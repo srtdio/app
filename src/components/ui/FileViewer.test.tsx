@@ -126,9 +126,10 @@ describe('the sheet by kind', () => {
     expect(html).toContain('data-pdf-page="1"');
   });
 
-  it('top bar: close X, the name, Download; 44px buttons, no selection on chrome', () => {
+  it('top bar: "<" Back (never an X), the name, Download; 44px buttons, no selection on chrome', () => {
     const html = sheet('pdf', 'light');
-    expect(html).toContain('aria-label="Close"');
+    expect(html).toContain('aria-label="Back"');
+    expect(html).not.toContain('aria-label="Close"');
     expect(html).toContain('aria-label="Download"');
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('[-webkit-touch-callout:none]');
@@ -163,7 +164,8 @@ describe('the sheet by kind', () => {
     const html = renderToStaticMarkup(
       <FileViewerFallback name="x.pdf" kind="pdf" source={source} onClose={() => {}} />,
     );
-    expect(html).toContain('aria-label="Close"');
+    expect(html).toContain('aria-label="Back"');
+    expect(html).not.toContain('aria-label="Close"');
     expect(html).toContain(VIEWER_ERROR.replace("'", '&#x27;'));
     expect(html).toContain('Download');
   });

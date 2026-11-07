@@ -7,8 +7,10 @@
 // A thumbnail (page 1 of a PDF, a video frame) sits on top; its box takes the
 // stored thumbnail's aspect from the message meta, so the height is final on
 // first paint and nothing moves when the image arrives. The sender's own file
-// shows its local thumbnail while it sends (same reserved box), with a thin
-// progress bar and no cancel. No thumbnail: an icon card.
+// shows its local thumbnail while it sends (same reserved box), dimmed, with
+// the shared UploadRing (D5 sending states: progress ring and stop square)
+// centred where the video play button sits, or over the icon card's icon spot.
+// No thumbnail: an icon card.
 //
 // The name wraps to two lines and is then cut in the middle, keeping the
 // extension (decision 152). The kind label comes from the mime. Tapping opens
@@ -27,6 +29,7 @@ import {
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { UploadRing } from '@/components/chat/UploadRing';
 import { cn } from '@/lib/cn';
 import { humanizeSize } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -122,6 +125,8 @@ interface FileBubbleProps {
   presignEnabled: boolean;
   /** Comments: the viewer opens with the over-the-app bar ("<" Back). Chat omits it. */
   backBar?: boolean | undefined;
+  /** Stops this own send while the file uploads (the UploadRing's stop square). */
+  onCancel?: (() => void) | undefined;
 }
 
 /** What the card shows; everything is decided before it renders. */
@@ -136,7 +141,7 @@ interface FileBubbleCardProps {
   meta: Array<{ text: string; mono: boolean }>;
   /** Upload progress 0..1 while sending; null once sent. */
   progress: number | null;
-  /** True while the upload request runs (the bar fills); false while it waits. */
+  /** True while the upload request runs (the media dims); false while it waits. */
   uploading: boolean;
   /** The last open failed: the inline retry line shows. */
   failed: boolean;
@@ -242,7 +247,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
               {...(props.onImageError !== undefined ? { onError: props.onImageError } : {})}
             />
           ) : null}
-          {kind === 'video' && thumbUrl !== null ? (
+          {kind === 'video' && thumbUrl !== null && !sending ? (
             <span className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
               <IconPlay size={ICON_SIZE.nav} />
             </span>
@@ -252,7 +257,10 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
       <span className="flex min-h-14 w-full items-center gap-3 px-3 py-3">
         {ratio === null ? (
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
-            <KindIcon kind={kind} size={ICON_SIZE.control} />
+            {/* While sending the ring takes this spot: the glyph keeps its box. */}
+            <span className={cn('flex', sending && 'invisible')}>
+              <KindIcon kind={kind} size={ICON_SIZE.control} />
+            </span>
           </span>
         ) : null}
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -278,19 +286,46 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           ) : null}
         </span>
       </span>
-      {sending ? (
-        <span
-          data-file-progress=""
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-1 bg-panel-3 lit-well"
-        >
-          <span
-            className="block h-full origin-left bg-accent lit-fill mv-fill"
-            style={{ transform: `scaleX(${uploading ? progress : 0})` }}
-          />
-        </span>
-      ) : null}
     </PressableRow>
+  );
+}
+
+/**
+ * The sending file's UploadRing, laid over the card (a sibling, never inside
+ * its button): centred on the thumbnail box (the video play button's spot,
+ * the same 44px) or on the icon card's 40px icon spot. Both overlays start
+ * inside the card's 1px edge (px), so the centres match the boxes exactly. The overlay takes no
+ * taps; only the ring does. `progress` is null while the upload waits (the
+ * ring shows 0, then fills).
+ */
+export function FileSendingRing(props: {
+  ratio: number | null;
+  progress: number | null;
+  onCancel?: (() => void) | undefined;
+}): ReactElement {
+  const ring = (
+    <UploadRing
+      progress={props.progress}
+      onCancel={props.onCancel}
+      variant="file"
+      className="pointer-events-auto"
+    />
+  );
+  return props.ratio !== null ? (
+    <span
+      data-file-ring=""
+      className="pointer-events-none absolute inset-x-px top-px flex items-center justify-center"
+      style={{ aspectRatio: `1 / ${props.ratio}` }}
+    >
+      {ring}
+    </span>
+  ) : (
+    <span
+      data-file-ring=""
+      className="pointer-events-none absolute inset-y-0 left-px flex w-16 items-center justify-center"
+    >
+      {ring}
+    </span>
   );
 }
 
@@ -304,6 +339,7 @@ export function FileBubble({
   cache,
   presignEnabled,
   backBar,
+  onCancel,
 }: FileBubbleProps): ReactElement {
   const kind = classifyFileKind(attachment.mime);
   const ratio = reservedRatio(attachment);
@@ -358,7 +394,7 @@ export function FileBubble({
     <div
       data-file-bubble={kind}
       data-file-state={fileBubbleState(progress !== null, openFailed)}
-      className={BUBBLE_FILL}
+      className={progress !== null ? cn(BUBBLE_FILL, 'relative') : BUBBLE_FILL}
     >
       <FileBubbleCard
         kind={kind}
@@ -373,6 +409,13 @@ export function FileBubble({
         onImageError={() => setImageFailed(true)}
         thumbAttempt={thumbAttempt}
       />
+      {progress !== null ? (
+        <FileSendingRing
+          ratio={ratio}
+          progress={attachment.local?.uploading === true ? progress : null}
+          onCancel={onCancel}
+        />
+      ) : null}
       {open && source !== null ? (
         <FileViewer
           name={fullName}

@@ -229,7 +229,11 @@ describe('post item header (W7, W8)', () => {
     expect(page).toContain('<HeaderBar');
     const actions = page.slice(page.indexOf('const actions'), page.indexOf('return createPortal'));
     expect(actions.indexOf('{props.action}')).toBeGreaterThan(actions.indexOf('{props.twoLine'));
-    expect(actions.indexOf('{closeButton}')).toBeGreaterThan(actions.indexOf('{props.action}'));
+    // No trailing close X (no-cross rule): the laptop close is the leading back "<".
+    expect(actions).not.toContain('{closeButton}');
+    expect(page).not.toContain('IconX');
+    expect(page).toContain('onBack={backAction}');
+    expect(page).toMatch(/laptopClose \? \{ 'data-plan-close': '' \}/);
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain('action: (');
     expect(item).toContain('data-plan-more=""');

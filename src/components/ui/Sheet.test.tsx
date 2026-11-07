@@ -2,7 +2,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { Sheet } from '@/components/ui/Sheet';
+import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -10,6 +12,13 @@ import { DUR_BASE_MS } from '@/lib/motion';
 let root: Root | null = null;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The inner markup of IconChevronLeft at the control size. */
+function chevronPaths(): string {
+  const box = document.createElement('div');
+  box.innerHTML = renderToStaticMarkup(<IconChevronLeft size={ICON_SIZE.control} />);
+  return box.querySelector('svg')?.innerHTML ?? 'missing';
+}
 
 interface Opts {
   dirty?: boolean;
@@ -38,8 +47,9 @@ async function mount(opts: Opts = {}) {
   });
   const sheet = document.querySelector<HTMLElement>('[role="dialog"]');
   if (sheet === null) throw new Error('no sheet');
-  const x = sheet.querySelector<HTMLButtonElement>('[aria-label="Close"]');
-  if (x === null) throw new Error('no X');
+  // The one exit: the "<" back (kept as `x` below for the close-path tests).
+  const x = sheet.querySelector<HTMLButtonElement>('[aria-label="Back"]');
+  if (x === null) throw new Error('no Back');
   return { sheet, x, backdrop: sheet.parentElement!, onClose };
 }
 
@@ -60,13 +70,39 @@ afterEach(() => {
 });
 
 describe('Sheet header', () => {
-  it('title left, close X right at the control size, no Cancel in the header', async () => {
+  it('"<" back leading at the control size, then the title; no X, no Cancel in the header', async () => {
     const { sheet, x } = await mount();
-    const header = x.closest('.border-b');
-    expect(header?.firstElementChild?.tagName).toBe('H2');
-    expect(x.querySelector('svg')?.getAttribute('width')).toBe('20');
+    const header = x.closest('[data-sheet-grab]');
+    // Leading edge: the Back is the header's first child, the title follows it.
+    expect(header?.firstElementChild).toBe(x);
+    expect(x.nextElementSibling?.tagName).toBe('H2');
+    expect(x.className).toContain('-ml-3');
+    expect(x.className).not.toContain('-mr-3');
+    const svg = x.querySelector('svg');
+    expect(svg?.getAttribute('width')).toBe('20');
+    // The glyph is IconChevronLeft (same path), never a cross.
+    expect(svg?.innerHTML).toBe(chevronPaths());
     expect(header?.textContent).not.toContain('Cancel');
-    expect(sheet.querySelectorAll('[aria-label="Close"]')).toHaveLength(1);
+    expect(sheet.querySelectorAll('[aria-label="Back"]')).toHaveLength(1);
+    expect(sheet.querySelector('[aria-label="Close"]')).toBeNull();
+  });
+
+  it('a header verb sits trailing while the exit stays the leading "<"', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(
+        <Sheet open onClose={() => {}} title="Edit" headerAction={<button type="button">Save</button>}>
+          <p>body</p>
+        </Sheet>,
+      );
+      await wait(30);
+    });
+    const header = document.querySelector<HTMLElement>('[data-sheet-grab]');
+    expect(header?.firstElementChild?.getAttribute('aria-label')).toBe('Back');
+    expect(header?.lastElementChild?.textContent).toBe('Save');
+    expect(document.querySelector('[aria-label="Close"]')).toBeNull();
   });
 });
 

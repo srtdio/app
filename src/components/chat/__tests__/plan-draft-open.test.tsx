@@ -198,7 +198,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(canDeletePlan({ created_by: null }, null, null)).toBe(false);
   });
 
-  it('rename: 1 to 200 chars, trimmed; the field has Cancel (X) and Done, 44px each', () => {
+  it('rename: 1 to 200 chars, trimmed; the field has a ghost Cancel and Done, 44px each', () => {
     expect(renameTitle('  New  ')).toBe('New');
     expect(renameTitle('   ')).toBeNull();
     expect(renameTitle('x'.repeat(201))).toBeNull();
@@ -210,7 +210,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(html).toContain('maxLength="200"');
     expect(html).toContain('aria-label="Cancel rename"');
     expect(html).toContain('Done');
-    expect(html).toMatch(/class="[^"]*h-11 w-11[^"]*"[^>]*data-plan-rename-cancel=""/);
+    expect(html).toMatch(/class="[^"]*h-11 min-h-11[^"]*"[^>]*data-plan-rename-cancel=""[^>]*>Cancel<\/button>/);
     const empty = renderToStaticMarkup(
       <RenameField value="  " busy={false} onChange={noop} onCancel={noop} onDone={noop} />,
     );

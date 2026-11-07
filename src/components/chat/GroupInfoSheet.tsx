@@ -16,7 +16,7 @@ import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PhotoOptionsSheet, type PhotoOptionsSheetProps } from '@/components/ui/PhotoOptionsSheet';
 import { HeaderBar } from '@/components/ui/HeaderBar';
-import { ICON_SIZE, IconCamera, IconPlus, IconSignOut, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconCamera, IconPlus, IconSignOut, IconTrash } from '@/components/ui/icons';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { supabase } from '@/lib/supabase';
@@ -854,7 +854,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
                     disabled={busy}
                     onClick={() => setRemoveTarget(member)}
                   >
-                    <IconX size={ICON_SIZE.control} />
+                    <IconTrash size={ICON_SIZE.control} />
                   </IconButton>
                 ) : null}
               </li>

@@ -19,7 +19,7 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   useIsLaptop: () => false,
 }));
 
-import { IconCheck, IconPause, IconX } from '@/components/ui/icons';
+import { IconBan, IconCheck, IconPause } from '@/components/ui/icons';
 import {
   DELETE_CONFIRM_BASE,
   PostActionSheet,
@@ -98,7 +98,7 @@ describe('31. Approve on their behalf lives in the ⋯ menu', () => {
     await render(
       [
         { key: 'approved', icon: IconCheck, label: 'Approve on their behalf', onPick },
-        { key: 'rejected', icon: IconX, label: 'Reject', danger: true, onPick: vi.fn() },
+        { key: 'rejected', icon: IconBan, label: 'Reject', danger: true, onPick: vi.fn() },
         { key: 'parked', icon: IconPause, label: 'Park', onPick: vi.fn() },
       ],
       onOpenChange,

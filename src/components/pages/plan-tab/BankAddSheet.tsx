@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Sheet, SheetActions } from '@/components/ui/Sheet';
 import { Card } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Textarea';
-import { ICON_SIZE, IconPaperclip, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconPaperclip, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { BucketOption } from '@/lib/buckets';
@@ -235,7 +235,7 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
                       setFiles((prev) => prev.filter((x) => x.versionId !== f.versionId))
                     }
                   >
-                    <IconX size={ICON_SIZE.control} />
+                    <IconTrash size={ICON_SIZE.control} />
                   </IconButton>
                 </li>
               ))}
@@ -253,7 +253,7 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
                     label={`Remove ${u.file.name}`}
                     onClick={() => controller.remove(u.id)}
                   >
-                    <IconX size={ICON_SIZE.control} />
+                    <IconTrash size={ICON_SIZE.control} />
                   </IconButton>
                 </li>
               ))}

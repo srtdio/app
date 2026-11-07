@@ -133,7 +133,7 @@ describe('CreatePostSheet W1', () => {
     await renderSheet();
     await act(async () => setValue(caption(), 'Hello'));
     await act(async () =>
-      document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click(),
+      document.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!.click(),
     );
     expect(document.body.textContent).toContain(CREATE_POST_DISCARD_TITLE);
     expect(CREATE_POST_DISCARD_TITLE).toBe('Discard changes?');

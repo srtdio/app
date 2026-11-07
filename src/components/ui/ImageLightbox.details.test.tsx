@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The viewer's details sit at the top centre (name, then the time in mono),
-// for every caller that passes details; "Show in chat" sits in the bottom bar
+// The viewer's details are the back bar's title ("{sender} · {time}") for
+// every caller that passes details; "Show in chat" sits in the bottom bar
 // only when the caller passes onShowInChat, and reports the shown index.
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -12,6 +12,7 @@ vi.mock('agora-chat', () => ({
 
 import {
   ImageLightbox,
+  lightboxTitle,
   SHOW_IN_CHAT_LABEL,
   type ImageLightboxProps,
 } from '@/components/ui/ImageLightbox';
@@ -64,27 +65,38 @@ function dialog(): HTMLElement {
   return el;
 }
 
-describe('ImageLightbox details', () => {
-  it('renders the sender and time at the top centre, above the image pane', () => {
-    mount({ details: { sender: 'Maya', time: '23 Oct, 2:14 PM' } });
-    const block = dialog().querySelector('[data-lightbox-details]');
-    expect(block).not.toBeNull();
-    expect(block?.textContent).toContain('Maya');
-    expect(block?.textContent).toContain('23 Oct, 2:14 PM');
-    const time = [...(block?.querySelectorAll('span') ?? [])].find(
-      (s) => s.textContent === '23 Oct, 2:14 PM',
-    );
-    expect(time?.className).toContain('font-mono');
-    expect(time?.className).toContain('tabular-nums');
-    // Top: it comes before the pane in document order.
+describe('ImageLightbox details (D3: the back bar title)', () => {
+  it('renders "{sender} · {time}" as the back bar title, above the image pane', () => {
+    mount({ details: { sender: 'Maya', time: '23 Oct' } });
+    const title = dialog().querySelector('[data-lightbox-back-bar] [data-lightbox-title]');
+    expect(title?.textContent).toBe('Maya · 23 Oct');
     const pane = dialog().querySelector('[data-lightbox-pane]');
-    if (block === null || pane === null) throw new Error('missing block or pane');
-    expect(block.compareDocumentPosition(pane) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    if (title === null || pane === null) throw new Error('missing title or pane');
+    expect(title.compareDocumentPosition(pane) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The two-line top-centre block is gone: the title carries it.
+    expect(dialog().querySelector('[data-lightbox-details]')).toBeNull();
   });
 
-  it('no details: no details block (comments)', () => {
+  it('no details: the image name is the title', () => {
     mount();
-    expect(dialog().querySelector('[data-lightbox-details]')).toBeNull();
+    const title = dialog().querySelector('[data-lightbox-title]');
+    expect(title?.textContent).toBe('2.jpg');
+  });
+
+  it("the caller's backBar title wins over the details", () => {
+    mount({ details: { sender: 'Maya', time: '23 Oct' }, backBar: { title: 'Sam · 2h' } });
+    expect(dialog().querySelector('[data-lightbox-title]')?.textContent).toBe('Sam · 2h');
+  });
+});
+
+describe('lightboxTitle (pure)', () => {
+  it('override, then sender · time, then the name', () => {
+    expect(lightboxTitle('T', { sender: 'Maya', time: '2h' }, 'a.jpg')).toBe('T');
+    expect(lightboxTitle(undefined, { sender: 'Maya', time: '2h' }, 'a.jpg')).toBe('Maya · 2h');
+    expect(lightboxTitle(undefined, { sender: 'Maya', time: '' }, 'a.jpg')).toBe('Maya');
+    expect(lightboxTitle(undefined, { sender: '', time: '2h' }, 'a.jpg')).toBe('2h');
+    expect(lightboxTitle(undefined, { sender: '', time: '' }, 'a.jpg')).toBe('a.jpg');
+    expect(lightboxTitle('', undefined, 'a.jpg')).toBe('a.jpg');
   });
 });
 

@@ -473,7 +473,7 @@ interface MessageThreadProps {
    */
   onDiscard?: (messageId: string) => void;
   /**
-   * The X on an own uploading send: cancel it (its bubble goes). Defaults to
+   * The stop square on an own uploading send: cancel it (its bubble goes). Defaults to
    * the chat store's outbox for this channel when a provider is present.
    */
   onCancelUpload?: (messageId: string) => void;
@@ -2315,7 +2315,7 @@ export function MessageBubble(props: {
   onDiscard?: (messageId: string) => void;
   /** A tombstone's one menu row: hide it for the viewer (Delete for me); absent: inert. */
   onDeleteForMe?: (() => void) | undefined;
-  /** Cancels this own send while its files upload (the UploadRing's X). */
+  /** Cancels this own send while its files upload (the UploadRing's stop square). */
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
   /** A Reply privately quote tapped: open where it points; absent: the quote is static. */
@@ -2425,7 +2425,7 @@ export function MessageBubble(props: {
             cardMeta: <BubbleMetaView meta={meta} mine={mine} placement="card" />,
           }
         : { inBubble: false };
-  // An own send still uploading can be cancelled with the ring's X; once
+  // An own send still uploading can be stopped with the ring's stop square; once
   // recorded, refused or missing its files it cannot.
   const onCancelUpload = props.onCancelUpload;
   const cancelUpload =
@@ -5679,7 +5679,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // Everything per chat is keyed on the channel id (the parent also remounts
   // the thread per channel), never the title.
   const channelId = props.channelId;
-  // The X on an own uploading send: the caller's handler, else this chat's outbox.
+  // The stop square on an own uploading send: the caller's handler, else this chat's outbox.
   const storeCancel = useCancelUpload();
   const propCancel = props.onCancelUpload;
   const onCancelUpload = useMemo<((messageId: string) => void) | undefined>(() => {

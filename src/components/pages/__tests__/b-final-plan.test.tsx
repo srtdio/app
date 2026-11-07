@@ -13,7 +13,7 @@ import { Toolbar } from '@/components/ui/Toolbar';
 import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { TRAILING_PULL } from '@/components/ui/layout';
-import { IconX } from '@/components/ui/icons';
+import { IconPlus } from '@/components/ui/icons';
 
 vi.mock('@/lib/use-is-laptop', async (orig) => ({
   ...(await orig<typeof import('@/lib/use-is-laptop')>()),
@@ -70,22 +70,22 @@ describe('HeaderBar slots (additive)', () => {
 });
 
 describe('trailing rule on the Plan bar actions', () => {
-  it('the ⋯ last pulls itself out by 12; an X last is pulled by the bar', () => {
+  it('the ⋯ last pulls itself out by 12; an icon box last is pulled by the bar', () => {
     const more = html(<HeaderBar title="Item" actions={<ActionMenuTrigger type="button" />} />);
     expect(more).toMatch(new RegExp(`aria-label="More actions"[^>]*class="[^"]*${TRAILING_PULL}`));
     const close = html(
       <HeaderBar
         title="Plan"
         actions={
-          <IconButton label="Close plan" data-plan-close="">
-            <IconX />
+          <IconButton label="Add" data-plan-add="">
+            <IconPlus />
           </IconButton>
         }
       />,
     );
     // The bar's rule: the last 44 icon box takes -mr-3 (its glyph on the edge).
     expect(close).toContain('[&amp;&gt;button.w-11:last-child]:-mr-3');
-    expect(close).toContain('data-plan-close=""');
+    expect(close).toContain('data-plan-add=""');
   });
 
   it('PlanPage renders the one HeaderBar: the ⋯ / X last, no hand-placed pull', () => {

@@ -131,7 +131,7 @@ describe('Cockpit on laptop', () => {
 
     await act(async () => dot.click());
     await settle();
-    const x = panel()?.querySelector<HTMLButtonElement>('[aria-label="Close"]');
+    const x = panel()?.querySelector<HTMLButtonElement>('[aria-label="Back"]');
     await act(async () => x?.click());
     await settle();
     expect(panel()).toBeNull();
@@ -161,13 +161,13 @@ describe('Cockpit on phone', () => {
     layout.laptop = false;
   });
 
-  it('the dot opens a bottom sheet; X closes it', async () => {
+  it('the dot opens a bottom sheet; the "<" back closes it', async () => {
     const dot = await mount();
     await act(async () => dot.click());
     await settle();
     expect(sheet()).not.toBeNull();
     expect(panel()).toBeNull();
-    const x = sheet()?.querySelector<HTMLButtonElement>('[aria-label="Close"]');
+    const x = sheet()?.querySelector<HTMLButtonElement>('[aria-label="Back"]');
     await act(async () => x?.click());
     await settle();
     expect(getCockpitState().open).toBe(false);
