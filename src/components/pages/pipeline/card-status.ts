@@ -46,14 +46,13 @@ export function reviewStatus(
   stageEnteredAt: string,
   viewer: CardViewer,
   now: Date,
-  timeZone?: string | null,
 ): ReviewStatus | null {
   if (stage !== 'review') return null;
   if (isClient(viewer.role)) return { tone: 'you', text: 'Waiting on you' };
   if (!isAgencySide(viewer.role)) return null;
   const only = viewer.approverFirstNames.length === 1 ? viewer.approverFirstNames[0] : undefined;
   const who = only !== undefined && only !== '' ? only : 'approvers';
-  return { tone: 'with', text: `With ${who} · ${formatAgo(stageEnteredAt, now, timeZone ?? undefined)}` };
+  return { tone: 'with', text: `With ${who} · ${formatAgo(stageEnteredAt, now)}` };
 }
 
 /** Whether this viewer may make any move at all from `stage` (the card's ⋯ shows only then). */

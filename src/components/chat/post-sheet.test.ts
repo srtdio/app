@@ -37,13 +37,13 @@ function row(over: Partial<PostCardRow> = {}): PostCardRow {
 }
 
 const TZ = 'UTC';
-/** Three days after the row's stage_entered_at (20 Sep, 10:00Z). */
+/** Three days after the row's stage_entered_at (Sun 20 Sep, 10:00Z): formatAgo reads "Sun". */
 const NOW = new Date('2026-09-23T12:00:00Z');
 
 describe('agencyWaitingHint', () => {
   it('the agency side in review: waiting on approvers, relative to entering review', () => {
     expect(agencyWaitingHint('agency', row({ stage: 'review' }), NOW)).toBe(
-      'Waiting on approvers · 3 days ago',
+      'Waiting on approvers · Sun',
     );
   });
 
@@ -221,7 +221,7 @@ describe('detailRows', () => {
     ]);
   });
 
-  it('approved with an approver: name · when (formatRelative)', () => {
+  it('approved with an approver: name · when (formatAgo)', () => {
     const rows = detailRows(
       row({ stage: 'approved', approved_by: 'u1', approved_at: '2026-09-23T09:05:00Z' }),
       'Asha',
@@ -230,12 +230,12 @@ describe('detailRows', () => {
     );
     const approved = rows.find((r) => r.key === 'approved');
     expect(approved?.label).toBe('Approved');
-    expect(approved?.value).toBe('Asha · 2 hours ago');
+    expect(approved?.value).toBe('Asha · 2h');
   });
 
   it('approved with no approver: when it entered approved, relative', () => {
     const rows = detailRows(row({ stage: 'approved' }), null, NOW, TZ);
-    expect(rows.find((r) => r.key === 'approved')?.value).toBe('3 days ago');
+    expect(rows.find((r) => r.key === 'approved')?.value).toBe('Sun');
   });
 
   it('not approved and no approver: no approval row', () => {
