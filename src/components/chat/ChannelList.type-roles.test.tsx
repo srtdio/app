@@ -94,8 +94,8 @@ describe('chat list type roles', () => {
   });
 
   it('meta: the row time is the meta role (sm, mono, tabular); the preview is secondary', () => {
-    // formatRelative on the list's clock: sent an hour before NOW.
-    const time = '1 hour ago';
+    // formatAgo on the list's clock: sent an hour before NOW.
+    const time = '1h';
     const [stamp] = paint(list([group]), 'span', time);
     expect(classes(stamp as Element)).toEqual(
       expect.arrayContaining(['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']),

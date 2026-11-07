@@ -13,7 +13,7 @@ import {
   type FileViewerProps,
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 
 vi.mock('@/lib/files/office/run', () => ({ runOffice: vi.fn() }));
 
@@ -45,13 +45,13 @@ describe('fileViewerDetails', () => {
     expect(fileViewerDetails(undefined, undefined)).toBeNull();
   });
 
-  it('formats sentAt through src/lib/time.ts formatRelative (the one past-time format)', () => {
+  it('formats sentAt through src/lib/time.ts formatAgo (short past time)', () => {
     const now = new Date('2026-11-04T10:00:00.000Z');
     expect(fileViewerDetails('Maya', AT, now)).toEqual({
       sender: 'Maya',
-      time: formatRelative(AT, now),
+      time: formatAgo(AT, now),
     });
-    expect(fileViewerDetails('Maya', AT, now)?.time).toBe('11 days ago');
+    expect(fileViewerDetails('Maya', AT, now)?.time).toBe('23 Oct');
   });
 
   it('either line alone still shows', () => {
