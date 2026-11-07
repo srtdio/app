@@ -173,7 +173,7 @@ describe('seek, speed and the auto-play chain', () => {
     expect(nextSpeed(1.5)).toBe(2);
     expect(nextSpeed(2)).toBe(1);
     expect(nextSpeed(3)).toBe(1);
-    expect([1, 1.5, 2].map(speedLabel)).toEqual(['1×', '1.5×', '2×']);
+    expect([1, 1.5, 2].map(speedLabel)).toEqual(['1x', '1.5x', '2x']);
   });
 
   it('hands on 350ms later only to an unplayed next note', () => {

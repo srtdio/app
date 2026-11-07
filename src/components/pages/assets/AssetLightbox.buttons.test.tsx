@@ -73,7 +73,7 @@ describe('AssetLightbox buttons', () => {
   const html = mount();
 
   it.each([
-    'aria-label="Close viewer"',
+    'aria-label="Back"',
     'aria-label="Download"',
     'aria-label="Previous file"',
     'aria-label="Next file"',

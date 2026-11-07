@@ -118,7 +118,7 @@ async function runMediaFlow(page: Page): Promise<void> {
   expect(chips).toEqual([...SEARCH_CHIP_ORDER]);
 
   const photo = page.locator('[data-search-chip="photo"]');
-  // The picked chip carries its own X (44x44, "Clear Photos filter"): it
+  // The picked chip carries its own Clear (44 tall, "Clear Photos filter"): it
   // clears the filter and the chat list is back. No All chip.
   await expect(page.locator('[data-chip-clear]')).toHaveCount(0);
   await photo.click();
@@ -126,7 +126,7 @@ async function runMediaFlow(page: Page): Promise<void> {
   await expect(clear).toBeVisible();
   await expect(page.locator('[data-chip-clear]')).toHaveCount(1);
   const box = await clear.boundingBox();
-  expect(Math.round(box?.width ?? 0)).toBe(44);
+  expect(Math.round(box?.width ?? 0)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box?.height ?? 0)).toBe(44);
   await clear.click();
   await expect(photo).toHaveAttribute('aria-pressed', 'false');

@@ -666,9 +666,9 @@ export function nextSpeed(rate: number): number {
   return VOICE_SPEEDS[(index + 1) % VOICE_SPEEDS.length] ?? 1;
 }
 
-/** The pill label for a rate: "1×", "1.5×", "2×". */
+/** The pill label for a rate: "1x", "1.5x", "2x". */
 export function speedLabel(rate: number): string {
-  return `${rate}×`;
+  return `${rate}x`;
 }
 
 /** The chosen speed, shared by every note for the rest of the session. */

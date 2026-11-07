@@ -310,7 +310,7 @@ describe('VoiceNote playback', () => {
     expect(audio.getAttribute('src')).toBe('https://r2/a');
   });
 
-  it('while playing, the speed pill cycles 1× -> 1.5× -> 2× -> 1×', () => {
+  it('while playing, the speed pill cycles 1x -> 1.5x -> 2x -> 1x', () => {
     const audio = mount({
       peekUrl: () => 'https://r2/a',
       refreshUrl: async () => ok('https://r2/a'),
@@ -320,13 +320,13 @@ describe('VoiceNote playback', () => {
     });
     const pill = (): HTMLButtonElement =>
       document.querySelector<HTMLButtonElement>('[data-voice-speed]')!;
-    expect(pill().textContent).toBe('1×');
+    expect(pill().textContent).toBe('1x');
     act(() => pill().click());
-    expect(pill().textContent).toBe('1.5×');
+    expect(pill().textContent).toBe('1.5x');
     act(() => pill().click());
-    expect(pill().textContent).toBe('2×');
+    expect(pill().textContent).toBe('2x');
     act(() => pill().click());
-    expect(pill().textContent).toBe('1×');
+    expect(pill().textContent).toBe('1x');
   });
   it('a note that never starts shows the error row once the watchdog runs out twice', async () => {
     vi.useFakeTimers();

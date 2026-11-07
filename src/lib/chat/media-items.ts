@@ -96,7 +96,10 @@ export function flattenMedia(
   isRemoved?: RemovedLookup,
 ): MediaItem[] {
   return hits.flatMap((hit) =>
-    parseAttachmentMeta(hit.attachmentMeta ?? null, hit.attachmentAssetIds ?? []).flatMap((a) => {
+    // A message deleted for everyone, or hidden for me and written, lists nothing.
+    isMediaGone(hit.id)
+      ? []
+      : parseAttachmentMeta(hit.attachmentMeta ?? null, hit.attachmentAssetIds ?? []).flatMap((a) => {
       if (a.assetId === '' || mediaKindOfMime(a.mime) !== kind) return [];
       if (isRemoved?.(hit.channelId, hit.id, a.assetId) === true) return [];
       const size = metaSize(hit.attachmentMeta, a.assetId);

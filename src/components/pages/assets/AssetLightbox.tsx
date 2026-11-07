@@ -14,8 +14,8 @@ import {
   IconInfo,
   IconLink,
   IconTrash,
-  IconX,
 } from '@/components/ui/icons';
+import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { RenameOutcome } from '@/lib/asset-upload';
 import { displayLabel, humanizeSize, type AssetListItem } from '@/lib/assets';
@@ -46,6 +46,12 @@ const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLa
 
 const SIGN_FAIL = errorText('get a link for this file', null);
 const SWIPE_THRESHOLD = 48;
+
+// The "<" exit inside the Info sheet (panel ink): ViewerBackButton is a plain
+// button, so it carries the IconButton's 44px shape itself.
+const SHEET_BACK =
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg ' +
+  'mv-tint hover:bg-panel-2 focus-visible:lit-focus';
 
 // The top bar's 44px icon buttons on the overlay (light and dark share it).
 // Passed to the shared IconButton; overlay tokens sort after its own, so they win.
@@ -386,7 +392,7 @@ export function AssetLightbox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Focus moves in (to Close), Tab stays inside, and it goes back on close.
+  // Focus moves in (to "<" Back), Tab stays inside, and it goes back on close.
   useModalFocus(dialogRef, true, { initial: () => closeRef.current });
 
   // Escape reaches the lightbox only as the top layer (a menu or confirm above
@@ -574,29 +580,31 @@ export function AssetLightbox({
       tabIndex={-1}
       className="fixed inset-0 z-sheet flex flex-col bg-overlay focus:outline-none"
     >
-      {/* One top bar: close on the left, the name and its type line in the
-          centre, then Download, Copy link, Info and Delete. It clears the notch. */}
+      {/* One top bar: "<" (Back) on the leading edge, never an X; the name and
+          its type line in the centre (the asset has no sender or sent time, so
+          the name is the title); "{i} / {n}" with more than one file; then
+          Download, Copy link, Info and Delete. It clears the notch. */}
       <div
         data-lightbox-bar=""
         className="flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)] text-overlay-fg"
       >
-        <IconButton
-          buttonRef={closeRef}
-          type="button"
-          label="Close viewer"
-          onClick={onClose}
-          className={BAR_BUTTON}
-        >
-          <IconX size={ICON_SIZE.control} />
-        </IconButton>
+        <ViewerBackButton buttonRef={closeRef} onClick={onClose} className={BAR_BUTTON} />
         <div className="min-w-0 flex-1 px-1 text-center">
           <p className="truncate text-base font-medium">
             <Highlight text={name} />
           </p>
           <p className="truncate text-sm tabular-nums text-overlay-fg-dim">
-            {lightboxSubtitle(typeLabel(kind), item.sizeBytes, index, items.length)}
+            {lightboxSubtitle(typeLabel(kind), item.sizeBytes, 0, 1)}
           </p>
         </div>
+        {items.length > 1 ? (
+          <span
+            data-lightbox-counter=""
+            className="shrink-0 px-1 font-mono text-sm tabular-nums text-overlay-fg-dim"
+          >
+            {`${index + 1} / ${items.length}`}
+          </span>
+        ) : null}
         {renderActions(BAR_BUTTON, () => setInfoOpen(true))}
       </div>
 
@@ -689,12 +697,10 @@ export function AssetLightbox({
             className="lit-overlay relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
           >
             <div className="flex items-center gap-2">
+              <ViewerBackButton onClick={() => setInfoOpen(false)} className={SHEET_BACK} />
               <Text as="h2" role="title" className="min-w-0 flex-1 truncate">
                 {name}
               </Text>
-              <IconButton label="Close" onClick={() => setInfoOpen(false)}>
-                <IconX size={ICON_SIZE.control} />
-              </IconButton>
             </div>
 
             <dl className="mt-3 flex flex-col gap-3">
