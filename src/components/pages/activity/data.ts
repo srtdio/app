@@ -2,13 +2,13 @@
 // with a plain RLS-scoped select (each member sees only their own rows) and maps
 // every row into a render-ready ActivityItem: Activity's rows and the chat,
 // plan and task alerts the chat bell used to show (alerts.ts), on one feed.
-// The per-user read-state and snooze mutations go through the @srtdio/rpc
+// The per-user read-state mutations go through the @srtdio/rpc
 // wrappers (each carries an explicit p_trace_id). Everything here that does not
 // touch the network is a pure, unit-tested function so the page stays thin.
 
 import { mark } from '@/lib/perf-marks';
 import type { Client, Result } from '@srtdio/rpc';
-import { inboxMarkAllRead, inboxMarkRead, inboxSnooze, withTraceHeader } from '@srtdio/rpc';
+import { inboxMarkAllRead, inboxMarkRead, withTraceHeader } from '@srtdio/rpc';
 import type { Database, InboxEventTypeValue, Json } from '@srtdio/schemas';
 import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
 import { parseMentions } from '@srtdio/comments';
@@ -23,7 +23,6 @@ import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/pe
 import {
   BELL_CHAT_ENTITY,
   BELL_PLAN_EVENT_TYPES,
-  INBOX_SNOOZE_OPTIONS,
   RETIRED_EVENT_LIST,
   chatMessageHref,
   isBellPlanEvent,
@@ -178,19 +177,8 @@ function displayEventType(row: InboxEntryRow, payload: unknown): string {
  *  brief created / closed, posts created from a brief). */
 export const BRIEFS_SCOPE = 'briefs';
 
-/** The sort direction, threaded straight from useSort('activity', ...). */
+/** The list order: Activity reads newest first (no sort control); 'oldest' is kept by the reads. */
 export type ActivityDirection = 'newest' | 'oldest';
-
-/** Snooze kinds accepted by inbox_snooze (p_kind). 'clear' un-snoozes. */
-export type SnoozeKind = '1h' | '4h' | 'tomorrow_9' | 'next_week' | 'clear';
-
-interface SnoozeOption {
-  kind: SnoozeKind;
-  label: string;
-}
-
-/** Menu options offered in the kebab: the shared labels. 'clear' is shown separately by the menu. */
-export const SNOOZE_OPTIONS: readonly SnoozeOption[] = INBOX_SNOOZE_OPTIONS;
 
 /** One inbox entry, mapped to the fields the row renders. */
 export interface ActivityItem {
@@ -1243,9 +1231,6 @@ export const MARKED_READ_LABEL = 'Marked as read';
 /** A refresh that failed with rows already on screen (they stay). */
 export const REFRESH_FAILED = errorText('refresh', null);
 
-/** A snooze that did not save (the raw error goes to the log, never the screen). */
-export const SNOOZE_FAILED = errorText('snooze', null);
-
 /** The loading line under the chips. */
 export const LOADING_NOTIFICATIONS = 'Loading activity';
 
@@ -1256,10 +1241,10 @@ export function updatesLabel(n: number): string {
 
 /** The one positive line each chip's empty state shows (All keeps its own). */
 export const EMPTY_LINES = {
+  unread: 'New updates show up here.',
   plans: 'Plan updates show up here.',
   mentions: 'Mentions of you show up here.',
   briefs: 'Brief updates show up here.',
-  snoozed: 'Snoozed updates come back here.',
 } as const;
 
 /** The load error: plain copy, never the raw error. */
@@ -2316,23 +2301,6 @@ export async function markChipRead(
   }
 }
 
-/** Set or clear snoozed_until on one entry. */
-export function snoozeEntry(
-  client: Client,
-  item: ActivityItem,
-  workspaceId: string,
-  kind: SnoozeKind,
-  traceId: string,
-): Promise<Result<undefined>> {
-  return inboxSnooze(client, {
-    p_entry_id: item.id,
-    p_workspace_id: workspaceId,
-    p_created_at: item.createdAt,
-    p_kind: kind,
-    p_trace_id: traceId,
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Session-shared reads: page one per chip, and the Mentions count
 // ---------------------------------------------------------------------------
@@ -2344,8 +2312,8 @@ export function snoozeEntry(
 // so the page's mount joins them. The last good page of a chip is kept for the
 // session: a return to Activity, or to a chip, paints it at once and refreshes
 // quietly behind it (no request while it is fresh). The page's own writes (a
-// mark read, a snooze) edit the kept pages too (editKeptActivityPages). Any
-// inbox change (the shell's poll, a mark read, a snooze, Mark all read:
+// mark read and its revert) edit the kept pages too (editKeptActivityPages). Any
+// inbox change (the shell's poll, a mark read, Mark all read:
 // INBOX_CHANGED_EVENT) marks them all stale before the page's own listener
 // reloads, so a reload never joins an answer the change made old.
 
@@ -2414,7 +2382,7 @@ const PAGE_STATES: readonly ActivityState[] = [
 const PAGE_DIRECTIONS: readonly ActivityDirection[] = ['newest', 'oldest'];
 
 /**
- * Apply one of the page's own writes (a mark read, a snooze, their revert) to
+ * Apply one of the page's own writes (a mark read, its revert) to
  * every kept chip page of this user and workspace, so a return paints it:
  * the pages read this session and the ones the device saved (seeded at boot,
  * not read yet). A page that was stale stays stale (the next read still goes
@@ -2445,18 +2413,9 @@ if (typeof window !== 'undefined') {
   window.addEventListener(INBOX_CHANGED_EVENT, () => invalidateActivityReads());
 }
 
-/** The viewer's stored Activity sort (use-sort.ts's key for 'activity'), else newest. */
-function storedActivitySort(): ActivityDirection {
-  try {
-    return window.localStorage.getItem('sorted:sort:activity') === 'oldest' ? 'oldest' : 'newest';
-  } catch {
-    return 'newest';
-  }
-}
-
 /**
- * The bell press: start Activity's first reads (page one of All in the
- * viewer's sort, and the unread-mention count) through the keys the page's
+ * The bell press: start Activity's first reads (page one of All, newest
+ * first, and the unread-mention count) through the keys the page's
  * mount joins. Cheap, never throws, paints nothing; a failure is the page's to
  * retry. The client and the count read load with import() (the client is the
  * shell's; the count's module imports this one).
@@ -2464,7 +2423,7 @@ function storedActivitySort(): ActivityDirection {
 export function prefetchActivityData(ctx: PrefetchContext): void {
   try {
     mark('activity:prefetch');
-    const direction = storedActivitySort();
+    const direction: ActivityDirection = 'newest';
     void Promise.all([import('@/lib/supabase'), import('@/lib/inbox/inbox-reads')])
       .then(([{ supabase }, reads]) => {
         void sharedActivityPage(

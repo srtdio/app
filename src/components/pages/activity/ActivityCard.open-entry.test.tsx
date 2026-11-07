@@ -82,8 +82,6 @@ function tapHead(group: ActivityItem[]): ReturnType<typeof vi.fn> {
         presignEnabled={false}
         onOpenGroup={onOpenGroup}
         onOpenEntry={() => {}}
-        onSnooze={() => {}}
-        onMarkRead={() => {}}
         selfName={null}
       />,
     );

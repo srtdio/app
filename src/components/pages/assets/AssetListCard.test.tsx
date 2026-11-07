@@ -6,25 +6,17 @@ import {
   ASSET_LIST_PAGE,
   AssetList,
   AssetListCard,
-  assetCardRows,
   assetFacts,
   assetTabTag,
 } from '@/components/pages/assets/AssetListCard';
-import type { ActionMenuItem } from '@/components/ui/ActionMenu';
-import { IconFile, IconTrash } from '@/components/ui/icons';
-import { LIST_CARD_GRID } from '@/components/ui/ListCard';
+import { LIST_CARD_GRID, type ListCardSelect } from '@/components/ui/ListCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 
-// Phone layout for the card's ⋮ menu (ui/ActionMenu); no matchMedia here.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => false,
-}));
-
 // SSR to static markup: useState initializers run (a warm cache peek shows the
-// image) while effects do not. Every Assets item is ui/ListCard: the picture,
-// the name, the type and size facts, then the added time and the tab tag.
+// image) while effects do not. Every Assets item is ui/ListCard: the picture;
+// line 1 the name and the added time; line 2 the type and size facts and the
+// tab tag. No ⋮: long-press / right-click selects.
 
 const NOW = new Date('2026-01-01T03:00:00Z');
 
@@ -86,16 +78,17 @@ function card(
 }
 
 describe('Assets item is ui/ListCard', () => {
-  it('renders the part with the name on line 1, the facts on line 2, time and tag on line 3', () => {
+  it('renders the part: name and time on line 1, facts and tag on line 2', () => {
     const out = card(makeAsset({ pageCount: 12, sizeBytes: 6_400_000 }));
     expect(out).toMatch(/^<div data-asset-card="a1"[^>]*data-list-card=""/);
     expect(out).toMatch(/data-list-card-line="1"[^]*data-asset-name="" title="report.pdf"/);
     expect(out).toMatch(/data-list-card-preview=""[^>]*data-asset-meta=""[^>]*>PDF · 12 pages · /);
     // formatAdded on the device zone: uploaded earlier the same day reads its clock time.
     expect(out).toMatch(
-      /data-list-card-line="3"[^]*data-asset-uploaded=""[^>]*>\d{1,2}:\d{2} (AM|PM)</,
+      /data-list-card-line="1"[^]*data-asset-uploaded=""[^>]*>\d{1,2}:\d{2} (AM|PM)<[^]*data-list-card-line="2"/,
     );
-    expect(out).toMatch(/data-asset-tag=""[^]*>PDF</);
+    expect(out).toMatch(/data-list-card-line="2"[^]*data-asset-tag=""[^]*>PDF</);
+    expect(out).not.toContain('data-list-card-line="3"');
     // The old tile frame is gone.
     expect(out).not.toContain('data-tile');
     expect(out).not.toContain('aspect-[4/3]');
@@ -169,7 +162,7 @@ describe('line 2 facts, only from fields the item holds', () => {
   });
 });
 
-describe('line 3 tag is the tab label', () => {
+describe('line 2 tag is the tab label', () => {
   it('Media, PDF, Docs, Sheets, Links; none for an unknown kind', () => {
     expect(assetTabTag({ kind: 'image' })).toBe('Media');
     expect(assetTabTag({ kind: 'video' })).toBe('Media');
@@ -226,41 +219,39 @@ describe('the picture slot', () => {
   });
 });
 
-describe('select mode', () => {
-  it('a tap toggles: aria-pressed on the card, the 20 tick box in place of the ⋮, lit-selected', () => {
-    const on = card(makeAsset(), { selectMode: true, selected: true, onToggleSelect: vi.fn() });
-    expect(on).toMatch(/<button[^>]*aria-pressed="true"[^>]*aria-label="Select report.pdf"/);
-    expect(on).not.toContain('View report.pdf');
-    expect(on).not.toContain('data-card-menu');
-    expect(on).toMatch(/data-list-card-more=""[^>]*>\s*<span[^>]*data-card-tick="on"/);
-    expect(on).toMatch(/data-card-tick="on" class="[^"]*h-5 w-5[^"]*bg-accent/);
-    expect(on).toContain('<svg');
+function selectState(active: boolean, chosen: boolean): ListCardSelect {
+  return { active, chosen, onEnter: vi.fn(), onToggle: vi.fn() };
+}
+
+describe('select mode (ListCard select)', () => {
+  it('no ⋮ ever: no menu trigger, no More actions', () => {
+    for (const out of [card(makeAsset()), card(makeAsset(), { select: selectState(false, false) })]) {
+      expect(out).not.toContain('data-card-menu');
+      expect(out).not.toContain('More actions');
+      expect(out).not.toContain('data-list-card-more');
+    }
+  });
+
+  it('selecting: aria-pressed on the card, the tick on the picture, lit-selected when chosen', () => {
+    const on = card(makeAsset(), { select: selectState(true, true) });
+    expect(on).toMatch(/<button[^>]*aria-label="View report.pdf"[^>]*aria-pressed="true"/);
+    expect(on).toContain('data-list-card-tick="on"');
     expect(on).toContain('lit-selected');
-    const off = card(makeAsset(), { selectMode: true, selected: false, onToggleSelect: vi.fn() });
+    const off = card(makeAsset(), { select: selectState(true, false) });
     expect(off).toContain('aria-pressed="false"');
-    expect(off).toMatch(/data-card-tick="off" class="[^"]*h-5 w-5[^"]*border-border-strong/);
+    expect(off).toContain('data-list-card-tick="off"');
     expect(off).not.toContain('lit-selected');
   });
 
-  it('out of select mode: the ⋮ and no selection affordance', () => {
-    const out = card(makeAsset(), { onStartSelect: vi.fn() });
-    expect(out).toContain('aria-label="More actions for report.pdf"');
-    expect(out).toMatch(/data-list-card-more=""[^]*?data-card-menu=""/);
+  it('out of select mode: no pressed state, the tick hidden, no text callout on a hold', () => {
+    const out = card(makeAsset(), { select: selectState(false, false) });
     expect(out).not.toContain('aria-pressed');
-    expect(out).not.toContain('data-card-tick');
+    expect(out).toContain('data-list-card-tick="hidden"');
+    expect(out).toContain('select-none');
   });
 
-  it('the ⋮ menu offers Select before Delete (Delete stays last)', () => {
-    const rows: ActionMenuItem[] = [
-      { id: 'download', label: 'Download', icon: IconFile, onSelect: () => {} },
-      { id: 'delete', label: 'Delete', icon: IconTrash, tone: 'danger', onSelect: () => {} },
-    ];
-    const start = vi.fn();
-    const out = assetCardRows(rows, start);
-    expect(out.map((row) => row.id)).toEqual(['download', 'select', 'delete']);
-    out.find((row) => row.id === 'select')?.onSelect();
-    expect(start).toHaveBeenCalledTimes(1);
-    expect(assetCardRows(rows, undefined)).toBe(rows);
+  it('without select the card has no tick at all', () => {
+    expect(card(makeAsset())).not.toContain('data-list-card-tick');
   });
 });
 
@@ -279,22 +270,21 @@ describe('AssetList', () => {
     expect(out.match(/data-list-card=""/g)).toHaveLength(2);
   });
 
-  it('passes select mode through: which ids are selected', () => {
+  it('passes select mode through: each card gets its own select state', () => {
+    const selectFor = vi.fn((item: AssetListItem) => selectState(true, item.id === 'a1'));
     const out = renderToStaticMarkup(
       <AssetList
         items={items}
         presignEnabled={false}
         cache={cache}
         onOpen={vi.fn()}
-        selectMode
-        selectedIds={new Set(['a1'])}
-        onToggleSelect={vi.fn()}
+        selectFor={selectFor}
       />,
     );
-    expect(out).toContain('aria-label="Select one.pdf"');
-    expect(out).toContain('aria-label="Select two.pdf"');
+    expect(selectFor).toHaveBeenCalledTimes(2);
     expect(out).toContain('aria-pressed="true"');
     expect(out).toContain('aria-pressed="false"');
+    expect(out.match(/data-list-card-tick="on"/g)).toHaveLength(1);
   });
 
   it('draws the first page of cards only, with a marker to draw more', () => {
@@ -317,9 +307,10 @@ describe('AssetList', () => {
 describe('source rules', () => {
   const src = readFileSync(fileURLToPath(new URL('./AssetListCard.tsx', import.meta.url)), 'utf8');
 
-  it('a long-press (touch) or a right-click (laptop) opens the same ⋮ ActionMenu', () => {
-    expect(src).toContain('useMenuGesture(() => setMenuOpen(true))');
-    expect(src).toContain('...gesture.handlers');
+  it('no ⋮ menu or menu gesture: ListCard select owns long-press and right-click', () => {
+    expect(src).not.toContain('ActionMenu');
+    expect(src).not.toContain('useMenuGesture');
+    expect(src).toContain('select={select}');
   });
 
   it('one minute clock for the whole list, no timer per card', () => {

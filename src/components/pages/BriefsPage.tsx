@@ -301,8 +301,8 @@ export function briefsLoadMore(
 
 /**
  * The loading state: a static skeleton in the real list's shape (a section
- * header bar, a day label, then ui/ListCardBox: the ListCard's frame, 72
- * picture and three lines), in the same container and grid, so nothing
+ * header bar, a day label, then ui/ListCardBox: the ListCard's 74 frame, 48
+ * picture and two lines), in the same container and grid, so nothing
  * jumps when the cards arrive. Shared Bone boxes (a top-lit sweep, never a pulse).
  */
 export function BriefsListSkeleton(): ReactElement {
@@ -841,7 +841,7 @@ export function BriefsPage() {
     [showSort, shownBriefs, filter, sort],
   );
 
-  // The list's one clock: every card's time ("Due today", "3h")
+  // The list's one clock: every card's time ("Today", "2d late", "3h")
   // reads the same instant and ages once a minute; no timer per card.
   const nowMs = useMinuteClock();
 

@@ -75,6 +75,7 @@ import {
   filteredEmpty,
   moveErrorMessage,
   pipelineHeader,
+  pipelineSelectActions,
   pipelineSurface,
   postCountLabel,
   postsSkeleton,
@@ -394,10 +395,29 @@ describe('the surface', () => {
       cache: {} as unknown as PresignCache,
       presignEnabled: false,
       workspaceKey: null,
-      onLongPressPost: () => {},
       shownKey: 'pipeline:shown:',
     });
   }
+
+  it('threads the select mode down to the feed', () => {
+    const selectFor = (id: string) => ({
+      active: false,
+      chosen: id === 'p1',
+      onEnter: () => {},
+      onToggle: () => {},
+    });
+    const tree = pipelineSurface({
+      stage: 'all',
+      sorted: [],
+      cache: {} as unknown as PresignCache,
+      presignEnabled: false,
+      workspaceKey: null,
+      selectFor,
+      shownKey: 'pipeline:shown:',
+    });
+    expect((tree.props as { selectFor?: unknown }).selectFor).toBe(selectFor);
+    expect(tree.props).not.toHaveProperty('onLongPressPost');
+  });
 
   it('is the one list (the feed) on phone and laptop for every chip (no board, no Plan week)', () => {
     for (const stage of [...STAGES, 'all', 'plan']) {
@@ -1181,5 +1201,96 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
       .filter((r) => (r.props as { 'aria-checked': boolean })['aria-checked'])
       .map(rowLabel);
     expect(checked).toEqual(['This month', 'Due date']);
+  });
+});
+
+describe('select bar actions (the old card ⋮ rows)', () => {
+  const noop = (): void => {};
+  function actions(
+    post: PipelinePost | null,
+    count: number,
+    viewer: { role: string | null; approverFirstNames: string[]; pending?: boolean },
+    onMove: (post: PipelinePost, to?: Stage) => void = noop,
+  ) {
+    return pipelineSelectActions({ post, count, viewer, onOpen: noop, onCopyLink: noop, onMove });
+  }
+
+  it('one ticked post: Open, Copy link, then every move the move sheet offers', async () => {
+    const { moveActions } = await import('@/components/pages/pipeline/MoveSheet');
+    for (const role of ['client', 'agency', 'owner']) {
+      for (const stage of STAGES) {
+        const labels = actions(makePost('p1', stage), 1, {
+          role,
+          approverFirstNames: [],
+        }).map((a) => a.label);
+        expect(labels.slice(0, 2)).toEqual(['Open', 'Copy link']);
+        const moves = moveActions(role, stage).map((m) => m.label);
+        expect(labels.slice(2)).toEqual(moves);
+        expect(labels).not.toContain('Move');
+      }
+    }
+  });
+
+  it('while the role loads, one Move row opens the move sheet', () => {
+    const moved: Array<Stage | undefined> = [];
+    const rows = actions(
+      makePost('p1', 'draft'),
+      1,
+      { role: null, approverFirstNames: [], pending: true },
+      (_post, to) => moved.push(to),
+    );
+    expect(rows.map((a) => a.label)).toEqual(['Open', 'Copy link', 'Move']);
+    rows.find((a) => a.id === 'move')?.onSelect();
+    expect(moved).toEqual([undefined]);
+  });
+
+  it('a viewer with no allowed move gets Open and Copy link only', () => {
+    expect(
+      actions(makePost('p1', 'review'), 1, { role: null, approverFirstNames: [] }).map(
+        (a) => a.label,
+      ),
+    ).toEqual(['Open', 'Copy link']);
+  });
+
+  it('two or more ticked: no per-post row (Open, Copy link, moves are single)', () => {
+    expect(actions(null, 2, { role: 'agency', approverFirstNames: [] })).toEqual([]);
+    expect(actions(makePost('p1', 'draft'), 2, { role: 'agency', approverFirstNames: [] })).toEqual(
+      [],
+    );
+  });
+
+  it('Reject is bad ink; icons: review arrow, approve check, park pause, reject X', async () => {
+    const icons = await import('@/components/ui/icons');
+    const rows = actions(makePost('p1', 'review'), 1, { role: 'client', approverFirstNames: [] });
+    const byId = new Map(rows.map((a) => [a.id, a]));
+    expect(byId.get('open')?.icon).toBe(icons.IconArrowUpRight);
+    expect(byId.get('copy-link')?.icon).toBe(icons.IconLink);
+    expect(byId.get('move-approved')?.icon).toBe(icons.IconCheck);
+    expect(byId.get('move-rejected')?.icon).toBe(icons.IconX);
+    expect(byId.get('move-rejected')?.tone).toBe('bad');
+    expect(byId.get('move-approved')?.tone).toBeUndefined();
+    const agency = actions(makePost('p1', 'draft'), 1, { role: 'agency', approverFirstNames: [] });
+    expect(new Map(agency.map((a) => [a.id, a])).get('move-review')?.icon).toBe(
+      icons.IconArrowUpRight,
+    );
+  });
+
+  it('a move row hands its target to the page move', () => {
+    const moved: Array<Stage | undefined> = [];
+    const rows = actions(
+      makePost('p1', 'review'),
+      1,
+      { role: 'client', approverFirstNames: [] },
+      (_post, to) => moved.push(to),
+    );
+    rows.find((a) => a.id === 'move-rejected')?.onSelect();
+    expect(moved).toEqual(['rejected']);
+  });
+
+  it('the page renders the SelectBar while selecting, labelled Selected posts', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('useListSelection()');
+    expect(src).toContain('label="Selected posts"');
+    expect(src).toContain('selection.leaveThen(() => openPostCard(');
   });
 });

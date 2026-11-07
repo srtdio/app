@@ -159,7 +159,7 @@ describe('Briefs list type roles', () => {
     await mount();
     const title = byText('Launch reel');
     expectRole(title.parentElement as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
-    expectRole(byText('Build hype for the drop'), ['text-md', 'text-fg-2', 'line-clamp-2']);
+    expectRole(byText('Build hype for the drop'), ['text-md', 'text-fg-2', 'truncate']);
   });
 
   it('the due line is sm fg-3 meta', async () => {

@@ -6,11 +6,6 @@
 // their rows map to no alert and the feed read leaves them out.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
 
 vi.mock('@/lib/workspace-context', async (importOriginal) => ({
   workspaceDisplayName: (await importOriginal<typeof import('@/lib/workspace-context')>())
@@ -194,15 +189,14 @@ describe('chips', () => {
     for (const id of alertIds) {
       expect(ids('all')).toContain(id);
       expect(ids('unread')).toContain(id);
-      for (const state of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
+      for (const state of ['mentions', 'briefs', 'plans'] as const) {
         expect(ids(state)).not.toContain(id);
       }
     }
   });
 
-  it('a snoozed alert moves to Snoozed', () => {
+  it('a row snoozed until later stays hidden from All and Unread (the read filter keeps it out)', () => {
     const snoozed = [plan('plan_opened', { snoozed_until: LATER }), task({ snoozed_until: LATER })];
-    expect(ids('snoozed', snoozed)).toEqual(['plan_opened', 'task']);
     expect(ids('all', snoozed)).toEqual([]);
     expect(ids('unread', snoozed)).toEqual([]);
   });
@@ -240,8 +234,9 @@ describe('Mark all read', () => {
     );
     expect(page).not.toContain('{chipUnread} unread');
     expect(page).toMatch(/<Button variant="link" onClick=\{handleMarkAll\}>\s*Mark all read/);
-    // The toolbar keeps one IconButton (Sort): no ⋯ menu, no text button there.
+    // The toolbar is the search alone: no sort, no ⋯ menu, no text button there.
     expect(page).not.toContain('ActionMenu');
+    expect(page).not.toContain('SortMenu');
     expect(count(page, 'onClick={handleMarkAll}')).toBe(1);
   });
 });
@@ -350,8 +345,6 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
         presignEnabled={false}
         onOpenGroup={() => {}}
         onOpenEntry={() => {}}
-        onSnooze={() => {}}
-        onMarkRead={() => {}}
         selfName={null}
         {...extra}
       />,
@@ -380,11 +373,12 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     expect(card([task()])).not.toContain('data-list-card-tag');
   });
 
-  it('a missed task due time: the card frame, the menu, the unread dot and its icon', () => {
+  it('a missed task due time: the card frame, the bad time, the unread dot and its icon', () => {
     const html = card([taskDue()]);
     expect(html).toContain('data-activity-event="task_due"');
     expect(html).toContain('data-list-card=""');
-    expect(html).toContain('data-activity-menu');
+    expect(html).not.toContain('data-activity-menu');
+    expect(html).toContain('data-list-card-time-bad=""');
     expect(html).toContain('data-list-card-unread');
     expect(html).toContain('data-activity-alert-icon="task"');
     // The one tag names the kind: a missed due time reads Reminder.
@@ -421,8 +415,6 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
               presignEnabled={false}
               onOpenGroup={() => {}}
               onOpenEntry={() => {}}
-              onSnooze={() => {}}
-              onMarkRead={() => {}}
               selfName={null}
               side={side}
             />
@@ -568,22 +560,24 @@ describe('notifications fixes: page and provider wiring', () => {
   );
 
   it('server search: the shared header, ?q= in the URL, chips hidden, newest first only', () => {
-    // Search left, sort right, through the shared SectionHeader + SortMenu.
-    expect(page).toContain('<SectionHeader<ActivityDirection>');
+    // The search runs the full width of the shared SectionHeader: no sort control.
+    expect(page).toMatch(/<SectionHeader\s+search=\{\{/);
+    expect(page).not.toMatch(/<SectionHeader[^>]*\bsort=/);
     expect(page).toContain("placeholder: 'Search activity'");
-    expect(page).toContain('options={activitySortOptions(searching)}');
-    expect(page).toContain("{ value: 'newest', label: 'Newest first' }");
-    expect(page).toContain("{ value: 'oldest', label: 'Oldest first' }");
-    expect(page).not.toMatch(/label: 'Newest'|label: 'Oldest'/);
+    expect(page).not.toContain('SortMenu');
+    expect(page).not.toContain('useSort');
+    expect(page).not.toContain('activitySortOptions');
+    expect(page).not.toContain('SORT_OPTIONS');
+    expect(page).not.toContain('Oldest first');
     // The query lives in the URL; the search is the shared debounced runner.
     expect(page).toContain("const SEARCH_PARAM = 'q';");
     expect(page).toContain('useServerSearch<ActivityItem[]>(');
     expect(page).toContain('searchActivityEntries(supabase, workspaceId, { query }, signal)');
-    // Oldest first is never faked by reversing pages: searching reads newest first.
-    expect(page).toContain("const sort: ActivityDirection = searching ? 'newest' : storedSort;");
+    // The list is newest first, the feed and the search alike.
+    expect(page).toContain("const ACTIVITY_SORT: ActivityDirection = 'newest';");
     // The chips (and their Mark all read) hide while searching; results ignore the chip.
     expect(page).toMatch(/\{searching \? null : \(\s*<ActivityFilterBar/);
-    expect(page).toContain('? groupDigest(items, sort, { nowMs, tz })');
+    expect(page).toContain('? groupDigest(items, ACTIVITY_SORT, { nowMs, tz })');
     // Load more while searching pages the search, keyset on (created_at, id).
     expect(page).toContain('await searchActivityEntries(supabase, workspaceId, { query, cursor })');
     // The live poll never merges into search results.
@@ -606,8 +600,7 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).toContain('if (!document.hidden) setNowMs(Date.now());');
   });
 
-  it('fix 12: the page speaks of activity, never notifications, in its loading and sort copy', () => {
-    expect(page).toContain('label="Sort activity"');
+  it('fix 12: the page speaks of activity, never notifications, in its loading copy', () => {
     expect(page).not.toContain('Sort notifications');
     expect(page).not.toContain('Loading notifications');
     // Loading is the card-shaped boxes (ActivityBoxes), labelled "Loading activity".
@@ -617,9 +610,13 @@ describe('notifications fixes: page and provider wiring', () => {
   });
 
   it('fix 13: each chip empty state is its one positive line', () => {
-    for (const key of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
+    for (const key of ['unread', 'mentions', 'briefs', 'plans'] as const) {
       expect(page).toContain(`title={EMPTY_LINES.${key}}`);
     }
+    // The Unread chip's own line; All keeps its line word for word; no Snoozed line.
+    expect(EMPTY_LINES.unread).toBe('New updates show up here.');
+    expect(page).toContain('title="Activity across posts, briefs and people shows up here."');
+    expect(page).not.toContain('EMPTY_LINES.snoozed');
     for (const gone of [
       'No mentions yet',
       'No brief activity yet',
@@ -638,19 +635,17 @@ describe('notifications fixes: page and provider wiring', () => {
       'if (!(event instanceof CustomEvent) || event.detail !== POLL_CHANGE_SOURCE) return;',
     );
     expect(page).toContain("void loadActivity('merge');");
-    expect(page).toContain('setItems((prev) => mergeFresh(prev, result.data, sort));');
+    expect(page).toContain('setItems((prev) => mergeFresh(prev, result.data, ACTIVITY_SORT));');
     // The provider skips a count refresh for its own poll event.
     expect(provider).toMatch(
       /if \(event instanceof CustomEvent && event\.detail === POLL_CHANGE_SOURCE\) return;/,
     );
   });
 
-  it('fix 18: a load or load-more that went stale (seq, chip or sort moved on) is dropped', () => {
+  it('fix 18: a load or load-more that went stale (seq or chip moved on) is dropped', () => {
     expect(page).toContain('const activitySeqRef = useRef(0);');
     expect(page).toContain('if (seq !== activitySeqRef.current) return;');
-    expect(page).toMatch(
-      /seq !== activitySeqRef\.current \|\|\s*stateRef\.current !== chip \|\|\s*sortRef\.current !== direction/,
-    );
+    expect(page).toMatch(/seq !== activitySeqRef\.current \|\|\s*stateRef\.current !== chip \|\|/);
     expect(page).toContain('setItems((prev) => appendUnique(prev, result.data));');
   });
 
@@ -701,15 +696,15 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).toContain('{error && items.length === 0 ? (');
   });
 
-  it('fix 25: a failed snooze toasts errorCopy and logs the trace id, never the raw error', () => {
-    expect(page).toMatch(
-      /logger\.warn\('notifications: snooze failed', \{\s*trace_id: traceId,\s*error: result\.error\.message,\s*\}\);\s*push\(errorText\('snooze', result\.error\)\);/,
-    );
+  it('no snooze and no row menu: Activity has no per-row actions beyond the tap', () => {
+    expect(page).not.toMatch(/snoozeEntry|handleSnooze|onSnooze|SnoozeKind|onMarkRead=/);
     expect(page).not.toContain('push(result.error.message)');
   });
 
   it('fix 27: Today and Yesterday follow the workspace timezone and roll over at its midnight', () => {
-    expect(page).toContain('groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz })');
+    expect(page).toContain(
+      'groupDigest(filterByState(items, state, nowMs), ACTIVITY_SORT, { nowMs, tz })',
+    );
     expect(page).toContain('msUntilZonedMidnight(nowMs, tz)');
     expect(page).toContain('?.timezone ?? null');
   });

@@ -1,27 +1,20 @@
 import { mark } from '@/lib/perf-marks';
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-  type ReactElement,
-  type RefObject,
-} from 'react';
-import { cn } from '@/lib/cn';
-import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
-import { useMenuGesture } from '@/components/ui/useLongPress';
+import { useEffect, useRef, useState, type ComponentType, type RefObject } from 'react';
 import { Thumbnail } from '@/components/media';
 import {
   ICON_SIZE,
-  IconCheck,
-  IconCheckCircle,
   IconFile,
   IconImage,
   IconLink,
   IconVideo,
   type IconProps,
 } from '@/components/ui/icons';
-import { LIST_CARD_GRID, ListCard, type ListCardPicture } from '@/components/ui/ListCard';
+import {
+  LIST_CARD_GRID,
+  ListCard,
+  type ListCardPicture,
+  type ListCardSelect,
+} from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { FileTile, fileTileMeta, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { GlideItem } from '@/lib/motion';
@@ -48,7 +41,7 @@ export const ASSET_LIST_PAGE = 60;
 const MORE_MARGIN = '800px';
 
 /**
- * Line 2: the type and size facts, built only from the fields the item already
+ * The preview (line 2): the type and size facts, built only from the fields the item already
  * holds (no read). A picture: "PNG · 2400 x 2400 · 2.4 MB"; a video: "MP4 · 0:15
  * · 18 MB"; a file: its kind, pages and size ("PDF · 12 pages · 6.1 MB"); a
  * link: its domain. A fact the item lacks is left out. Pure.
@@ -78,7 +71,7 @@ export function assetFacts(item: AssetListItem): string {
     .join(' · ');
 }
 
-/** Line 3's one grey tag: the item's tab label (Media, PDF, Docs, Sheets, Links); none when unknown. */
+/** Line 2's one grey tag: the item's tab label (Media, PDF, Docs, Sheets, Links); none when unknown. */
 export function assetTabTag(item: Pick<AssetListItem, 'kind'>): string | undefined {
   return item.kind === null ? undefined : TAB_LABELS[KIND_TAB[item.kind]];
 }
@@ -147,78 +140,29 @@ function assetPicture(
   return { kind: 'icon', icon };
 }
 
-/**
- * The 20 tick box in the ListCard `check` slot while selecting (where the ⋮
- * sits). Decorative: the card's own button carries aria-pressed and the toggle
- * (as the chat list's select check).
- */
-export function AssetSelectTick({ selected }: { selected: boolean }): ReactElement {
-  return (
-    <span
-      aria-hidden="true"
-      data-card-tick={selected ? 'on' : 'off'}
-      className={cn(
-        'flex h-5 w-5 items-center justify-center rounded-sm border lit-well',
-        selected ? 'border-transparent bg-accent text-accent-fg' : 'border-border-strong bg-panel',
-      )}
-    >
-      {selected ? <IconCheck size={ICON_SIZE.inline} /> : null}
-    </span>
-  );
-}
-
-/**
- * The card's ⋮ rows: the page's rows plus Select (start selecting with this
- * card ticked), which sits with the other rows before Delete (always last).
- * Without onStartSelect the rows are the page's as they are. Pure.
- */
-export function assetCardRows(
-  menuItems: readonly ActionMenuItem[],
-  onStartSelect: (() => void) | undefined,
-): readonly ActionMenuItem[] {
-  if (onStartSelect === undefined) return menuItems;
-  const select: ActionMenuItem = {
-    id: 'select',
-    label: 'Select',
-    icon: IconCheckCircle,
-    onSelect: onStartSelect,
-  };
-  const last = menuItems[menuItems.length - 1];
-  return last?.tone === 'danger'
-    ? [...menuItems.slice(0, -1), select, last]
-    : [...menuItems, select];
-}
-
 interface AssetListCardProps {
   item: AssetListItem;
   /** Whether presigning is configured; when false, pictures show the icon. */
   presignEnabled: boolean;
   cache: PresignCache;
-  /** The list's clock: line 3 reads when it was added, "10:27 AM" today else "2 Nov" (formatAdded). */
+  /** The list's clock: the time reads when it was added, "10:27 AM" today else "2 Nov" (formatAdded). */
   now: Date;
   /** Tap: open the lightbox (files) or the external link (links). */
   onOpen: () => void;
-  /** The rows of this card's ⋮ menu (ui/ActionMenu), opened by the ⋮, a long press or a right-click. */
-  menuItems?: readonly ActionMenuItem[];
-  /** When true, a tap toggles selection instead of opening, and the tick shows. */
-  selectMode?: boolean;
-  /** Whether this card is currently selected (only meaningful in select mode). */
-  selected?: boolean;
-  /** Toggle this card's selection (select mode only). */
-  onToggleSelect?: () => void;
   /**
-   * The ⋮ menu's Select row (outside select mode): start selecting with this
-   * card already ticked. When undefined the row is left out.
+   * Select mode (useListSelection().selectFor): a long-press or right-click
+   * enters it with this card ticked; while it is on a tap toggles. Absent: the
+   * card only opens.
    */
-  onStartSelect?: (() => void) | undefined;
+  select?: ListCardSelect | undefined;
 }
 
 /**
- * One Assets item on ui/ListCard: the picture, the name, the type and size
- * facts, then when it was added and its tab as the one grey tag, with the ⋮.
- * A tap opens it (the lightbox, or the link in a new tab); a long press or a
- * right-click opens the same ⋮ menu. In select mode a tap toggles it and the
- * tick takes the ⋮'s place, so the card never changes size.
+ * One Assets item on ui/ListCard: the picture; line 1 the file name and when
+ * it was added (formatAdded); line 2 the type and size facts and its tab as
+ * the one grey tag. A tap opens it (the lightbox, or the link in a new tab).
+ * No ⋮: a long-press or right-click selects it (ListCard `select`) and the
+ * old menu rows live on the page's SelectBar.
  */
 export function AssetListCard({
   item,
@@ -226,27 +170,15 @@ export function AssetListCard({
   cache,
   now,
   onOpen,
-  menuItems = [],
-  selectMode = false,
-  selected = false,
-  onToggleSelect,
-  onStartSelect,
+  select,
 }: AssetListCardProps) {
   const name = displayLabel(item);
-  // The ⋮ menu's open state: the ⋮ toggles it; a long press (touch) or a
-  // right-click (laptop) opens it (useMenuGesture, LONG_PRESS_MS).
-  const [menuOpen, setMenuOpen] = useState(false);
-  // Called unconditionally to satisfy the rules of hooks; its handlers are only
-  // spread onto the card when select mode is off.
-  const gesture = useMenuGesture(() => setMenuOpen(true));
   const isFile = item.kind !== 'image' && item.kind !== 'link';
-
-  const rows = assetCardRows(menuItems, onStartSelect);
 
   return (
     <ListCard
       surface={{ 'data-asset-card': item.id }}
-      selected={selectMode && selected}
+      select={select}
       picture={assetPicture(item, name, cache, presignEnabled)}
       pictureHooks={{ 'data-asset-picture': '' }}
       title={
@@ -260,56 +192,12 @@ export function AssetListCard({
       timeHooks={{ 'data-asset-uploaded': '' }}
       tag={assetTabTag(item)}
       tagHooks={{ 'data-asset-tag': '' }}
-      // In select mode the card is a plain toggle: a tap selects/deselects and
-      // the menu gesture + lightbox/link wiring is bypassed (you pick files,
-      // not open them).
-      onPress={
-        selectMode
-          ? () => onToggleSelect?.()
-          : () => {
-              // A tap opens; the click that trails a long-press does not.
-              if (gesture.consumeClickSuppression()) return;
-              onOpen();
-            }
-      }
-      press={
-        selectMode
-          ? {
-              'aria-pressed': selected,
-              'aria-label': `Select ${name}`,
-              style: { touchAction: 'manipulation' },
-            }
-          : {
-              ...gesture.handlers,
-              'aria-label': item.kind === 'link' ? `Open ${name}` : `View ${name}`,
-              style: { touchAction: 'manipulation' },
-            }
-      }
-      {...(selectMode
-        ? {
-            check: <AssetSelectTick selected={selected} />,
-          }
-        : {
-            // The ⋮ on line 3, a sibling of the card's tap surface (buttons
-            // never nest); its trigger takes the trailing rule. The laptop
-            // popover anchors under it.
-            menu: (
-              <ActionMenu
-                title={name}
-                items={rows}
-                open={menuOpen}
-                onOpenChange={setMenuOpen}
-                trigger={
-                  <ActionMenuTrigger
-                    type="button"
-                    label={`More actions for ${name}`}
-                    aria-expanded={menuOpen}
-                    data-card-menu=""
-                  />
-                }
-              />
-            ),
-          })}
+      // In select mode ListCard takes the tap (it toggles), so this only opens.
+      onPress={onOpen}
+      press={{
+        'aria-label': item.kind === 'link' ? `Open ${name}` : `View ${name}`,
+        style: { touchAction: 'manipulation' },
+      }}
     />
   );
 }
@@ -319,16 +207,8 @@ interface AssetListProps {
   presignEnabled: boolean;
   cache: PresignCache;
   onOpen: (item: AssetListItem) => void;
-  /** The rows of an item's ⋮ menu (its ⋮ or a long press opens it). */
-  menuItemsFor?: (item: AssetListItem) => readonly ActionMenuItem[];
-  /** When true, cards become selection toggles instead of openers. */
-  selectMode?: boolean;
-  /** The currently selected asset ids (select mode only). */
-  selectedIds?: ReadonlySet<string>;
-  /** Toggle one item's selection (select mode only). */
-  onToggleSelect?: (item: AssetListItem) => void;
-  /** A card's ⋮ Select row: start selecting with that item ticked. */
-  onStartSelect?: ((item: AssetListItem) => void) | undefined;
+  /** Each card's select mode (useListSelection().selectFor); absent: no select mode. */
+  selectFor?: ((item: AssetListItem) => ListCardSelect) | undefined;
 }
 
 /**
@@ -376,11 +256,7 @@ export function AssetList({
   presignEnabled,
   cache,
   onOpen,
-  menuItemsFor,
-  selectMode = false,
-  selectedIds,
-  onToggleSelect,
-  onStartSelect,
+  selectFor,
 }: AssetListProps) {
   const { count, sentinelRef } = useGrowingCount(items.length);
   const nowMs = useMinuteClock();
@@ -398,11 +274,7 @@ export function AssetList({
               cache={cache}
               now={now}
               onOpen={() => onOpen(item)}
-              menuItems={menuItemsFor?.(item) ?? []}
-              selectMode={selectMode}
-              selected={selectedIds?.has(item.id) ?? false}
-              onToggleSelect={() => onToggleSelect?.(item)}
-              onStartSelect={onStartSelect === undefined ? undefined : () => onStartSelect(item)}
+              select={selectFor?.(item)}
             />
           </GlideItem>
         ))}

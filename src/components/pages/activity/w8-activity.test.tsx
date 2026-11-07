@@ -1,15 +1,10 @@
-// W8 regressions for Activity: the card's ⋯ menu, group read state, Mark all
-// read on the active chip only (no Undo), the plain load error and the shared
-// snooze labels.
+// W8 regressions for Activity: group read state, Mark all read on the active
+// chip only (no Undo), the plain load error and one unread dot size. The
+// card's ⋯ menu and its snoozes are gone (no row menu on Activity).
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
 
 vi.mock('@/lib/workspace-context', async (importOriginal) => ({
   workspaceDisplayName: (await importOriginal<typeof import('@/lib/workspace-context')>())
@@ -26,11 +21,9 @@ import {
 import {
   ACTIVITY_LOAD_FAILED,
   MARKED_READ_LABEL,
-  SNOOZE_OPTIONS,
   markAllTargets,
   type ActivityItem,
 } from '@/components/pages/activity/data';
-import { INBOX_SNOOZE_OPTIONS } from '@/lib/inbox/bell-types';
 import type { PresignCache } from '@/lib/asset-presign';
 
 const cache = {} as unknown as PresignCache;
@@ -80,19 +73,17 @@ function renderCard(group: ActivityItem[]): string {
       presignEnabled={false}
       onOpenGroup={() => {}}
       onOpenEntry={() => {}}
-      onSnooze={() => {}}
-      onMarkRead={() => {}}
       selfName={null}
     />,
   );
 }
 
-describe('W8 fix 3: the card shows a visible 44px ⋯ menu', () => {
-  it('mounts ActivityRowMenu on every card', () => {
+describe('the card carries no ⋯ menu', () => {
+  it('renders no row menu, no Activity options and no snooze', () => {
     const html = renderCard([item({ id: 'a' })]);
-    expect(html).toContain('data-activity-menu');
-    expect(html).toContain('aria-label="Activity options"');
-    expect(html).toMatch(/aria-label="Activity options"[^>]*class="[^"]*h-11 w-11/);
+    expect(html).not.toContain('data-activity-menu');
+    expect(html).not.toContain('Activity options');
+    expect(html).not.toMatch(/[Ss]nooze/);
   });
 });
 
@@ -156,17 +147,7 @@ describe('W8 fix 6: the load error is plain copy, never raw error text', () => {
   });
 });
 
-describe('W8 fix 7: shared snooze labels and one unread dot size', () => {
-  it('Notifications uses the one shared set of snooze labels', () => {
-    expect(SNOOZE_OPTIONS).toBe(INBOX_SNOOZE_OPTIONS);
-    expect(SNOOZE_OPTIONS.map((o) => o.label)).toEqual([
-      '1 hour',
-      '4 hours',
-      'Tomorrow 9 AM',
-      'Next week',
-    ]);
-  });
-
+describe('W8 fix 7: one unread dot size', () => {
   it('every unread dot is 8px', () => {
     expect(UNREAD_DOT_CLASS).toContain('h-2 w-2');
     const html = renderCard([item({ id: 'a' })]);

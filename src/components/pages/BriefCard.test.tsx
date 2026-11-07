@@ -60,7 +60,7 @@ function makeCache(peekUrl: string | null) {
   };
 }
 
-// A fixed clock two months before the default due day (1 Jul), so "Due 1 Jul"
+// A fixed clock two months before the default due day (1 Jul), so "1 Jul"
 // reads the same whatever day the suite runs.
 const NOW = new Date('2026-05-01T12:00:00Z');
 
@@ -95,7 +95,7 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).not.toContain('data-card-title');
   });
 
-  it('renders the small copy as the 72 picture when thumbnailAssetVersionId is present', () => {
+  it('renders the small copy as the 48 picture when thumbnailAssetVersionId is present', () => {
     const { cache, peekThumbnail } = makeCache('https://cdn.example/thumb.jpg');
     const out = render(makeBrief({ thumbnailAssetVersionId: 'av1' }), cache);
     expect(out).toContain('<img');
@@ -141,7 +141,8 @@ describe('BriefCard on ui/ListCard', () => {
     const out = render(makeBrief({ status: 'open', target_date: '2026-07-01' }), cache);
     expect(out).toContain('Spring launch');
     expect(out).toContain('Open');
-    expect(out).toContain('Due 1 Jul');
+    expect(out).toContain('>1 Jul<');
+    expect(out).not.toContain('Due ');
   });
 
   it('a brief with no due date shows when it was raised (formatAgo)', () => {
@@ -157,7 +158,7 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).not.toContain('data-list-card-time-bad');
   });
 
-  it('an open brief past its due day reads "Overdue 2d" in the bad tone', () => {
+  it('an open brief past its due day reads "2d late" in the bad tone', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({ status: 'open', target_date: '2026-07-01' }),
@@ -165,12 +166,13 @@ describe('BriefCard on ui/ListCard', () => {
       true,
       new Date('2026-07-03T12:00:00Z'),
     );
-    expect(out).toContain('Overdue 2d');
+    expect(out).toContain('>2d late<');
+    expect(out).not.toContain('Overdue');
     expect(out).toContain('data-list-card-time-bad=""');
     expect(out).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad/);
   });
 
-  it('a closed brief is never overdue: it keeps its due words, not the bad tone', () => {
+  it('a closed brief is never late: it keeps its due words, not the bad tone', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({ status: 'closed', target_date: '2026-07-01' }),
@@ -178,8 +180,8 @@ describe('BriefCard on ui/ListCard', () => {
       true,
       new Date('2026-07-03T12:00:00Z'),
     );
-    expect(out).toContain('Due 1 Jul');
-    expect(out).not.toContain('Overdue');
+    expect(out).toContain('>1 Jul<');
+    expect(out).not.toContain('late<');
     expect(out).not.toContain('data-list-card-time-bad');
   });
 
@@ -191,10 +193,10 @@ describe('BriefCard on ui/ListCard', () => {
         'UTC',
         now,
       );
-    expect(at('2026-06-28')).toEqual({ text: 'Due today', bad: false });
-    expect(at('2026-06-29')).toEqual({ text: 'Due tomorrow', bad: false });
-    expect(at('2026-07-01')).toEqual({ text: 'Due Wed', bad: false });
-    expect(at('2026-06-27')).toEqual({ text: 'Overdue 1d', bad: true });
+    expect(at('2026-06-28')).toEqual({ text: 'Today', bad: false });
+    expect(at('2026-06-29')).toEqual({ text: 'Tomorrow', bad: false });
+    expect(at('2026-07-01')).toEqual({ text: 'Wed', bad: false });
+    expect(at('2026-06-27')).toEqual({ text: '1d late', bad: true });
   });
 
   it('shows the Closed tag for a closed brief', () => {
@@ -203,7 +205,7 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).toContain('Closed');
   });
 
-  it('Open and Closed are the one grey (neutral) Tag on line 3', () => {
+  it('Open and Closed are the one grey (neutral) Tag on line 2', () => {
     const { cache } = makeCache(null);
     for (const status of ['open', 'closed'] as const) {
       const out = render(makeBrief({ status }), cache);
@@ -211,20 +213,40 @@ describe('BriefCard on ui/ListCard', () => {
       expect(out).toContain(tagClass('neutral'));
       expect(out).not.toContain('bg-accent-soft');
       expect(out).not.toContain('M16.5 10.5V6.75');
+      expect(out).toMatch(/data-list-card-line="2"[^]*data-brief-status=/);
     }
   });
 
   it('the due date renders mono with tabular figures', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ target_date: '2026-07-01' }), cache);
-    expect(out).toMatch(/data-brief-due="" class="font-mono[^"]*tabular-nums[^"]*">Due 1 Jul</);
+    expect(out).toMatch(/data-brief-due="" class="font-mono[^"]*tabular-nums[^"]*">1 Jul</);
+    // The time sits on line 1, with the title.
+    expect(out).toMatch(/data-list-card-line="1"[^]*data-brief-due=""[^]*data-list-card-line="2"/);
   });
 
-  it('the title is one truncated heading line; the objective clamps to 2 lines', () => {
+  it('the title is one truncated heading line; the brief text is one truncated preview line', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({}), cache);
     expect(out).toMatch(/data-list-card-title="" class="[^"]*truncate/);
-    expect(out).toMatch(/data-list-card-preview="" class="[^"]*line-clamp-2[^"]*min-h-9/);
+    expect(out).toMatch(/data-list-card-preview="" class="[^"]*truncate/);
+    expect(out).not.toContain('line-clamp-2');
+    expect(out).not.toContain('data-list-card-line="3"');
+  });
+
+  it('a closed brief keeps the muted card', () => {
+    const { cache } = makeCache(null);
+    expect(render(makeBrief({ status: 'closed' }), cache)).toContain('lit-card-muted');
+    expect(render(makeBrief({ status: 'open' }), cache)).not.toContain('lit-card-muted');
+  });
+
+  it('has no select mode and no menu: no tick, no ⋮, no long-press hooks', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeBrief({}), cache);
+    expect(out).not.toContain('data-list-card-tick');
+    expect(out).not.toContain('data-card-menu');
+    expect(out).not.toContain('More actions');
+    expect(out).not.toContain('select-none');
   });
 });
 

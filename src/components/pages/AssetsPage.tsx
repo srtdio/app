@@ -13,7 +13,7 @@ import { AssetList } from '@/components/pages/assets/AssetListCard';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
-import { assetMenuItems, type AssetToast } from '@/components/pages/assets/AssetActionSheet';
+import { assetSelectActions, type AssetToast } from '@/components/pages/assets/AssetActionSheet';
 import { AssetInUseSheet, type AssetInUseState } from '@/components/pages/assets/AssetInUseSheet';
 import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
@@ -30,7 +30,6 @@ import {
   deleteToastLabel,
   partialDeleteLabel,
   SELECT_ALL_FAILED,
-  selectedLabel,
 } from '@/components/pages/assets/assets-nav';
 import { useOptionalToast } from '@/components/ui/toast';
 import { useUndoableAction } from '@/lib/use-undoable-action';
@@ -45,9 +44,9 @@ import { useSort } from '@/lib/use-sort';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import { logger } from '@/lib/logger';
-import { bottomAnchorProps, useBottomInset } from '@/lib/bottom-inset';
 import { cn } from '@/lib/cn';
 import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
+import { SelectBar, useListSelection, visibleSelectActions } from '@/components/ui/SelectBar';
 import { GUTTER } from '@/components/ui/layout';
 import { BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import {
@@ -201,14 +200,13 @@ export function AssetsPage() {
   const searchJump = useSearchJump(jumpLanding);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
-  // The phone selection bar sits on top of the tab bar (and any other bottom
-  // bar), never over it: its bottom is the shared bottom inset.
-  const selectBarRef = useRef<HTMLDivElement>(null);
-  const selectBarInset = useBottomInset(selectBarRef);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  // Select all reads every matching id from the server; bumped on Cancel or a
-  // workspace switch so a late answer never reselects.
+  // Select mode (ui/SelectBar): a long-press or right-click on a card enters it
+  // with that card ticked; Cancel, Esc, Back or unticking the last card leave.
+  const selection = useListSelection();
+  const clearSelection = selection.clear;
+  // Select all reads every matching id from the server; bumped when select mode
+  // ends (Cancel, a finished action) or the workspace switches, so a late
+  // answer never reselects.
   const [selectingAll, setSelectingAll] = useState(false);
   const selectAllGeneration = useRef(0);
   const [renameItem, setRenameItem] = useState<AssetListItem | null>(null);
@@ -432,14 +430,20 @@ export function AssetsPage() {
     setViewer(null);
     setUploadOpen(false);
     setAddLinkOpen(false);
-    setSelectMode(false);
-    setSelected(new Set());
+    clearSelection();
     selectAllGeneration.current += 1;
     setSelectingAll(false);
     setRenameItem(null);
     setPendingDelete(new Set());
     setInUse(null);
-  }, [workspaceId]);
+  }, [workspaceId, clearSelection]);
+
+  // Leaving select mode drops a Select all still reading.
+  useEffect(() => {
+    if (selection.active) return;
+    selectAllGeneration.current += 1;
+    setSelectingAll(false);
+  }, [selection.active]);
 
   // Resolve the current member's workspace role with one RLS-scoped read (no
   // worker round-trip), so the rename affordance can be gated to owner/admin/
@@ -488,23 +492,14 @@ export function AssetsPage() {
   // continues numbering past them when auto-naming.
   const siblingLabels = useMemo(() => liveItems.map(displayLabel), [liveItems]);
 
-  // Toggle one asset's selection. No cap: a delete runs in batches the server
-  // accepts (BULK_BATCH_SIZE), so any selection size can be deleted.
-  const toggleSelect = useCallback((item: AssetListItem): void => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(item.id)) next.delete(item.id);
-      else next.add(item.id);
-      return next;
-    });
-  }, []);
-
   // Select all = every file in the current tab, loaded or not: its ids are read
   // from the server (keyset pages of 1000). While searching, Select all takes
-  // the shown matches only (the search's loaded pages).
+  // the shown matches only (the search's loaded pages). No cap: a delete runs
+  // in batches the server accepts (BULK_BATCH_SIZE).
+  const setManySelected = selection.setMany;
   const selectAll = useCallback(async (): Promise<void> => {
     if (searching) {
-      setSelected(new Set(visible.map((item) => item.id)));
+      setManySelected(visible.map((item) => item.id));
       return;
     }
     if (workspaceId === null) return;
@@ -519,8 +514,8 @@ export function AssetsPage() {
       push(SELECT_ALL_FAILED, 'error');
       return;
     }
-    setSelected(new Set(result.data.filter((id) => !pendingDelete.has(id))));
-  }, [searching, visible, workspaceId, tab, push, pendingDelete]);
+    setManySelected(result.data.filter((id) => !pendingDelete.has(id)));
+  }, [searching, visible, workspaceId, tab, push, pendingDelete, setManySelected]);
 
   // Tap a card: open its external link in a new tab, or open the lightbox at
   // that asset. Opening a link never navigates the current Sorted tab.
@@ -653,7 +648,7 @@ export function AssetsPage() {
     });
   }, []);
 
-  // Delete files (menu, viewer or select mode): hide them at once and show the
+  // Delete files (the select bar or the viewer): hide them at once and show the
   // Undo toast; the soft-delete RPC runs only when the window ends. Undo, or a
   // failed commit, brings the rows back; asset_in_use opens the in-use sheet.
   // Delete is offered to every member, matching asset_delete's policy.
@@ -729,13 +724,13 @@ export function AssetsPage() {
     [runUndoable, unhide, newTrace, showInUse, push, loadCounts, setItemsAndKeep],
   );
 
+  const selectedIds = selection.ids;
   const deleteSelected = useCallback((): void => {
-    const ids = Array.from(selected);
+    const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    setSelectMode(false);
-    setSelected(new Set());
+    clearSelection();
     deleteItems(ids);
-  }, [selected, deleteItems]);
+  }, [selectedIds, clearSelection, deleteItems]);
 
   // Commit one queued file to the asset-upload worker: the file part keeps its
   // ORIGINAL device name (stored as assets.filename, with its extension for type
@@ -844,21 +839,6 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace, setItemsAndKeep],
   );
 
-  // A card's ⋯ menu (ui/ActionMenu): Open {domain} or Copy link first, Delete
-  // last, which hides the file at once and offers Undo (no dialog).
-  const menuItemsFor = useCallback(
-    (item: AssetListItem) =>
-      assetMenuItems(item, {
-        presignEnabled,
-        requestDownloadUrl,
-        canRename,
-        onInfo: (target) => openAsset(target, true),
-        onRename: setRenameItem,
-        onDelete: (target) => deleteItems([target.id]),
-        onToast: push,
-      }),
-    [presignEnabled, requestDownloadUrl, canRename, openAsset, deleteItems, push],
-  );
 
   const searchFailed = searching && assetSearch.status === 'error' && assetSearch.data === null;
   const listLoading = searching
@@ -901,22 +881,30 @@ export function AssetsPage() {
   const gridRef = useRef<HTMLDivElement>(null);
   useSettleOnLanding(gridRef, !listLoading && visible.length > 0, hadBoxes);
 
-  const exitSelectMode = (): void => {
-    selectAllGeneration.current += 1;
-    setSelectingAll(false);
-    setSelectMode(false);
-    setSelected(new Set());
-  };
-
   // Nothing to select: no shown file and, outside a search, a server total of 0.
   const nothingToSelect =
     visible.length === 0 && (searching || counts === null || counts[tab] === 0);
 
-  // A card's ⋮ Select row: starts selecting with that file ticked.
-  const startSelectWith = (item: AssetListItem): void => {
-    setSelected(new Set([item.id]));
-    setSelectMode(true);
-  };
+  // The select bar: the old card ⋮ rows. Open link / Download / Copy link /
+  // Rename / Info for exactly one ticked file (one that is loaded), Delete for
+  // any count (Undo). Rename and Info open over the page, so select mode
+  // leaves first (its Back entry popped); the in-place rows leave after.
+  const singleItem =
+    selection.count === 1 ? liveItems.find((item) => selection.ids.has(item.id)) : undefined;
+  const leaveSelectThen = selection.leaveThen;
+  const selectActions = visibleSelectActions(
+    assetSelectActions(singleItem, {
+      presignEnabled,
+      requestDownloadUrl,
+      canRename,
+      onInfo: (target) => leaveSelectThen(() => openAsset(target, true)),
+      onRename: (target) => leaveSelectThen(() => setRenameItem(target)),
+      onDelete: deleteSelected,
+      onDone: clearSelection,
+      onToast: push,
+    }),
+    selection.count,
+  ).map((action) => (selectingAll ? { ...action, disabled: true } : action));
 
   return (
     <>
@@ -938,51 +926,13 @@ export function AssetsPage() {
             />
           ),
         }}
-        stickyChildren={selectMode}
       >
-        {selectMode ? (
-          <div data-select-bar="" className="flex w-full flex-col gap-1">
-            <div className="flex w-full items-center gap-2">
-              <Button variant="ghost" onClick={exitSelectMode}>
-                Cancel
-              </Button>
-              <span
-                className="min-w-0 flex-1 truncate text-center text-base font-semibold text-fg"
-                aria-live="polite"
-              >
-                {selectedLabel(selected.size)}
-              </span>
-              <Button
-                variant="ghost"
-                data-assets-select-all=""
-                disabled={nothingToSelect || selectingAll}
-                aria-busy={selectingAll}
-                onClick={() => void selectAll()}
-              >
-                Select all
-              </Button>
-              {/* Desktop keeps Delete up here; phones get the bottom bar. */}
-              <span className="hidden gap-2 md:flex">
-                <Button
-                  variant="danger"
-                  disabled={selected.size === 0 || selectingAll}
-                  onClick={deleteSelected}
-                >
-                  Delete
-                </Button>
-              </span>
-            </div>
-          </div>
-        ) : assetsFailed ? null : (
+        {assetsFailed ? null : (
           <AssetTabs value={tab} counts={counts ?? NO_COUNTS} onChange={setTab} />
         )}
       </SectionHeader>
 
-      <div
-        role={selectMode ? undefined : 'tabpanel'}
-        id={ASSET_TABPANEL_ID}
-        aria-labelledby={selectMode ? undefined : assetTabId(tab)}
-      >
+      <div role="tabpanel" id={ASSET_TABPANEL_ID} aria-labelledby={assetTabId(tab)}>
         {searchFailed ? (
           <div className={cn(GUTTER, 'mt-4')}>
             <LoadError
@@ -1030,11 +980,7 @@ export function AssetsPage() {
               presignEnabled={presignEnabled}
               cache={cache}
               onOpen={(item) => openAsset(item)}
-              menuItemsFor={menuItemsFor}
-              selectMode={selectMode}
-              selectedIds={selected}
-              onToggleSelect={toggleSelect}
-              onStartSelect={startSelectWith}
+              selectFor={(item) => selection.selectFor(item.id)}
             />
           </div>
         )}
@@ -1059,7 +1005,7 @@ export function AssetsPage() {
       {/* Deleted files wait 31 days in Recently deleted; the way there from Assets.
           The link variant pads its text by 8px (px-2), so the row's left gutter
           is 8px less than the page's: the text starts on the cards' edge. */}
-      {!selectMode ? (
+      {!selection.active ? (
         <div data-recently-deleted-row="" className="pb-6 pl-2 pr-4 pt-2 md:pl-4 md:pr-6">
           <Button
             variant="link"
@@ -1072,37 +1018,29 @@ export function AssetsPage() {
         </div>
       ) : null}
 
-      {/* Phones: Delete pinned at the bottom while selecting, in thumb
-          reach right above the tab bar (useBottomInset; the tab bar carries
-          the safe area, so the bar only pads it when nothing sits under it).
-          It is a bottom bar itself, so the Undo strip stacks above it. The
-          spacer keeps the last row uncovered. */}
-      {selectMode ? (
-        <>
-          <div aria-hidden="true" className="h-20 md:hidden" />
-          <div
-            ref={selectBarRef}
-            data-select-actions=""
-            {...bottomAnchorProps}
-            style={{ bottom: selectBarInset }}
-            className={cn(
-              'lit-dock fixed inset-x-0 z-dock border-t bg-panel pt-3 md:hidden',
-              'pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]',
-              selectBarInset > 0 ? 'pb-3' : 'pb-[max(12px,env(safe-area-inset-bottom))]',
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <Button
-                variant="danger"
-                className="min-w-11 flex-1"
-                disabled={selected.size === 0 || selectingAll}
-                onClick={deleteSelected}
-              >
-                {selected.size > 0 ? `Delete ${selected.size}` : 'Delete'}
-              </Button>
-            </div>
-          </div>
-        </>
+      {/* Select mode: the one bottom bar (ui/SelectBar), in thumb reach above
+          the tab bar on phone, the same bar on laptop. The Undo strip stacks
+          above it. */}
+      {selection.active ? (
+        <SelectBar
+          count={selection.count}
+          onCancel={clearSelection}
+          actions={selectActions}
+          label="Selected files"
+          data-select-actions=""
+          extra={
+            <Button
+              variant="ghost"
+              type="button"
+              data-assets-select-all=""
+              disabled={nothingToSelect || selectingAll}
+              aria-busy={selectingAll}
+              onClick={() => void selectAll()}
+            >
+              Select all
+            </Button>
+          }
+        />
       ) : null}
 
       {viewer !== null && viewerItem !== undefined ? (

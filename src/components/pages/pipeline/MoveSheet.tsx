@@ -1,4 +1,4 @@
-// The move sheet: the card's ⋯ or a long-press opens this sheet to move the
+// The move sheet: the Pipeline select bar's Move row opens this sheet to move the
 // post. It is presentational only - it never calls the stage-transition proc
 // itself; picking an action calls up to the page's move handler (PipelinePage
 // owns the confirms, the proc call, the Undo strip and the regroup).
@@ -70,7 +70,7 @@ export interface MoveSheetProps {
   /** Re-runs the role read (the error state's Retry). */
   onRetryRole?: () => void;
   /**
-   * 'approved' when the card's ⋯ Approve row opened the sheet: it opens on the
+   * 'approved' when the select bar's Approve row opened the sheet: it opens on the
    * approve confirm (or the on-behalf sheet) instead of the action list.
    */
   intent?: Stage | null;
@@ -102,7 +102,7 @@ export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   useEffect(() => {
     gate.cancel();
   }, [gate, props.open, postId]);
-  // Opened from the card's ⋯ Approve row: go straight to the approve confirm.
+  // Opened from the select bar's Approve row: go straight to the approve confirm.
   const intent = props.intent ?? null;
   useEffect(() => {
     if (props.open && postId !== null && intent === 'approved') gate.request(postId, 'approved');

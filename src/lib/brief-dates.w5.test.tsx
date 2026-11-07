@@ -54,8 +54,8 @@ describe('brief target dates in America/Los_Angeles', () => {
     expect(formatDueDate('2026-10-08', 'UTC', new Date('2027-03-01T12:00:00Z'))).toBe('8 Oct 2026');
   });
 
-  it('the card reads "Due 8 Oct"', () => {
-    expect(briefDueLabel('2026-10-08', 'Asia/Kolkata', NOW)).toBe('Due 8 Oct');
+  it('the card reads "8 Oct" (words only, never "Due")', () => {
+    expect(briefDueLabel('2026-10-08', 'Asia/Kolkata', NOW)).toBe('8 Oct');
     const out = renderToStaticMarkup(
       <MemoryRouter>
         <BriefCard
@@ -68,7 +68,8 @@ describe('brief target dates in America/Los_Angeles', () => {
         />
       </MemoryRouter>,
     );
-    expect(out).toContain('Due 8 Oct');
+    expect(out).toContain('>8 Oct<');
+    expect(out).not.toContain('Due ');
     expect(out).not.toContain('7 Oct');
   });
 

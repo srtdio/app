@@ -1,7 +1,7 @@
 // The Pipeline's ask-first sheet for the moves that confirm before they run:
 // Reject (with an optional reason that goes to the comments), Park, and
 // Draft -> Send for review from the move sheet. One surface for the move
-// sheet and the long-press (a board drag moves at once, behind the same Undo
+// sheet and the select bar's move rows (a board drag moves at once, behind the same Undo
 // strip). Confirm hands the reason up; the page runs the move behind the
 // 4 second Undo strip. The shared Sheet slides on the Y axis only.
 

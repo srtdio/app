@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { stripFormat } from '@srtdio/comments';
 import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
@@ -14,13 +13,12 @@ import {
   IconActivity,
   IconAlarmClock,
   IconBriefs,
+  IconCalendarClock,
   IconFile,
   IconPlan,
   IconTaskSquare,
   type IconProps,
 } from '@/components/ui/icons';
-import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
-import { useMenuGesture } from '@/components/ui/useLongPress';
 import {
   BRIEFS_SCOPE,
   MENTION_EVENT_TYPE,
@@ -32,7 +30,6 @@ import {
   cardBodyLine,
   deletedFilesBody,
   groupOpenEntry,
-  isSnoozed,
   isChatMention,
   isWelcome,
   opensNothing,
@@ -41,7 +38,6 @@ import {
   welcomeTitle,
   type ActivityItem,
   type AlertInfo,
-  type SnoozeKind,
 } from '@/components/pages/activity/data';
 import { alertDisplayTime } from '@/lib/inbox/alerts';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
@@ -63,8 +59,6 @@ interface ActivityCardProps {
   onOpenGroup: (group: ActivityItem[], entry: ActivityItem) => void;
   /** Open a single entry (kept for callers; the card opens the group). */
   onOpenEntry: (entry: ActivityItem) => void;
-  onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
-  onMarkRead: (item: ActivityItem) => void;
   /** The signed-in user's resolved display name, used to accent their own @name
    *  inside a mention preview; null when it has not resolved yet. */
   selfName: string | null;
@@ -152,7 +146,7 @@ export function activityKind(item: ActivityItem): ActivityKind | undefined {
 }
 
 /**
- * The card's ONE grey tag on line 3: a digest group of several entries counts
+ * The card's ONE grey tag on line 2: a digest group of several entries counts
  * them ("3 updates"); else what the entry is (activityKind: Mention, Post,
  * Brief, Plan, Reminder). None for the welcome row or a kindless entry. Pure.
  */
@@ -233,13 +227,25 @@ function alertIcon(item: ActivityItem, alert: AlertInfo): ComponentType<IconProp
   return IconTaskSquare;
 }
 
+/**
+ * Retired event types (RETIRED_EVENT_TYPES; the page never lists them, an old
+ * row can still land): a plain card with its own glyph, never blank.
+ */
+const RETIRED_ICONS: Readonly<Record<string, ComponentType<IconProps>>> = {
+  reminder: IconAlarmClock,
+  scheduled_sent: IconCalendarClock,
+  scheduled_failed: IconCalendarClock,
+};
+
 /** The event types that are about a person: the picture is their photo. */
 const PERSON_EVENTS: ReadonlySet<string> = new Set([MENTION_EVENT_TYPE, 'invite']);
 
 /**
- * The picture (72): the thing the event is about (the post's picture, else
- * its "Aa" / play placeholder; the brief, plan or alert icon; the first
- * deleted file), or, for a mention or a person event, that person's photo.
+ * The picture (48), never blank: the thing the event is about (the post's
+ * picture, else its "Aa" / play placeholder; the brief, plan or alert icon;
+ * the first deleted file; a retired type's glyph), or, for a mention or a
+ * person event, that person's photo (initials on their colour when none);
+ * else the Activity glyph.
  */
 function activityPicture(
   lead: ActivityItem,
@@ -250,10 +256,12 @@ function activityPicture(
 ): ListCardPicture {
   const alert = lead.alert ?? null;
   if (alert !== null) return { kind: 'icon', icon: alertIcon(lead, alert) };
+  const retired = RETIRED_ICONS[lead.eventType];
+  if (retired !== undefined) return { kind: 'icon', icon: retired };
   if (isWelcome(lead) && lead.welcome != null) {
     return {
       kind: 'image',
-      node: <Avatar name={lead.welcome.workspaceName} role="profile" kind="group" decorative />,
+      node: <Avatar name={lead.welcome.workspaceName} role="card" kind="group" decorative />,
     };
   }
   if (PERSON_EVENTS.has(lead.eventType) && actor.actorName !== null) {
@@ -315,14 +323,17 @@ function activityPicture(
 }
 
 /**
- * One digest group as one ui/ListCard: the picture (the thing, or the
- * person), the who-did-what title with the unread dot, the comment or alert
- * line as the preview, then the time (formatAgo on the list's clock), the
- * one tag (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
- * Reminder) and the ⋯ (Mark as read, Snooze). A tap opens the group (the
- * newest entry that links to a comment, else the lead). A threaded group is
- * one card ("+N more" when it has no line of its own); its entries open from
- * the page it lands on.
+ * One digest group as one ui/ListCard (two lines, 74 tall):
+ *   1. the who-did-what title, the actor first ... the time (formatAgo on the
+ *      list's clock; the bad token for a missed due time);
+ *   2. the comment, quote or alert line as the preview, the one tag
+ *      (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
+ *      Reminder) and the unread dot.
+ * The picture is the thing or the person, never blank. No ⋮ and no select
+ * mode: a long-press does nothing. A tap opens the group (the newest entry
+ * that links to a comment, else the lead) and marks it read. A threaded group
+ * is one card ("+N more" when it has no line of its own); its entries open
+ * from the page it lands on.
  */
 export function ActivityCard({
   group,
@@ -331,8 +342,6 @@ export function ActivityCard({
   cache,
   presignEnabled,
   onOpenGroup,
-  onSnooze,
-  onMarkRead,
   selfName,
   side = 'unknown',
   entering = false,
@@ -347,17 +356,12 @@ export function ActivityCard({
   const rememberThisCard = (): void => {
     if (growKey !== '') rememberCard(growKey, cardRef.current);
   };
-  // Long-press on touch and right-click on laptop open the card's ⋯ menu.
-  const [menuOpen, setMenuOpen] = useState(false);
-  const gesture = useMenuGesture(() => setMenuOpen(true));
-
   const lead = group[0];
   if (lead === undefined) return null;
   // The head opens the newest entry that links to a comment, else the lead.
   const openEntry = groupOpenEntry(group) ?? lead;
   const alert = lead.alert ?? null;
   const unread = groupHasUnread(group);
-  const snoozed = isSnoozed(lead, nowMs);
   const actor = newestEntry(group) ?? lead;
   const title = activityCardTitle(group, side);
   const previewText = activityPreviewText(group);
@@ -367,7 +371,7 @@ export function ActivityCard({
       : previewText;
   const tappable = !opensNothing(lead, side);
   const tag = activityCardTag(group);
-  // Line 3: how long ago, on the list's one clock ("just now", "3h", "Mon").
+  // Line 1 trailing: how long ago, on the list's one clock ("just now", "3h", "Mon").
   const time = formatAgo(
     alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
     new Date(nowMs),
@@ -382,13 +386,6 @@ export function ActivityCard({
         'data-activity-event': lead.eventType,
         'data-activity-id': lead.id,
         ...(entering ? { 'data-activity-entering': '' } : {}),
-        ...gesture.handlers,
-        onClickCapture: (event) => {
-          // The click that trails a long-press never also opens the card.
-          if (!gesture.consumeClickSuppression()) return;
-          event.preventDefault();
-          event.stopPropagation();
-        },
       }}
       picture={activityPicture(lead, actor, cache, presignEnabled, title)}
       {...(alert !== null
@@ -396,32 +393,17 @@ export function ActivityCard({
         : lead.entityType === PLAN_ITEM_ENTITY
           ? { pictureHooks: { 'data-activity-plan-icon': '' } }
           : {})}
-      // A missed due time reads in bad.
-      title={bad ? <span className="text-bad">{title}</span> : title}
+      title={title}
       unread={unread}
       preview={preview}
       previewHooks={{ 'data-activity-preview': '' }}
       time={time}
       timeHooks={{ 'data-activity-time': '' }}
+      // A missed due time reads in bad.
+      timeBad={bad}
       tag={tag}
       tagHooks={
         group.length > 1 ? { 'data-activity-updates-tag': '' } : { 'data-activity-scope-tag': '' }
-      }
-      menu={
-        <div data-activity-menu="" className="flex">
-          <ActivityRowMenu
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            snoozed={snoozed}
-            unread={unread}
-            onSnooze={(kind) => {
-              for (const entry of group) onSnooze(entry, kind);
-            }}
-            onMarkRead={() => {
-              for (const entry of group) if (entry.readAt === null) onMarkRead(entry);
-            }}
-          />
-        </div>
       }
       {...(tappable
         ? {

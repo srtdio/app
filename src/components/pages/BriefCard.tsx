@@ -46,9 +46,9 @@ export function BriefStatusPill({ status }: { status: string }): ReactElement {
 }
 
 /**
- * The card's due words (formatDue): "Due today", "Due tomorrow", "Due Fri",
- * "Due 8 Oct" ("Due 4 Jan 2027" outside now's year), on the workspace
- * zone (due dates are workspace calendar days).
+ * The card's due words (formatDue): "Today", "Tomorrow", "Fri", "8 Oct"
+ * ("4 Jan 2027" outside now's year), on the workspace zone (due dates are
+ * workspace calendar days). Words only: never "Due".
  */
 export function briefDueLabel(
   targetDate: string,
@@ -72,18 +72,18 @@ interface BriefCardProps {
   now?: Date | undefined;
 }
 
-/** A brief's line 3 time: the text, and whether it is overdue (the bad token). */
+/** A brief's line 1 time: the text, and whether it is overdue (the bad token). */
 export interface BriefCardTime {
   text: string;
   bad: boolean;
 }
 
 /**
- * A brief's line 3 time. With a due date: "Due today" / "Due Fri" /
- * "Due 12 Dec" (formatDue), or "Overdue 2d" in the bad tone once the day
- * has passed (formatOverdue); a closed brief is never overdue (it keeps its
- * "Due 12 Oct"). Without one: when it was raised, "3h" (formatAgo, on the
- * device zone). Due days read on the workspace zone. Pure.
+ * A brief's line 1 time. With a due date: "Today" / "Fri" / "12 Dec"
+ * (formatDue), or "2d late" in the bad tone once the day has passed
+ * (formatOverdue); a closed brief is never late (it keeps its "12 Oct").
+ * Without one: when it was raised, "3h" (formatAgo, on the device zone).
+ * Due days read on the workspace zone. Pure.
  */
 export function briefCardTime(
   brief: Pick<Brief, 'target_date' | 'created_at' | 'status'>,
@@ -102,11 +102,13 @@ export function briefCardTime(
 
 /**
  * A brief on ui/ListCard: the first image attachment (else the brief icon) as
- * the picture, the title, the objective as the 2-line preview (stripFormat),
- * then the due / overdue time (briefCardTime) and the grey Open / Closed tag.
- * No link preview on the card (the brief screen lists the links). The card's one real link is laid over the whole
- * card (named by the title). Closing a brief lives in the detail page's menu,
- * never on the card.
+ * the picture; line 1 the title and the due / late time (briefCardTime);
+ * line 2 the brief text as the one-line preview (stripFormat) and the grey
+ * Open / Closed tag (a closed brief keeps the muted card). No select mode:
+ * a long-press or right-click does nothing. No link preview on the card (the
+ * brief screen lists the links). The card's one real link is laid over the
+ * whole card (named by the title). Closing a brief lives in the detail
+ * page's menu, never on the card.
  */
 export function BriefCard({ brief, cache, presignEnabled, href, timeZone, now }: BriefCardProps) {
   const closed = isBriefClosed(brief);

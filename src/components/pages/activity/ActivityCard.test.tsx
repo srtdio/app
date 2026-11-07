@@ -1,9 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   ActivityCard,
@@ -14,8 +9,6 @@ import {
 } from '@/components/pages/activity/ActivityCard';
 import { chatMentionPreview, type ActivityItem } from '@/components/pages/activity/data';
 import type { PresignCache } from '@/lib/asset-presign';
-
-// The card's ⋯ menu picks popover vs Sheet by width; the node env has no matchMedia.
 
 // The card reads the workspace key (for KEY-N) from the workspace context.
 vi.mock('@/lib/workspace-context', async (importOriginal) => ({
@@ -76,8 +69,6 @@ function renderCard(group: ActivityItem[], extra: { entering?: boolean } = {}): 
       presignEnabled={false}
       onOpenGroup={() => {}}
       onOpenEntry={() => {}}
-      onSnooze={() => {}}
-      onMarkRead={() => {}}
       selfName={null}
       {...extra}
     />,
@@ -152,8 +143,6 @@ describe('ActivityCard on ui/ListCard', () => {
             presignEnabled={false}
             onOpenGroup={() => {}}
             onOpenEntry={() => {}}
-            onSnooze={() => {}}
-            onMarkRead={() => {}}
             selfName={null}
           />,
         ),
@@ -237,10 +226,34 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(html).not.toContain('data-activity-scope-tag');
   });
 
-  it('the ⋯ sits on line 3 through ActionMenuTrigger (the trailing rule)', () => {
-    const html = renderCard([item({})]);
-    expect(html).toMatch(/data-list-card-more=""[^]*data-activity-menu=""/);
-    expect(html).toMatch(/aria-label="Activity options"[^>]*-mr-3/);
+  it('the new anatomy: two lines, title + time on line 1, preview + tag + unread dot on line 2', () => {
+    const html = renderCard([
+      item({ title: 'Q3', actorName: 'Dev', body: 'Looks good', readAt: null }),
+    ]);
+    expect(html).not.toContain('data-list-card-line="3"');
+    expect(html).toMatch(
+      /data-list-card-line="1"[^]*data-list-card-title=""[^]*Dev commented on Q3[^]*data-activity-time=""[^]*data-list-card-line="2"/,
+    );
+    expect(html).toMatch(
+      /data-list-card-line="2"[^]*data-activity-preview=""[^]*Looks good[^]*data-activity-scope-tag=""[^]*data-list-card-unread=""/,
+    );
+  });
+
+  it('no ⋮, no row menu and no select mode on Activity', () => {
+    const html = renderCard([item({ readAt: null })]);
+    expect(html).not.toContain('data-activity-menu');
+    expect(html).not.toContain('Activity options');
+    expect(html).not.toContain('data-list-card-more');
+    expect(html).not.toContain('data-list-card-tick');
+    expect(html).not.toContain('data-list-card-selecting');
+  });
+
+  it('a missed due time reads its time in bad, the title stays plain', () => {
+    const html = renderCard([
+      item({ eventType: 'task_due', entityType: 'chat_channel', scope: 'people' }),
+    ]);
+    expect(html).toContain('data-list-card-time-bad=""');
+    expect(html).not.toMatch(/data-list-card-title=""[^>]*>\s*<span class="text-bad"/);
   });
 
   it('a live-added card renders at its final place, never a class fade or slide', () => {
@@ -261,7 +274,7 @@ describe('ActivityCard pictures', () => {
     expect(video).toContain('data-post-placeholder="video"');
   });
 
-  it('a mention is that person: the actor photo circle at 72', () => {
+  it('a mention is that person: the actor photo circle at 48', () => {
     const html = renderCard([
       item({
         eventType: 'mention',
@@ -275,7 +288,7 @@ describe('ActivityCard pictures', () => {
     ]);
     expect(html).toContain('data-list-card-picture="person"');
     expect(html).toContain('https://cdn/bob.png');
-    expect(html).toContain('data-avatar-role="profile"');
+    expect(html).toContain('data-avatar-role="card"');
     // No separate small actor avatar.
     expect(html).not.toContain('data-avatar-role="inline"');
   });
@@ -302,6 +315,22 @@ describe('ActivityCard pictures', () => {
     ]);
     expect(html).toContain('data-list-card-picture="image"');
     expect(html).toContain('>K<');
+    expect(html).toContain('data-avatar-role="card"');
+  });
+
+  it('every card has a picture, never blank: retired types are plain cards with an icon', () => {
+    for (const eventType of ['reminder', 'scheduled_sent', 'scheduled_failed']) {
+      const html = renderCard([
+        item({ eventType, entityType: 'chat_channel', scope: 'people', actorName: 'Bob' }),
+      ]);
+      expect(html).toContain('data-list-card-picture="icon"');
+      expect(html).toContain('<svg');
+      expect(html).not.toContain('data-list-card-tag');
+    }
+    // No actor and no thing: the Activity glyph.
+    const bare = renderCard([item({ eventType: 'system', entityType: null, scope: 'people' })]);
+    expect(bare).toContain('data-list-card-picture="icon"');
+    expect(bare).toContain('<svg');
   });
 });
 
@@ -420,15 +449,17 @@ describe('ActivityCard titles and previews', () => {
     expect(html).not.toContain('data-activity-lead');
   });
 
-  it('a tappable card is one button named by its title, unread dot and preview', () => {
-    const html = renderCard([item({ title: 'Q3', actorName: 'Dev', readAt: null })]);
+  it('a tappable card is one button named by its title, preview and unread dot', () => {
+    const html = renderCard([
+      item({ title: 'Q3', actorName: 'Dev', body: 'Looks good', readAt: null }),
+    ]);
     const button = /<button[^>]*data-activity-lead=""[^>]*>/.exec(html)?.[0] ?? '';
     expect(button).not.toContain('aria-label=');
     const ids = /aria-labelledby="([^"]+)"/.exec(button)?.[1]?.split(' ') ?? [];
     expect(ids).toHaveLength(3);
     expect(html).toContain(`id="${ids[0]}" data-list-card-title=""`);
     expect(html).toMatch(new RegExp(`<span[^>]*id="${ids[0]}"[^>]*>Dev commented on Q3<`));
-    expect(html).toContain(`id="${ids[1]}" data-list-card-unread=""`);
-    expect(html).toContain(`id="${ids[2]}" data-list-card-preview=""`);
+    expect(html).toContain(`id="${ids[1]}" data-list-card-preview=""`);
+    expect(html).toContain(`id="${ids[2]}" data-list-card-unread=""`);
   });
 });

@@ -17,7 +17,7 @@ export interface CardViewer {
   /** The workspace's active approvers' first names, in member order. */
   approverFirstNames: readonly string[];
   /**
-   * The role read is still in flight: the card's ⋯ lists the Move row (the
+   * The role read is still in flight: the select bar lists the Move row (the
    * move sheet waits for the role) instead of the role's own moves.
    */
   pending?: boolean;
@@ -55,7 +55,7 @@ export function reviewStatus(
   return { tone: 'with', text: `With ${who} · ${formatAgo(stageEnteredAt, now)}` };
 }
 
-/** Whether this viewer may make any move at all from `stage` (the card's ⋯ shows only then). */
+/** Whether this viewer may make any move at all from `stage` (the select bar's move rows show only then). */
 export function hasAllowedMove(role: string | null, stage: Stage): boolean {
   return STAGES.some((to) => to !== stage && canRoleMove(role, stage, to));
 }
