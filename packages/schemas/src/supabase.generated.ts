@@ -2300,6 +2300,45 @@ export type Database = {
           },
         ]
       }
+      chat_message_hides: {
+        Row: {
+          channel_id: string
+          hidden_at: string
+          message_id: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          hidden_at?: string
+          message_id: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          hidden_at?: string
+          message_id?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_message_hides_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "chat_message_hides_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_message_marks: {
         Row: {
           channel_id: string
@@ -9898,6 +9937,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      chat_messages_hide: {
+        Args: { p_message_ids: string[]; p_trace_id: string }
+        Returns: undefined
       }
       chat_open_bundle: {
         Args: {
