@@ -104,7 +104,7 @@ function escapeRe(s: string): string {
 const CARRIER_RES = PART_CARRIERS.map((c) => ({
   ...c,
   re: c.use.startsWith('<')
-    ? new RegExp(`${escapeRe(c.use)}(?=[\\s>/])`, 'g')
+    ? new RegExp(`${escapeRe(c.use)}(?=[\\s>/]|$)`, 'g')
     : new RegExp(`(?<![\\w.])${escapeRe(c.use)}`, 'g'),
 }));
 

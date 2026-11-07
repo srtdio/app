@@ -2200,13 +2200,16 @@ for (const dark of [false, true]) {
 // projects; LAPTOP_DARK_SCREENS adds laptop dark. A chip with nothing under it
 // shows its zero line, which is shot as it is.
 
-/** The list painted: a ListCard, or the chip's zero line. */
+/**
+ * The list painted: a ListCard, or the chip's zero line ("{Things} show up
+ * here.", or Snoozed's "Snoozed updates come back here.").
+ */
 async function listOrZero(page: Page, what: string, extra: Locator[] = []): Promise<void> {
   await waitFor(
     [
       page.locator('[data-list-card]'),
       ...extra,
-      page.getByText(/show up here\./),
+      page.getByText(/(show up|come back) here\./),
       page.getByText(/^No results/),
     ],
     what,
