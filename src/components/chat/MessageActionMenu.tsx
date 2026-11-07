@@ -197,6 +197,11 @@ interface MessageActionMenuProps {
    */
   failedSend?: boolean;
   /**
+   * Delete offers only "Delete for me" (someone else's message, or an own one
+   * past the window): the row carries no "30 min" hint.
+   */
+  deleteForMeOnly?: boolean;
+  /**
    * Offers "Save to notes" (a recorded, live
    * message in any chat but notes).
    */
@@ -249,6 +254,7 @@ type MenuItemProps = Pick<
   | 'canDelete'
   | 'onDelete'
   | 'failedSend'
+  | 'deleteForMeOnly'
   | 'canSaveToNotes'
   | 'onSaveToNotes'
   | 'notes'
@@ -380,7 +386,9 @@ export function messageMenuItems(
       key: 'delete',
       label: 'Delete',
       icon: <IconTrash size={size} />,
-      ...(props.notes === true || props.failedSend === true ? {} : { hint: '30 min' }),
+      ...(props.notes === true || props.failedSend === true || props.deleteForMeOnly === true
+        ? {}
+        : { hint: '30 min' }),
       danger: true,
       run: () => props.onDelete?.(),
     });

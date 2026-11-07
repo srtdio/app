@@ -123,7 +123,15 @@ import {
   MOVE_CANCEL_PX,
 } from '@/components/ui/useLongPress';
 import { useToast } from '@/components/ui/toast';
-import { deleteConfirmCopy, purgeChatFiles, type PurgeChatOutcome } from '@/lib/chat/delete-flow';
+import {
+  deleteChoices,
+  deleteConfirmCopy,
+  purgeChatFiles,
+  selectionDeleteChoices,
+  type PurgeChatOutcome,
+} from '@/lib/chat/delete-flow';
+import { useDeleteForMe } from '@/lib/chat/use-delete-for-me';
+import { DeleteSheet } from '@/components/chat/DeleteSheet';
 import { cn } from '@/lib/cn';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import type { ChannelSummary, ChatProfile } from '@/lib/chat-reads';
@@ -3568,8 +3576,13 @@ function ThreadBody(
     onForwardMessage?: (message: ThreadMessage) => boolean;
     /** Menu "Edit" picked; absent hides it. */
     onEditMessage?: (message: ThreadMessage) => void;
-    /** Menu "Delete" picked: the single-message confirm opens; absent hides it. */
-    onDeleteMessage?: (message: ThreadMessage) => void;
+    /**
+     * Menu "Delete" picked (`nowMs`: when the menu opened, server time): the
+     * delete sheet, or in Personal notes the single-message confirm; absent hides it.
+     */
+    onDeleteMessage?: (message: ThreadMessage, nowMs: number) => void;
+    /** Delete for me is available: Delete shows on every sent message, not only own ones. */
+    canDeleteForMe?: boolean;
     onChangePriority?: (messageId: string) => void;
     /** A jump-to request (seq makes a repeat of the same id fire again). */
     /** quiet: a search jump whose message is gone opens the chat with no toast. */
@@ -4496,6 +4509,14 @@ function ThreadBody(
       ? ownMessageActions(menu.message, menu.openedAt, props.notes === true)
       : { canEdit: false, canDelete: false };
   const menuFailed = menu !== null && canDiscardFailed(menu.message);
+  // Delete for me: any sent, live message outside Personal notes.
+  const menuForMe =
+    menu !== null &&
+    props.canDeleteForMe === true &&
+    props.notes !== true &&
+    !menuFailed &&
+    menu.message.state === 'sent' &&
+    menu.message.deleted !== true;
   const replyPrivately = props.replyPrivately;
   const menuSender = menu?.message.senderUserId ?? null;
   const menuReplyPrivately =
@@ -4833,16 +4854,17 @@ function ThreadBody(
           if (menu) props.onEditMessage?.(menu.message);
         }}
         canDelete={
-          (props.onDeleteMessage !== undefined && menuOwn.canDelete) ||
+          (props.onDeleteMessage !== undefined && (menuOwn.canDelete || menuForMe)) ||
           (menuFailed && props.onDiscard !== undefined)
         }
         onDelete={() => {
           if (!menu) return;
           // A failed send never left the device: it goes at once, no confirm.
           if (menuFailed) props.onDiscard?.(menu.message.id);
-          else props.onDeleteMessage?.(menu.message);
+          else props.onDeleteMessage?.(menu.message, menu.openedAt);
         }}
         failedSend={menuFailed}
+        deleteForMeOnly={menuForMe && !menuOwn.canDelete}
         notes={props.notes === true}
         canSaveToNotes={
           menu !== null &&
@@ -5396,6 +5418,22 @@ export function deleteHasUndo(message: Pick<ThreadMessage, 'attachments' | 'stat
   return message.state === 'sent' && message.attachments.length === 0;
 }
 
+/** The menu Delete's sheet target: one message, and whether it offers "Delete for everyone". */
+interface DeleteSheetTarget {
+  message: ThreadMessage;
+  everyone: boolean;
+}
+
+/** Time since a message's server created_at at `nowMs`, or null when it has none. Pure. */
+export function messageAgeMs(
+  message: Pick<ThreadMessage, 'createdAt'>,
+  nowMs: number,
+): number | null {
+  if (message.createdAt === '') return null;
+  const created = Date.parse(message.createdAt);
+  return Number.isNaN(created) ? null : nowMs - created;
+}
+
 /** The Undo toast's title for a deleted message. */
 export const MESSAGE_DELETED_UNDO = 'Message deleted';
 
@@ -5941,6 +5979,26 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       },
       revert,
     });
+  };
+  // Delete for me: the sheet's second choice (and a tombstone's only one).
+  // Hidden at once behind the "Deleted for you" Undo; written when it ends.
+  const deleteForMe = useDeleteForMe({ userId: props.currentUserId, workspaceId });
+  const canDeleteForMe =
+    channelId !== undefined &&
+    props.notes !== true &&
+    props.currentUserId !== undefined &&
+    workspaceId !== null;
+  const hideForMe = (messages: readonly ThreadMessage[]): void => {
+    if (channelId === undefined) return;
+    const sent = messages.filter((m) => m.state === 'sent');
+    deleteForMe(sent.map((m) => ({ messageId: m.id, channelId })));
+  };
+  // The menu Delete's sheet: one message, "Delete for everyone" when it qualifies.
+  const [deleteSheetFor, setDeleteSheetFor] = useState<DeleteSheetTarget | null>(null);
+  // Today's delete for everyone: a 4s Undo for text, the files confirm otherwise.
+  const deleteForEveryone = (message: ThreadMessage): void => {
+    if (deleteHasUndo(message)) deleteWithUndo(message);
+    else setDeleteOneFor(message);
   };
   // Remove files, keep the message: the files go at once (the overlay), behind
   // the Undo strip; the record, purge and signal run when the window ends (or
@@ -6709,13 +6767,38 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   };
   const openPlanHere = (planId: string): void =>
     statusPlanCards?.openPlan({ planId, senderName: planSender(planId) });
+  // Selection Delete outside notes: "Delete for everyone" only when every
+  // selected message qualifies; "Delete for me" always.
+  const selectedMessages = [...selected].flatMap((id) => {
+    const message = messagesById.get(id);
+    return message !== undefined ? [message] : [];
+  });
+  const selectionNow = selecting ? serverNow() : 0;
+  const selectionForMe =
+    selecting && canDeleteForMe
+      ? {
+          everyone:
+            deleteBlock === null &&
+            selectionDeleteChoices(
+              selectedMessages.map((m) => ({
+                mine: m.mine && m.state === 'sent' && m.deleted !== true,
+                ageMs: messageAgeMs(m, selectionNow),
+              })),
+            ).everyone,
+          onDeleteForMe: () => {
+            hideForMe(selectedMessages);
+            exitSelection();
+          },
+        }
+      : undefined;
   // Selection mode's bar: in place of the composer, in the chat or the open thread.
   const selectionBar =
     selecting && onDeleteMessages !== undefined ? (
       <SelectionBar
         count={selected.size}
-        block={deleteBlock}
-        canDelete={selected.size > 0 && deleteBlock === null}
+        block={selectionForMe !== undefined ? null : deleteBlock}
+        canDelete={selected.size > 0 && (selectionForMe !== undefined || deleteBlock === null)}
+        {...(selectionForMe !== undefined ? { forMe: selectionForMe } : {})}
         {...(canForwardHere && selectionForwardable(selected, selectable)
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
@@ -6812,12 +6895,29 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     viewerUserId: props.currentUserId,
     mentions: props.mentions,
     workspaceId,
-    ...(onDeleteMessages !== undefined && !selecting
+    ...((onDeleteMessages !== undefined || canDeleteForMe) && !selecting
       ? {
-          onDeleteMessage: (message: ThreadMessage) => {
-            if (deleteHasUndo(message)) deleteWithUndo(message);
-            else setDeleteOneFor(message);
+          onDeleteMessage: (message: ThreadMessage, nowMs: number) => {
+            const choices = deleteChoices({
+              mine: message.mine && message.state === 'sent' && message.deleted !== true,
+              ageMs: messageAgeMs(message, nowMs),
+              notes,
+              failed: false,
+            });
+            // Personal notes keeps its single Delete, exactly as before.
+            if (choices.kind === 'notes') {
+              if (onDeleteMessages !== undefined) deleteForEveryone(message);
+              return;
+            }
+            if (choices.kind !== 'sheet') return;
+            const everyone = choices.everyone && onDeleteMessages !== undefined;
+            if (!canDeleteForMe) {
+              if (everyone) deleteForEveryone(message);
+              return;
+            }
+            setDeleteSheetFor({ message, everyone });
           },
+          canDeleteForMe,
         }
       : {}),
     ...(onEditMessage !== undefined && !selecting ? { onEditMessage: startEdit } : {}),
@@ -7138,6 +7238,18 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         onCancel: () => setDeleteOneFor(null),
         onConfirm: () => void confirmDeleteOne(),
       })}
+      <DeleteSheet
+        open={deleteSheetFor !== null}
+        count={1}
+        everyone={deleteSheetFor?.everyone === true}
+        onEveryone={() => {
+          if (deleteSheetFor !== null) deleteForEveryone(deleteSheetFor.message);
+        }}
+        onForMe={() => {
+          if (deleteSheetFor !== null) hideForMe([deleteSheetFor.message]);
+        }}
+        onClose={() => setDeleteSheetFor(null)}
+      />
       {taskChannel !== null ? (
         <SearchWordsContext.Provider value={headerWords}>
           <TaskSheet

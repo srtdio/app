@@ -1,7 +1,9 @@
 // Selection mode's two bars. The header bar replaces the thread header: "N
 // selected" and a 44x44 Cancel. The bottom bar replaces the composer: Forward
-// (any recorded message) and Delete (own, inside 30 minutes). When
-// Delete cannot apply it stays visible but disabled, with one line saying why.
+// (any recorded message) and Delete (own, inside 30 minutes; outside Personal
+// notes it opens the delete sheet, Delete for me always and Delete for
+// everyone when every selected message qualifies). When Delete cannot apply it
+// stays visible but disabled, with one line saying why.
 // Delete opens the confirm dialog; a failure shows the mapped copy as a toast
 // (never raw proc text) and the selection is kept (the caller only clears it
 // on success). The bottom bar keeps clear of the safe-area inset. Design
@@ -19,6 +21,7 @@ import { cn } from '@/lib/cn';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { DELETE_BLOCK_COPY, type DeleteBlock } from '@/lib/chat/forward';
 import { deleteNotesConfirmCopy, type DeleteConfirmCopy } from '@/lib/chat/delete-flow';
+import { DeleteSheet } from '@/components/chat/DeleteSheet';
 import {
   HEADER_NAME_TYPE,
   SELECTION_REASON_TYPE,
@@ -241,8 +244,15 @@ export function SelectionBar(props: {
   notes?: boolean;
   /** Runs the delete; resolves ok (with a toast when files went), or the user copy to toast. */
   onDelete: () => Promise<{ ok: true; toast?: string } | { ok: false; message: string }>;
+  /**
+   * Delete for me is offered (outside Personal notes): Delete opens the delete
+   * sheet, "Delete for everyone" (only when `everyone`) takes the confirm above.
+   */
+  forMe?: { everyone: boolean; onDeleteForMe: () => void } | undefined;
 }): ReactElement {
   const [confirming, setConfirming] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const forMe = props.forMe;
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -263,8 +273,18 @@ export function SelectionBar(props: {
         block={props.block}
         canDelete={props.canDelete}
         onForward={props.onForward}
-        onDeleteTap={() => setConfirming(true)}
+        onDeleteTap={() => (forMe !== undefined ? setChoosing(true) : setConfirming(true))}
       />
+      {forMe !== undefined ? (
+        <DeleteSheet
+          open={choosing}
+          count={props.count}
+          everyone={forMe.everyone}
+          onEveryone={() => setConfirming(true)}
+          onForMe={forMe.onDeleteForMe}
+          onClose={() => setChoosing(false)}
+        />
+      ) : null}
       {deleteMessagesConfirm({
         open: confirming,
         count: props.count,

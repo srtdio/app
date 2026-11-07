@@ -40,11 +40,60 @@ import {
 } from '@/lib/chat/mentions';
 import { recheck } from '@/lib/chat/send-flow';
 import { readChannelMemberIds } from '@/lib/chat-reads';
+import { DELETE_SELECTION_WINDOW_MS } from '@/lib/chat/forward';
 import type { Result } from '@srtdio/rpc';
 import type {
   PurgeChatRequest,
   PurgeChatResponse,
 } from '@/server/workers/asset-upload-purge-contracts';
+
+/**
+ * What a message's Delete offers. Personal notes keeps its single Delete
+ * (`notes`); a failed send goes from this device as today (`discard`); every
+ * other sent message opens the delete sheet, with "Delete for everyone" only
+ * for an own message inside DELETE_SELECTION_WINDOW_MS (the menu's
+ * DELETE_WINDOW_MS) and "Delete for me" always.
+ */
+export type DeleteChoices =
+  | { kind: 'notes' }
+  | { kind: 'discard' }
+  | { kind: 'sheet'; everyone: boolean };
+
+/**
+ * The delete rule for one message. `ageMs` is the time since its server
+ * created_at (null when it has none: never for everyone). `mine` means an own,
+ * recorded, live message. Pure.
+ */
+export function deleteChoices(input: {
+  mine: boolean;
+  ageMs: number | null;
+  notes: boolean;
+  failed: boolean;
+}): DeleteChoices {
+  if (input.failed) return { kind: 'discard' };
+  if (input.notes) return { kind: 'notes' };
+  const everyone =
+    input.mine &&
+    input.ageMs !== null &&
+    !Number.isNaN(input.ageMs) &&
+    input.ageMs <= DELETE_SELECTION_WINDOW_MS;
+  return { kind: 'sheet', everyone };
+}
+
+/**
+ * The selection bar's rule: "Delete for everyone" only when every selected
+ * message qualifies on its own (each one's deleteChoices offers it), "Delete
+ * for me" always. Pure.
+ */
+export function selectionDeleteChoices(
+  items: readonly { mine: boolean; ageMs: number | null }[],
+): { everyone: boolean } {
+  const offers = (item: { mine: boolean; ageMs: number | null }): boolean => {
+    const choices = deleteChoices({ ...item, notes: false, failed: false });
+    return choices.kind === 'sheet' && choices.everyone;
+  };
+  return { everyone: items.length > 0 && items.every(offers) };
+}
 
 /** The confirm a delete shows. */
 export interface DeleteConfirmCopy {
