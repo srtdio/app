@@ -203,7 +203,7 @@ describe('G4: a failed member refresh after an add or remove', () => {
     expect(el.props.children).toBe(MEMBERS_REFRESH_FAILED);
     // PressableRow supplies the 44px minimum.
     expect(el.type).toBe(PressableRow);
-    expect(PRESSABLE_ROW_BASE).toContain('min-h-[44px]');
+    expect(PRESSABLE_ROW_BASE).toContain('min-h-11');
     (el.props.onClick as () => void)();
     expect(onRetry).toHaveBeenCalledOnce();
   });
@@ -238,7 +238,7 @@ describe('group info full page', () => {
   it('is a full-screen page with a back button and safe-area bottom padding, no vh', () => {
     const html = page(true);
     expect(html).toContain('role="dialog"');
-    expect(html).toContain('fixed inset-0 z-50');
+    expect(html).toContain('fixed inset-0 z-sheet');
     expect(html).toContain('bg-bg');
     // ui/HeaderBar: one exit, the back "<" on the 16 edge (pulled 12), no X.
     expect(html).toContain('data-header-bar=""');
@@ -342,7 +342,7 @@ describe('group info full page', () => {
     );
     expect(className).toContain('h-11');
     expect(className).toContain('rounded-lg');
-    expect(className).not.toContain('min-h-[56px]');
+    expect(className).not.toContain('min-h-14');
     expect(className).toContain('w-full');
     expect(className).toContain('text-bad');
     expect(className).toContain('lit-btn-secondary');

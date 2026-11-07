@@ -1,5 +1,13 @@
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -8,6 +16,10 @@ import { approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { briefRoute } from '@/lib/chat/briefs';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
+import { HeaderBar } from '@/components/ui/HeaderBar';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { Text, textRole } from '@/components/ui/Text';
+import { GUTTER } from '@/components/ui/layout';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
@@ -36,7 +48,6 @@ import {
   IconCalendar,
   IconChat,
   IconChevronDown,
-  IconChevronLeft,
   IconCopy,
   IconEdit,
   IconLock,
@@ -109,7 +120,8 @@ import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useBackGuard } from '@/lib/back-guard';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { formatDue } from '@/lib/time';
+import { daysFromToday, formatDue, formatOverdue } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import {
   annotationCreate,
   getPost,
@@ -182,17 +194,6 @@ function snapshotCaption(snapshot: Json | null): string | null {
   return typeof caption === 'string' ? caption : null;
 }
 
-// The header status-dot fill per stage, reusing the SAME per-stage colour the
-// pill carries (draft dim, review accent, approved good, parked warn, rejected
-// bad) so no new colour is introduced.
-const STAGE_DOT: Record<Stage, string> = {
-  draft: 'bg-fg-3',
-  review: 'bg-accent',
-  approved: 'bg-good',
-  parked: 'bg-warn',
-  rejected: 'bg-bad',
-};
-
 /** The comments section's id: the open-comments chip scrolls here. */
 export const COMMENTS_SECTION_ID = 'post-comments';
 
@@ -229,7 +230,7 @@ export function postPageGrid(embedded: boolean): {
 } {
   if (embedded) {
     return {
-      page: 'grid grid-cols-1 gap-4 px-4 md:px-6 pt-4 pb-6',
+      page: `grid grid-cols-1 gap-4 ${GUTTER} pt-4 pb-6`,
       head: 'min-w-0',
       media: 'min-w-0',
       body: 'min-w-0',
@@ -237,7 +238,7 @@ export function postPageGrid(embedded: boolean): {
     };
   }
   return {
-    page: 'mx-auto grid w-full max-w-[1120px] grid-cols-1 gap-4 px-4 md:px-6 pt-4 pb-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:gap-x-8',
+    page: `mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 ${GUTTER} pt-4 pb-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:gap-x-8`,
     head: 'min-w-0 lg:col-start-1 lg:row-start-1',
     media: 'min-w-0 lg:col-start-1 lg:row-start-2',
     body: 'min-w-0 lg:col-start-1 lg:row-start-3 lg:self-start',
@@ -310,9 +311,11 @@ export function PostDetailPage({
   // growFromCard (kept on laptop): opened from a card tap, the page grows out
   // of that card on its first frame (layout effect, no wait). Back grows it
   // back into the card. Never embedded, never on a kept-view tab return.
-  const pageAnchorRef = useRef<HTMLDivElement>(null);
+  const pageAnchorRef = useRef<HTMLElement>(null);
   useGrowFromCard(postId, pageAnchorRef, !embedded);
   const newTrace = useNewTrace();
+  // The one shared minute clock: the status line and the due day age with it.
+  const nowMs = useMinuteClock();
   const { workspaceId, workspaceKey, workspaces, workspaceName } = useWorkspace();
 
   // A comment link (?comment={commentId}: Activity, toast, email, search) focuses
@@ -1466,10 +1469,19 @@ export function PostDetailPage({
     await commitGallery(ids);
   }
 
-  const backButton = (
-    <IconButton label="Back" className="shrink-0" onClick={leave}>
-      <IconChevronLeft size={ICON_SIZE.control} />
-    </IconButton>
+  // The post screen's top bar is ui/HeaderBar (Back "<" with the leading
+  // pull, the stage line in the title slot, the ⋯ last). The post title is
+  // the page's one h1 (Display, below), so the bar's title is never an h1.
+  const topBar = (title: ReactNode, actions?: ReactNode): ReactElement => (
+    <HeaderBar
+      barRef={pageAnchorRef}
+      compact
+      onBack={leave}
+      title={title}
+      titleSlot={<span className={textRole('title', 'truncate')}>{title}</span>}
+      {...(actions !== undefined ? { actions } : {})}
+      className={SAFE_TOP_BAR_CLASS}
+    />
   );
 
   // Flow B 34: the skeleton uses the loaded page's own grid, so nothing jumps
@@ -1557,18 +1569,12 @@ export function PostDetailPage({
     // side), so the side panel keeps its mounted Comments across the paint.
     return (
       <SearchWordsContext.Provider value={searchJump.words}>
-        {embedded ? null : (
-          <div
-            ref={pageAnchorRef}
-            className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
-          >
-            {backButton}
-            <div aria-hidden className="flex min-w-0 flex-1 items-center gap-2">
-              <Bone lit="flat" as="div" className="h-4 w-32 rounded" />
-            </div>
-            <div aria-hidden className="h-11 w-11 shrink-0" />
-          </div>
-        )}
+        {embedded
+          ? null
+          : topBar(
+              <Bone lit="flat" as="span" className="inline-block h-4 w-32 rounded align-middle" />,
+              <span aria-hidden className="h-11 w-11 shrink-0" />,
+            )}
         {/* The loaded page's read-only title slot: always empty here. */}
         {null}
         {/* N12: a skeleton of the page's own shapes (title, details row, media,
@@ -1577,7 +1583,7 @@ export function PostDetailPage({
         <div aria-busy="true" data-post-skeleton="" className={grid.page}>
           <div aria-hidden className={cn(grid.head, 'flex flex-col gap-3')}>
             <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
-            <div className="flex min-h-[44px] items-center gap-2">
+            <div className="flex min-h-11 items-center gap-2">
               <Bone lit="lit-avatar" as="div" className="h-5 w-5 rounded-full" />
               <Bone lit="flat" as="div" className="h-3 w-24 rounded" />
               <Bone lit="flat" as="div" className="h-3 w-16 rounded" />
@@ -1605,15 +1611,8 @@ export function PostDetailPage({
   if (loadError) {
     return (
       <>
-        {embedded ? null : (
-          <div
-            ref={pageAnchorRef}
-            className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
-          >
-            {backButton}
-          </div>
-        )}
-        <div className="px-4 md:px-6 mt-4">
+        {embedded ? null : topBar(null)}
+        <div className={cn('mt-4', GUTTER)}>
           <LoadError title="this post" onRetry={() => void load()} />
         </div>
       </>
@@ -1623,14 +1622,7 @@ export function PostDetailPage({
   if (notFound || detail === null) {
     return (
       <>
-        {embedded ? null : (
-          <div
-            ref={pageAnchorRef}
-            className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
-          >
-            {backButton}
-          </div>
-        )}
+        {embedded ? null : topBar(null)}
         <EmptyState
           icon={<IconPipeline size={ICON_SIZE.tray} />}
           title="Post not found"
@@ -1670,7 +1662,18 @@ export function PostDetailPage({
   const canEditContent = agencySide && !readOnly && !approvedLocked;
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
-  const dueLabel = post.target_date !== null ? formatDue(post.target_date, approveTimeZone) : null;
+  // "Due today" / "Due Fri" / "Due 12 Dec", or "Overdue 2d" in the
+  // bad token once the workspace day has passed; approved is never overdue.
+  const dueOverdue =
+    post.target_date !== null &&
+    currentStage !== 'approved' &&
+    (daysFromToday(post.target_date, approveTimeZone, new Date(nowMs)) ?? 0) < 0;
+  const dueLabel =
+    post.target_date === null
+      ? null
+      : dueOverdue
+        ? formatOverdue(post.target_date, approveTimeZone, new Date(nowMs)).text
+        : formatDue(post.target_date, approveTimeZone, new Date(nowMs));
   const detailsEditable = canEditContent;
   const metaDot = (
     <span aria-hidden className="shrink-0 text-fg-3">
@@ -1698,7 +1701,7 @@ export function PostDetailPage({
   const metaHead: React.ReactNode[] = [];
   if (ownerKnown) {
     metaHead.push(
-      <span key="owner" data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
+      <span key="owner" data-detail="owner" className="inline-flex min-w-0 items-center gap-2">
         {asOwner(
           <Avatar
             name={ownerInfo.name}
@@ -1721,7 +1724,12 @@ export function PostDetailPage({
   if (dueLabel !== null) {
     if (metaHead.length > 0) metaHead.push(<span key="due-dot">{metaDot}</span>);
     metaHead.push(
-      <span key="due" data-detail="due" className="shrink-0 whitespace-nowrap tabular-nums">
+      <span
+        key="due"
+        data-detail="due"
+        {...(dueOverdue ? { 'data-overdue': '' } : {})}
+        className={cn('shrink-0 whitespace-nowrap tabular-nums', dueOverdue && 'text-bad')}
+      >
         {dueLabel}
       </span>,
     );
@@ -1731,17 +1739,17 @@ export function PostDetailPage({
       <Link
         data-detail="brief"
         to={briefRoute(post.brief_id)}
-        className="inline-flex min-h-[44px] min-w-0 items-center rounded-lg font-medium text-accent hover:underline focus-visible:lit-focus"
+        className="inline-flex min-h-11 min-w-0 items-center rounded-lg font-medium text-accent hover:underline focus-visible:lit-focus"
       >
         <span className="min-w-0 truncate">{fromBriefLabel(briefName)}</span>
       </Link>
     ) : null;
-  const metaHeadClass = 'flex min-h-[44px] min-w-0 shrink items-center gap-2 rounded-lg';
+  const metaHeadClass = 'flex min-h-11 min-w-0 shrink items-center gap-2 rounded-lg';
   const metaLine =
     metaHead.length > 0 || briefLink !== null ? (
       <div
         data-post-details=""
-        className="flex min-h-[44px] min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-sm text-fg-3"
+        className="flex min-h-11 min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-sm text-fg-3"
       >
         {metaHead.length > 0 ? (
           detailsEditable ? (
@@ -1800,6 +1808,7 @@ export function PostDetailPage({
   const stageHelper = decisions.note;
   const decisionModel = decisions.model;
   const decisionBusy = decisions.busy;
+  const decisionPending = decisions.pending;
   const actionError = decisions.error;
   const phoneLayout = !isLaptop && !embedded;
   // Flow B 27: the stage shows once, in the top bar; with no moves to offer
@@ -1809,13 +1818,19 @@ export function PostDetailPage({
     <PostDecisionRow
       model={headerDecision ? null : decisionModel}
       busy={decisionBusy}
+      pending={decisionPending}
       error={actionError}
       note={stageHelper}
     />
   );
   const headerStageAction = headerDecision ? (
     <div data-header-decision="" className="shrink-0">
-      <PostDecisionRow model={decisionModel} busy={decisionBusy} error={null} />
+      <PostDecisionRow
+        model={decisionModel}
+        busy={decisionBusy}
+        pending={decisionPending}
+        error={null}
+      />
     </div>
   ) : null;
   const phoneStageNotes =
@@ -1826,7 +1841,12 @@ export function PostDetailPage({
     ) : null;
   const decisionBar =
     phoneLayout && !readOnly ? (
-      <PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />
+      <PostDecisionBar
+        model={decisionModel}
+        busy={decisionBusy}
+        pending={decisionPending}
+        error={actionError}
+      />
     ) : null;
   const decisionBarShown = decisionBar !== null && (decisionModel !== null || actionError !== null);
   const decisionBarHeight = `calc(${decisionBarSpace(decisionModel, actionError)}px + env(safe-area-inset-bottom))`;
@@ -1839,7 +1859,7 @@ export function PostDetailPage({
     approvedLocked && !readOnly ? (
       <div
         data-approved-banner=""
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-base text-fg lit-tint"
+        className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl bg-good-soft px-3 py-2 text-base text-fg lit-tint"
       >
         <span aria-hidden className="shrink-0 text-good">
           <IconLock size={ICON_SIZE.nav} />
@@ -1893,40 +1913,38 @@ export function PostDetailPage({
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
-      {embedded ? null : (
-        <div
-          ref={pageAnchorRef}
-          className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
-        >
-          {backButton}
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span
-              aria-hidden
-              className={`h-[7px] w-[7px] shrink-0 rounded-full ${STAGE_DOT[currentStage]}`}
-            />
-            <span className="truncate text-lg font-semibold">
-              {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date())}
-            </span>
-          </div>
-          {headerStageAction}
-          {actionMenu !== null ? (
-            <div data-header-more="" className="shrink-0">
-              {actionMenu}
-            </div>
-          ) : (
-            <div className="h-11 w-11 shrink-0" />
+      {embedded
+        ? null
+        : topBar(
+            <>
+              <StatusDot stage={currentStage} className="mr-2 align-middle" />
+              {postStatusLine(
+                currentStage,
+                post.updated_at,
+                post.stage_entered_at,
+                new Date(nowMs),
+              )}
+            </>,
+            <>
+              {headerStageAction}
+              {actionMenu !== null ? (
+                <div data-header-more="" className="flex shrink-0">
+                  {actionMenu}
+                </div>
+              ) : (
+                <span aria-hidden className="h-11 w-11 shrink-0" />
+              )}
+            </>,
           )}
-        </div>
-      )}
 
       {/* An old version or a compare: the title stays (one h1), every write
           affordance is gone. */}
       {readOnly ? (
         <div className={cn(grid.page, 'pb-0')}>
           <div className={grid.head}>
-            <h1 className="text-3xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]">
+            <Text as="h1" role="display" className="break-words [overflow-wrap:anywhere]">
               <Highlight text={post.title} />
-            </h1>
+            </Text>
           </div>
         </div>
       ) : null}
@@ -1969,7 +1987,10 @@ export function PostDetailPage({
                     // 44px floor as the tappable title; the 1px field edge
                     // (border-field) comes out of the padding (7px / 3px), so
                     // entering edit never shifts the page.
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg border border-field bg-panel-2 px-[7px] py-[3px] text-3xl font-semibold tracking-tight text-fg lit-well outline-none focus:lit-focus"
+                    className={textRole(
+                      'display',
+                      '-mx-2 block min-h-11 w-[calc(100%+1rem)] rounded-lg border border-field bg-panel-2 px-[7px] py-[3px] text-fg lit-well outline-none focus:lit-focus',
+                    )}
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
@@ -2005,7 +2026,7 @@ export function PostDetailPage({
                 // Spec A3: the title itself is the edit target (no pencil
                 // tile): at least 44px tall, a visible focus ring, and the
                 // same padding as the editor so tapping never shifts the page.
-                <h1 className="text-3xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]">
+                <Text as="h1" role="display" className="break-words [overflow-wrap:anywhere]">
                   {/* inline (w-auto) on a block: the -mx-2 bleed widens it to the
                       full title column plus the padding, no width calc needed. */}
                   <PressableRow
@@ -2013,16 +2034,18 @@ export function PostDetailPage({
                     type="button"
                     data-title-edit=""
                     onClick={openTitleEditor}
-                    className="-mx-2 block px-2 py-1 font-semibold tracking-tight mv-tint"
+                    className={textRole('display', '-mx-2 block px-2 py-1 mv-tint')}
                   >
                     <Highlight text={post.title} />
                   </PressableRow>
-                </h1>
+                </Text>
               )
             ) : (
-              <h1
+              <Text
+                as="h1"
+                role="display"
                 data-post-title=""
-                className="text-3xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]"
+                className="break-words [overflow-wrap:anywhere]"
               >
                 <Highlight text={post.title} />
                 {approvedLocked && agencySide ? (
@@ -2034,7 +2057,7 @@ export function PostDetailPage({
                     <IconLock size={ICON_SIZE.inline} />
                   </span>
                 ) : null}
-              </h1>
+              </Text>
             )}
 
             {/* Spec A1: one meta line (owner, due, brief); agency roles tap
@@ -2117,7 +2140,7 @@ export function PostDetailPage({
                 />
               )}
               {gallerySaving ? (
-                <p aria-live="polite" className="mt-2.5 text-sm text-fg-3">
+                <p aria-live="polite" className="mt-2 text-sm text-fg-3">
                   Saving…
                 </p>
               ) : null}

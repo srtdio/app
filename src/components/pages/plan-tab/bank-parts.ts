@@ -3,13 +3,13 @@
 // filter line's labels, the zero copy, the Plan it branch, the share
 // warnings, the error copy and the bulk write limiter. No React, no reads.
 
+import type { BucketOption } from '@/lib/buckets';
 import type { BankIdea, BankSort, PlanRow } from '@/lib/chat/plans';
 import { sideForRole } from '@/lib/chat/viewer-role';
 import { errorText } from '@/lib/error-copy';
 import { isDraftPlan } from '@/lib/plan-tab';
 import { formatCivilShort } from '@/lib/plan-week';
 import { postFormatLabel } from '@/lib/post-format';
-import { formatRelative } from '@/lib/time';
 
 /** The Bank's sort options, in menu order (Recently active by default). */
 export const BANK_SORT_OPTIONS: ReadonlyArray<{ value: BankSort; label: string }> = [
@@ -155,11 +155,19 @@ export function bankZeroCopy(filter: BankFilter, searching: boolean): string {
   return 'Ideas show up here.';
 }
 
-/** "{n} comments · {ago}" ("1 comment"); the ago from time.ts. Pure. */
-export function ideaMetaLine(idea: BankIdea, now: Date): string {
-  const n = idea.comment_count;
-  const ago = formatRelative(idea.last_active_at ?? idea.created_at, now);
-  return `${n} ${n === 1 ? 'comment' : 'comments'} · ${ago}`;
+/**
+ * An idea card's one tag: its first bucket's name (in the idea's own order),
+ * or none. Pure.
+ */
+export function ideaBucketTag(
+  idea: Pick<BankIdea, 'bucket_ids'>,
+  buckets: readonly BucketOption[],
+): string | undefined {
+  for (const id of idea.bucket_ids ?? []) {
+    const bucket = buckets.find((b) => b.id === id);
+    if (bucket !== undefined) return bucket.name;
+  }
+  return undefined;
 }
 
 /** The idea's format line: its linked post's format, else Idea. Pure. */
@@ -167,21 +175,9 @@ export function ideaFormatLine(idea: Pick<BankIdea, 'format'>): string {
   return idea.format !== null && idea.format !== '' ? postFormatLabel(idea.format) : 'Idea';
 }
 
-/** The table's Idea sub line: "{format} · {n} files" ("1 file"). Pure. */
-export function ideaFilesLine(idea: Pick<BankIdea, 'format' | 'file_count'>): string {
-  const n = idea.file_count;
-  return `${ideaFormatLine(idea)} · ${n} ${n === 1 ? 'file' : 'files'}`;
-}
-
 /** "+N" on a thumbnail when the idea holds more than one file; null otherwise. Pure. */
 export function moreFilesLabel(fileCount: number): string | null {
   return fileCount > 1 ? `+${fileCount - 1}` : null;
-}
-
-/** The table's Came from: the plan the idea left, or New idea. Pure. */
-export function cameFromLabel(idea: Pick<BankIdea, 'came_from_plan_title'>): string {
-  const title = idea.came_from_plan_title;
-  return title !== null && title !== undefined && title !== '' ? title : 'New idea';
 }
 
 export const CLIENT_CAN_SEE = 'Client can see';
@@ -273,23 +269,6 @@ export function approverNames(
 export function showToClientWarning(names: readonly string[], comments: number): string {
   const who = joinNames(names);
   return `${who} will see this idea and all ${comments} ${comments === 1 ? 'comment' : 'comments'}, team ones included.`;
-}
-
-// ---------------------------------------------------------------------------
-// Drag (laptop: a panel card onto a month day)
-// ---------------------------------------------------------------------------
-
-/** The drag payload type a Bank row carries onto a calendar day. */
-export const BANK_DRAG_TYPE = 'application/x-sorted-bank-idea';
-
-/** The idea id a drag carries, or null when it is not a Bank row. Pure. */
-export function bankDragId(
-  types: readonly string[],
-  read: (type: string) => string,
-): string | null {
-  if (!types.includes(BANK_DRAG_TYPE)) return null;
-  const id = read(BANK_DRAG_TYPE);
-  return id !== '' ? id : null;
 }
 
 // ---------------------------------------------------------------------------

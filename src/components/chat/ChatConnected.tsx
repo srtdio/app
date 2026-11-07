@@ -296,7 +296,7 @@ export function chatListPaneClass(planPanelOpen: boolean, pageScroll = false): s
   return cn(
     // pageScroll (phone list, page mode): the pane grows with the list and the
     // document scrolls it (src/lib/scroll-mode.ts); otherwise full height.
-    pageScroll ? 'w-full' : 'h-full w-full border-border md:w-72 md:border-r xl:w-[352px]',
+    pageScroll ? 'w-full' : 'h-full w-full border-border md:w-72 md:border-r xl:w-chat-list',
     planPanelOpen &&
       'max-[891px]:pointer-events-none max-[891px]:invisible max-[891px]:absolute max-[891px]:inset-y-0 max-[891px]:left-0',
     planPanelOpen &&
@@ -2376,7 +2376,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             'relative h-full min-w-0 flex-1',
             // The docked plan panel (440px) takes the right; from 1180px the
             // thread narrows so it covers nothing (below, it overlays).
-            planPanelOpen && 'min-[1180px]:mr-[440px]',
+            planPanelOpen && 'min-[1180px]:mr-plan-panel',
           )}
         >
           {opening !== null ? (

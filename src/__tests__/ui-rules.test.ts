@@ -372,10 +372,10 @@ describe('ui rules: one checkbox', () => {
     ).toEqual([]);
   });
 
-  it('ui/Checkbox is the 18px field box with the accent tick', () => {
+  it('ui/Checkbox is the 20px field box with the accent tick', () => {
     const src = bySrc('ui/Checkbox.tsx');
     expect(src).toContain('type="checkbox"');
-    const look = ['h-[18px]', 'border-field', 'lit-well', 'checked:bg-accent', 'text-accent-fg'];
+    const look = ['h-5 w-5', 'border-field', 'lit-well', 'checked:bg-accent', 'text-accent-fg'];
     for (const c of look) expect(src).toContain(c);
   });
 });
@@ -409,19 +409,18 @@ describe('ui rules: icons live in ui/', () => {
 });
 
 describe('ui rules: 44px touch targets', () => {
-  // CLAUDE.md exception: only the laptop Plan month's lines are 22px (dense).
-  it('PressableRow dense is used only in pages/plan-tab/PlanCalendar.tsx', () => {
+  // The one 22px exception (the laptop Plan month's lines) retired with the
+  // calendar (7 Nov 2026): no screen draws a dense row now.
+  it('PressableRow dense is used nowhere', () => {
     const offenders: string[] = [];
     for (const { rel, src } of ALL_FILES) {
-      if (rel === 'pages/plan-tab/PlanCalendar.tsx' || rel === 'ui/PressableRow.tsx') continue;
+      if (rel === 'ui/PressableRow.tsx') continue;
       for (const at of indexesOf(src, /<PressableRow\b/)) {
         const attrs = topLevel(openingTag(src, at));
         if (/\sdense(?=[\s=/>])/.test(attrs)) offenders.push(`${rel}:${lineOf(src, at)}`);
       }
     }
     expect(offenders).toEqual([]);
-    // The exception is still in use (no stale rule).
-    expect(bySrc('pages/plan-tab/PlanCalendar.tsx')).toMatch(/<PressableRow\s+dense\b/);
   });
 });
 

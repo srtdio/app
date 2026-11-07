@@ -11,9 +11,10 @@
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { trayIcon } from '@/components/ui/ActionRow';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
-import { ICON_SIZE, IconPlus, IconTrash } from '@/components/ui/icons';
+import { IconPlus, IconTrash } from '@/components/ui/icons';
 
 interface SlideActionsSheetProps {
   open: boolean;
@@ -58,7 +59,7 @@ function SlideRow({
           danger ? 'text-bad' : 'text-fg-2',
         )}
       >
-        {icon}
+        {trayIcon(icon)}
       </span>
       <span className="truncate">{label}</span>
     </PressableRow>
@@ -83,12 +84,12 @@ export function SlideActionsSheet({
     <Sheet open={open} onClose={onClose} title={`Image ${index + 1} of ${count}`}>
       <div className="flex flex-col gap-1">
         <SlideRow
-          icon={<IconPlus size={ICON_SIZE.tray} />}
+          icon={<IconPlus />}
           label="Add image after this"
           onClick={() => run(onAddAfter)}
         />
         <SlideRow
-          icon={<IconTrash size={ICON_SIZE.tray} />}
+          icon={<IconTrash />}
           label="Remove image"
           danger
           disabled={saving}

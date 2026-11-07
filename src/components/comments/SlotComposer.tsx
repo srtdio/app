@@ -437,7 +437,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
       <div className="flex">
         <Button
           variant="ghost"
-          className="min-h-[44px] min-w-[44px]"
+          className="min-h-11 min-w-11"
           data-add-slot=""
           disabled={submitting || slots.length >= MAX_POINTS}
           onClick={addSlot}

@@ -32,8 +32,8 @@ const ALLOWED: Readonly<Record<string, number>> = {
   'comments/SlotComposer.tsx': 1,
   'chat/Composer.tsx': 1,
   // Debt.
-  'chat/ScheduleSheet.tsx': 1,
-  'chat/ReminderSheet.tsx': 1,
+  // The schedule and reminder time pickers' one shared frame.
+  'chat/WhenOptions.tsx': 1,
   'chat/PlanScreen.tsx': 1,
   'chat/ConceptSheet.tsx': 1,
   'settings/UsernameField.tsx': 1,

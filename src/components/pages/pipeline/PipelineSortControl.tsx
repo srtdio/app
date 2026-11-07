@@ -14,6 +14,8 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { popoverClass } from '@/components/ui/popover-classes';
+import { SECTION_LABEL } from '@/components/ui/Text';
 import {
   ICON_SIZE,
   IconCalendar,
@@ -107,7 +109,7 @@ function radioRow(
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex h-11 items-center gap-2.5 px-3 text-base mv-tint',
+        'flex h-11 items-center gap-2 px-3 text-base mv-tint',
         selected ? 'text-fg' : 'text-fg-2',
       )}
     >
@@ -197,11 +199,11 @@ function MenuShell(props: {
         {props.trigger}
         {props.open ? (
           <>
-            <div className="fixed inset-0 z-40" aria-hidden="true" onClick={props.onClose} />
+            <div className="fixed inset-0 z-dock" aria-hidden="true" onClick={props.onClose} />
             <div
               ref={panelRef}
               onKeyDown={keys.onKeyDown}
-              className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border bg-panel p-1.5 lit-overlay"
+              className={cn('absolute right-0 top-full z-sheet mt-2 w-64', popoverClass())}
             >
               {props.body}
             </div>
@@ -358,19 +360,15 @@ export function filterControlBody(props: {
 }): ReactElement {
   return (
     <div data-filter-body="" className="flex flex-col">
-      <p className="px-3 pb-1 pt-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-        Due date
-      </p>
+      <p className={cn(SECTION_LABEL, 'px-3 pb-1 pt-2')}>Due date</p>
       {dateControlBody({
         dateWindow: props.dateWindow,
         onDateWindowChange: props.onDateWindowChange,
         customRange: props.customRange,
         onCustomOpen: props.onCustomOpen,
       })}
-      <div className="my-1.5 border-t border-border" aria-hidden="true" />
-      <p className="px-3 pb-1 pt-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-        Sort
-      </p>
+      <div className="my-2 border-t border-border" aria-hidden="true" />
+      <p className={cn(SECTION_LABEL, 'px-3 pb-1 pt-2')}>Sort</p>
       {sortControlBody({ order: props.order, onOrderChange: props.onOrderChange })}
     </div>
   );
@@ -412,7 +410,7 @@ export function PipelineFilterControl({
         <span
           aria-hidden="true"
           data-filter-dot=""
-          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent lit-badge"
+          className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent lit-badge"
         />
       ) : null}
     </IconButton>

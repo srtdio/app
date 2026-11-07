@@ -16,8 +16,9 @@ const SURFACES: readonly { file: string; what: string }[] = [
   { file: 'chat/StarredList.tsx', what: 'starred row sender photo + name' },
   { file: 'chat/PlanItemThread.tsx', what: 'plan comment author + mentions' },
   { file: 'comments/Comments.tsx', what: 'comment author photo + name, @mentions' },
-  { file: 'pages/activity/ActivityCard.tsx', what: 'actor photo + entry author' },
-  { file: 'pages/activity/AvatarStack.tsx', what: 'bucket avatar stack' },
+  // Activity cards are ui/ListCard: the whole card is the one tap target (it
+  // opens the thing), so the person's photo there opens the card, like the chat list
+  // (the bucket AvatarStack is deleted).
   { file: 'pages/settings/MembersList.tsx', what: 'member row photo + name' },
   { file: 'pages/PostDetailPage.tsx', what: 'owner photo + name' },
   { file: 'pages/pcs/PostDetailsSheet.tsx', what: 'owner photo' },
@@ -37,8 +38,10 @@ describe('person surfaces open the shared person card', () => {
     });
   }
 
-  it('the Activity page hands the stack its people', () => {
-    expect(source('pages/NotificationsPage.tsx')).toContain('people={bucketActors(entries)}');
+  it('the Activity day label has no avatar beside it (people open from each card)', () => {
+    const page = source('pages/NotificationsPage.tsx');
+    expect(page).not.toContain('AvatarStack');
+    expect(page).not.toContain('bucketActors(');
   });
 
   it('a chat @mention tap no longer opens a DM directly: photo in a DM, card elsewhere', () => {

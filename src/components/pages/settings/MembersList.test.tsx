@@ -17,7 +17,7 @@ vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't-1' }));
 
 import { getInviteRoleOptions } from './MembersInviteForm';
 import { tagClass } from '@/components/ui/Tag';
-import { MembersList, memberActionItems } from './MembersList';
+import { EMAIL_OFF_LABEL, EMAIL_ON_LABEL, MembersList, memberActionItems } from './MembersList';
 import type { PendingEditHandler } from './MembersList';
 import type { DerivedMembers, MemberEntry } from './members-data';
 
@@ -109,14 +109,18 @@ describe('MembersList', () => {
         })}
       />,
     );
-    expect(out.match(/>On</g)).toHaveLength(1);
-    expect(out.match(/>Emails off</g)).toHaveLength(1);
-    // The tag sits in the self row and the opted-out row only.
+    // A small grey mail glyph with its name, never a tag (the row's one tag is the role).
+    expect(out.match(/data-member-email-mark="on"/g)).toHaveLength(1);
+    expect(out.match(/data-member-email-mark="off"/g)).toHaveLength(1);
+    expect(out).toContain(`aria-label="${EMAIL_ON_LABEL}"`);
+    expect(out).toContain(`aria-label="${EMAIL_OFF_LABEL}"`);
+    expect(out).not.toContain('>On<');
+    expect(out).not.toContain('>Emails off<');
+    // The mark sits in the self row and the opted-out row only.
     const self = out.slice(out.indexOf('Sam Self'), out.indexOf('Oli Off'));
-    expect(self).toContain('>On<');
+    expect(self).toContain('data-member-email-mark="on"');
     const old = out.slice(out.indexOf('Ola Old'));
-    expect(old).not.toContain('>On<');
-    expect(old).not.toContain('>Emails off<');
+    expect(old).not.toContain('data-member-email-mark');
   });
 
   it('creator and approver viewers never see the email tag', () => {
@@ -132,8 +136,7 @@ describe('MembersList', () => {
         })}
       />,
     );
-    expect(out).not.toContain('>On<');
-    expect(out).not.toContain('>Emails off<');
+    expect(out).not.toContain('data-member-email-mark');
   });
 
   it('shows the owner lock and no action kebabs for a read-only (client) viewer', () => {

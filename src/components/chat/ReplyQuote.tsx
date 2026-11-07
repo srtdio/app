@@ -172,7 +172,7 @@ function quoteLines(
     <>
       <span
         className={cn(
-          'w-[3px] shrink-0 self-stretch rounded-full',
+          'w-1 shrink-0 self-stretch rounded-full',
           tone === 'warn' ? 'bg-warn' : 'bg-accent',
         )}
         aria-hidden="true"

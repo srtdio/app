@@ -23,7 +23,8 @@ import type {
   TrafficData,
   UsersData,
 } from '@/lib/cockpit/types';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 
 export const AGORA_CONSOLE_URL = 'https://console.agora.io';
@@ -65,7 +66,7 @@ export function NeedsYouTab({
   if (alerts === null) return <Pending />;
   if (alerts.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border bg-panel lit-card px-3 py-3">
+      <div className="flex items-center gap-3 rounded-xl border bg-panel lit-card p-3">
         <span className="text-good">
           <IconCheckCircle size={ICON_SIZE.control} />
         </span>
@@ -88,9 +89,9 @@ export function NeedsYouTab({
               if (alert.href !== undefined) openExternal(alert.href);
               else if (alert.tab !== undefined) onOpenTab(alert.tab);
             }}
-            className="flex items-start gap-3 px-3 py-2.5"
+            className="flex items-start gap-3 p-3"
           >
-            <span className="mt-1.5">
+            <span className="mt-1">
               <StatusDot level={alert.level} />
             </span>
             <span className="flex min-w-0 flex-col">
@@ -165,6 +166,7 @@ function sentryStatus(substatus: string | null): 'New' | 'Ongoing' | 'Back again
 }
 
 export function ErrorsTab({ source }: { source: Source<{ issues: SentryIssue[] }> | undefined }) {
+  const now = new Date(useMinuteClock());
   return (
     <WithSource source={source}>
       {(d) =>
@@ -182,7 +184,7 @@ export function ErrorsTab({ source }: { source: Source<{ issues: SentryIssue[] }
                 <li key={issue.id}>
                   <PressableRow
                     onClick={() => openExternal(issue.permalink)}
-                    className="flex flex-col gap-1 px-3 py-2.5"
+                    className="flex flex-col gap-1 p-3"
                   >
                     <span className="flex w-full items-start gap-2">
                       <span className="min-w-0 flex-1 line-clamp-2 text-base font-medium text-fg [overflow-wrap:anywhere]">
@@ -192,7 +194,7 @@ export function ErrorsTab({ source }: { source: Source<{ issues: SentryIssue[] }
                     </span>
                     <span className="truncate text-sm text-fg-3">
                       {issue.culprit} · {countText(issue.count)} times ·{' '}
-                      {formatRelative(issue.lastSeen)}
+                      {formatAgo(issue.lastSeen, now)}
                     </span>
                   </PressableRow>
                 </li>

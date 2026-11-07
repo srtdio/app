@@ -67,7 +67,7 @@ export function renderFormatted(body: string, inner: (text: string) => ReactNode
       const style = segment.styles[k];
       if (style !== undefined && style !== 'mono') node = wrapStyle(style, node);
     }
-    return <Fragment key={i}>{node}</Fragment>;
+    return <Fragment key={`part-${i}`}>{node}</Fragment>;
   });
 }
 
@@ -103,7 +103,7 @@ export function renderBodyLinks(
       return highlight.length === 0 ? (
         segment.text
       ) : (
-        <Fragment key={i}>{markSearchWords(segment.text, highlight)}</Fragment>
+        <Fragment key={`part-${i}`}>{markSearchWords(segment.text, highlight)}</Fragment>
       );
     }
     const target = classify(segment.url, origin, APP_ENTITY_ROUTES);
@@ -113,7 +113,7 @@ export function renderBodyLinks(
     if (verdict !== null && verdict.verdict === 'unsafe') {
       return (
         <UnsafeLinkText
-          key={i}
+          key={`part-${i}`}
           url={segment.url}
           reasons={verdict.reasons}
           className={cn('inline', className)}
@@ -125,7 +125,7 @@ export function renderBodyLinks(
     }
     return target.kind === 'external' ? (
       <a
-        key={i}
+        key={`part-${i}`}
         data-msg-link=""
         href={segment.url}
         target="_blank"
@@ -135,7 +135,7 @@ export function renderBodyLinks(
         {label}
       </a>
     ) : (
-      <Link key={i} data-msg-link="" to={target.path} className={className}>
+      <Link key={`part-${i}`} data-msg-link="" to={target.path} className={className}>
         {label}
       </Link>
     );

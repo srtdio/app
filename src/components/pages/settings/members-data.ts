@@ -6,7 +6,7 @@
 import type { Database } from '@srtdio/schemas';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { ChatProfile } from '@/lib/chat-reads';
-import { formatDate } from '@/lib/time';
+import { formatAdded } from '@/lib/time';
 import { errorText } from '@/lib/error-copy';
 
 export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members']['Row'];
@@ -198,11 +198,12 @@ export function memberRemoveErrorMessage(code: DomainErrorCode): string {
   }
 }
 
-/** Format accepted_at for the "joined" column with the app day format ("23 Oct",
- *  the year only outside now's year; the viewer's clock); null when never accepted. */
+/** Format accepted_at for the "joined" column as a record time (formatAdded:
+ *  "10:27 AM" today, else "2 Nov", "2 Nov 2025" off-year); null when never
+ *  accepted. */
 export function formatJoined(acceptedAt: string | null, now: Date = new Date()): string | null {
   if (acceptedAt === null) return null;
-  const day = formatDate(acceptedAt, now);
+  const day = formatAdded(acceptedAt, now);
   return day === '' ? null : day;
 }
 

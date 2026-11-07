@@ -31,6 +31,27 @@ export interface HeaderBarProps {
   subtitle?: ReactNode;
   /** 56 phone, 64 laptop by default; `compact` keeps 56 on both. */
   compact?: boolean;
+  /**
+   * The screen's own h1 (PageHead): tabIndex -1 so a route change can move
+   * focus to it (src/lib/route-a11y.ts); never a Tab stop, no focus line.
+   * Default false: the title is a plain h1.
+   */
+  routeFocus?: boolean;
+  /**
+   * A control in the title's place (a title menu button, an inline rename
+   * field). It sits in the same title column; the caller renders it with the
+   * title role. Default: the plain h1.
+   */
+  titleSlot?: ReactNode;
+  /** Hooks on the title column (data-* and tabIndex for a panel's focus target). Behaviour only. */
+  titleProps?: {
+    tabIndex?: number;
+    [hook: `data-${string}`]: string | undefined;
+  };
+  /** Drawn under the bar, anchored to it (a header menu); the bar stacks above the body. */
+  overlay?: ReactNode;
+  /** Ref to the <header> (a page anchors its scroll or motion to the bar). Behaviour only. */
+  barRef?: Ref<HTMLElement> | undefined;
   className?: string;
 }
 
@@ -47,15 +68,22 @@ export function HeaderBar({
   actions,
   subtitle,
   compact = false,
+  routeFocus = false,
+  titleSlot,
+  titleProps,
+  overlay,
+  barRef,
   className,
 }: HeaderBarProps) {
   return (
     <header
+      ref={barRef}
       data-header-bar=""
       className={cn(
         'flex min-w-0 shrink-0 items-center gap-2 border-b bg-panel lit-header',
         compact ? 'h-14' : 'h-14 md:h-16',
         GUTTER,
+        overlay !== undefined && 'relative z-sticky',
         className,
       )}
     >
@@ -72,8 +100,21 @@ export function HeaderBar({
       ) : mark !== undefined ? (
         <span className="flex shrink-0 items-center">{mark}</span>
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <h1 className={textRole('title', 'truncate')}>{title}</h1>
+      <div
+        {...titleProps}
+        className={cn(
+          'flex min-w-0 flex-1 flex-col',
+          titleProps?.tabIndex !== undefined && 'rounded-lg focus:outline-none',
+        )}
+      >
+        {titleSlot ?? (
+          <h1
+            {...(routeFocus ? { tabIndex: -1 } : {})}
+            className={textRole('title', cn('truncate', routeFocus && 'focus:outline-none'))}
+          >
+            {title}
+          </h1>
+        )}
         {subtitle !== undefined ? (
           <span className={textRole('meta', 'truncate')}>{subtitle}</span>
         ) : null}
@@ -87,6 +128,7 @@ export function HeaderBar({
           {actions}
         </div>
       ) : null}
+      {overlay}
     </header>
   );
 }

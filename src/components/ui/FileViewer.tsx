@@ -47,7 +47,8 @@ import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
 import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
-import { formatDateTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
@@ -341,7 +342,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-overlay-fg disabled:text-overlay-fg-dim disabled:pointer-events-none',
     text:
-      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
+      'inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
       'text-overlay-fg bg-overlay-surface lit-media hover:bg-overlay-line focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-overlay-fg',
   },
@@ -354,7 +355,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg ' +
       'lit-hover focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none',
     text:
-      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
+      'inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
       'text-fg bg-panel border lit-btn-secondary focus-visible:lit-focus',
   },
 };
@@ -431,7 +432,7 @@ export function fileViewerDetails(
   now: Date = new Date(),
 ): { sender: string; time: string } | null {
   if (sender === undefined && sentAt === undefined) return null;
-  const time = sentAt !== undefined ? formatDateTime(sentAt, now) : '';
+  const time = sentAt !== undefined ? formatAgo(sentAt, now) : '';
   const name = sender ?? '';
   if (name === '' && time === '') return null;
   return { sender: name, time };
@@ -723,7 +724,7 @@ function PdfPage(props: {
           data-pdf-page-error=""
           onClick={() => setAttempt((n) => n + 1)}
           className={cn(
-            'absolute inset-0 flex min-h-[44px] items-center justify-center bg-panel text-base text-fg',
+            'absolute inset-0 flex min-h-11 items-center justify-center bg-panel text-base text-fg',
             'focus-visible:lit-focus focus-visible:-outline-offset-2',
             NO_SELECT,
           )}
@@ -1140,7 +1141,7 @@ function TopBar(props: {
     <div
       data-viewer-bar=""
       className={cn(
-        'relative z-10 flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)]',
+        'relative z-raised flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)]',
         NO_SELECT,
       )}
     >
@@ -1185,7 +1186,8 @@ function TopBar(props: {
 
 export function FileViewerSheet(props: FileViewerProps): ReactElement {
   const { name, kind, size, source, onLoadError, actions, subtitle, onShowInChat } = props;
-  const details = fileViewerDetails(props.sender, props.sentAt);
+  const nowMs = useMinuteClock();
+  const details = fileViewerDetails(props.sender, props.sentAt, new Date(nowMs));
   // Callers pass a fresh onClose each render: keep the latest in a ref so the
   // key and swipe listeners are not re-attached (and a drag not dropped).
   const onCloseRef = useRef(props.onClose);
@@ -1342,7 +1344,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
       aria-label={name}
       data-file-viewer={kind}
       data-viewer-tone={viewerTone(kind)}
-      className="fixed inset-0 z-[80] flex flex-col overflow-hidden"
+      className="fixed inset-0 z-viewer flex flex-col overflow-hidden"
     >
       <div
         aria-hidden="true"
@@ -1367,7 +1369,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           line={actions !== undefined ? viewerBarLine(null, subtitle) : null}
         />
         {details !== null ? (
-          <div className="relative z-10 flex shrink-0 justify-center px-14 pb-1">
+          <div className="relative z-raised flex shrink-0 justify-center px-14 pb-1">
             <ViewerDetails
               sender={details.sender}
               time={details.time}
@@ -1392,7 +1394,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           <div
             data-viewer-bottom-bar=""
             className={cn(
-              'relative z-10 flex h-16 shrink-0 items-center px-4 pb-[env(safe-area-inset-bottom)]',
+              'relative z-raised flex h-16 shrink-0 items-center px-4 pb-[env(safe-area-inset-bottom)]',
               NO_SELECT,
             )}
           >
@@ -1459,7 +1461,7 @@ export function FileViewerFallback(props: {
       aria-modal="true"
       aria-label={props.name}
       data-file-viewer-fallback=""
-      className={cn('fixed inset-0 z-[80] flex flex-col', tone.backdrop, NO_SELECT)}
+      className={cn('fixed inset-0 z-viewer flex flex-col', tone.backdrop, NO_SELECT)}
     >
       <div className="flex shrink-0 items-center px-1 pt-[max(env(safe-area-inset-top),4px)]">
         <button

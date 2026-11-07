@@ -622,7 +622,7 @@ describe('pre-app screens', () => {
     expect(document.body.textContent).toContain('Your team is on its way');
     expect(button('Resend')).toBeDefined();
     for (const label of ['I make the posts after all', 'Use a different email', 'Sign out']) {
-      expect(button(label).className).toContain('min-h-[44px]');
+      expect(button(label).className).toContain('min-h-11');
     }
     expect(onFinish).not.toHaveBeenCalled();
   });

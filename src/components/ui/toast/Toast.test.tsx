@@ -99,8 +99,8 @@ describe('Toast', () => {
     expect(action).toHaveLength(1);
     const props = action[0]!.props as { onClick: () => void; className: string; children: string };
     expect(props.children).toBe('Undo');
-    expect(props.className).toContain('min-h-[44px]');
-    expect(props.className).toContain('min-w-[44px]');
+    expect(props.className).toContain('min-h-11');
+    expect(props.className).toContain('min-w-11');
     props.onClick();
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onDismiss).toHaveBeenCalledWith('1');

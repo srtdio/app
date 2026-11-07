@@ -90,7 +90,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => props.onPick(member)}
             className={cn(
-              'flex min-h-[44px] cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 lit-hover',
+              'flex min-h-11 cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 lit-hover',
               index === props.active ? 'bg-panel-2' : undefined,
             )}
           >
@@ -98,7 +98,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
               <>
                 <span
                   aria-hidden="true"
-                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-hover"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-hover"
                 >
                   @
                 </span>

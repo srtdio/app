@@ -12,7 +12,7 @@ describe('Tag', () => {
       '<span class="lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-bad-soft text-bad">Not delivered</span>',
     );
     expect(renderToStaticMarkup(<Tag label="Review" dot="review" />)).toBe(
-      '<span class="lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2 gap-1.5"><span aria-hidden="true" class="h-2 w-2 shrink-0 rounded-full bg-stage-review"></span>Review</span>',
+      '<span class="lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2 gap-2"><span aria-hidden="true" class="h-2 w-2 shrink-0 rounded-full bg-stage-review"></span>Review</span>',
     );
   });
 

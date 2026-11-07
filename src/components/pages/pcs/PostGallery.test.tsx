@@ -338,8 +338,8 @@ describe('galleryView', () => {
 
     // Every dot is a 44px touch target; only the active slide's dot is current.
     for (const dot of dots) {
-      expect(className(dot)).toContain('min-h-[44px]');
-      expect(className(dot)).toContain('min-w-[44px]');
+      expect(className(dot)).toContain('min-h-11');
+      expect(className(dot)).toContain('min-w-11');
     }
     const current = dots.map((el) => (el.props as { 'aria-current'?: boolean })['aria-current']);
     expect(current).toEqual([false, true, false]);

@@ -248,9 +248,8 @@ export function firstBriefErrorField(errors: Record<string, string>): BriefError
   return null;
 }
 
-/** The Create button's label: in flight, uploading, or ready. Pure. */
-function createBriefLabel(submitting: boolean, pendingUploads: number): string {
-  if (submitting) return 'Creating…';
+/** The Create button's label: uploading, or ready (in flight is Button busy). Pure. */
+function createBriefLabel(pendingUploads: number): string {
   if (pendingUploads > 0) return `Uploading ${fileCount(pendingUploads)}…`;
   return 'Create brief';
 }
@@ -368,7 +367,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
   function fieldError(key: BriefErrorField): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <ErrorNote className="mt-1.5">
+      <ErrorNote className="mt-2">
         <span id={briefErrorId(key)}>{fieldErrors[key]}</span>
       </ErrorNote>
     ) : null;
@@ -392,10 +391,9 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       className="shrink-0"
       data-induction={INDUCTION_KEYS.briefSheetCreate}
       onClick={() => void handleSubmit()}
-      disabled={submitting}
-      aria-busy={submitting}
+      busy={submitting}
     >
-      {createBriefLabel(submitting, pendingUploads)}
+      {createBriefLabel(pendingUploads)}
     </Button>
   );
 
@@ -499,7 +497,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             // still reads in the error colour.
             <p
               role="status"
-              className={`mt-1.5 text-sm ${pendingUploads > 0 ? 'text-fg-3' : 'text-bad'}`}
+              className={`mt-2 text-sm ${pendingUploads > 0 ? 'text-fg-3' : 'text-bad'}`}
             >
               {uploadNotice}
             </p>

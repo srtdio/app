@@ -178,7 +178,7 @@ describe('counts with a pair', () => {
     const keys = [...entries.values()].flat().map((e) => e.key);
     expect(keys).toContain('item:c1');
     expect(keys).not.toContain('item:iA');
-    expect(postStageLine(b, concept)).toBe('Post: In review');
+    expect(postStageLine(b, concept)).toBe('Post: Review');
   });
 });
 

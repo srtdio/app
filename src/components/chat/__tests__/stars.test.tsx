@@ -257,7 +257,7 @@ describe('bubble meta', () => {
 
   it('own: the meta ink (white, as the time); incoming: fg-3', () => {
     expect(render(true)).not.toContain('text-fg-3');
-    expect(render(true)).toContain('--bubble-meta-own');
+    expect(render(true)).toContain('text-bubble-meta-own');
     expect(render(false)).toContain('data-meta-star="" class="inline-flex text-fg-3"');
   });
 
@@ -350,7 +350,7 @@ describe('chat home chips', () => {
     expect(out).toContain('overflow-x-auto');
     expect(out).toContain('[scrollbar-width:none]');
     expect(out).toContain('touch-pan-x');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
     expect(out).toContain('shrink-0');
     expect(out).toContain('whitespace-nowrap');
   });

@@ -17,7 +17,8 @@ import {
   watchBatchFreshness,
 } from '@/components/chat/post-card';
 
-const TZ = 'UTC';
+/** Two days after approved_at (Mon 21 Sep 14:05Z), three after stage_entered_at (Sun 20 Sep 10:00Z). */
+const NOW = new Date('2026-09-23T14:30:00Z');
 
 /** Pin the device locale: Intl.DateTimeFormat with no locale resolves to `locale`. */
 function deviceLocale(locale: string): void {
@@ -123,30 +124,26 @@ describe('approverIds / firstName', () => {
 describe('cardFooter', () => {
   const approved = cardRow('p1', { approved_by: 'u1', approved_at: '2026-09-21T14:05:00Z' });
 
-  it('approved with a name: check, name and date + time, Open', () => {
-    expect(cardFooter(approved, 'Asha', 'agency', TZ)).toEqual({
-      state: 'Approved by Asha · 21 Sep, 2:05 PM',
+  it('approved with a name: check, name and when (formatAgo), Open', () => {
+    expect(cardFooter(approved, 'Asha', 'agency', NOW)).toEqual({
+      state: 'Approved by Asha · Mon',
       action: 'Open',
       accent: false,
       check: true,
     });
   });
 
-  it('the approval time is one 12-hour register whatever the device locale', () => {
+  it('the approval time reads the same whatever the device locale', () => {
     deviceLocale('en-IN');
-    expect(cardFooter(approved, 'Asha', 'agency', TZ).state).toBe(
-      'Approved by Asha · 21 Sep, 2:05 PM',
-    );
+    expect(cardFooter(approved, 'Asha', 'agency', NOW).state).toBe('Approved by Asha · Mon');
     vi.restoreAllMocks();
     deviceLocale('en-GB');
-    expect(cardFooter(approved, 'Asha', 'agency', TZ).state).toBe(
-      'Approved by Asha · 21 Sep, 2:05 PM',
-    );
+    expect(cardFooter(approved, 'Asha', 'agency', NOW).state).toBe('Approved by Asha · Mon');
   });
 
-  it('approved without an approver falls back to the stage_entered_at date', () => {
-    expect(cardFooter(cardRow('p1'), null, 'client', TZ)).toMatchObject({
-      state: 'Approved · 20 Sep',
+  it('approved without an approver falls back to when it entered approved', () => {
+    expect(cardFooter(cardRow('p1'), null, 'client', NOW)).toMatchObject({
+      state: 'Approved · Sun',
       action: 'Open',
       check: true,
     });
@@ -154,18 +151,18 @@ describe('cardFooter', () => {
 
   it('review words by side: client is waited on, agency waits, unknown is neutral', () => {
     const review = cardRow('p1', { stage: 'review' });
-    expect(cardFooter(review, null, 'client', TZ)).toEqual({
+    expect(cardFooter(review, null, 'client', NOW)).toEqual({
       state: 'Waiting on you',
       action: 'Review',
       accent: true,
       check: false,
     });
-    expect(cardFooter(review, null, 'agency', TZ)).toMatchObject({
+    expect(cardFooter(review, null, 'agency', NOW)).toMatchObject({
       state: 'Waiting on approvers',
       action: 'Open',
       accent: false,
     });
-    expect(cardFooter(review, null, 'unknown', TZ)).toMatchObject({
+    expect(cardFooter(review, null, 'unknown', NOW)).toMatchObject({
       state: 'In review',
       action: 'Open',
     });
@@ -177,7 +174,7 @@ describe('cardFooter', () => {
       ['parked', 'Parked'],
       ['rejected', 'Rejected'],
     ] as const) {
-      expect(cardFooter(cardRow('p1', { stage }), null, 'client', TZ)).toEqual({
+      expect(cardFooter(cardRow('p1', { stage }), null, 'client', NOW)).toEqual({
         state: label,
         action: 'Open',
         accent: false,
@@ -286,8 +283,8 @@ describe('approver label (on behalf of the approvers)', () => {
   it('the card footer prints the suffixed approver', () => {
     deviceLocale('en-GB');
     const approved = cardRow('p1', { approved_by: 'u1', approved_at: '2026-09-21T14:05:00Z' });
-    expect(cardFooter(approved, approverLabel('Chitra', 'agency'), 'client', TZ).state).toBe(
-      'Approved by Chitra on behalf of the approvers · 21 Sep, 2:05 PM',
+    expect(cardFooter(approved, approverLabel('Chitra', 'agency'), 'client', NOW).state).toBe(
+      'Approved by Chitra on behalf of the approvers · Mon',
     );
   });
 });

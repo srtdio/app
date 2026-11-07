@@ -4,6 +4,7 @@ import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
+import { SECTION_LABEL, Text } from '@/components/ui/Text';
 import {
   ICON_SIZE,
   IconChevronLeft,
@@ -202,7 +203,7 @@ export function viewerName(items: readonly AssetListItem[], asset: AssetListItem
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{label}</dt>
+      <dt className={SECTION_LABEL}>{label}</dt>
       <dd className="text-base text-fg break-words">{value}</dd>
     </div>
   );
@@ -571,7 +572,7 @@ export function AssetLightbox({
       aria-modal="true"
       aria-label={`Viewing ${name}`}
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex flex-col bg-overlay focus:outline-none"
+      className="fixed inset-0 z-sheet flex flex-col bg-overlay focus:outline-none"
     >
       {/* One top bar: close on the left, the name and its type line in the
           centre, then Download, Copy link, Info and Delete. It clears the notch. */}
@@ -642,7 +643,7 @@ export function AssetLightbox({
             data-file-card=""
             className="lit-overlay m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg"
           >
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold tracking-[0.06em] text-fg-2">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold text-fg-2">
               {typeLabel(kind)}
             </div>
             <div className="min-w-0">
@@ -675,7 +676,7 @@ export function AssetLightbox({
 
       {/* Info: bottom sheet sliding up inside the lightbox. */}
       {infoOpen ? (
-        <div className="absolute inset-0 z-10 flex items-end">
+        <div className="absolute inset-0 z-raised flex items-end">
           <Backdrop
             aria-label="Close details"
             onClick={() => setInfoOpen(false)}
@@ -688,7 +689,9 @@ export function AssetLightbox({
             className="lit-overlay relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
           >
             <div className="flex items-center gap-2">
-              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{name}</h2>
+              <Text as="h2" role="title" className="min-w-0 flex-1 truncate">
+                {name}
+              </Text>
               <IconButton label="Close" onClick={() => setInfoOpen(false)}>
                 <IconX size={ICON_SIZE.control} />
               </IconButton>
@@ -696,9 +699,7 @@ export function AssetLightbox({
 
             <dl className="mt-3 flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
-                <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-                  Name
-                </dt>
+                <dt className={SECTION_LABEL}>Name</dt>
                 {editingName ? (
                   <div className="mt-1 flex flex-col gap-2">
                     <Input
@@ -720,10 +721,11 @@ export function AssetLightbox({
                       <Button
                         variant="primary"
                         className="flex-1"
+                        busy={savingName}
                         disabled={!canSaveName}
                         onClick={() => void saveName()}
                       >
-                        {savingName ? 'Saving' : 'Save'}
+                        Save
                       </Button>
                     </div>
                   </div>
@@ -731,17 +733,20 @@ export function AssetLightbox({
                   <dd className="flex items-center gap-1">
                     <span className="min-w-0 flex-1 break-words text-base text-fg">{name}</span>
                     {canRename ? (
-                      <IconButton
+                      // Edit = pencil + "Edit" (the one edit control); it renames the file.
+                      <Button
+                        variant="ghost"
                         type="button"
-                        label="Rename file"
+                        data-rename-file=""
                         onClick={() => {
                           setNameDraft(name);
                           setEditingName(true);
                         }}
                         className="shrink-0"
                       >
-                        <IconEdit size={ICON_SIZE.control} />
-                      </IconButton>
+                        <IconEdit size={ICON_SIZE.inline} />
+                        Edit
+                      </Button>
                     ) : null}
                   </dd>
                 )}

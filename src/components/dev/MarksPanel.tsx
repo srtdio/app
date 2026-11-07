@@ -18,7 +18,7 @@ import { clearMarks, readMarks } from '@/lib/perf-marks';
 /** How often the list re-reads while open. */
 const MARKS_REFRESH_MS = 500;
 
-const BUTTON = 'min-w-[44px] shrink-0';
+const BUTTON = 'min-w-11 shrink-0';
 
 /** The panel, portalled to the body; nothing at all when the paint log is off. */
 export function MarksPanel(): ReactElement | null {
@@ -50,7 +50,7 @@ function MarksStrip(): ReactElement {
   };
   if (!open) {
     return (
-      <div data-marks-panel="" style={{ bottom: inset + 8 }} className="fixed right-2 z-[60]">
+      <div data-marks-panel="" style={{ bottom: inset + 8 }} className="fixed right-2 z-dialog">
         <Button
           type="button"
           variant="secondary"
@@ -67,7 +67,7 @@ function MarksStrip(): ReactElement {
     <div
       data-marks-panel=""
       style={{ bottom: inset }}
-      className="fixed inset-x-0 z-[60] flex max-h-[40svh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel text-fg lit-overlay"
+      className="fixed inset-x-0 z-dialog flex max-h-[40svh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel text-fg lit-overlay"
     >
       <div className="flex shrink-0 items-center gap-1 border-b lit-header px-2">
         <span className="flex-1 truncate text-sm font-semibold text-fg-2">
@@ -83,7 +83,7 @@ function MarksStrip(): ReactElement {
           Hide
         </Button>
       </div>
-      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1 font-mono text-xs leading-4 tabular-nums">
+      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1 font-mono text-xs tabular-nums">
         {marks.map((m) => (
           <li key={m.name} className="flex gap-2">
             <span className="min-w-0 flex-1 break-all">{m.name}</span>

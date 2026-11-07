@@ -103,7 +103,9 @@ describe('onboarding and induction follow the design rules', () => {
   it('cards are 12, the step card 16; the step card is raised, cards lift', () => {
     const flow = FILES.find(({ rel }) => rel === 'onboarding/OnboardingFlow.tsx')?.src ?? '';
     expect(flow).toContain('rounded-2xl border bg-panel p-6 lit-raised');
-    expect(flow).toContain('max-w-[340px] rounded-xl border bg-panel lit-card p-3.5"');
+    // Preview cards take the card part's surface (radius 12, lit-card) and its 16 pad.
+    expect(flow).toContain("cn('w-full max-w-xs', cardSurface(), cardPad())");
+    expect(flow).not.toContain('p-3.5');
   });
 
   it('the intro card is the step card role on the panel: Start primary, Skip tour ghost', () => {
@@ -111,7 +113,7 @@ describe('onboarding and induction follow the design rules', () => {
     expect(guide).toContain("kind === 'intro' ? 'rounded-2xl' : 'rounded-xl'");
     expect(guide).toContain('border bg-panel p-4 text-fg lit-overlay');
     expect(guide).not.toMatch(/bg-accent text-accent-fg|text-accent-fg/);
-    expect(guide).toContain('<Button variant="primary" onClick={onPress}>');
+    expect(guide).toContain('<Button variant="primary" busy={busy} onClick={onPress}>');
     // Skip tour is ghost (text-fg-2), which contrast.test holds at 4.5:1 on panel in both themes.
     expect(guide).not.toMatch(/variant=\{hero/);
   });

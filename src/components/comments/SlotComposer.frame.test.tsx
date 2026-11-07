@@ -44,7 +44,11 @@ function rows(): HTMLElement[] {
 
 /** A row's controls in order: 'field', or each button's name. */
 function order(row: HTMLElement): string[] {
-  return Array.from(row.children).map((el) =>
+  // The side slot (data-composer-side) is a wrapper; its buttons keep their place in the row.
+  const cells = Array.from(row.children).flatMap((el) =>
+    el.hasAttribute('data-composer-side') ? Array.from(el.children) : [el],
+  );
+  return cells.map((el) =>
     el.hasAttribute('data-composer-field')
       ? 'field'
       : el.hasAttribute('data-slot-number')

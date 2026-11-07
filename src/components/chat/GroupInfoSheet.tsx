@@ -50,6 +50,7 @@ import { SHEET_NOTICE_TYPE } from '@/components/chat/chat-type';
 import { MODAL_HEADER_SAFE, ModalPanel } from '@/components/chat/ModalPanel';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { errorText } from '@/lib/error-copy';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 /**
  * The inline line a member who cannot rename the group sees. It names the
@@ -190,7 +191,7 @@ export function MembersRefreshNotice(props: { onRetry: () => void }): ReactEleme
       role="status"
       data-members-refresh=""
       onClick={props.onRetry}
-      className={`mt-1 flex items-center px-1 text-fg-2 underline-offset-2 hover:underline ${SHEET_NOTICE_TYPE}`}
+      className={`mt-1 flex items-center text-fg-2 underline-offset-2 hover:underline ${SHEET_NOTICE_TYPE}`}
     >
       {MEMBERS_REFRESH_FAILED}
     </PressableRow>
@@ -378,7 +379,7 @@ export function GroupHero(props: {
   return (
     <div className="flex flex-col items-center gap-1 text-center">
       {props.canEdit ? (
-        <div className="h-[72px] w-[72px]">
+        <div className="h-18 w-18">
           <PressableRow
             type="button"
             data-group-photo=""
@@ -391,7 +392,7 @@ export function GroupHero(props: {
             <span
               data-camera-badge=""
               aria-hidden="true"
-              className="absolute -bottom-2 -right-2 flex h-12 w-12 items-center justify-center rounded-full border-4 border-bg bg-accent text-accent-fg lit-btn-primary"
+              className="absolute -bottom-2 -right-2 flex h-12 w-12 items-center justify-center rounded-full border-cutout-lg border-bg bg-accent text-accent-fg lit-btn-primary"
             >
               <IconCamera size={ICON_SIZE.control} />
             </span>
@@ -432,15 +433,17 @@ export function groupInfoPage(props: {
     <ModalPanel
       aria-label={GROUP_INFO_HEADING}
       data-group-page=""
-      className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
+      className="fixed inset-0 z-sheet flex flex-col bg-bg outline-none"
     >
-      {select?.selecting === true ? (
-        // Select mode: "n selected" and Cancel (SelectionHeader) take the bar.
-        <div
-          className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
-        >
-          {select.header}
-        </div>
+      {select?.selecting === true && select.selectHeader !== null ? (
+        // Select mode: the same HeaderBar holds "n selected" and Cancel, so
+        // the title sits on the one edge in both modes.
+        <HeaderBar
+          compact
+          className={MODAL_HEADER_SAFE}
+          title={select.selectHeader.title}
+          actions={select.selectHeader.cancel}
+        />
       ) : (
         // A modal page: Back left, the title, Select (when offered) right. One exit.
         <HeaderBar
@@ -479,13 +482,9 @@ export function groupInfoPage(props: {
   );
 }
 
-/** A section heading: small caps label over its rows. */
+/** A section heading: small caps label over its rows, on the page's 16 edge (L2). */
 function SectionLabel(props: { children: string }): ReactElement {
-  return (
-    <p className="mb-1 px-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-      {props.children}
-    </p>
-  );
+  return <p className={`mb-1 ${TEXT_ROLE.section}`}>{props.children}</p>;
 }
 
 export interface MembersState {
@@ -808,8 +807,8 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
             <Button variant="ghost" disabled={busy} onClick={() => setName(props.groupName)}>
               Cancel
             </Button>
-            <Button variant="primary" disabled={busy} onClick={() => void submitRename()}>
-              {busy ? 'Saving' : 'Save'}
+            <Button variant="primary" busy={busy} onClick={() => void submitRename()}>
+              Save
             </Button>
           </div>
         ) : null}
@@ -830,7 +829,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         ) : (
           <ul className="flex flex-col">
             {members.options.map((member) => (
-              <li key={member.userId} className="flex items-center gap-3 px-1 min-h-[44px]">
+              <li key={member.userId} className="flex min-h-11 items-center gap-3">
                 <PersonTrigger
                   userId={member.userId}
                   name={member.displayName}
@@ -896,10 +895,11 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
             <Button
               variant="primary"
               className="mt-2"
-              disabled={addId === null || busy}
+              busy={busy}
+              disabled={addId === null}
               onClick={() => void submitAdd()}
             >
-              {busy ? 'Adding' : 'Add to group'}
+              Add to group
             </Button>
           </div>
         ) : null}

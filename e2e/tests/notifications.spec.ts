@@ -210,13 +210,14 @@ test('a failed scheduled send: names the receiver, the reason, and Retry sends i
   await expect(failed.locator('[data-activity-scope-tag]')).toHaveCount(0);
   // The reason replaces the message preview on a failed card.
   await expect(failed).not.toContainText(FAILED_BODY);
-  const retry = failed.locator('[data-activity-action="retry"]');
-  const edit = failed.locator('[data-activity-action="edit"]');
-  await expect(retry).toHaveText('Retry');
-  await expect(edit).toHaveText('Edit');
+  // Edit and Retry live in the card's ⋯ (ui/ListCard keeps every card one height).
+  await expect(failed.locator('[data-activity-lead]')).toHaveCount(0);
+  const more = failed.getByRole('button', { name: 'Activity options' });
+  expectMinTouchTarget(await more.boundingBox());
+  await more.click();
+  await expect(page.getByRole('menuitem', { name: 'Edit', exact: true })).toBeVisible();
+  const retry = page.getByRole('menuitem', { name: 'Retry', exact: true });
   expectMinTouchTarget(await retry.boundingBox());
-  expectMinTouchTarget(await edit.boundingBox());
-
   await retry.click();
   await expect
     .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_scheduled_send_now'))
@@ -424,12 +425,13 @@ test('Upcoming: a pending reminder and a scheduled message, soonest first; never
   await expect(page.getByRole('button', { name: 'Mark all read', exact: true })).toHaveCount(0);
 
   const reminder = page.locator('[data-upcoming-row="reminder"]');
-  const changeTime = reminder.locator('[data-upcoming-action="edit"]');
-  const cancel = reminder.locator('[data-upcoming-action="cancel"]');
-  await expect(changeTime).toHaveText('Change time');
-  expectMinTouchTarget(await changeTime.boundingBox());
+  // Change time and Cancel live in the card's ⋯ (ui/ListCard).
+  const more = reminder.locator('[data-upcoming-more]');
+  expectMinTouchTarget(await more.boundingBox());
+  await more.click();
+  await expect(page.getByRole('menuitem', { name: 'Change time', exact: true })).toBeVisible();
+  const cancel = page.getByRole('menuitem', { name: 'Cancel', exact: true });
   expectMinTouchTarget(await cancel.boundingBox());
-
   await cancel.click();
   await expect(page.getByRole('dialog', { name: 'Cancel this reminder?' })).toBeVisible();
   await page.locator('[data-confirm-cancel-upcoming]').click();
@@ -523,7 +525,7 @@ test('fix 3: at 390px the chip row ends with a full gutter after Snoozed and no 
   expectClean(network);
 });
 
-test('fix 6 and 30: a brief row shows the BRIEF text tile; deleted files show a tile and "+2"', async ({
+test('fix 6 and 30 on ui/ListCard: a brief row shows the brief icon picture; deleted files name the files', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -532,23 +534,20 @@ test('fix 6 and 30: a brief row shows the BRIEF text tile; deleted files show a 
 
   const brief = card(page, 'brief_created');
   await expect(brief).toBeVisible({ timeout: 15_000 });
-  const briefTile = brief.locator('[data-activity-text-tile="Brief"]');
-  await expect(briefTile).toBeVisible();
-  await expect(briefTile).toContainText(BRIEF_TITLE);
-  const briefBox = await briefTile.boundingBox();
-  if (briefBox === null) throw new Error('brief tile has no box');
-  expect(briefBox.width).toBeGreaterThan(40);
-  expect(briefBox.height).toBeGreaterThan(40);
+  await expect(brief).toContainText(BRIEF_TITLE);
+  const briefPicture = brief.locator('[data-list-card-picture="icon"]');
+  await expect(briefPicture).toBeVisible();
+  const briefBox = await briefPicture.boundingBox();
+  if (briefBox === null) throw new Error('brief picture has no box');
+  expect(Math.round(briefBox.width)).toBe(72);
+  expect(Math.round(briefBox.height)).toBe(72);
+  await expect(brief.locator('[data-activity-scope-tag]')).toHaveText('Brief');
 
   const files = card(page, 'assets_deleted');
   await expect(files).toContainText(`${PEER_NAME} deleted 3 files`);
   await expect(files).toContainText(FILES_FIRST);
   await expect(files).toContainText('Also hero.png and teaser.mov');
-  await expect(files.locator('[data-activity-text-tile], img').first()).toBeVisible();
-  await expect(files.locator('[data-activity-text-tile="PDF"]')).toContainText(FILES_FIRST);
-  const badge = files.locator('[data-activity-files-badge]');
-  await expect(badge).toBeVisible();
-  await expect(badge).toHaveText('+2');
+  await expect(files.locator('[data-list-card-picture]')).toBeVisible();
   expectClean(network);
 });
 
@@ -567,9 +566,9 @@ test('Notifications: every button is 44 tall with an 8px radius or round', async
 // Type roles on Notifications (design rules, locked 24 Oct 2026): no visible
 // title bar (the h1 is sr-only, as Pipeline, Briefs, Assets and Plan show none), a day bucket
 // label is a section label (12px/600, uppercase), a card's preview line is
-// body text at 14px and its time is meta at 12px.
+// the secondary role at 13px (ui/ListCard) and its time is meta at 12px.
 test(
-  'Notifications type roles: no visible title, section label 12px uppercase, body 14px, meta 12px',
+  'Notifications type roles: no visible title, section label 12px uppercase, preview 13px, meta 12px',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
@@ -594,8 +593,10 @@ test(
     expect(labelType.weight).toBe('600');
     expect(labelType.transform).toBe('uppercase');
 
-    const body = mention.locator('p', { hasText: MENTION_PREVIEW }).first();
-    expect((await typeOf(body)).size).toBe('14px');
+    // ui/ListCard: the preview is the secondary role (13/18).
+    const body = mention.locator('[data-list-card-preview]').first();
+    await expect(body).toContainText(MENTION_PREVIEW);
+    expect((await typeOf(body)).size).toBe('13px');
 
     const meta = mention.locator('[data-activity-time]').first();
     expect((await typeOf(meta)).size).toBe('12px');

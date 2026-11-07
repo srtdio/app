@@ -169,7 +169,7 @@ describe('member rows on the rail', () => {
     const out = bubble(memberRow, { member: true, rail: railFor('middle', {}), selecting: true });
     expect(out).not.toContain('data-rail');
     expect(out).not.toContain('pl-[30px]');
-    expect(out).toContain('pl-[60px]');
+    expect(out).toContain('pl-15');
     expect(out).not.toContain('Quoted text');
   });
 
@@ -263,7 +263,7 @@ describe('thread controls', () => {
     expect(out).toContain('bg-panel');
     expect(out).toContain('h-5 w-5');
     expect(out).toContain('rounded-lg');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
     expect(out).toContain('Monday carousel');
     expect(out).not.toContain('GBL-12');
     expect(out).toContain('aria-label="Open the thread about Monday carousel"');
@@ -288,7 +288,7 @@ describe('thread controls', () => {
       />,
     );
     expect(own).toContain('justify-end');
-    expect(own).toContain('min-h-[44px]');
+    expect(own).toContain('min-h-11');
     expect(own).toContain('text-md font-semibold text-accent');
     expect(own).toContain('data-rail="through"');
     const left = html(
@@ -302,7 +302,7 @@ describe('thread controls', () => {
         onOpen={() => {}}
       />,
     );
-    expect(left).toContain('pl-[64px]');
+    expect(left).toContain('pl-16');
     expect(left).not.toContain('data-rail');
   });
 
@@ -322,7 +322,7 @@ describe('thread controls', () => {
     const out = html(
       <>
         <RailThrough />
-        <RailTick reach="w-[15px]" top="-top-2.5" />
+        <RailTick reach="w-[15px]" top="-top-3" />
         <RailElbow reach="w-[15px]" bottom="bottom-0" />
       </>,
     );

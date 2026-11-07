@@ -516,7 +516,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         NO_TOUCH_SELECT,
       )}
     >
-      <span className="w-[3px] shrink-0 self-stretch rounded-full bg-accent" aria-hidden="true" />
+      <span className="w-1 shrink-0 self-stretch rounded-full bg-accent" aria-hidden="true" />
       {post !== null ? (
         <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={32} />
       ) : (
@@ -527,7 +527,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         {post !== null ? (
           <span className="truncate text-sm text-fg-2">{post.title}</span>
         ) : (
-          <span aria-hidden="true" className="my-[3px] h-3 w-28 rounded bg-panel-2" />
+          <span aria-hidden="true" className="my-0.5 h-3 w-28 rounded bg-panel-2" />
         )}
       </span>
       <IconButton label="Close about" className="shrink-0" onClick={props.onCancel}>
@@ -1073,7 +1073,7 @@ function PendingThumb(props: {
         <span
           data-schedule-upload-bar={progress}
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
+          className="absolute inset-x-0 bottom-0 h-1 bg-panel-3 lit-well"
         >
           <span className="block h-full bg-accent lit-fill" style={{ width: `${progress}%` }} />
         </span>
@@ -1893,7 +1893,8 @@ export function Composer(props: ComposerProps): ReactElement {
     openSchedule();
   });
   const holdToSchedule = layout === 'touch' && schedulable;
-  const showChevron = layout === 'laptop' && schedulable;
+  // Scheduling keeps the chevron (disabled) so the send slot keeps its width.
+  const showChevron = layout === 'laptop' && (schedulable || scheduleBusy);
   // Phone: Send keeps the keyboard up; see sendPressHandlers.
   const sendKeptFocusRef = useRef(false);
   const sendPress = sendPressHandlers({
@@ -2152,15 +2153,15 @@ export function Composer(props: ComposerProps): ReactElement {
           'relative flex flex-col gap-2',
           // The open tray keeps lit-dock; the bar under it joins without a seam.
           trayShown
-            ? 'border-t bg-panel px-3 py-2.5 lit-dock-joined'
-            : 'border-t bg-panel px-3 py-2.5 lit-dock',
+            ? 'border-t bg-panel px-3 py-2 lit-dock-joined'
+            : 'border-t bg-panel px-3 py-2 lit-dock',
         )}
       >
         {/* The pickers slide up above the composer (edgeStrip), never a fade. */}
         <ComposerStrip
           open={mentionRows.length > 0}
           data-mention-anchor=""
-          className="absolute inset-x-3 bottom-full z-20 mb-2"
+          className="absolute inset-x-3 bottom-full z-sticky mb-2"
         >
           <MentionPicker
             members={mentionRows}
@@ -2174,7 +2175,7 @@ export function Composer(props: ComposerProps): ReactElement {
           <ComposerStrip
             open
             data-hash-picker=""
-            className="absolute inset-x-3 bottom-full z-20 mb-2"
+            className="absolute inset-x-3 bottom-full z-sticky mb-2"
           >
             <PostPicker
               inline
@@ -2542,12 +2543,13 @@ export function Composer(props: ComposerProps): ReactElement {
                         aria-haspopup="dialog"
                         aria-expanded={scheduleOpen !== null}
                         data-schedule-chevron=""
+                        disabled={scheduleBusy}
                         className="shrink-0 rounded-l-none"
                         onClick={() =>
                           scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()
                         }
                       >
-                        <IconChevronDown size={ICON_SIZE.control} />
+                        <IconChevronDown size={ICON_SIZE.nav} />
                       </Button>
                     </span>
                   </>

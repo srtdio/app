@@ -201,7 +201,8 @@ describe('CreateBriefSheet: every close path is blocked while submitting', () =>
     await fillRequired();
     await act(async () => createButton()?.click());
     expect(briefCreate).toHaveBeenCalledTimes(1);
-    expect(createButton()?.textContent).toContain('Creating…');
+    expect(createButton()?.getAttribute('aria-busy')).toBe('true');
+    expect(createButton()?.textContent).toContain('Create brief');
 
     await press('Escape');
     await act(async () =>
@@ -243,7 +244,7 @@ describe('CreateBriefSheet: header actions like New post (15f)', () => {
     expect(panel).not.toBeNull();
     expect(panel?.className).toContain('max-h-[90svh]');
     expect(panel?.className).toContain('sm:max-h-[84svh]');
-    expect(panel?.className).not.toContain('lg:w-[960px]');
+    expect(panel?.className).not.toContain('lg:w-sheet-wide');
   });
 });
 

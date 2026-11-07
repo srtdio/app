@@ -9,7 +9,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconAssets } from '@/components/ui/icons';
-import { AssetGrid } from '@/components/pages/assets/AssetGrid';
+import { AssetList } from '@/components/pages/assets/AssetListCard';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
@@ -47,7 +47,9 @@ import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/ke
 import { logger } from '@/lib/logger';
 import { bottomAnchorProps, useBottomInset } from '@/lib/bottom-inset';
 import { cn } from '@/lib/cn';
-import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
+import { GUTTER } from '@/components/ui/layout';
+import { BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import {
   addAssetLink,
   canRenameAssets,
@@ -101,6 +103,8 @@ import { useServerSearch } from '@/lib/search/server-search';
 import { errorText } from '@/lib/error-copy';
 
 const SKELETON_COUNT = 12;
+/** Stable keys for the fixed set of loading cards (ui/ListCardBox). */
+const SKELETON_KEYS = Array.from({ length: SKELETON_COUNT }, (_, n) => `skeleton-${n}`);
 
 /** The list search's URL param (?q=), as on every list screen. */
 const SEARCH_PARAM = 'q';
@@ -891,7 +895,7 @@ export function AssetsPage() {
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
   // Back on Assets, the scroll lands where it was once the files painted.
   useKeptScroll(viewKey('assets:scroll'), !listLoading && !assetsFailed);
-  // Boxes show only while nothing is held; the grid settles once when it lands
+  // Boxes show only while nothing is held; the list settles once when it lands
   // after them (a kept view paints at once and never settles).
   const hadBoxes = useHadBoxes(listLoading && !assetsFailed && !searchFailed);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -908,7 +912,7 @@ export function AssetsPage() {
   const nothingToSelect =
     visible.length === 0 && (searching || counts === null || counts[tab] === 0);
 
-  // The round box on a card: one tap starts selecting with that file ticked.
+  // A card's ⋮ Select row: starts selecting with that file ticked.
   const startSelectWith = (item: AssetListItem): void => {
     setSelected(new Set([item.id]));
     setSelectMode(true);
@@ -980,7 +984,7 @@ export function AssetsPage() {
         aria-labelledby={selectMode ? undefined : assetTabId(tab)}
       >
         {searchFailed ? (
-          <div className="px-4 md:px-6 mt-4">
+          <div className={cn(GUTTER, 'mt-4')}>
             <LoadError
               title="your files"
               onRetry={() => assetSearch.refresh()}
@@ -988,26 +992,17 @@ export function AssetsPage() {
             />
           </div>
         ) : assetsFailed ? (
-          <div className="px-4 md:px-6 mt-4">
+          <div className={cn(GUTTER, 'mt-4')}>
             <LoadError title="your files" onRetry={() => void retryLoad()} retrying={retrying} />
           </div>
         ) : listLoading ? (
           <BoxSkeleton
             lit="flat"
             label="Loading files"
-            className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]"
+            className={cn(GUTTER, 'py-4', LIST_CARD_GRID)}
           >
-            {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
-              <div
-                key={i}
-                data-skeleton-tile=""
-                className="lit-card rounded-xl border bg-panel overflow-hidden"
-              >
-                <Bone lit="flat" as="div" className="aspect-[4/3] w-full" />
-                <div className="flex h-9 items-center border-t border-border px-3">
-                  <Bone lit="flat" className="h-3 w-2/3 rounded" />
-                </div>
-              </div>
+            {SKELETON_KEYS.map((key) => (
+              <ListCardBox key={key} data-skeleton-tile="" />
             ))}
           </BoxSkeleton>
         ) : !searching && tab === 'all' && liveItems.length === 0 ? (
@@ -1024,13 +1019,13 @@ export function AssetsPage() {
               }}
             />
           ) : tab !== 'all' ? (
-            <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-base text-fg-2">
+            <div data-asset-tab-empty={tab} className={cn(GUTTER, 'py-10 text-base text-fg-2')}>
               {TAB_EMPTY[tab]}
             </div>
           ) : null
         ) : (
-          <div ref={gridRef} className="px-4 md:px-6 py-4">
-            <AssetGrid
+          <div ref={gridRef} className={cn(GUTTER, 'py-4')}>
+            <AssetList
               items={visible}
               presignEnabled={presignEnabled}
               cache={cache}
@@ -1046,7 +1041,7 @@ export function AssetsPage() {
         {/* Older files load a page at a time; search, tabs and sort work over
             what is loaded. Shown only while another page exists. */}
         {!assetsFailed && !searchFailed && !listLoading && !shownNext.done ? (
-          <div className="px-4 md:px-6 pb-4 flex justify-center">
+          <div className={cn(GUTTER, 'pb-4 flex justify-center')}>
             <Button
               variant="secondary"
               type="button"
@@ -1084,14 +1079,14 @@ export function AssetsPage() {
           spacer keeps the last row uncovered. */}
       {selectMode ? (
         <>
-          <div aria-hidden="true" className="h-[76px] md:hidden" />
+          <div aria-hidden="true" className="h-20 md:hidden" />
           <div
             ref={selectBarRef}
             data-select-actions=""
             {...bottomAnchorProps}
             style={{ bottom: selectBarInset }}
             className={cn(
-              'lit-dock fixed inset-x-0 z-40 border-t bg-panel pt-3 md:hidden',
+              'lit-dock fixed inset-x-0 z-dock border-t bg-panel pt-3 md:hidden',
               'pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]',
               selectBarInset > 0 ? 'pb-3' : 'pb-[max(12px,env(safe-area-inset-bottom))]',
             )}
@@ -1099,7 +1094,7 @@ export function AssetsPage() {
             <div className="flex items-center gap-2">
               <Button
                 variant="danger"
-                className="min-w-[44px] flex-1"
+                className="min-w-11 flex-1"
                 disabled={selected.size === 0 || selectingAll}
                 onClick={deleteSelected}
               >

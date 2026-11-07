@@ -78,6 +78,8 @@ export function CockpitDot() {
     <IconButton
       type="button"
       label={dotLabel(level)}
+      // The dot has no text: the tooltip names it and its state, as the label does.
+      title={dotLabel(level)}
       aria-expanded={open}
       data-cockpit-dot={level}
       onClick={(event) => {
@@ -97,7 +99,7 @@ export function CockpitDot() {
 function LiveStamp({ checkedAt }: { checkedAt: string | null }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span className={cn(tagClass('good'), 'gap-1.5')}>
+      <span className={cn(tagClass('good'), 'gap-1')}>
         <StatusDot level="green" small />
         Live
       </span>
@@ -123,11 +125,11 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
             aria-pressed={selected}
             onClick={() => onPick(tab)}
             className={cn(
-              'flex min-w-0 flex-col gap-1 border px-3 py-2.5',
+              'flex min-w-0 flex-col gap-1 border p-3',
               selected ? 'border-transparent bg-accent text-accent-fg lit-pill' : 'lit-card',
             )}
           >
-            <span className="flex w-full items-center gap-1.5">
+            <span className="flex w-full items-center gap-1">
               <StatusDot
                 level={tile === undefined ? 'grey' : tile.state === 'ok' ? tile.level : 'amber'}
                 small
@@ -269,7 +271,7 @@ export function CockpitPanel() {
       <SwipeToClose onClose={close}>
         {/* Tall from its first frame: the sheet opens at its full height (Sheet caps it
             at 90dvh), so a tab that loads or changes never grows it. */}
-        <div className="-mx-[18px] -mt-4 flex min-h-[85svh] flex-col">
+        <div className="-mx-4 -mt-4 flex min-h-[85svh] flex-col">
           <div className="px-4 pt-3">
             <LiveStamp checkedAt={state.checkedAt} />
           </div>

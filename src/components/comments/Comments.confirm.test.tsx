@@ -196,8 +196,8 @@ describe('approver Confirm on a resolved checkpoint', () => {
     const tap = confirmButton(1);
     expect(tap).toBeDefined();
     expect(tap?.textContent).toContain('Confirm');
-    expect(tap?.className).toContain('min-h-[44px]');
-    expect(tap?.className).toContain('min-w-[44px]');
+    expect(tap?.className).toContain('min-h-11');
+    expect(tap?.className).toContain('min-w-11');
     expect(rowText('p-1')).toContain('Resolved');
     expect(rowTick('p-1')).toBe('hollow');
 

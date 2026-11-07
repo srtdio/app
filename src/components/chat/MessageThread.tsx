@@ -90,6 +90,7 @@ import {
   renderMessageBody,
 } from '@/components/chat/message-body';
 import { Avatar } from '@/components/ui/Avatar';
+import { LANE_BOTTOM_CLEAR, LANE_TOP_CLEAR } from '@/components/ui/layout';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -142,7 +143,7 @@ import {
   transcribeVoiceNote,
   useVoiceRecord,
 } from '@/lib/chat/transcript-store';
-import { civilDay, formatTime } from '@/lib/time';
+import { civilDay, formatAgo, formatTime } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
@@ -928,13 +929,14 @@ export function hasAlbum(message: Pick<ThreadMessage, 'attachments'>): boolean {
 /**
  * What the thread's one image viewer shows for a message: its album images (a
  * local preview stands in for an own instant send still uploading), plus the
- * bottom bar's sender and the clock time ("2:05 PM", the viewer's clock;
- * `timeZone` is for tests). Pure.
+ * bottom bar's sender and when it was sent, short (formatAgo: "just now",
+ * "5m", "Yesterday", "Mon"; relative to `now`).
+ * Pure.
  */
 export function threadLightbox(
   message: ThreadMessage,
   profiles: Map<string, ChatProfile>,
-  timeZone?: string,
+  now: Date = new Date(),
 ): { images: LightboxImage[]; details: LightboxDetails } {
   const images = splitAlbum(message.attachments).images.map((a) => {
     const src = a.local?.previewUrl;
@@ -944,7 +946,7 @@ export function threadLightbox(
     images,
     details: {
       sender: senderName(message, profiles),
-      time: formatTime(messageTimeSource(message), timeZone),
+      time: formatAgo(messageTimeSource(message), now),
     },
   };
 }
@@ -1301,7 +1303,7 @@ export function ThreadHeaderIdentity(props: {
           props.isGroup ? `Group info for ${props.title}` : `Contact info for ${props.title}`
         }
         onClick={props.onOpenContact}
-        className="flex min-w-0 flex-1 items-center gap-2.5"
+        className="flex min-w-0 flex-1 items-center gap-3"
       >
         {photo}
         {text}
@@ -1439,15 +1441,15 @@ export function MetaStar({ mine }: { mine: boolean }): ReactElement {
       data-meta-star=""
       className={cn('inline-flex', !mine && 'text-fg-3')}
     >
-      <IconStarFilled size={12} />
+      <IconStarFilled size={ICON_SIZE.text} />
     </span>
   );
 }
 
 /**
  * A message's in-bubble meta: the clock time ("2:05 PM") on the viewer's clock.
- * formatTime, not formatChatTime: a bubble already sits under its day pill, so
- * it always shows its time. `timeZone` is for tests. Pure.
+ * formatTime (absolute): a bubble already sits under its day pill, so it
+ * always shows its clock time. `timeZone` is for tests. Pure.
  */
 export function bubbleMeta(
   message: ThreadMessage,
@@ -1490,10 +1492,10 @@ export function MetaGlyph({ status }: { status: MetaTick }): ReactElement {
       className={cn(
         TICK_ICON_BOX,
         'inline-flex items-center justify-center',
-        status === 'read' && 'text-[color:var(--tick-read)]',
+        status === 'read' && 'text-tick-read',
       )}
     >
-      {status === 'sending' ? <IconClock size={12} /> : null}
+      {status === 'sending' ? <IconClock size={ICON_SIZE.text} /> : null}
       {status === 'delivered' ? <IconTickSingle /> : null}
       {status === 'read' ? <IconTickDouble /> : null}
     </span>
@@ -1520,7 +1522,7 @@ function metaParts(meta: BubbleMeta, mine = true, spacer = false): ReactElement 
       {meta.starred === true ? (
         spacer ? (
           <span className="inline-flex">
-            <IconStarFilled size={12} />
+            <IconStarFilled size={ICON_SIZE.text} />
           </span>
         ) : (
           <MetaStar mine={mine} />
@@ -1547,13 +1549,13 @@ export type MetaPlacement = 'inline' | 'pill' | 'row' | 'card';
 
 /** The meta's ink on the bubble: the own or peer meta token, at full strength. */
 function metaInk(mine: boolean): string {
-  return mine ? 'text-[color:var(--bubble-meta-own)]' : 'text-[color:var(--bubble-meta)]';
+  return mine ? 'text-bubble-meta-own' : 'text-bubble-meta';
 }
 
 /** Each placement's position: two overlays at the bottom-right, the row in flow. */
 const META_POSITION: Record<MetaPlacement, string> = {
-  inline: 'pointer-events-none absolute bottom-[3px] right-2 inline-flex',
-  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-[color:var(--media-meta-fg)] lit-media',
+  inline: 'pointer-events-none absolute bottom-1 right-2 inline-flex',
+  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-media-meta lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
   // Inside ui/ChatCard's bottom-trailing time slot, which places and inks it.
   card: 'pointer-events-none inline-flex',
@@ -1577,7 +1579,7 @@ export function BubbleMetaView(props: {
       data-meta={props.placement}
       data-status={props.meta.status ?? undefined}
       className={cn(
-        'items-center gap-1 whitespace-nowrap',
+        'shrink-0 items-center gap-1 whitespace-nowrap',
         BUBBLE_META_TYPE,
         META_POSITION[props.placement],
         // A card's time slot inks it (own card: on-bubble ink; peer: fg-3).
@@ -1601,7 +1603,7 @@ export function MetaSpacer({ meta }: { meta: BubbleMeta }): ReactElement {
       aria-hidden="true"
       data-meta-spacer=""
       className={cn(
-        'pointer-events-none invisible inline-flex select-none items-center gap-1 whitespace-nowrap pl-3 align-baseline',
+        'pointer-events-none invisible inline-flex shrink-0 select-none items-center gap-1 whitespace-nowrap pl-3 align-baseline',
         BUBBLE_META_TYPE,
       )}
     >
@@ -1645,7 +1647,7 @@ export function canRetryFailed(message: Pick<ThreadMessage, 'refusal'>): boolean
 }
 
 /** The failed line's text actions: the shared 44px Button, the bad token for Delete. */
-const FAILED_ACTION_CLASS = 'min-w-[44px]';
+const FAILED_ACTION_CLASS = 'min-w-11';
 
 /**
  * The line under a failed own text send: "Not sent" (announced), then Retry
@@ -1770,8 +1772,8 @@ export function bubbleClass(
     'group/bubble relative min-w-0 max-w-full focus-visible:lit-focus',
     NO_TOUCH_SELECT,
     bubbleCorners(state),
-    state.album === true ? 'min-w-[240px] p-[3px]' : sized(BUBBLE_PAD, state.layout),
-    state.voiceOnly && 'min-w-[220px]',
+    state.album === true ? 'min-w-60 p-1' : sized(BUBBLE_PAD, state.layout),
+    state.voiceOnly && 'min-w-56',
     state.mine
       ? 'bg-bubble-own text-accent-fg lit-bubble-own'
       : 'bg-panel-2 text-fg lit-bubble-other',
@@ -1799,8 +1801,8 @@ export function tombstoneClass(shape: BubbleShape): string {
  * pulls out of BUBBLE_PAD; its 264px width widens a short message's bubble.
  */
 const LINK_CARD_INSET: ChatSize = {
-  touch: '-mx-2 -mt-1 mb-1.5 w-[264px] max-w-[calc(100%+16px)]',
-  laptop: '-ml-[5px] -mr-[3px] -mt-[2px] mb-1.5 w-[264px] max-w-[calc(100%+8px)]',
+  touch: '-mx-2 -mt-1 mb-1.5 w-64 max-w-[calc(100%+16px)]',
+  laptop: '-mx-1 -mt-1 mb-1.5 w-64 max-w-[calc(100%+8px)]',
 };
 
 /** Cancel the native default (the touch contextmenu on rows). */
@@ -1813,13 +1815,14 @@ function preventDefault(event: { preventDefault: () => void }): void {
  * the sides stay aligned) makes room for the 44px circle at its left. No
  * transition: the column appears at once.
  */
-export const SELECTION_ROW_OFFSET = 'relative pl-[60px]';
+export const SELECTION_ROW_OFFSET = 'relative pl-15';
 
 /** Where the check circle (or lock) sits: the row's left column, vertically centred. */
 export const SELECTION_CHECK_SLOT = 'absolute left-4 top-1/2 flex -translate-y-1/2';
 
 /** A checked row's layer: the one selected look (lit-selected) across the full row, never opacity. */
-export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 border-y lit-selected';
+export const SELECTED_ROW_TINT =
+  'pointer-events-none absolute inset-0 -z-raised border-y lit-selected';
 
 /**
  * Own-bubble inner content (reply quote, file chips, shared cards, voice note)
@@ -1923,7 +1926,7 @@ export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
     'whitespace-nowrap font-semibold',
     mine ? 'text-accent-fg' : 'text-accent-hover',
-    self && cn('rounded-sm px-[3px]', mine ? MENTION_ME_OWN : MENTION_ME_PEER),
+    self && cn('rounded-sm px-1', mine ? MENTION_ME_OWN : MENTION_ME_PEER),
   );
 }
 
@@ -1934,7 +1937,7 @@ export function mentionClass(mine: boolean, self: boolean): string {
  * and 22px body lines); the pseudo element keeps the 44px width floor.
  */
 const MENTION_HIT =
-  "relative inline-flex -my-[13px] items-center before:absolute before:left-1/2 before:top-1/2 before:h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
+  "relative inline-flex -my-3 items-center before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-full before:min-w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
 
 /**
  * The thread's mention name lookup: the batched profiles, then this
@@ -1992,7 +1995,7 @@ function mentionRuns(
   return splitMentions(text).map((segment, i) => {
     if (segment.kind === 'text') {
       return (
-        <Fragment key={i}>
+        <Fragment key={`part-${i}`}>
           {renderBodyLinks(segment.text, mine, currentOrigin(), highlight)}
         </Fragment>
       );
@@ -2013,14 +2016,14 @@ function mentionRuns(
     const known = ctx.nameOf(id) !== undefined || former;
     if (open === undefined || everyone || !known) {
       return (
-        <span key={i} data-mention={id} className={mentionClass(mine, tint)}>
+        <span key={`part-${i}`} data-mention={id} className={mentionClass(mine, tint)}>
           {label}
         </span>
       );
     }
     return (
       <PressableRow
-        key={i}
+        key={`part-${i}`}
         inline
         type="button"
         data-mention={id}
@@ -2145,7 +2148,7 @@ export const REACTION_ROW_SPACE = 'mb-5';
  */
 /** On a PressableRow (inline): 44 tall, a 44px width floor, the glyph centred in bad. */
 export const FAILED_RETRY_CLASS =
-  'absolute right-full top-1/2 mr-1 flex h-11 min-w-[44px] -translate-y-1/2 items-center justify-center text-bad';
+  'absolute right-full top-1/2 mr-1 flex h-11 min-w-11 -translate-y-1/2 items-center justify-center text-bad';
 
 /**
  * A row's piece of the rail (none for a left root card no member follows yet,
@@ -2160,7 +2163,7 @@ export interface RowRail {
 /** How far a row's tick reaches up: through the row's own top padding. */
 function railTop(head: boolean, afterLabel: boolean): string {
   if (!head) return '-top-0.5';
-  return afterLabel ? 'top-0' : '-top-2.5';
+  return afterLabel ? 'top-0' : '-top-3';
 }
 
 /** The root's rail reaches down through the row's bottom padding (the reaction badge's room). */
@@ -2356,7 +2359,7 @@ export function MessageBubble(props: {
   const voiceOnly = isVoiceOnly(message);
   const album = hasAlbum(message);
   // Album bubbles pad 3px around the album; the rest keeps the text inset.
-  const albumInset = 'px-[9px] pt-[5px]';
+  const albumInset = 'px-2 pt-1';
   const hasBody = message.body.trim() !== '';
   const sharedPlanIds = message.sharedPlanIds ?? NO_PLAN_IDS;
   const hasCards =
@@ -2452,7 +2455,7 @@ export function MessageBubble(props: {
     'group flex items-start gap-2',
     railRowClass(rail, mine),
     NO_TOUCH_SELECT,
-    head ? (props.afterLabel === true ? 'pt-0' : 'pt-2.5') : 'pt-0.5',
+    head ? (props.afterLabel === true ? 'pt-0' : 'pt-3') : 'pt-0.5',
     mine ? 'flex-row-reverse' : 'flex-row',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
@@ -2648,7 +2651,7 @@ export function MessageBubble(props: {
                   <PostRefChip
                     post={chip.post}
                     onTap={chip.onTap}
-                    className={album ? 'mx-[9px]' : '-mb-1.5 -mt-2'}
+                    className={album ? 'mx-2' : '-mb-1.5 -mt-2'}
                   />
                 ) : (chip === undefined || parentDeleted) && reply !== null ? (
                   <ReplyQuoteBox
@@ -2670,7 +2673,7 @@ export function MessageBubble(props: {
                     media={parentDeleted ? null : quoteMedia(props.quoted)}
                     thumbSource={{ cache, presignEnabled }}
                     onJump={() => props.onJumpToMessage?.(reply.id)}
-                    className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
+                    className={album ? 'mx-2 mb-1 mt-1' : 'mb-1'}
                   />
                 ) : null}
                 {message.privateReply != null ? (
@@ -2680,7 +2683,7 @@ export function MessageBubble(props: {
                     workspaceId={props.workspaceId ?? null}
                     layout={layout}
                     onOpen={props.onOpenPrivateReply}
-                    className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
+                    className={album ? 'mx-2 mb-1 mt-1' : 'mb-1'}
                   />
                 ) : null}
                 {textOnly ? (
@@ -2730,7 +2733,7 @@ export function MessageBubble(props: {
                       onImageClick={(_attachment, index) => props.onOpenImage?.(index)}
                     />
                     {hasCards ? (
-                      <div className="flex flex-col px-[9px] pb-[5px]">
+                      <div className="flex flex-col px-2 pb-1">
                         <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                         <SharedBriefCards briefIds={message.sharedBriefIds} />
                         <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
@@ -2804,20 +2807,20 @@ export function MessageBubble(props: {
                   onMore();
                 }}
                 className={cn(
-                  'pointer-events-none absolute right-0 top-0 z-10 flex h-11 min-w-[44px] items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
+                  'pointer-events-none absolute right-0 top-0 z-raised flex h-11 min-w-11 items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
                 )}
               >
                 <span
                   aria-hidden="true"
                   data-more-glyph=""
                   className={cn(
-                    'flex h-[18px] w-10 items-start justify-end rounded-tr-[inherit] bg-gradient-to-l from-50%',
+                    'flex w-10 items-start justify-end rounded-tr-[inherit] bg-gradient-to-l from-50%',
                     // On a card (the card is the bubble) the glyph's visible
                     // edge comes in to the card's 12px content edge.
                     cardOnly ? 'pr-2' : 'pr-1',
                     mine && !cardOnly
-                      ? 'from-bubble-own text-[color:var(--bubble-meta-own)]'
-                      : 'from-panel-2 text-[color:var(--bubble-meta)]',
+                      ? 'from-bubble-own text-bubble-meta-own'
+                      : 'from-panel-2 text-bubble-meta',
                   )}
                 >
                   <ChevronGlyph />
@@ -2911,7 +2914,7 @@ export function ForwardedLabel(props: { mine?: boolean } = {}): ReactElement {
     <span
       data-forwarded=""
       className={cn(
-        'mb-1 flex items-center gap-1 text-sm leading-none',
+        'mb-1 flex items-center gap-1 text-sm',
         props.mine === true ? 'text-accent-fg' : 'text-fg-2',
       )}
     >
@@ -3053,7 +3056,18 @@ export function threadRows(
  * slack above the first message and a short thread pins to the bottom. Never
  * justify-end on the scroll container; the spacer collapses to 0 on overflow.
  */
-export const THREAD_LIST_CLASS = cn('flex flex-1 flex-col overflow-y-auto py-2', NO_TOUCH_SELECT);
+/**
+ * The thread's scroll box. Its scroll padding keeps the floating lanes clear
+ * (ui/layout LANE_TOP_CLEAR, LANE_BOTTOM_CLEAR): a row it lands on (a jump, a
+ * quote) never parks its title or time under the unread pill or the latest
+ * button.
+ */
+export const THREAD_LIST_CLASS = cn(
+  'flex flex-1 flex-col overflow-y-auto py-2',
+  LANE_TOP_CLEAR,
+  LANE_BOTTOM_CLEAR,
+  NO_TOUCH_SELECT,
+);
 
 /**
  * The list's children in order: the bottom-pin spacer, the older-page row, then
@@ -4598,7 +4612,7 @@ function ThreadBody(
   const viewerData =
     viewerMessage !== undefined
       ? withRemovableImages(
-          threadLightbox(viewerMessage, props.profiles),
+          threadLightbox(viewerMessage, props.profiles, new Date(nowMs)),
           viewerMessage,
           props.onRemoveFiles,
           props.viewerUserId ?? '',
@@ -5052,7 +5066,7 @@ export function DayPill({ label, layout }: { label: string; layout: ChatLayout }
     <li role="separator" aria-label={label} className="flex justify-center">
       <span
         className={cn(
-          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-2.5 py-0.5 text-fg-3 lit-pill',
+          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-3 py-1 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >
@@ -5072,7 +5086,7 @@ export function threadLoadError(onRetry: (() => void) | undefined): ReactElement
         {...(onRetry !== undefined
           ? {
               action: (
-                <Button variant="primary" className="min-w-[44px]" onClick={onRetry}>
+                <Button variant="primary" className="min-w-11" onClick={onRetry}>
                   Retry
                 </Button>
               ),
@@ -5096,7 +5110,7 @@ export function threadLoadErrorRow(onRetry: (() => void) | undefined): ReactElem
     >
       <span>Couldn&apos;t load messages</span>
       {onRetry !== undefined ? (
-        <Button variant="secondary" className="min-w-[44px]" onClick={onRetry}>
+        <Button variant="secondary" className="min-w-11" onClick={onRetry}>
           Retry
         </Button>
       ) : null}
@@ -5121,7 +5135,7 @@ export function olderLoadErrorRow(onRetry: () => void): ReactElement {
       className="flex items-center justify-center gap-3 px-4 py-2 text-base text-fg-2"
     >
       <span>{OLDER_LOAD_FAILED}</span>
-      <Button variant="secondary" className="min-w-[44px]" onClick={onRetry}>
+      <Button variant="secondary" className="min-w-11" onClick={onRetry}>
         Retry
       </Button>
     </li>
@@ -5144,7 +5158,7 @@ export function ThreadTopStrip({ layout }: { layout: ChatLayout }): ReactElement
     <div
       aria-hidden="true"
       data-thread-top-strip=""
-      className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[env(safe-area-inset-top,0px)] bg-panel"
+      className="pointer-events-none fixed inset-x-0 top-0 z-base h-[env(safe-area-inset-top,0px)] bg-panel"
     />
   );
 }
@@ -5163,7 +5177,7 @@ export function threadOpeningSkeleton(
       <ThreadTopStrip layout={layout} />
       <div
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',
+          'flex h-14 shrink-0 items-center gap-3 border-b bg-panel lit-header',
           sized(HEADER_PAD, layout),
         )}
       >
@@ -5173,7 +5187,7 @@ export function threadOpeningSkeleton(
           </IconButton>
         ) : null}
         <Bone lit="lit-avatar" as="div" className="h-9 w-9 shrink-0 rounded-full" />
-        <Bone lit="flat" as="div" className="h-3.5 w-32 rounded" />
+        <Bone lit="flat" as="div" className="h-3 w-32 rounded" />
       </div>
       {threadSkeleton()}
     </div>
@@ -7106,7 +7120,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       <ThreadTopStrip layout={layout} />
       <div
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',
+          'flex h-14 shrink-0 items-center gap-3 border-b bg-panel lit-header',
           sized(HEADER_PAD, layout),
         )}
       >

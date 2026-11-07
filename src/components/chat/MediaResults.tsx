@@ -51,7 +51,7 @@ import { env } from '@/lib/env';
 import { humanizeSize } from '@/lib/assets';
 import { appPresignCache } from '@/lib/shared-presign';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { formatDateTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { checkLink } from '@/lib/links/safety';
 import { previewClient, type LinkPreview } from '@/lib/links/preview';
 import { useInView } from '@/lib/use-in-view';
@@ -115,10 +115,10 @@ const LOADING_TILES = 12;
 const LOADING_ROWS = 3;
 
 /** The square grid: 4 across, 6 from 1180px, 2px gaps. */
-const GRID = 'grid grid-cols-4 gap-[2px] min-[1180px]:grid-cols-6';
+const GRID = 'grid grid-cols-4 gap-0.5 min-[1180px]:grid-cols-6';
 
 /** A list row: one 64px tap target, no text selection and no iOS callout on hold. */
-const ROW = cn('flex min-h-[64px] min-w-0 items-center gap-3 px-2 py-2', NO_TOUCH_SELECT);
+const ROW = cn('flex min-h-16 min-w-0 items-center gap-3 px-2 py-2', NO_TOUCH_SELECT);
 
 /** The 44px leading box of a file or link row (the chat info Files and Links rows). */
 const ROW_ICON =
@@ -253,7 +253,7 @@ function VideoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
           <IconPlay size={ICON_SIZE.control} />
         </span>
       ) : null}
-      <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-xs text-[color:var(--media-meta-fg)] lit-media">
+      <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-xs text-media-meta lit-media">
         <IconPlay size={ICON_SIZE.text} />
         {item.durationMs !== null ? (
           <span data-media-duration="" className="font-mono tabular-nums">
@@ -310,7 +310,7 @@ function FileRowItem(props: { item: MediaItem; date: string; onOpen: () => void 
         </span>
         <span className="truncate text-sm text-fg-3">
           {mediaFileMeta(item).map((part, i) => (
-            <span key={i}>
+            <span key={`part-${i}`}>
               {i > 0 ? ' · ' : null}
               <span className={part.mono ? 'font-mono tabular-nums' : undefined}>{part.text}</span>
             </span>
@@ -404,7 +404,7 @@ function LinkRowItem(props: {
         }}
         className={ROW}
       >
-        <span className={cn(ROW_ICON, unsafe && 'bg-warn-soft text-[color:var(--warn-ink)]')}>
+        <span className={cn(ROW_ICON, unsafe && 'bg-warn-soft text-warn-ink')}>
           {unsafe ? (
             <IconAlertTriangle size={ICON_SIZE.control} />
           ) : (
@@ -413,10 +413,7 @@ function LinkRowItem(props: {
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span
-            className={cn(
-              'truncate text-base font-medium',
-              unsafe ? 'text-[color:var(--warn-ink)]' : 'text-fg',
-            )}
+            className={cn('truncate text-base font-medium', unsafe ? 'text-warn-ink' : 'text-fg')}
           >
             {title}
           </span>
@@ -479,7 +476,7 @@ function VoiceRowItem(props: {
       className={cn('flex min-w-0 flex-col gap-1 px-2 py-2', NO_TOUCH_SELECT)}
       onContextMenu={noCallout}
     >
-      <div className="flex min-h-[44px] min-w-0 items-center gap-3">
+      <div className="flex min-h-11 min-w-0 items-center gap-3">
         {item.senderId !== null ? (
           <PersonTrigger
             display="block"
@@ -514,7 +511,7 @@ function VoiceRowItem(props: {
         </span>
         <span className={ROW_DATE}>{props.date}</span>
       </div>
-      <div className="pl-[52px]">
+      <div className="pl-13">
         <VoiceNote
           url={PRESIGN_ENABLED && !failed ? url : null}
           name={item.name}
@@ -657,9 +654,9 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     nameOf: props.nameOf,
     channelsById: props.channelsById,
   };
-  const dateOf = (item: ChipItem): string => searchDateLabel(item.createdAt, nowMs, timeZone);
+  const dateOf = (item: ChipItem): string => searchDateLabel(item.createdAt, nowMs);
   const sentAtLabel = (item: ChipItem): string =>
-    formatDateTime(item.createdAt, new Date(nowMs), timeZone);
+    formatAgo(item.createdAt, new Date(nowMs), timeZone);
   const showInChat = (item: ChipItem): void => {
     setOpenKey(null);
     props.onShowInChat(item.channelId, item.messageId);
@@ -687,7 +684,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     grid ? (
       <ul data-media-skeleton="" className={GRID}>
         {Array.from({ length: LOADING_TILES }, (_, i) => (
-          <li key={i} className="aspect-square">
+          <li key={`bone-${i}`} className="aspect-square">
             <Bone lit="lit-media" as="div" className="h-full w-full" />
           </li>
         ))}
@@ -695,10 +692,10 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     ) : (
       <ul data-media-skeleton="" className="flex flex-col">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li key={i} className="flex items-center gap-3 px-2 py-2">
+          <li key={`bone-${i}`} className="flex items-center gap-3 px-2 py-2">
             <Bone lit="lit-media" as="div" className="h-11 w-11 shrink-0 rounded-lg" />
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <Bone lit="flat" as="div" className="h-3.5 w-1/3 rounded" />
+              <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
               <Bone lit="flat" as="div" className="h-3 w-3/4 rounded" />
             </div>
           </li>
@@ -770,7 +767,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
   );
 
   return (
-    <div data-media-results={kind} className="flex flex-col gap-2 px-[14px] pb-4">
+    <div data-media-results={kind} className="flex flex-col gap-2 px-4 pb-4">
       <SettleLanding boxes={loading} selector="[data-media-tile], [data-media-row]">
         {body}
       </SettleLanding>

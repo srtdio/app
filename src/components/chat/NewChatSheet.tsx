@@ -315,7 +315,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
         <p
           id="group-limit-note"
           data-group-limit-note=""
-          className="px-1 text-base leading-snug text-fg-2 text-pretty"
+          className="px-1 text-base text-fg-2 text-pretty"
         >
           {isOwner ? GROUP_LIMIT_OWNER : groupLimitMemberCopy(ownerName())}
         </p>

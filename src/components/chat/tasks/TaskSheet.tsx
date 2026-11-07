@@ -8,10 +8,10 @@
 // hour into one chat line and one alert.
 //
 // The sheet rises from the bottom at the height of what it holds (a short
-// list, a short sheet; up to 88% of the screen, then the list scrolls inside),
-// with a grabber; swipe up on the header, or the menu's Full screen, fills the
-// screen; swipe down or Half screen returns. The resize itself is instant (no
-// move in src/lib/motion fits it). Laptop: a centre box (960px wide when full).
+// list, a short sheet; the one sheet frame, up to 90% of the screen, then the
+// list scrolls inside), with a grabber; swipe up on the header, or the menu's
+// Full screen, fills the screen; swipe down or Half screen returns. The resize
+// itself is instant (no move in src/lib/motion fits it). Laptop: a centre box (960px wide when full).
 // Header: Back, "Tasks" (with "<Name> is editing…" under it while another
 // member holds unsaved changes), "Saving…" / "Saved" (Retry after a failure) and a
 // ⋯ menu (ui/ActionMenu): Search tasks, Share to chat, Full screen / Half
@@ -70,7 +70,7 @@ import { Input } from '@/components/ui/Input';
 import { LoadError } from '@/components/ui/LoadError';
 import { NoResults } from '@/components/ui/NoResults';
 import { SearchWordsContext, glowTarget } from '@/components/ui/SearchHighlight';
-import { Sheet } from '@/components/ui/Sheet';
+import { SHEET_FRAME, Sheet } from '@/components/ui/Sheet';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
 import {
   ICON_SIZE,
@@ -123,6 +123,8 @@ import {
   type TaskCalendar,
   type TaskWhen,
 } from '@/lib/chat/task-when';
+import { formatDueDate } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import {
   DEFAULT_PRIORITY,
@@ -159,6 +161,7 @@ import {
 import { errorText } from '@/lib/error-copy';
 import { createPausableTimer } from '@/lib/pausable-timer';
 import { UNDO_MS } from '@/lib/undo';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 export const TASK_SHEET_TITLE = 'Tasks';
 const SHARE_LABEL = 'Share to chat';
@@ -178,7 +181,7 @@ const FULL_LABEL = 'Full screen';
 const HALF_LABEL = 'Half screen';
 const PAST_OPEN_LABEL = 'Not done';
 const PAST_DONE_LABEL = 'Done';
-const SECTION_LABEL = 'px-4 pb-1 pt-3 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+const SECTION_LABEL = `px-4 pb-1 pt-3 ${TEXT_ROLE.section}`;
 
 /** One positive line per chip when it holds nothing. */
 const CHIP_ZERO: Readonly<Record<TaskWhen, string>> = {
@@ -282,7 +285,7 @@ function AddRow(props: {
     <li className="flex flex-col px-3 pt-3">
       {/* The well and, like the chat composer's send, a round add button beside it: Enter adds too. */}
       <form data-task-add="" onSubmit={submit} className="flex items-center gap-2">
-        <div className="flex min-h-[44px] min-w-0 flex-1 items-center gap-1 rounded-lg border border-field bg-panel-2 pl-3 pr-1 lit-well focus-within:lit-focus">
+        <div className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border border-field bg-panel-2 pl-3 pr-1 lit-well focus-within:lit-focus">
           <input
             ref={inputRef}
             type="text"
@@ -294,7 +297,7 @@ function AddRow(props: {
             maxLength={TASK_TITLE_MAX}
             placeholder={ADD_PLACEHOLDER}
             onChange={(e) => setText(e.target.value)}
-            className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 outline-none md:text-base"
+            className="min-h-11 min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 outline-none md:text-base"
           />
           <PriorityChip
             priority={priority}
@@ -333,7 +336,8 @@ function AddRow(props: {
         ))}
         {quick === undefined && dueOn !== null ? (
           <Chip
-            label={rowDateLine({ dueOn, status: 'todo', doneAt: null }, props.calendar)?.text ?? ''}
+            // The picked day itself (a chosen date stays absolute): "12 Nov".
+            label={formatDueDate(dueOn, props.calendar.timeZone, props.calendar.now)}
             selected
             data-task-day="picked"
             className="font-mono tabular-nums"
@@ -402,7 +406,7 @@ function ChipLine(props: {
           tab
           selected={props.chip === c.key}
           data-task-when-chip={c.key}
-          className="min-w-0 flex-auto justify-center whitespace-nowrap px-2"
+          className="min-w-0 flex-auto justify-center truncate whitespace-nowrap px-2"
           onClick={() => props.onChip(c.key)}
         />
       ))}
@@ -505,6 +509,8 @@ interface TaskSheetProps {
 
 export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const { tasks, currentUserId } = props;
+  // The one shared minute clock: due and done lines age with it.
+  const nowMs = useMinuteClock();
   const [draft, setDraft] = useState<SheetDraft>(EMPTY_DRAFT);
   const [notices, setNotices] = useState<Map<string, Notice>>(new Map());
   const [saving, setSaving] = useState(false);
@@ -778,7 +784,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   // When each row falls, on the workspace calendar, as it looks with this
   // draft's changes; new tasks by the day they were given.
   const calendar: TaskCalendar = {
-    now: new Date(),
+    now: new Date(nowMs),
     timeZone: props.timeZone,
     weekStartDay: props.weekStartDay,
   };
@@ -1006,7 +1012,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
 
   const side = props.side;
   const sheet = createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
+    <div className="fixed inset-0 z-sheet flex items-end sm:items-center sm:justify-center">
       <Backdrop ref={dimRef} aria-label="Close tasks" position="absolute" onClick={requestClose} />
       <div
         ref={panelRef}
@@ -1016,10 +1022,12 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         aria-label={TASK_SHEET_TITLE}
         data-task-full={full ? '' : undefined}
         className={cn(
-          'relative flex w-full flex-col overflow-hidden bg-panel lit-overlay focus:outline-none sm:max-w-[92%] sm:rounded-xl sm:border',
+          'relative flex flex-col overflow-hidden focus:outline-none',
+          // At the height of what it holds: the one sheet frame (ui/Sheet
+          // SHEET_FRAME). Full screen fills the viewport (laptop a 960 box).
           full
-            ? 'h-[100svh] supports-[height:1dvh]:h-[100dvh] sm:h-[84svh] sm:w-[960px]'
-            : 'max-h-[88svh] supports-[height:1dvh]:max-h-[88dvh] rounded-t-2xl border sm:w-[560px] sm:max-h-[84svh]',
+            ? 'w-full h-[100svh] supports-[height:1dvh]:h-[100dvh] bg-panel lit-overlay sm:h-[84svh] sm:w-sheet-wide sm:max-w-[92%] sm:rounded-xl sm:border'
+            : SHEET_FRAME,
         )}
       >
         <div
@@ -1063,6 +1071,15 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
                     className="invisible col-start-1 row-start-1 px-2 text-sm"
                   >
                     {SAVING_LABEL}
+                  </span>
+                  {/* Retry's width is held too (ghost Button: 16 each side,
+                      base/500), so a failed save never widens the slot. */}
+                  <span
+                    aria-hidden="true"
+                    data-task-save-reserve="retry"
+                    className="invisible col-start-1 row-start-1 px-4 text-base font-medium"
+                  >
+                    {RETRY_LABEL}
                   </span>
                   <span className="col-start-1 row-start-1 flex items-center">
                     {saveFailed ? (

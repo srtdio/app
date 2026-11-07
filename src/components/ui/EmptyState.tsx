@@ -14,18 +14,18 @@ export function EmptyState({ icon, title, description, action, compact = false }
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center text-center px-6 py-14 gap-1.5',
-        compact ? null : 'min-h-[320px]',
+        'flex flex-col items-center justify-center text-center px-6 py-14 gap-2',
+        compact ? null : 'min-h-80',
       )}
     >
-      <div className="w-[54px] h-[54px] rounded-xl bg-panel-2 border lit-card flex items-center justify-center text-fg-3 mb-1.5">
+      <div className="w-14 h-14 rounded-xl bg-panel-2 border lit-card flex items-center justify-center text-fg-3 mb-2">
         {icon}
       </div>
       <div className="text-lg font-semibold text-fg">{title}</div>
       {description !== undefined ? (
-        <div className="text-base text-fg-2 max-w-[300px]">{description}</div>
+        <div className="text-base text-fg-2 max-w-xs">{description}</div>
       ) : null}
-      {action !== undefined ? <div className="mt-3.5">{action}</div> : null}
+      {action !== undefined ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }

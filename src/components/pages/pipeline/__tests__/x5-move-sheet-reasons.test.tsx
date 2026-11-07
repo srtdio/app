@@ -1,13 +1,12 @@
 // X5 fix 3 (FT18), revised by post flow C fix 39: the sheet lists only the
-// allowed moves (no blocked rows); moveBlockedReason words a blocked board
-// drop ("{Stage} posts can move to {allowed}."); an unknown role shows no actions; a failed role read says
+// allowed moves (no blocked rows); an unknown role shows no actions; a failed role read says
 // "Couldn't check your access." with Retry, never the role line.
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { MoveSheetView, type MoveSheetViewProps } from '@/components/pages/pipeline/MoveSheet';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { GATE_IDLE, createApproveGate } from '@/components/pages/pipeline/approve-gate';
-import { APPROVE_ROLE_BLOCKED, moveBlockedReason } from '@/components/pages/pipeline/stage-meta';
+import { APPROVE_ROLE_BLOCKED } from '@/components/pages/pipeline/stage-meta';
 import { ROLE_READ_ERROR, ROLE_READ_PENDING } from '@/components/pages/pipeline/member-role';
 import { x5Post } from './x5-fixtures';
 
@@ -74,20 +73,6 @@ describe('X5 move sheet reasons and role states', () => {
     expect(list.some((row) => text(row).startsWith('Draft'))).toBe(false);
     expect(all(tree).some((el) => text(el).includes('Not allowed from'))).toBe(false);
     for (const row of list) expect((row.props as { disabled?: boolean }).disabled).toBeFalsy();
-  });
-
-  it('a blocked drop names where the post can go for this role, or that only approvers approve', () => {
-    expect(moveBlockedReason(null, 'review', 'approved')).toBe(APPROVE_ROLE_BLOCKED);
-    expect(moveBlockedReason(null, 'draft', 'approved')).toBe('Only approvers can approve.');
-    expect(moveBlockedReason('client', 'review', 'parked')).toBe(
-      'Review posts can move to Approved or Rejected.',
-    );
-    expect(moveBlockedReason('owner', 'draft', 'rejected')).toBe(
-      'Draft posts can move to Review or Parked.',
-    );
-    expect(moveBlockedReason('owner', 'rejected', 'approved')).toBe(
-      'Rejected posts can move to Review.',
-    );
   });
 
   it('while the role is unknown no action shows and none blames the role', () => {

@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
+import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
+import { assertListCards, assertSameWidth, checkLayout } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
 import {
@@ -16,12 +17,12 @@ import {
   PLAN_ID,
   PLAN_POST_ITEM,
   POST_IDS,
+  REFUSED_SEND,
   seedClientPlan,
   seedPlanTab,
   seedTeamAndHiddenPlans,
   TEAM_PLAN_ID,
   planMessage,
-  TAB_OK_ITEM_TITLE,
   TAB_SHARED_PLAN_ID,
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
@@ -235,6 +236,23 @@ async function briefReady(page: Page): Promise<void> {
 
 async function chatListReady(page: Page): Promise<void> {
   await waitFor([page.getByText(PEER_NAME, { exact: true })], 'chat list');
+}
+
+/**
+ * The chat home with all three row kinds on screen: Personal notes (built from
+ * the session), a group (GROUP_NAME) and a person (PEER_NAME), one row style.
+ */
+async function chatListAllRows(page: Page): Promise<void> {
+  await chatListReady(page);
+  await waitFor([page.locator('[data-notes-tile]')], 'Personal notes row');
+  await waitFor(
+    [page.locator('[data-section="groups"]').getByText(GROUP_NAME, { exact: true })],
+    'group row',
+  );
+  await waitFor(
+    [page.locator('[data-section="people"]').getByText(PEER_NAME, { exact: true })],
+    'person row',
+  );
 }
 
 async function openChat(page: Page, name: string): Promise<void> {
@@ -822,7 +840,7 @@ function seedBank(network: HarnessNetwork): void {
   );
 }
 
-/** The Plan tab on the Bank (phone: the chip's list; laptop: the side panel). */
+/** The Plan tab on the Bank chip (phone and laptop: the idea cards in the grid). */
 async function bankReady(page: Page): Promise<void> {
   await waitFor([page.locator('[data-bank-row]').getByText(BANK_FIRST_TITLE)], 'bank');
 }
@@ -839,18 +857,6 @@ async function bankRowMenu(page: Page, name: RegExp): Promise<void> {
     'idea more',
   );
   await tap([page.getByRole('menuitem', { name })], 'idea menu item');
-}
-
-/** The laptop Plan tab switched to Week (the week of today), today's column filled. */
-async function planTabWeek(page: Page): Promise<void> {
-  await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
-  await tap([page.locator('[data-plan-tab-view="week"]')], 'Week');
-  await waitFor([page.locator('[data-plan-tab-week]')], 'plan tab week');
-  await waitFor([page.locator('[data-plan-tab-today-head] [data-plan-tab-today-pill]')], 'today');
-  await waitFor(
-    [page.locator('[data-plan-tab-today-cell]').getByText(TAB_OK_ITEM_TITLE)],
-    'today items',
-  );
 }
 
 /** The shared plan "Autumn launch" (/plan/:id) with today's tile and pill in view. */
@@ -953,7 +959,7 @@ function seedMemberEmailOffByOwner(network: HarnessNetwork): void {
 
 /** Members panel, Ana's row ⋯, Change role: the member sheet. */
 async function openMemberSheet(page: Page): Promise<void> {
-  await waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members');
+  await waitFor([page.locator('[data-member-email-mark="off"]').first()], 'settings members');
   await tap(
     [page.getByRole('button', { name: 'Actions for Ana Silva', exact: true })],
     'member actions',
@@ -1080,7 +1086,7 @@ const SCREENS: Screen[] = [
       await waitFor(anyOverlay(page), 'chat row menu');
     },
   },
-  { name: 'chat-list', seed: creator, url: '/chat', steps: chatListReady },
+  { name: 'chat-list', seed: creator, url: '/chat', steps: chatListAllRows },
   {
     name: 'chat-plan-card',
     seed: creator,
@@ -1345,7 +1351,7 @@ const SCREENS: Screen[] = [
     steps: async (page) => waitFor([page.locator('[data-activity-boxes]')], 'activity boxes'),
   },
   {
-    // Plan tab: plan-card boxes on the phone, the month grid's entry boxes on laptop.
+    // Plan tab: ListCard boxes in the list grid (phone and laptop).
     name: 'boxes-plan-tab',
     seed: creator,
     extra: (network) => {
@@ -1618,22 +1624,6 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Laptop month: the trace line in today's cell (dense, like item lines).
-    name: 'plan-tab-month-trace',
-    only: 'laptop',
-    seed: creator,
-    extra: (network) => {
-      seedTab(network);
-      // Moved on Monday: today's cell is full (its lines fold into "+N more").
-      seedTrace(network, TAB_SHARED_PLAN_ID, 'Monsoon teaser', NOW - 2 * 86_400_000);
-    },
-    url: '/plan',
-    steps: async (page) => {
-      await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
-      await waitFor([page.locator(`[data-plan-tab-trace="${TRACE_ITEM}"]`)], 'month trace');
-    },
-  },
-  {
     name: 'plan-tab',
     seed: creator,
     extra: seedTab,
@@ -1642,7 +1632,7 @@ const SCREENS: Screen[] = [
       waitFor([page.locator('[data-plan-tab-list]'), page.getByText('Autumn launch')], 'plan'),
   },
   {
-    // The phone's week chips: a chip with no plans in it shows the zero line.
+    // The week chips: a chip with no plans in it shows the zero line.
     name: 'plan-tab-week-zero',
     only: 'phone',
     seed: creator,
@@ -1655,7 +1645,7 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // The Bank chip: idea cards (thumbnail, star, tags, meta).
+    // The Bank chip: idea ListCards (picture, title, text, last active, bucket).
     name: 'plan-tab-bank',
     seed: creator,
     extra: seedBank,
@@ -1730,31 +1720,6 @@ const SCREENS: Screen[] = [
       await waitFor([page.locator('[data-bank-plan-it]')], 'plan it sheet');
     },
   },
-  {
-    // Laptop: the Bank chip opens the side panel beside the calendar.
-    name: 'plan-tab-bank-panel',
-    only: 'laptop',
-    seed: creator,
-    extra: seedBank,
-    url: '/plan?week=bank',
-    steps: async (page) => {
-      await bankReady(page);
-      await waitFor([page.locator('[data-bank="panel"] [data-bank-drag-hint]')], 'panel');
-    },
-  },
-  {
-    // Laptop: Expand swaps the calendar for the Bank table.
-    name: 'plan-tab-bank-table',
-    only: 'laptop',
-    seed: creator,
-    extra: seedBank,
-    url: '/plan?week=bank',
-    steps: async (page) => {
-      await bankReady(page);
-      await tap([page.locator('[data-bank-expand]')], 'Expand');
-      await waitFor([page.locator('[data-bank-table]').getByText(BANK_FIRST_TITLE)], 'bank table');
-    },
-  },
   { name: 'post-detail', seed: creator, url: `/posts/${POST}`, steps: postDetailReady },
   { name: 'post-detail-approver', seed: approver, url: `/posts/${POST}`, steps: postDetailReady },
   { name: 'post-more-menu', seed: creator, url: `/posts/${POST}`, steps: openPostMenu },
@@ -1813,8 +1778,8 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Owner viewer: every active row carries the catch-up email tag; Ana has
-    // opted out, so both "On" and "Emails off" paint.
+    // Owner viewer: every active row carries the catch-up email mark; Ana has
+    // opted out, so both the on and the off (struck) mail glyph paint.
     name: 'members',
     seed: creator,
     extra: (network) => {
@@ -1824,7 +1789,7 @@ const SCREENS: Screen[] = [
     },
     url: '/settings?panel=members',
     steps: async (page) =>
-      waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members'),
+      waitFor([page.locator('[data-member-email-mark="off"]').first()], 'settings members'),
   },
   {
     // Owner viewer: Ana's member sheet (row ⋯, Change role) with the Catch-up
@@ -2054,21 +2019,9 @@ SCREENS.push({
   steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up'),
 });
 
-// The Plan tab's Week (laptop) and a plan screen holding today (Wed 21 Oct, the
-// solid accent tile and its "Today" pill): laptop light and dark; the plan
-// screen also on the phone (iPhone light and dark projects).
-for (const dark of [false, true]) {
-  const suffix = dark ? '-dark' : '';
-  SCREENS.push({
-    name: `plan-tab-week${suffix}`,
-    seed: creator,
-    extra: seedTab,
-    only: 'laptop',
-    dark,
-    url: '/plan',
-    steps: planTabWeek,
-  });
-}
+// A plan screen holding today (Wed 21 Oct, the solid accent tile and its
+// "Today" pill): laptop light and dark, and the phone (iPhone light and dark
+// projects).
 SCREENS.push({
   name: 'plan-screen-today',
   seed: creator,
@@ -2238,6 +2191,128 @@ for (const dark of [false, true]) {
     },
   });
 }
+
+// The six ui/ListCard lists, chip by chip (7 Nov 2026): Pipeline (each stage
+// chip and All), Assets (each tab and select mode), Activity (each chip) and
+// the Plan tab (each chip; Bank is plan-tab-bank). The default chip of each is
+// its base screen (pipeline: Review, assets: All, notifications: All,
+// plan-tab: This week). Phone light/dark and laptop light come from the
+// projects; LAPTOP_DARK_SCREENS adds laptop dark. A chip with nothing under it
+// shows its zero line, which is shot as it is.
+
+/**
+ * The list painted: a ListCard, or the chip's zero line ("{Things} show up
+ * here.", or Snoozed's "Snoozed updates come back here.").
+ */
+async function listOrZero(page: Page, what: string, extra: Locator[] = []): Promise<void> {
+  await waitFor(
+    [
+      page.locator('[data-list-card]'),
+      ...extra,
+      page.getByText(/(show up|come back) here\./),
+      page.getByText(/^No results/),
+    ],
+    what,
+  );
+}
+
+const PIPELINE_CHIP_SCREENS = ['all', 'draft', 'approved', 'parked', 'rejected'] as const;
+for (const stage of PIPELINE_CHIP_SCREENS) {
+  SCREENS.push({
+    name: `pipeline-chip-${stage}`,
+    seed: creator,
+    url: `/pipeline?stage=${stage}`,
+    steps: async (page) => {
+      await waitFor(
+        [page.locator('[data-chip-row]').locator('button[aria-current="true"]')],
+        `${stage} chip`,
+      );
+      await listOrZero(page, `pipeline ${stage}`);
+    },
+  });
+}
+
+const ASSET_TAB_SCREENS = [
+  { tab: 'media', label: 'Media' },
+  { tab: 'pdf', label: 'PDF' },
+  { tab: 'docs', label: 'Docs' },
+  { tab: 'sheets', label: 'Sheets' },
+  { tab: 'links', label: 'Links' },
+] as const;
+for (const { tab, label } of ASSET_TAB_SCREENS) {
+  SCREENS.push({
+    name: `assets-tab-${tab}`,
+    seed: creator,
+    url: `/assets?type=${tab}`,
+    steps: async (page) => {
+      await waitFor(
+        [page.getByRole('tab', { name: new RegExp(`^${label}(\\s\\d+)?$`), selected: true })],
+        `${label} tab`,
+      );
+      await listOrZero(page, `assets ${tab}`);
+    },
+  });
+}
+
+const ACTIVITY_CHIP_SCREENS = [
+  { chip: 'unread', label: 'Unread' },
+  { chip: 'mentions', label: 'Mentions' },
+  { chip: 'briefs', label: 'Briefs' },
+  { chip: 'plans', label: 'Plans' },
+  { chip: 'upcoming', label: 'Upcoming' },
+  { chip: 'snoozed', label: 'Snoozed' },
+] as const;
+for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
+  SCREENS.push({
+    name: `activity-chip-${chip}`,
+    seed: creator,
+    url: '/activity',
+    steps: async (page) => {
+      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+      const chips = page.locator('[data-activity-chips]');
+      await tap([chips.getByRole('button', { name: new RegExp(`^${label}\\b`) })], `${label} chip`);
+      await waitFor(
+        [chips.locator('button[aria-pressed="true"]', { hasText: label })],
+        `${label} chip on`,
+      );
+      await listOrZero(page, `activity ${chip}`, [page.locator('[data-upcoming-list]')]);
+    },
+  });
+}
+
+const PLAN_TAB_CHIP_SCREENS = ['next', 'later', 'earlier', 'all'] as const;
+for (const chip of PLAN_TAB_CHIP_SCREENS) {
+  SCREENS.push({
+    name: `plan-tab-chip-${chip}`,
+    seed: creator,
+    extra: seedTab,
+    url: `/plan?week=${chip}`,
+    steps: async (page) => {
+      await waitFor(
+        [page.locator(`[data-plan-tab-when="${chip}"][aria-pressed="true"]`)],
+        `${chip} chip`,
+      );
+      await listOrZero(page, `plan tab ${chip}`, [page.locator('[data-plan-tab-chip-zero]')]);
+    },
+  });
+}
+
+// Assets in select mode: a card's ⋯ Select starts it with that file ticked;
+// every card keeps its height with the tick box where the ⋮ was.
+SCREENS.push({
+  name: 'assets-select',
+  seed: creator,
+  url: '/assets',
+  steps: async (page) => {
+    await assetsReady(page);
+    await tap(
+      [page.getByRole('button', { name: 'More actions for Hero banner.png', exact: true })],
+      'asset ⋯ trigger',
+    );
+    await tap(menuRow(page, /^Select$/), 'Select');
+    await waitFor([page.locator('[data-select-bar]')], 'select bar');
+  },
+});
 
 // The person card and Reply privately (2 Nov 2026). The card opens from a
 // person's photo, name or @mention ([data-person-trigger]): a Sheet on phone
@@ -2889,41 +2964,6 @@ SCREENS.push(
 // "Visible and lit" (PR 1): the states the lighting pass changed, each in the
 // projects of the visual-coverage guard (src/__tests__/visual-coverage.test.ts).
 
-/**
- * Lifts a draggable card and holds it over the first other column its role may
- * drop it in: a native dragstart on the card (it lifts one height, lit-float)
- * and a dragover on the column (lit-drop), never a drop, so nothing moves in
- * the world. The target is found by trying each other column (canRoleMove
- * decides which one lights), so the screen does not depend on the seed's stages.
- */
-async function liftOverReview(page: Page): Promise<void> {
-  await pipelineReady(page);
-  const card = await firstVisible(
-    [page.locator('[data-drag-container] [data-drag-item][draggable="true"]')],
-    'a draggable card',
-  );
-  const from = await card.evaluate(
-    (el) => el.closest('[data-drag-container]')?.getAttribute('data-stage') ?? '',
-  );
-  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-  await card.dispatchEvent('dragstart', { dataTransfer });
-  const columns = page.locator('[data-drag-container]');
-  const count = await columns.count();
-  for (let i = 0; i < count; i += 1) {
-    const column = columns.nth(i);
-    if ((await column.getAttribute('data-stage')) === from) continue;
-    await column.scrollIntoViewIfNeeded();
-    await column.dispatchEvent('dragenter', { dataTransfer });
-    await column.dispatchEvent('dragover', { dataTransfer });
-    if (/(^|\s)lit-drop(\s|$)/.test((await column.getAttribute('class')) ?? '')) {
-      await expect(card).toHaveClass(/(^|\s)lit-float(\s|$)/);
-      return;
-    }
-    await column.dispatchEvent('dragleave', { dataTransfer });
-  }
-  throw new Error('not reached: a column that takes the lifted card');
-}
-
 /** The Profile panel's alerts block in view (Sound, Notifications, Pause for). */
 async function alertsBlock(page: Page): Promise<void> {
   const block = page.locator('[data-alerts-block]');
@@ -2932,17 +2972,6 @@ async function alertsBlock(page: Page): Promise<void> {
 }
 
 SCREENS.push(
-  {
-    // Laptop board: a card lifted (lit-float) over a column it may drop in (lit-drop,
-    // the 1px dashed line plus its inset ring).
-    name: 'pipeline-drag-drop',
-    seed: creator,
-    only: 'laptop',
-    // The kanban (one column per stage) shows only on All; a single stage is
-    // a grid with nowhere to drop.
-    url: '/pipeline?stage=all',
-    steps: liftOverReview,
-  },
   {
     // ME's own voice note in the DM (n=28 in the fixture): played and unplayed
     // bars, the speed pill and the transcribe link in on-bubble ink (dark too).
@@ -3027,6 +3056,337 @@ SCREENS.push(
       await page.mouse.move(0, 0);
       await page.locator('#auth-code').focus();
       await waitFor([page.locator('[data-code-box].lit-focus')], 'focused code box');
+    },
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Moment states: each held still on purpose. A read or write that never
+// answers (holdRpc, holdUploads, a page route left pending) keeps the busy
+// state up for the whole test; the recorder is the page's MediaRecorder and
+// microphone stubbed in the test (no app hook). Busy controls also run
+// assertSameWidth (layout-checks.ts check 5): idle and busy are one width.
+
+/** Bytes in the stub recording: a blob of exactly this size never reads back. */
+const HELD_VOICE_BYTES = 4099;
+
+/**
+ * The page's microphone and MediaRecorder, stubbed: recording starts at once
+ * and stop hands back one chunk of HELD_VOICE_BYTES whose bytes never read, so
+ * the composer stays in its voice-sending state (the file is typed from its
+ * header before it is handed to the thread).
+ */
+async function stubRecorder(_network: HarnessNetwork, page: Page): Promise<void> {
+  await page.addInitScript((size: number) => {
+    const held = new WeakSet<Blob>();
+    const slice = Blob.prototype.slice;
+    Blob.prototype.slice = function (this: Blob, ...args: Parameters<Blob['slice']>): Blob {
+      const out = slice.apply(this, args);
+      if (this.size === size) held.add(out);
+      return out;
+    };
+    const arrayBuffer = Blob.prototype.arrayBuffer;
+    Blob.prototype.arrayBuffer = function (this: Blob): Promise<ArrayBuffer> {
+      if (held.has(this) || this.size === size) return new Promise<ArrayBuffer>(() => undefined);
+      return arrayBuffer.call(this);
+    };
+    class StubRecorder extends EventTarget {
+      state: 'inactive' | 'recording' = 'inactive';
+      readonly mimeType: string;
+      constructor(_stream: unknown, options?: { mimeType?: string }) {
+        super();
+        this.mimeType = options?.mimeType ?? 'audio/mp4';
+      }
+      static isTypeSupported(type: string): boolean {
+        return type === 'audio/mp4';
+      }
+      start(): void {
+        this.state = 'recording';
+      }
+      requestData(): void {
+        const event = new Event('dataavailable');
+        Object.defineProperty(event, 'data', {
+          value: new Blob([new Uint8Array(size)], { type: this.mimeType }),
+        });
+        this.dispatchEvent(event);
+      }
+      stop(): void {
+        if (this.state === 'inactive') return;
+        this.requestData();
+        this.state = 'inactive';
+        this.dispatchEvent(new Event('stop'));
+      }
+    }
+    Object.defineProperty(window, 'MediaRecorder', {
+      value: StubRecorder,
+      configurable: true,
+      writable: true,
+    });
+    const stream = { getTracks: () => [{ stop: () => undefined }] };
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: {
+        getUserMedia: () => Promise.resolve(stream),
+        enumerateDevices: () => Promise.resolve([]),
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      },
+      configurable: true,
+    });
+  }, HELD_VOICE_BYTES);
+}
+
+/**
+ * The DM's composer form. Found by the composer row (ui/Composer), not its
+ * textarea: recording swaps the field's contents, so the textarea unmounts.
+ */
+const dmComposer = (page: Page): Locator => page.locator('form:has([data-composer-row])').first();
+
+/** The composer row's last slot (send, mic, stop or the busy spinner). */
+const sendSlot = (page: Page): Locator =>
+  dmComposer(page).locator('[data-composer-row] > :last-child');
+
+/** The DM with a recording running (the stub microphone). */
+async function startRecording(page: Page): Promise<void> {
+  await openDm(page);
+  await tap([page.getByRole('button', { name: 'Record voice note', exact: true })], 'mic');
+  await waitFor([page.locator('[data-composer-state="recording"]')], 'recording composer');
+}
+
+/** Types a line into the DM composer and sends it. */
+async function sendInDm(page: Page, body: string): Promise<void> {
+  await openDm(page);
+  await dmComposer(page).locator('textarea').fill(body);
+  await tap([page.getByRole('button', { name: 'Send', exact: true })], 'Send');
+}
+
+/** Waits until an attribute holds one value across two reads 400ms apart. */
+async function attributeStill(target: Locator, name: string): Promise<void> {
+  let last = await target.getAttribute(name);
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const now = await target.getAttribute(name);
+    if (now === last) return;
+    last = now;
+  }
+  throw new Error(`${name} never settled`);
+}
+
+/** A pending page route: requests to this path are never answered. */
+async function neverAnswerPath(page: Page, path: string): Promise<void> {
+  await page.route(
+    (url) => url.pathname === path,
+    () => undefined,
+  );
+}
+
+const PENDING_BODY = 'Sending the cut now';
+
+SCREENS.push(
+  {
+    // The composer while a voice note records: the bin in the leading slot,
+    // the red dot, "Recording" and the elapsed time (masked: it ticks), and
+    // Stop and send in the send slot.
+    name: 'chat-composer-recording',
+    seed: creator,
+    prepare: stubRecorder,
+    url: '/chat',
+    mask: (page) => [page.locator('[data-composer-field]').getByText(/^\d+:\d{2}$/)],
+    steps: startRecording,
+  },
+  {
+    // Stop and send: the voice note on its way, the spinner in the send slot
+    // at the stop button's width.
+    name: 'chat-voice-sending',
+    seed: creator,
+    prepare: stubRecorder,
+    url: '/chat',
+    steps: async (page) => {
+      await startRecording(page);
+      // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+      await page.waitForTimeout(1_100);
+      await assertSameWidth(sendSlot(page), async () => {
+        await tap(
+          [page.getByRole('button', { name: 'Stop and send voice note', exact: true })],
+          'Stop and send',
+        );
+        await expect(
+          page.getByRole('button', { name: 'Sending voice note', exact: true }),
+        ).toHaveAttribute('aria-busy', 'true');
+      });
+    },
+  },
+  {
+    // A typed draft scheduled for tomorrow, the write held: the field reads
+    // "Scheduling…" and the send slot spins at its own width.
+    name: 'chat-composer-scheduling',
+    seed: creator,
+    extra: (network) => {
+      network.holdRpc('chat_message_schedule');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await dmComposer(page).locator('textarea').fill(SCHEDULE_DRAFT);
+      await pickTrayTile(page, 'schedule');
+      const sheet = page.getByRole('dialog', { name: 'Schedule message' });
+      await waitFor([sheet.locator('[data-schedule-row="tomorrow"]')], 'schedule options');
+      await assertSameWidth(sendSlot(page), async () => {
+        await tap([sheet.locator('[data-schedule-row="tomorrow"]')], 'Tomorrow');
+        await waitFor([page.locator('[data-composer-state="scheduling"]')], 'scheduling');
+      });
+    },
+  },
+  {
+    // One sheet saving: Rename file with a new name, the save held. Save
+    // spins at its own width and the sheet cannot close.
+    name: 'asset-rename-saving',
+    seed: creator,
+    prepare: (_network, page) => neverAnswerPath(page, '/rename'),
+    url: '/assets',
+    steps: async (page) => {
+      await assetsReady(page);
+      await tap(
+        [page.getByRole('button', { name: 'More actions for Hero banner.png', exact: true })],
+        'asset ⋯ trigger',
+      );
+      await tap(menuRow(page, /^Rename$/), 'Rename');
+      const sheet = page.getByRole('dialog', { name: 'Rename file' });
+      await waitFor([sheet], 'rename sheet');
+      await sheet.getByRole('textbox').first().fill('Hero banner final.png');
+      // The footer's submit, found by its slot: busy (ui/Button) hides the
+      // label, so the button's name is empty while it spins.
+      const save = sheet.locator('[data-sheet-footer] button[type="submit"]');
+      await expect(save).toHaveAccessibleName('Save');
+      await assertSameWidth(save, async () => {
+        await save.click();
+        await expect(save).toHaveAttribute('aria-busy', 'true');
+      });
+    },
+  },
+  {
+    // Tasks: a tick autosaves, the save held: "Saving…" in the header's save
+    // slot (the slot holds its width).
+    name: 'chat-tasks-saving',
+    seed: creator,
+    extra: (network) => {
+      seedDatedTasks(network);
+      network.holdRpc('chat_task_save_batch');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openTasks(page);
+      const tick = sheet.locator('[data-task-tick][aria-checked="false"]').first();
+      const saved = page.waitForRequest((r) => r.url().includes('chat_task_save_batch'));
+      await assertSameWidth(sheet.locator('[data-task-save-slot]'), async () => {
+        await tick.click();
+        await saved;
+        await waitFor([sheet.locator('[data-task-save-state="saving"]')], 'Saving…');
+      });
+    },
+  },
+  {
+    // A photo sent with its upload held: the own bubble shows the local
+    // preview under the upload ring (Cancel upload).
+    name: 'chat-upload-progress',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await dmComposer(page)
+        .locator('input[type="file"]')
+        .first()
+        .setInputFiles({
+          name: 'moodboard.png',
+          mimeType: 'image/png',
+          buffer: solidPng(64, 48, [200, 120, 60]),
+        });
+      await waitFor([dmComposer(page).getByText('moodboard.png')], 'picked photo');
+      await tap([page.getByRole('button', { name: 'Send', exact: true })], 'Send');
+      const ring = await firstVisible([page.locator('[data-upload-ring]')], 'upload ring');
+      await attributeStill(ring, 'data-upload-progress');
+    },
+  },
+  {
+    // An own message whose record write is held: the clock in its meta.
+    name: 'chat-message-pending',
+    seed: creator,
+    extra: (network) => {
+      network.holdRpc('chat_message_send');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await sendInDm(page, PENDING_BODY);
+      const own = page.locator('[data-msg-id]', { hasText: PENDING_BODY });
+      await waitFor([own.locator('[data-status="sending"]')], 'pending clock');
+    },
+  },
+  {
+    // An own message the record refused: "Not sent" with the reason and Delete.
+    name: 'chat-message-not-sent',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await sendInDm(page, REFUSED_SEND);
+      const own = page.locator('[data-msg-id]', { hasText: REFUSED_SEND });
+      await waitFor([own.locator('[data-failed-actions]')], 'Not sent line');
+    },
+  },
+  {
+    // The message menu's Select: one bubble's text selectable in place.
+    name: 'chat-select-mode',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await openDmMessageMenu(page);
+      await tap([page.locator('[data-menu-item="more"]')], 'More');
+      await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
+      await waitFor([page.locator('[data-selecting-text]')], 'select mode');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Phone: the composer focused (the keyboard's state; WebKit here draws no
+    // keyboard): the field's focus line, the row as it sits above the keys.
+    name: 'chat-composer-keyboard',
+    seed: creator,
+    only: 'phone',
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const field = dmComposer(page).locator('textarea');
+      await field.focus();
+      await expect(field).toBeFocused();
+    },
+  },
+  {
+    // The post screen: Approve confirmed, the stage write held. The confirm's
+    // Approve spins at its own width.
+    name: 'post-approve-busy',
+    seed: approver,
+    extra: (network) => {
+      network.holdRpc('stage_transition');
+    },
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      await tap([page.getByRole('button', { name: 'Approve', exact: true })], 'Approve');
+      const confirm = await firstVisible(
+        [page.getByRole('dialog', { name: /Approve this post/ }), page.getByRole('alertdialog')],
+        'approve confirm',
+      );
+      // The confirm's Approve by its hook: busy (ui/Button) hides the label,
+      // so the button's name is empty while it spins.
+      const approve = confirm.locator('[data-approve-confirm-button]');
+      await expect(approve).toHaveAccessibleName('Approve');
+      await assertSameWidth(approve, async () => {
+        await approve.click();
+        await expect(approve).toHaveAttribute('aria-busy', 'true');
+      });
     },
   },
 );
@@ -3118,6 +3478,11 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await screen.steps(page);
   await stabilise(page, screen.hold === true);
   await settle(page);
+  // Layout checks (layout-checks.ts) on the state as it is shot. A list
+  // screen must show its ui/ListCards, so the list-card rule (equal heights,
+  // the 72 picture 16 inside the edge and 12 to the text) runs on it.
+  if (LIST_CARD_SCREENS.has(screen.name)) await assertListCards(page, screen.name);
+  await checkLayout(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
     animations: 'disabled',
@@ -3126,6 +3491,26 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   });
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
+
+// The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
+// list, Activity, the Plan tab and its Bank): checkLayout's list-card rule
+// (every card 118 tall, the 72 picture 16 inside the edge and 12 to the text)
+// runs on every screen; these must show cards. The chip screens above may land
+// on a chip's zero line, so they are checked whenever cards show.
+const LIST_CARD_SCREENS = new Set([
+  'pipeline',
+  'pipeline-approver',
+  'briefs-approver',
+  'assets',
+  'assets-approver',
+  'assets-select',
+  'chat-list',
+  'chat-actions-menu',
+  'notifications',
+  'activity-bank',
+  'plan-tab',
+  'plan-tab-bank',
+]);
 
 // Laptop dark: these screens also run in the laptop-dark project
 // (playwright.visual.config.ts greps @laptop-dark there). The tag rides on the
@@ -3144,6 +3529,42 @@ const LAPTOP_DARK_SCREENS = new Set([
   'post-picker',
   'chat-status-drawer',
   'chat-status-drawer-plan',
+  // Moment states: phone and laptop, light and dark.
+  'chat-composer-recording',
+  'chat-voice-sending',
+  'chat-composer-scheduling',
+  'asset-rename-saving',
+  'chat-tasks-saving',
+  'chat-upload-progress',
+  'chat-message-pending',
+  'chat-message-not-sent',
+  'chat-select-mode',
+  'post-approve-busy',
+  // The six ListCard lists, every chip: phone and laptop, light and dark.
+  'chat-list',
+  'notifications',
+  'plan-tab-bank',
+  'pipeline-chip-all',
+  'pipeline-chip-draft',
+  'pipeline-chip-approved',
+  'pipeline-chip-parked',
+  'pipeline-chip-rejected',
+  'assets-tab-media',
+  'assets-tab-pdf',
+  'assets-tab-docs',
+  'assets-tab-sheets',
+  'assets-tab-links',
+  'assets-select',
+  'activity-chip-unread',
+  'activity-chip-mentions',
+  'activity-chip-briefs',
+  'activity-chip-plans',
+  'activity-chip-upcoming',
+  'activity-chip-snoozed',
+  'plan-tab-chip-next',
+  'plan-tab-chip-later',
+  'plan-tab-chip-earlier',
+  'plan-tab-chip-all',
 ]);
 
 for (const screen of SCREENS) {

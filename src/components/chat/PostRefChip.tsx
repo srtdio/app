@@ -8,10 +8,11 @@
 // the message keeps its plain quote. Tokens only; the own bubble's overrides
 // (OWN_BUBBLE_CONTENT) restyle the chip the way they restyle the quote.
 
+import { PostPlaceholder } from '@/components/ui/PostPlaceholder';
 import { mark } from '@/lib/perf-marks';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
+import { ICON_SIZE } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -139,7 +140,7 @@ export function useChipBatch(ids: readonly string[]): ChipLookup {
  */
 export function PostRefThumb(props: {
   assetVersionId: string | null;
-  size: 18 | 20 | 24 | 32;
+  size: 16 | 20 | 24 | 32;
   round?: boolean;
 }): ReactElement {
   const thumb = useThumbnail<HTMLSpanElement>({
@@ -147,7 +148,7 @@ export function PostRefThumb(props: {
     cache: sharedCardPresignCache(),
     enabled: PRESIGN_ENABLED,
   });
-  const box = { 18: 'h-[18px] w-[18px]', 20: 'h-5 w-5', 24: 'h-6 w-6', 32: 'h-8 w-8' }[props.size];
+  const box = { 16: 'h-4 w-4', 20: 'h-5 w-5', 24: 'h-6 w-6', 32: 'h-8 w-8' }[props.size];
   return (
     <span
       ref={thumb.ref}
@@ -167,7 +168,7 @@ export function PostRefThumb(props: {
           className="h-full w-full object-cover"
         />
       ) : (
-        <IconPipeline size={props.size <= 20 ? 12 : ICON_SIZE.inline} />
+        <PostPlaceholder kind="text" size={props.size <= 20 ? ICON_SIZE.text : ICON_SIZE.inline} />
       )}
     </span>
   );
@@ -197,8 +198,8 @@ export function PostRefChip(props: {
       }}
       className={cn('flex min-w-0 max-w-full items-center', props.className)}
     >
-      <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-panel-3 pl-[3px] pr-2.5 lit-pill">
-        <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={18} round />
+      <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-panel-3 pl-1 pr-3 lit-pill">
+        <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={16} round />
         <span className="min-w-0 truncate text-sm text-fg-2">{post.title}</span>
       </span>
     </PressableRow>

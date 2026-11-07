@@ -17,7 +17,7 @@ import {
   startPlanTabRead,
   type PlanTabReadArgs,
 } from '@/lib/plan-tab-shared';
-import { visibleRange } from '@/lib/plan-tab';
+import { planWeekChipRange } from '@/lib/plan-tab';
 import { civilToday } from '@/lib/plan-week';
 import { resetSessionReads } from '@/lib/session-read';
 
@@ -112,7 +112,7 @@ function gatedClient() {
 
 const ARGS: PlanTabReadArgs = {
   workspaceId: 'ws',
-  range: visibleRange('month', TODAY),
+  range: planWeekChipRange('this', TODAY),
   onlyShared: false,
 };
 
@@ -135,10 +135,10 @@ describe('Plan tab read rounds', () => {
 describe('Plan tab nav press', () => {
   it('a press starts the first render read; the mount joins it (no second request)', async () => {
     const { client, rounds } = gatedClient();
-    // A laptop press with the zone known: the side is resolved (mocked), then
-    // the month around today is read.
+    // A press with the zone known: the side is resolved (mocked), then This
+    // week (the default chip, phone and laptop alike) is read.
     const ctx = { userId: 'u1', workspaceId: 'ws', timeZone: 'UTC' };
-    const press = startPlanTabRead(client, ctx, true);
+    const press = startPlanTabRead(client, ctx);
     const first = await rounds();
     await press;
     const mount = readSharedPlanTab(client, 'u1', ARGS);
@@ -150,11 +150,11 @@ describe('Plan tab nav press', () => {
     expect(peekPlanTab('u1', ARGS)).toBeDefined();
   });
 
-  it('a phone press with no zone known reads no workspaces row and reads This week (the default chip)', async () => {
+  it('a press with no zone known reads no workspaces row and reads This week (the default chip)', async () => {
     const { client, rounds } = gatedClient();
     // Thursday 5 Nov 2026 midday UTC: Thursday in every zone the device could be in.
     const now = new Date('2026-11-05T12:00:00.000Z');
-    const press = startPlanTabRead(client, { userId: 'u1', workspaceId: 'ws' }, false, now);
+    const press = startPlanTabRead(client, { userId: 'u1', workspaceId: 'ws' }, now);
     const seen = await rounds();
     await press;
     expect(seen.flat()).toEqual(['rpc:plan_bundle_read']);

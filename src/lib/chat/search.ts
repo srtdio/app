@@ -21,7 +21,7 @@ import {
 } from '@/lib/chat/chat-store';
 import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
 import { resolveMentionText } from '@/lib/chat/mentions';
-import { civilDay, formatTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
 import { errorText } from '@/lib/error-copy';
 
@@ -495,30 +495,14 @@ export function snippetText(
   return start > 0 ? `${ELLIPSIS}${out}` : out;
 }
 
-/** The weekday names the date label uses. */
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-/** Whole calendar days from day a to day b (YYYY-MM-DD, no zone). */
-function daysBetween(a: string, b: string): number {
-  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
-}
-
 /**
- * A hit's date on the viewer's clock: today the time, yesterday "Yesterday",
- * the last 7 days the weekday, older DD/MM/YY. Pure (now is passed in;
- * `timeZone` is for tests, the app passes none).
+ * A hit's date, short (src/lib/time.ts formatAgo): "just now", "5m", "3h",
+ * "Yesterday", "Mon", "2 Nov" ("2 Nov 2025" off-year). Pure (now is passed in).
  */
-export function searchDateLabel(createdAt: string, nowMs: number, timeZone?: string): string {
+export function searchDateLabel(createdAt: string, nowMs: number): string {
   const ts = Date.parse(createdAt);
   if (Number.isNaN(ts)) return '';
-  const day = civilDay(ts, timeZone);
-  const today = civilDay(nowMs, timeZone);
-  const ago = daysBetween(day, today);
-  if (ago <= 0) return formatTime(ts, timeZone);
-  if (ago === 1) return 'Yesterday';
-  if (ago < 7) return WEEKDAYS[new Date(`${day}T00:00:00Z`).getUTCDay()] ?? '';
-  const [y, m, d] = day.split('-');
-  return `${d ?? ''}/${m ?? ''}/${(y ?? '').slice(-2)}`;
+  return formatAgo(ts, new Date(nowMs));
 }
 
 /**

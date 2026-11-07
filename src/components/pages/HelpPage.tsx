@@ -5,6 +5,7 @@ import { Chip } from '@/components/ui/Chip';
 import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { NoResults } from '@/components/ui/NoResults';
+import { Text } from '@/components/ui/Text';
 
 const CATEGORIES = [
   'All topics',
@@ -159,13 +160,15 @@ export function HelpPage() {
     <>
       <PageHead title="Help" />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
-        <section className="rounded-xl border bg-panel-2 lit-card-muted p-5 md:p-8">
+        <section className="rounded-xl border bg-panel-2 lit-card-muted p-4 md:p-6">
           <p className="text-base font-medium text-accent">Sorted Help Center</p>
-          <h2 className="mt-2 text-lg font-semibold">Find your way through the workflow</h2>
-          <p className="mt-2 max-w-2xl text-base leading-6 text-fg-2">
+          <Text as="h2" role="title" className="mt-2">
+            Find your way through the workflow
+          </Text>
+          <p className="mt-2 max-w-2xl text-base text-fg-2">
             Quick answers about pipeline, briefs, posts, approvals, files, and chat with your team.
           </p>
-          <div className="mt-5 max-w-xl">
+          <div className="mt-6 max-w-xl">
             <label htmlFor="help-search" className="sr-only">
               Search help
             </label>
@@ -177,12 +180,12 @@ export function HelpPage() {
               placeholder="Search help"
             />
           </div>
-          <nav aria-label="Helpful sections" className="mt-5 flex flex-wrap gap-2">
+          <nav aria-label="Helpful sections" className="mt-6 flex flex-wrap gap-2">
             {QUICK_LINKS.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
-                className="inline-flex min-h-[44px] items-center rounded-full bg-panel-3 lit-well-soft lit-hover px-4 text-base font-medium text-fg focus-visible:lit-focus"
+                className="inline-flex min-h-11 items-center rounded-full bg-panel-3 lit-well-soft lit-hover px-4 text-base font-medium text-fg focus-visible:lit-focus"
               >
                 {link.label}
               </NavLink>
@@ -192,12 +195,9 @@ export function HelpPage() {
 
         <section className="mt-8" aria-labelledby="help-articles-heading">
           <div className="flex flex-col gap-1">
-            <h2
-              id="help-articles-heading"
-              className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
-            >
+            <Text as="h2" role="section" id="help-articles-heading">
               Help articles
-            </h2>
+            </Text>
             <p className="text-sm text-fg-3">
               {articles.length} {articles.length === 1 ? 'article' : 'articles'}
             </p>
@@ -229,16 +229,14 @@ export function HelpPage() {
                   key={article.id}
                   className="group rounded-xl border bg-panel lit-card px-4"
                 >
-                  <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                  <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                     <span>{article.title}</span>
                     <IconChevronDown
                       size={ICON_SIZE.nav}
                       className="shrink-0 text-fg-3 mv-slide group-open:rotate-180"
                     />
                   </summary>
-                  <p className="max-w-3xl pb-4 pr-8 text-base leading-6 text-fg-2">
-                    {article.content}
-                  </p>
+                  <p className="max-w-3xl pb-4 pr-8 text-base text-fg-2">{article.content}</p>
                 </details>
               ))}
             </div>

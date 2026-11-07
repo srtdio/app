@@ -359,7 +359,7 @@ describe('Brief detail ⋯ menu rows', () => {
     await mount();
     await openMenu();
     for (const el of document.querySelectorAll<HTMLElement>('[role="menuitem"]')) {
-      expect(el.className).toContain('min-h-[44px]');
+      expect(el.className).toContain('min-h-11');
     }
     await act(async () => menuRow('brief-menu-copy-link')?.click());
     // The phone Sheet stays mounted through its exit transition, then unmounts.
@@ -607,10 +607,11 @@ describe('Brief detail content', () => {
   });
 
   it('the due date reads the picked day', async () => {
-    h.getBrief.mockResolvedValue(detail({ target_date: '2026-10-08' }));
+    // A day more than a week ahead reads as the date (formatDue): "Due 8 Oct YYYY".
+    const year = new Date().getFullYear() + 1;
+    h.getBrief.mockResolvedValue(detail({ target_date: `${year}-10-08` }));
     await mount();
-    // "8 Oct" in 2026, "8 Oct 2026" from a later year: both contain the day.
-    expect(text()).toContain('8 Oct');
+    expect(text()).toContain(`Due 8 Oct ${year}`);
   });
 });
 
@@ -733,9 +734,9 @@ describe('Brief detail polish', () => {
     await mount();
     for (const section of [phone(), desktop()]) {
       expect(section?.querySelectorAll('dt')).toHaveLength(0);
-      // "1 Oct" in 2026, "1 Oct 2026" from a later year.
+      // Short on the shared minute clock (formatAgo), whatever today is.
       expect(section?.querySelector('[data-brief-raised]')?.textContent).toMatch(
-        /^Raised 1 Oct( 2026)? by Asha Rao$/,
+        /^Raised (just now|\d+[mh]|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2} [A-Z][a-z]{2}( \d{4})?) by Asha Rao$/,
       );
       expect(section?.querySelector('[data-brief-format]')?.textContent).toBe('Format Carousel');
       expect(section?.textContent).not.toContain('carousel');
@@ -759,15 +760,16 @@ describe('Brief detail polish', () => {
     expect(briefFormatLabel('single_image')).toBe('Single image');
   });
 
-  it('the top bar reads the status and due day with a 7px dot at 15px semibold', async () => {
+  it('the top bar (ui/HeaderBar) reads the status and due day with the status dot in the title role', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
     expect(line?.textContent).toBe('Open · Due 14 Aug');
-    expect(line?.querySelector('[aria-hidden="true"]')?.className).toContain('h-[7px] w-[7px]');
-    expect(line?.querySelector('.text-lg')?.className).toContain('font-semibold');
+    expect(line?.querySelector('[data-status-dot="open"]')?.className).toContain('h-2 w-2');
+    expect(line?.closest('[data-header-bar]')).not.toBeNull();
+    expect(line?.closest('.text-lg')?.className).toContain('font-semibold');
     expect(line?.querySelector('[data-brief-due]')?.className ?? '').not.toContain('text-bad');
   });
 
@@ -777,7 +779,7 @@ describe('Brief detail polish', () => {
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
-    expect(line?.textContent).toBe('Open · Overdue 2 months');
+    expect(line?.textContent).toBe('Open · Overdue 2mo');
     expect(line?.querySelector('[data-brief-due]')?.className).toContain('text-bad');
   });
 
@@ -796,10 +798,17 @@ describe('Brief detail polish', () => {
       due: 'Due 14 Aug',
       overdue: false,
     });
-    expect(briefStatusLine('open', '2026-08-01', 'UTC', now).overdue).toBe(false);
+    expect(briefStatusLine('open', '2026-08-01', 'UTC', now)).toEqual({
+      status: 'Open',
+      due: 'Due today',
+      overdue: false,
+    });
+    expect(briefStatusLine('open', '2026-08-02', 'UTC', now).due).toBe('Due tomorrow');
+    expect(briefStatusLine('open', '2026-12-12', 'UTC', now).due).toBe('Due 12 Dec');
+    expect(briefStatusLine('open', '2026-05-20', 'UTC', now).due).toBe('Overdue 2mo');
     expect(briefStatusLine('open', '2026-07-31', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Overdue · 31 Jul',
+      due: 'Overdue 1d',
       overdue: true,
     });
     expect(briefStatusLine('open', null, 'UTC', now)).toEqual({
@@ -902,7 +911,7 @@ describe('Brief detail linked posts', () => {
       ),
     ];
     expect(rows.map((a) => a.getAttribute('href'))).toEqual(['/posts/p2', '/posts/p1']);
-    expect(rows[0]?.className).toContain('min-h-[44px]');
+    expect(rows[0]?.className).toContain('min-h-11');
     // The stage dot's word rides in the row name (sr-only).
     expect(rows[0]?.textContent).toBe('Post p2, Review');
   });

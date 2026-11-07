@@ -54,11 +54,12 @@ export function SettingsPage() {
       <div className="px-4 md:px-6">
         <Tabs label="Settings" items={PANELS} active={active} onChange={setActive} />
       </div>
-      <div className="px-4 md:px-6 py-5">
+      {/* One content width for all four tabs on laptop (the panels set none of their own). */}
+      <div data-settings-content="" className="px-4 py-6 md:max-w-2xl md:px-6">
         {active === 'workspace' ? (
           <div className="flex flex-col gap-6">
             <WorkspaceSettingsPanel />
-            <div className="-mx-3 max-w-[544px]">
+            <div className="-mx-3">
               <ActionRow
                 icon={<IconAssets size={ICON_SIZE.nav} />}
                 label="Storage"

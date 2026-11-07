@@ -86,7 +86,7 @@ export function UsernameField({
         : format === 'reserved'
           ? `@${value} is reserved. Try another.`
           : check === 'checking'
-            ? 'Checking...'
+            ? 'Checking…'
             : check === 'taken'
               ? `@${value} is taken. Try another.`
               : check === 'error'
@@ -103,7 +103,7 @@ export function UsernameField({
 
   return (
     <div>
-      <label htmlFor="settings-username" className="mb-1.5 block text-base font-medium">
+      <label htmlFor="settings-username" className="mb-2 block text-base font-medium">
         Username
       </label>
       <div className="flex gap-2">
@@ -124,12 +124,12 @@ export function UsernameField({
           />
         </div>
         {!unchanged ? (
-          <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
-            {saving ? 'Saving' : 'Save'}
+          <Button variant="primary" busy={saving} disabled={!canSave} onClick={() => void save()}>
+            Save
           </Button>
         ) : null}
       </div>
-      <p className={cn('mt-1.5 text-sm', message !== null ? 'text-fg-2' : tone)} aria-live="polite">
+      <p className={cn('mt-2 text-sm', message !== null ? 'text-fg-2' : tone)} aria-live="polite">
         {message ?? hint}
       </p>
     </div>

@@ -50,10 +50,8 @@ export function ActionRow({
         {trayIcon(icon)}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-base font-medium leading-snug">{label}</span>
-        {sub !== undefined ? (
-          <span className="truncate text-sm leading-snug text-fg-3">{sub}</span>
-        ) : null}
+        <span className="truncate text-base font-medium">{label}</span>
+        {sub !== undefined ? <span className="truncate text-sm text-fg-3">{sub}</span> : null}
       </span>
       {chevron ? (
         <span className="ml-auto shrink-0 text-fg-3">

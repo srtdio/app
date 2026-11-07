@@ -6,10 +6,14 @@
 // On the guard path (captions too large to align) it falls back to a plain
 // side-by-side with the stats still shown but no per-word marks.
 
+import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { formatDateTime } from '@/lib/time';
+import { SECTION_LABEL } from '@/components/ui/Text';
+import { formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { diffSegments, type DiffKind, type DiffResult, type DiffSegment } from '@/lib/text-diff';
 
 export type CompareViewMode = 'auto' | 'inline' | 'side';
@@ -32,6 +36,8 @@ interface CompareVersionsViewModel extends CompareVersionsViewProps {
   diff: DiffResult;
   mode: CompareViewMode;
   onModeChange: (mode: CompareViewMode) => void;
+  /** The shared minute clock's instant; times read relative to it. Absent: the current instant. */
+  now?: Date;
 }
 
 const MODES: ReadonlyArray<{ value: CompareViewMode; label: string }> = [
@@ -55,12 +61,12 @@ function isEmptyCaption(caption: string | null): boolean {
   return caption === null || caption.trim() === '';
 }
 
-// "23 Oct, 2:14 PM" via the app formatter, on the viewer's clock. Falls back
-// to the raw value if unparseable.
-function formatTimestamp(value: string): string {
+// When it happened, short (formatAgo: "just now", "5m", "Yesterday",
+// "Mon"). Falls back to the raw value if unparseable.
+function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatDateTime(value);
+  return formatAgo(value, now);
 }
 
 const NO_CAPTION = <span className="text-fg-3">No caption in this version.</span>;
@@ -73,24 +79,28 @@ function renderMarked(
   include: (kind: DiffKind) => boolean,
 ): ReactNode[] {
   const out: ReactNode[] = [];
-  segs.forEach((seg, i) => {
+  // Keyed by where the run starts in the caption (stable for a given diff).
+  let at = 0;
+  segs.forEach((seg) => {
+    const key = `${seg.kind}:${at}`;
+    at += seg.text.length;
     if (!include(seg.kind)) return;
     if (seg.kind === 'add') {
       out.push(
-        <span key={i} className="rounded-sm bg-good-soft text-good underline">
+        <span key={key} className="rounded-sm bg-good-soft text-good underline">
           <span className="sr-only">added </span>
           {seg.text}
         </span>,
       );
     } else if (seg.kind === 'del') {
       out.push(
-        <span key={i} className="rounded-sm bg-bad-soft text-bad line-through">
+        <span key={key} className="rounded-sm bg-bad-soft text-bad line-through">
           <span className="sr-only">removed </span>
           {seg.text}
         </span>,
       );
     } else {
-      out.push(<span key={i}>{seg.text}</span>);
+      out.push(<span key={key}>{seg.text}</span>);
     }
   });
   return out;
@@ -98,13 +108,9 @@ function renderMarked(
 
 function Panel({ label, children }: { label?: string; children: ReactNode }): ReactNode {
   return (
-    <div className="rounded-xl border bg-panel p-[18px] lit-card">
-      {label !== undefined ? (
-        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-          {label}
-        </div>
-      ) : null}
-      <p className="whitespace-pre-wrap text-base leading-relaxed text-fg">{children}</p>
+    <div className="rounded-xl border bg-panel p-4 lit-card">
+      {label !== undefined ? <div className={cn(SECTION_LABEL, 'mb-2')}>{label}</div> : null}
+      <p className="whitespace-pre-wrap text-base text-fg">{children}</p>
     </div>
   );
 }
@@ -120,6 +126,7 @@ export function compareVersionsView({
   diff,
   mode,
   onModeChange,
+  now = new Date(),
 }: CompareVersionsViewModel): ReactNode {
   const segs = diff.segs;
   const guarded = segs === null;
@@ -154,14 +161,14 @@ export function compareVersionsView({
   }
 
   return (
-    <div className="flex flex-col gap-6 px-4 py-6 md:px-6">
+    <div className={cn('flex flex-col gap-6 py-6', GUTTER)}>
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-accent-soft px-4 py-3 text-accent lit-tint">
         <div className="flex min-w-0 flex-col">
           <span className="text-base font-medium">
             Comparing v{fromVersionNumber} → v{toVersionNumber}
           </span>
           <span className="text-sm text-fg-2">
-            {formatTimestamp(fromCreatedAt)} → {formatTimestamp(toCreatedAt)}
+            {formatTimestamp(fromCreatedAt, now)} → {formatTimestamp(toCreatedAt, now)}
           </span>
         </div>
         <span className="ml-auto font-mono text-base tabular-nums">
@@ -181,7 +188,7 @@ export function compareVersionsView({
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex rounded-lg border border-border bg-panel-2 p-[3px] lit-well">
+            <div className="inline-flex rounded-lg border border-border bg-panel-2 p-1 lit-well">
               {MODES.map((option) => {
                 const active = mode === option.value;
                 return (
@@ -206,11 +213,11 @@ export function compareVersionsView({
           </div>
 
           <div className="flex items-center gap-4 text-sm text-fg-3">
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-2">
               <span aria-hidden className="h-3 w-3 rounded-sm bg-good-soft" />
               Added
             </span>
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-2">
               <span aria-hidden className="h-3 w-3 rounded-sm bg-bad-soft" />
               Removed
             </span>
@@ -225,6 +232,7 @@ export function compareVersionsView({
 
 export function CompareVersionsView(props: CompareVersionsViewProps) {
   const [mode, setMode] = useState<CompareViewMode>('auto');
+  const nowMs = useMinuteClock();
   // Renders at its final state on the first frame (never a fade).
 
   const diff = useMemo(
@@ -232,5 +240,9 @@ export function CompareVersionsView(props: CompareVersionsViewProps) {
     [props.fromCaption, props.toCaption],
   );
 
-  return <div>{compareVersionsView({ ...props, diff, mode, onModeChange: setMode })}</div>;
+  return (
+    <div>
+      {compareVersionsView({ ...props, diff, mode, onModeChange: setMode, now: new Date(nowMs) })}
+    </div>
+  );
 }

@@ -46,7 +46,7 @@ describe('SortMenu buttons', () => {
   it('every option row keeps a 44px target with the 8px radius', () => {
     for (const row of sortOptionButtons(options, 'name', () => {})) {
       const t = classOf(row);
-      expect(t).toContain('min-h-[44px]');
+      expect(t).toContain('min-h-11');
       expect(t).toContain('rounded-lg');
       for (const bad of BAD) expect(t).not.toContain(bad);
     }

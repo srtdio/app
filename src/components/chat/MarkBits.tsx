@@ -45,7 +45,7 @@ export function MarkBadge(props: {
         }}
         className="-mx-1 -mb-2 -mt-3 flex items-center px-1"
       >
-        <Tag label={label} tone={tone} className="min-w-[44px] justify-center" />
+        <Tag label={label} tone={tone} className="min-w-11 justify-center" />
       </PressableRow>
     );
   }

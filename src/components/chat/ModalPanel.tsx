@@ -13,7 +13,7 @@ import { useIsLaptop } from '@/lib/use-is-laptop';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 
 /** The full-screen chat page box (Contact, Group info, Starred). */
-export const MODAL_PAGE_CLASS = 'fixed inset-0 z-50 flex flex-col bg-bg outline-none';
+export const MODAL_PAGE_CLASS = 'fixed inset-0 z-sheet flex flex-col bg-bg outline-none';
 
 /**
  * The modal page's 56px header height plus the status-bar strip it covers

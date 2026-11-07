@@ -211,7 +211,8 @@ describe('notes_channel_ensure', () => {
         },
       }),
     );
-    expect(html).toMatch(/data-notes-tile=""[^>]*disabled/);
+    // The notes card's one button is disabled (the card root carries data-notes-tile).
+    expect(html).toMatch(/data-notes-tile=""[^>]*>[^]*?<button[^>]*disabled/);
   });
 });
 

@@ -1,32 +1,43 @@
-// The Plan tab on a phone: the plans as cards in sections (This week, Next
-// week, Upcoming, Past; empty ones hidden). A card has the chat plan card's
-// look (PLAN, the title on up to two lines, the mono date range) with the
-// plan's covers, then a shared plan's bar and "N of M OK", or a Draft's tag
-// and "N items · only your team sees this" ("1 item" for one). A tap opens the plan's own screen (full page). The phone
-// Plan screens themselves are not touched. Tokens only. While more plans
-// remain (the read's next cursor), PlanTabPage hands the list its Load more
-// (from usePlanTabData) and the list ends with it (PlanTabLoadMore, which the
-// laptop calendar ends with too); the cards it appends rise into place
-// (itemIn, Y only, laid over their final state; never a fade).
+// The Plan tab's list, phone and laptop alike (the laptop Month | Week calendar
+// retired 7 Nov 2026): one ui/ListCard per plan in LIST_CARD_GRID (one column
+// on a phone, auto-fill columns on a laptop), grouped in sections under All
+// (This week, Next week, Upcoming, Past; empty ones hidden). A card: the
+// plan's first cover (else the plan icon), its title, then its dates and post
+// count (a Draft adds "only your team sees this"), then when it starts
+// ("Starts Mon", "Started 3d ago") and one grey tag ("1 of 3 OK", or
+// "Draft"). A tap opens the plan's own screen. While more plans remain (the
+// read's next cursor), PlanTabPage hands the list its Load more (from
+// usePlanTabData) and the list ends with it (PlanTabLoadMore, which the Bank
+// and From bank end with too); the cards it appends rise into place (itemIn,
+// Y only, laid over their final state; never a fade).
 
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
-import { Bone, BoxSkeleton, itemIn, rememberCard, useFreshKeys } from '@/lib/motion';
-import { PlanCardBar, PlanCardTop } from '@/components/chat/PlanCard';
+import { BoxSkeleton, Bone, itemIn, rememberCard, useFreshKeys } from '@/lib/motion';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
-import { PLAN_DRAFT_LABEL } from '@/components/chat/plan-card';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { Button } from '@/components/ui/Button';
-import { PressableRow } from '@/components/ui/PressableRow';
-import { tagClass } from '@/components/ui/Tag';
+import { LIST_CARD_GRID, ListCard, ListCardBox } from '@/components/ui/ListCard';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
-import { PLAN_WEEK_CHIP_ZERO, planCardMeta, planSections, type PlanWeekChip } from '@/lib/plan-tab';
+import {
+  PLAN_WEEK_CHIP_ZERO,
+  planCardMeta,
+  planCardPreview,
+  planSections,
+  type PlanWeekChip,
+} from '@/lib/plan-tab';
+import { formatPlanStart } from '@/lib/time';
+import { Text } from '@/components/ui/Text';
 
-/** Load more's copy: 'Loading' while the page is in flight. Pure. */
-export function loadMoreLabel(busy: boolean): string {
-  return busy ? 'Loading' : 'Load more';
+/**
+ * Load more's copy. It never swaps while the page is in flight: busy shows on
+ * the button (Button busy), so the label keeps its width. Pure.
+ */
+export function loadMoreLabel(): string {
+  return 'Load more';
 }
 
 /** What Load more needs: busy while a page is in flight, and the tap. Null: every plan is in. */
@@ -36,9 +47,9 @@ export interface PlanTabMore {
 }
 
 /**
- * Load more (the Comments pattern): the shared Button, 44 tall, disabled and
- * 'Loading' while the page is in flight. The phone list and the laptop
- * calendar both end with it.
+ * Load more (the Comments pattern): the shared Button, 44 tall, busy (its
+ * label kept, the arc over it) while the page is in flight. The plan list,
+ * the Bank and From bank end with it.
  */
 export function PlanTabLoadMore(props: { more: PlanTabMore }): ReactElement {
   return (
@@ -46,28 +57,26 @@ export function PlanTabLoadMore(props: { more: PlanTabMore }): ReactElement {
       type="button"
       data-plan-tab-load-more=""
       className="self-start"
-      disabled={props.more.busy}
+      busy={props.more.busy}
       onClick={props.more.onMore}
     >
-      {loadMoreLabel(props.more.busy)}
+      {loadMoreLabel()}
     </Button>
   );
 }
 
-/** Covers a card shows at most. */
-export const CARD_COVERS = 4;
-
-/** A plan's covers: its items' first images (posts, then concept images), in item order. Pure. */
-export function planCovers(bundle: PlanBundle, thumbs: PlanThumbs): string[] {
-  const out: string[] = [];
+/**
+ * A plan's picture: its items' first image (a post's, else a concept image),
+ * in item order; null when none holds one. Pure.
+ */
+export function planCover(bundle: PlanBundle, thumbs: PlanThumbs): string | null {
   for (const item of bundle.items) {
     const post = item.post_id !== null ? thumbs.posts[item.post_id] : undefined;
     const concept = thumbs.concepts[item.id];
     const version = post ?? (concept?.kind === 'image' ? concept.versionId : undefined);
-    if (version !== undefined && !out.includes(version)) out.push(version);
-    if (out.length === CARD_COVERS) break;
+    if (version !== undefined) return version;
   }
-  return out;
+  return null;
 }
 
 /**
@@ -91,6 +100,10 @@ export function PlanTabList(props: {
   bundles: readonly PlanBundle[];
   thumbs: PlanThumbs;
   today: string;
+  /** The workspace zone the dates read on. */
+  timeZone: string;
+  /** The one list clock (useMinuteClock, PlanTabPage). */
+  now: Date;
   onOpen: (planId: string) => void;
   /** Load more while more plans remain; null when every plan is in. */
   more: PlanTabMore | null;
@@ -104,7 +117,7 @@ export function PlanTabList(props: {
   // Keyed on every read plan, not the shown ones: a chip pick switches instantly (no rise).
   const rise = useAppendedRise(props.bundles.map((b) => b.plan.id));
   return (
-    <div data-plan-tab-list="" className="flex flex-col gap-5 px-4 pb-8 pt-4">
+    <div data-plan-tab-list="" className={cn('flex flex-col gap-6 pb-8 pt-4', GUTTER)}>
       {sections.length === 0 ? (
         <div data-plan-tab-chip-zero="">
           <EmptyState icon={<IconPlan size={ICON_SIZE.tray} />} title={PLAN_WEEK_CHIP_ZERO} />
@@ -114,25 +127,29 @@ export function PlanTabList(props: {
         <section
           key={section.key}
           data-plan-tab-section={section.key}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-4"
         >
           {chip === 'all' ? (
-            <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+            <Text as="h2" role="section">
               {section.label}
-            </h2>
+            </Text>
           ) : null}
-          {section.bundles.map((bundle) => {
-            const id = bundle.plan.id;
-            return (
-              <div key={id} ref={rise(id)} className="flex flex-col">
-                <PlanTabCard
-                  bundle={bundle}
-                  covers={planCovers(bundle, props.thumbs)}
-                  onOpen={() => props.onOpen(id)}
-                />
-              </div>
-            );
-          })}
+          <div className={LIST_CARD_GRID}>
+            {section.bundles.map((bundle) => {
+              const id = bundle.plan.id;
+              return (
+                <div key={id} ref={rise(id)} className="flex min-w-0 flex-col">
+                  <PlanTabCard
+                    bundle={bundle}
+                    cover={planCover(bundle, props.thumbs)}
+                    timeZone={props.timeZone}
+                    now={props.now}
+                    onOpen={() => props.onOpen(id)}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </section>
       ))}
       {props.more !== null ? <PlanTabLoadMore more={props.more} /> : null}
@@ -140,85 +157,75 @@ export function PlanTabList(props: {
   );
 }
 
-/** One plan card of the list. */
+/**
+ * One plan on ui/ListCard: the first cover (else the plan icon), the title,
+ * the dates and post count (wrapping to the card's two lines), then when it
+ * starts and the one tag ("1 of 3 OK", or "Draft"). The whole card opens the
+ * plan; its page grows out of the card (rememberCard).
+ */
 export function PlanTabCard(props: {
   bundle: PlanBundle;
-  covers: readonly string[];
+  /** The first cover's asset version; null shows the plan icon. */
+  cover: string | null;
+  timeZone: string;
+  now: Date;
   onOpen: () => void;
 }): ReactElement {
-  const meta = planCardMeta(props.bundle);
+  const { bundle, cover } = props;
+  const plan = bundle.plan;
+  const meta = planCardMeta(bundle);
+  const rootRef = useRef<HTMLElement>(null);
   return (
-    <PressableRow
-      card
-      type="button"
-      data-plan-tab-card={props.bundle.plan.id}
-      onClick={(event) => {
+    <ListCard
+      rootRef={rootRef}
+      surface={{ 'data-plan-tab-card': plan.id }}
+      onPress={() => {
         // growFromCard: the plan's page grows out of this card.
-        rememberCard(props.bundle.plan.id, event.currentTarget);
+        rememberCard(plan.id, rootRef.current);
         props.onOpen();
       }}
-      className="lit-card flex flex-col gap-2 border bg-panel px-3.5 pb-3 pt-3 mv-tint"
-    >
-      <PlanCardTop plan={props.bundle.plan} wrapTitle />
-      {props.covers.length > 0 ? (
-        <span className="flex h-10 gap-1.5">
-          {props.covers.map((version) => (
-            <span
-              key={version}
-              data-plan-tab-cover=""
-              className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-panel-2 lit-media"
-            >
-              <Thumbnail
-                assetVersionId={version}
-                cache={sharedCardPresignCache()}
-                presignEnabled={PRESIGN_ENABLED}
-                fallback={{ kind: 'glyph' }}
-                alt=""
-              />
-            </span>
-          ))}
-        </span>
-      ) : null}
-      {meta.kind === 'shared' ? (
-        <>
-          <PlanCardBar
-            label="Approved"
-            value={meta.ok}
-            max={meta.total}
-            percent={meta.percent}
-            side="client"
-          />
-          <span data-plan-tab-progress="" className="truncate text-sm leading-4 text-fg-3">
-            {meta.label}
-          </span>
-        </>
-      ) : (
-        <span className="flex min-w-0 items-center gap-2">
-          <DraftTag />
-          <span data-plan-tab-progress="" className="truncate text-sm leading-4 text-fg-3">
-            {meta.label}
-          </span>
-        </span>
-      )}
-    </PressableRow>
-  );
-}
-
-/** The small Draft tag on a Draft plan (only the team sees it). */
-export function DraftTag(): ReactElement {
-  return (
-    <span data-plan-tab-draft="" className={cn(tagClass('warn'), 'shrink-0')}>
-      {PLAN_DRAFT_LABEL}
-    </span>
+      picture={
+        cover !== null
+          ? {
+              kind: 'image',
+              node: (
+                <Thumbnail
+                  assetVersionId={cover}
+                  cache={sharedCardPresignCache()}
+                  presignEnabled={PRESIGN_ENABLED}
+                  aspect="square"
+                  fallback={{ kind: 'glyph' }}
+                  fallbackTile={
+                    <span className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2">
+                      <IconPlan size={ICON_SIZE.picture} />
+                    </span>
+                  }
+                  alt=""
+                />
+              ),
+            }
+          : { kind: 'icon', icon: IconPlan }
+      }
+      pictureHooks={{ 'data-plan-tab-cover': cover !== null ? 'image' : 'icon' }}
+      title={plan.title}
+      preview={planCardPreview(bundle, props.timeZone, props.now)}
+      previewHooks={{ 'data-plan-tab-dates': '' }}
+      time={formatPlanStart(plan.starts_on, props.timeZone, props.now)}
+      timeHooks={{ 'data-plan-tab-start': '' }}
+      tag={meta.tag}
+      tagHooks={
+        meta.kind === 'draft' ? { 'data-plan-tab-draft': '' } : { 'data-plan-tab-progress': '' }
+      }
+    />
   );
 }
 
 /**
- * The phone Plan tab's loading boxes (sweepBoxes): a section label, then
- * plan-card-shaped Bones in PlanTabCard's own layout (eyebrow, title, mono
- * range, covers, the progress line). Only when nothing is held for the tab.
+ * The Plan tab's loading boxes (sweepBoxes): ListCard's own loading box in the
+ * list's grid, so nothing moves when the cards land. Only when nothing is held
+ * for the tab. `heading`: the group heading's bone, drawn only where the list
+ * will have one (the grouped All list).
  */
-/** `heading`: the group heading's bone, drawn only where the list will have one (All, search). */
 export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
   const heading = props.heading ?? true;
   return (
@@ -226,39 +233,19 @@ export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
       lit="flat"
       label="Loading plans"
       data-plan-tab-loading=""
-      className="flex flex-col gap-5 px-4 pb-8 pt-4"
+      className={cn('flex flex-col gap-6 pb-8 pt-4', GUTTER)}
     >
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-4">
         {heading ? (
           <div className="flex h-4 items-center">
             <Bone lit="flat" className="h-3 w-20 rounded" />
           </div>
         ) : null}
-        {[0, 1, 2].map((key) => (
-          <div
-            key={key}
-            data-plan-tab-box=""
-            className="lit-card flex flex-col gap-2 rounded-xl border bg-panel px-3.5 pb-3 pt-3"
-          >
-            <div className="flex h-4 items-center">
-              <Bone lit="flat" className="h-3 w-12 rounded" />
-            </div>
-            <div className="flex h-7 items-center">
-              <Bone lit="flat" className="h-5 w-2/3 rounded" />
-            </div>
-            <div className="flex h-5 items-center">
-              <Bone lit="flat" className="h-3.5 w-32 rounded" />
-            </div>
-            <div className="flex h-10 gap-1.5">
-              <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
-              <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
-              <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
-            </div>
-            <div className="flex h-4 items-center">
-              <Bone lit="flat" className="h-3 w-1/3 rounded" />
-            </div>
-          </div>
-        ))}
+        <div className={LIST_CARD_GRID}>
+          {[0, 1, 2].map((key) => (
+            <ListCardBox key={key} data-plan-tab-box="" />
+          ))}
+        </div>
       </section>
     </BoxSkeleton>
   );

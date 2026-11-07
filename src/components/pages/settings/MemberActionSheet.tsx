@@ -1,6 +1,6 @@
 // The member's role sheet, opened from the row's ⋯ (ui/ActionMenu: Change
 // role, Remove from workspace). Built on the existing Sheet primitive: the
-// member's avatar / name / email / role, then the role picker + Save (managers
+// member as one ui/Row (photo and name open the PersonCard; email; role tag), then the role picker + Save (managers
 // only, never on the owner's or the viewer's own row). Under it, for managers
 // on anyone but themselves, the Catch-up emails row: the same native tick box
 // as the person's own Settings row; it saves on tick and paints at once. The
@@ -14,6 +14,8 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Sheet } from '@/components/ui/Sheet';
+import { Row } from '@/components/ui/Row';
+import { Tag } from '@/components/ui/Tag';
 import { RolePicker, getInviteRoleOptions, isInviteRole } from './MembersInviteForm';
 import type { InviteRole, RoleChoice } from './MembersInviteForm';
 import { emailPatchAfterManagerSet, memberEmailState, roleLabel } from './members-data';
@@ -223,20 +225,36 @@ export function MemberActionSheet({
     <Sheet open={open} onClose={onClose} title="Member">
       {member !== null ? (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <Avatar
-              name={member.displayName}
-              {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-              role="profile"
-            />
-            <div className="min-w-0">
-              <div className="truncate text-base font-medium text-fg">{member.displayName}</div>
-              {member.email !== null ? (
-                <div className="truncate text-sm text-fg-3">{member.email}</div>
-              ) : null}
-              <div className="mt-1 text-sm text-fg-2">{roleLabel(member.role)}</div>
-            </div>
-          </div>
+          {/* The person as the Members row shows them (one person row, not a second
+              card): photo and name open the one PersonCard. */}
+          <Row
+            flush
+            leading={
+              <PersonTrigger
+                userId={member.userId}
+                name={member.displayName}
+                avatarUrl={member.avatarUrl}
+                display="block"
+              >
+                <Avatar
+                  name={member.displayName}
+                  {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
+                  role="header"
+                />
+              </PersonTrigger>
+            }
+            title={
+              <PersonTrigger
+                userId={member.userId}
+                name={member.displayName}
+                avatarUrl={member.avatarUrl}
+              >
+                {member.displayName}
+              </PersonTrigger>
+            }
+            {...(member.email !== null ? { secondary: member.email } : {})}
+            badge={<Tag label={roleLabel(member.role)} tone="neutral" />}
+          />
           {canChangeMemberRole(member, canManage) ? (
             // Keyed by member so a reopened sheet starts from that member's role.
             <RoleChange key={member.id} member={member} onChangeRole={onChangeRole} />

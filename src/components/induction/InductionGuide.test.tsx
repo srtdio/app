@@ -347,7 +347,7 @@ describe('the guide bar', () => {
     const d = await mount({ step: 'c_approved_chip' });
     const skip = q<HTMLButtonElement>('[data-induction-bar] [data-induction-skip]');
     expect(skip.textContent).toBe('Skip tour');
-    expect(skip.className).toContain('min-h-[44px]');
+    expect(skip.className).toContain('min-h-11');
     act(() => skip.click());
     expect(d.finish).toHaveBeenCalledWith('c_skipped');
     expect(d.setStep).not.toHaveBeenCalled();

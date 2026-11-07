@@ -52,7 +52,7 @@ describe('X7 FT41: failed older page', () => {
     expect(OLDER_LOAD_FAILED).toBe("Couldn't load earlier messages.");
     expect(out).toContain('load earlier messages.');
     expect(out).toContain('Retry');
-    expect(out).toContain('min-w-[44px]');
+    expect(out).toContain('min-w-11');
     expect(out).toContain('role="alert"');
   });
 

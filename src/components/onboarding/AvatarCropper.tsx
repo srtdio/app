@@ -328,7 +328,7 @@ function AvatarCropperImpl(
         </Button>
       ) : null}
 
-      <div className="w-full max-w-[260px]">
+      <div className="w-full max-w-64">
         <span className="mb-1 block text-sm font-medium text-fg-2">Zoom</span>
         <div className="flex items-center gap-2">
           <IconButton

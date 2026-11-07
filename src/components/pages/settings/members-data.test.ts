@@ -197,6 +197,7 @@ describe('roleLabel / memberRemoveErrorMessage / formatJoined', () => {
     expect(formatJoined('2025-01-15T12:00:00Z', new Date('2026-10-23T12:00:00Z'))).toBe(
       '15 Jan 2025',
     );
+    expect(formatJoined('2026-10-22T12:00:00Z', new Date('2026-10-23T12:00:00Z'))).toBe('22 Oct');
     expect(formatJoined(null)).toBeNull();
     expect(formatJoined('not-a-date')).toBeNull();
   });

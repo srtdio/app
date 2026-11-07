@@ -6,6 +6,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -87,6 +88,7 @@ import { sharePostToChannel } from '@/lib/chat/share-post';
 import { createInFlightGuard } from '@/lib/chat/thread-actions';
 import { cn } from '@/lib/cn';
 import { postFormatLabel } from '@/lib/post-format';
+import { Tag } from '@/components/ui/Tag';
 import {
   FORMATS_BY_PLATFORM,
   PostCreatePayloadSchema,
@@ -178,8 +180,9 @@ export function presetPrimaryLabel(input: {
   submitting: boolean;
   savedDraft: boolean;
 }): string {
-  if (input.preset.primary === 'save_draft') return input.submitting ? 'Saving…' : 'Save as draft';
-  if (input.submitting) return 'Sending…';
+  // Busy shows on the button (Button busy), never as a label swap: the label
+  // keeps its width while the save runs.
+  if (input.preset.primary === 'save_draft') return 'Save as draft';
   return input.savedDraft ? 'Send for review again' : 'Send for review';
 }
 
@@ -856,7 +859,7 @@ export function CreatePostSheet({
       label: bucket.name,
       renderLeft: (
         <span
-          className="inline-block h-2.5 w-2.5 rounded-full"
+          className="inline-block h-2 w-2 rounded-full"
           style={{ backgroundColor: bucket.colorHex }}
           aria-hidden="true"
         />
@@ -1262,7 +1265,7 @@ export function CreatePostSheet({
 
   function gridError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-sm text-bad">{fieldErrors[key]}</p>
+      <p className="mt-2 text-sm text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -1290,8 +1293,8 @@ export function CreatePostSheet({
           variant="primary"
           data-induction={INDUCTION_KEYS.postSheetPrimary}
           onClick={() => void handleSubmit()}
+          busy={submitting}
           disabled={!canSubmit}
-          aria-busy={false}
         >
           {preset !== undefined
             ? presetPrimaryLabel({ preset, submitting, savedDraft: savedDraftId !== null })
@@ -1308,12 +1311,11 @@ export function CreatePostSheet({
         className="shrink-0"
         data-submit="draft"
         onClick={() => void handleSubmit('draft')}
+        busy={submitMode === 'draft'}
         disabled={!canSubmit}
-        aria-busy={pendingUploads > 0}
+        aria-busy={submitMode === 'draft' || pendingUploads > 0}
       >
-        {submitMode === 'draft' ? (
-          'Saving…'
-        ) : pendingUploads > 0 ? (
+        {pendingUploads > 0 ? (
           <>
             <span
               aria-hidden="true"
@@ -1330,9 +1332,10 @@ export function CreatePostSheet({
         className="shrink-0"
         data-submit="review"
         onClick={() => void handleSubmit('review')}
+        busy={submitMode === 'review'}
         disabled={!canSubmit}
       >
-        {submitMode === 'review' ? 'Saving…' : SEND_FOR_REVIEW_LABEL}
+        {SEND_FOR_REVIEW_LABEL}
       </Button>
     </>
   );
@@ -1393,9 +1396,9 @@ export function CreatePostSheet({
               aria-label={previewChipLabel(preview.platform)}
               className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:gap-3"
             >
-              <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+              <Text as="h3" role="section">
                 {previewChipLabel(preview.platform)}
-              </h3>
+              </Text>
               <PreviewBody {...preview} />
             </aside>
           ) : null}
@@ -1447,7 +1450,7 @@ export function CreatePostSheet({
               <p
                 id="post-title-count"
                 data-title-count=""
-                className="mt-1.5 text-right text-sm tabular-nums text-fg-3"
+                className="mt-2 text-right text-sm tabular-nums text-fg-3"
               >
                 {captionCounterText(form.title.length, TITLE_MAX)}
               </p>
@@ -1510,7 +1513,7 @@ export function CreatePostSheet({
           {/* Below lg the preview opens from a chip after the caption; its row is
               reserved from the first paint so nothing jumps when the platform
               resolves. At lg the frame itself is the preview. */}
-          <div data-preview-chip-slot="" className="-my-2 flex min-h-[44px] items-center lg:hidden">
+          <div data-preview-chip-slot="" className="-my-2 flex min-h-11 items-center lg:hidden">
             {preview !== null ? (
               <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
             ) : null}
@@ -1579,10 +1582,10 @@ export function CreatePostSheet({
                           <Button
                             type="button"
                             variant="primary"
-                            disabled={newBucketBusy}
+                            busy={newBucketBusy}
                             onClick={() => void submitNewBucket()}
                           >
-                            {newBucketBusy ? 'Creating…' : 'Create'}
+                            Create
                           </Button>
                           <Button
                             type="button"
@@ -1706,13 +1709,12 @@ export function FormatRow({
 
   const name = platform !== null && format !== '' ? postFormatLabel(format, platform) : '';
   return (
-    <div data-format-row="" className="relative flex min-h-[44px] min-w-0 items-center gap-3">
+    <div data-format-row="" className="relative flex min-h-11 min-w-0 items-center gap-3">
       <span className="shrink-0 text-base font-medium text-fg">Format</span>
-      <span
-        data-format-pill=""
-        className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-sm font-medium text-fg lit-pill"
-      >
-        {name}
+      {/* Read-only: the format is changed with "Change format", so the pill
+          is ui/Tag (its neutral fill, the pill's own full ink kept). */}
+      <span data-format-pill="" className="flex shrink-0">
+        <Tag label={name} className="text-fg" />
       </span>
       <span data-format-source="" className="min-w-0 flex-1 truncate text-sm text-fg-3">
         {source !== null ? formatSourceLine(source) : ''}
@@ -1904,7 +1906,7 @@ function ShareToggle({
   onChange: (value: boolean) => void;
 }): ReactElement {
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-3 text-base">
+    <div className="flex min-h-11 items-center justify-between gap-3 text-base">
       <span className="[text-wrap:pretty]">{label}</span>
       <Switch checked={checked} onChange={onChange} label={label} />
     </div>

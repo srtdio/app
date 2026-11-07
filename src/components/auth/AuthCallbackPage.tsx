@@ -163,7 +163,7 @@ export function AuthCallbackPage() {
   const backToSignIn = (
     <Link
       to={withNext('/signin', next)}
-      className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline focus-visible:lit-focus"
+      className="inline-flex min-h-11 items-center justify-center text-accent hover:underline focus-visible:lit-focus"
     >
       Back to sign in
     </Link>
@@ -190,11 +190,11 @@ export function AuthCallbackPage() {
     <AuthShell title={copy.title} subtitle={copy.subtitle} footer={backToSignIn}>
       <Button
         variant="primary"
-        className="w-full"
+        className="w-full md:w-full"
         onClick={handleSignIn}
-        disabled={phase === 'signing'}
+        busy={phase === 'signing'}
       >
-        {phase === 'signing' ? 'Signing in' : copy.button}
+        {copy.button}
       </Button>
     </AuthShell>
   );

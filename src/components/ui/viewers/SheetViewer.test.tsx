@@ -135,7 +135,7 @@ describe('the grid', () => {
     const html = markup(book);
     expect(html).not.toContain('Secret');
     expect(html.match(/role="tab"/g)).toHaveLength(2);
-    expect(html).toContain('min-h-[44px] min-w-[44px]');
+    expect(html).toContain('min-h-11 min-w-11');
     expect(html).toMatch(/aria-selected="true"[^>]*data-sheet-tab="One"/);
   });
 

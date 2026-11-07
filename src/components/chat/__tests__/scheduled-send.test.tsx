@@ -98,7 +98,10 @@ describe('S2: phone hold and laptop chevron wiring', () => {
   });
 
   it('the chevron is laptop only, 44px, labelled', () => {
-    expect(composer).toContain("const showChevron = layout === 'laptop' && schedulable;");
+    // Laptop only; it stays (disabled) while scheduling so the send slot keeps its width.
+    expect(composer).toContain(
+      "const showChevron = layout === 'laptop' && (schedulable || scheduleBusy);",
+    );
     expect(composer).toContain('aria-label="Schedule options"');
     expect(composer).toContain('className="shrink-0 rounded-l-none"');
     expect(composer).toMatch(/shape="round"\s+aria-label="Schedule options"/);
@@ -125,7 +128,7 @@ describe('S3: the Schedule options', () => {
     expect(html).toContain('data-schedule-row="custom"');
     expect(html).toContain('Custom time');
     expect(html).toContain('font-mono');
-    expect(html).toContain('min-h-[56px]');
+    expect(html).toContain('min-h-14');
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('To Ops: hello');
     expect(html).toMatch(/9:00 AM/);
@@ -325,7 +328,7 @@ describe('UI-3 S2 / S3: upload first, all or nothing', () => {
   it('a chip dims and shows a thin progress bar while it uploads', () => {
     const thumb = composer.slice(composer.indexOf('function PendingThumb'));
     expect(thumb).toContain("uploading && 'opacity-50'");
-    expect(thumb).toContain('absolute inset-x-0 bottom-0 h-[3px]');
+    expect(thumb).toContain('absolute inset-x-0 bottom-0 h-1');
     expect(thumb).toContain('bg-accent');
   });
   it('a failed upload: the chip takes the failed state, the toast copy is fixed', () => {

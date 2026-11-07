@@ -272,7 +272,7 @@ describe('ChatInfoTabsView preview', () => {
     expect(row.type).toBe(Button);
     expect(row.props.variant).toBe('secondary');
     const className = String(row.props.className);
-    expect(className).not.toContain('min-h-[48px]');
+    expect(className).not.toContain('min-h-12');
     expect(className).not.toContain('rounded-md');
     expect(className).toContain('w-full');
     expect(row.props.children).toBe(SEE_ALL_LABEL);

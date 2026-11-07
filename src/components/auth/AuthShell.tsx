@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { PlanBackdrop } from '@/components/auth/PlanBackdrop';
 import { Wordmark } from '@/components/home/Wordmark';
+import { Text } from '@/components/ui/Text';
 
 /**
  * Centered auth card over a blurred Plan month (or, with backdrop off, the
@@ -32,27 +33,27 @@ export function AuthShell({
     <main
       className={
         backdrop
-          ? 'relative min-h-full w-full grid place-items-center overflow-hidden px-4 py-10 bg-bg'
-          : 'min-h-full w-full grid place-items-center px-4 py-10 bg-bg bg-[radial-gradient(circle_at_50%_-10%,var(--accent-soft),transparent_55%)]'
+          ? 'relative min-h-full w-full grid place-items-center overflow-hidden px-4 py-10 bg-bg md:px-6'
+          : 'min-h-full w-full grid place-items-center px-4 py-10 bg-bg md:px-6 bg-[radial-gradient(circle_at_50%_-10%,var(--accent-soft),transparent_55%)]'
       }
     >
       {backdrop ? <PlanBackdrop /> : null}
       <div
         data-auth-card=""
-        className={`relative z-10 flex w-full flex-col gap-6 rounded-2xl border bg-panel p-6 lit-raised md:p-10 ${wide ? 'max-w-3xl' : 'max-w-[440px]'}`}
+        className={`relative z-raised flex w-full flex-col gap-6 rounded-2xl border bg-panel p-6 lit-raised md:p-10 ${wide ? 'max-w-3xl' : 'max-w-md'}`}
       >
         <div className="flex flex-col items-center text-center">
           <Link
             to="/"
             aria-label="srtd home"
             data-auth-home-link=""
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-fg focus-visible:lit-focus [&_.mark]:h-[26px] [&_.mark]:w-auto md:[&_.mark]:h-[30px] [&_.mark-dot]:fill-accent"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-fg focus-visible:lit-focus [&_.mark]:h-6 [&_.mark]:w-auto md:[&_.mark]:h-8 [&_.mark-dot]:fill-accent"
           >
             <Wordmark />
           </Link>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight [text-wrap:balance]">
+          <Text as="h1" role="display" className="mt-4 [text-wrap:balance]">
             {title}
-          </h1>
+          </Text>
           <p className="mt-1 text-base text-fg-2 [text-wrap:balance]">{subtitle}</p>
         </div>
         {children}

@@ -7,28 +7,27 @@ import {
 } from '@/components/pages/BriefDetailPage';
 import type { BriefGalleryItem } from '@srtdio/briefs';
 
-// The Details "Raised" row: the day the brief was raised in the WORKSPACE zone,
-// in the app day format ("22 Sep", the year only outside now's year).
+// The Details "Raised" row: when the brief was raised, short (formatAgo).
+// Day-level cases sit at noon UTC so the civil gap is the same in any zone.
 describe('briefRaisedLabel', () => {
   const now = new Date('2026-10-23T12:00:00Z');
 
-  it('renders the raised day in the given zone, no year in the current year', () => {
-    expect(briefRaisedLabel('2026-09-22T12:00:00Z', 'Asia/Kolkata', now)).toBe('22 Sep');
+  it('reads short against now: just now, minutes, hours', () => {
+    expect(briefRaisedLabel('2026-10-23T11:59:40Z', now)).toBe('just now');
+    expect(briefRaisedLabel('2026-10-23T11:01:00Z', now)).toBe('59m');
+    expect(briefRaisedLabel('2026-10-23T04:57:00Z', now)).toBe('7h');
   });
 
-  it('reads day AND year from the same zoned reading', () => {
-    // 19:00Z on 31 Dec 2025 is already 1 Jan 2026 in Mumbai; London still reads
-    // the old year, so the year must come from the same zoned reading as the day.
-    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Asia/Kolkata', now)).toBe('1 Jan');
-    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Europe/London', now)).toBe('31 Dec 2025');
-  });
-
-  it('never throws on an unknown zone', () => {
-    expect(() => briefRaisedLabel('2025-12-31T19:00:00Z', 'Not/AZone', now)).not.toThrow();
+  it('then Yesterday, the weekday, the day, and the year off the current year', () => {
+    expect(briefRaisedLabel('2026-10-22T12:00:00Z', now)).toBe('Yesterday');
+    expect(briefRaisedLabel('2026-10-19T12:00:00Z', now)).toBe('Mon');
+    expect(briefRaisedLabel('2026-09-22T12:00:00Z', now)).toBe('22 Sep');
+    expect(briefRaisedLabel('2025-12-31T12:00:00Z', now)).toBe('31 Dec 2025');
+    expect(briefRaisedLabel('2024-10-01T12:00:00Z', now)).toBe('1 Oct 2024');
   });
 
   it('returns an unparseable created_at unchanged', () => {
-    expect(briefRaisedLabel('not-a-date', 'Asia/Kolkata', now)).toBe('not-a-date');
+    expect(briefRaisedLabel('not-a-date', now)).toBe('not-a-date');
   });
 });
 

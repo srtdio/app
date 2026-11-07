@@ -36,6 +36,7 @@ import { userProfileUpdate } from '@srtdio/rpc';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -675,12 +676,12 @@ export function ProfileSettingsPanel(): React.ReactElement {
     // Boxes in the panel's own shape (the 72px photo, then the fields), only
     // while nothing is held for the profile; a kept profile paints at once.
     return (
-      <BoxSkeleton lit="flat" label="Loading profile" className="max-w-[520px] flex flex-col gap-4">
-        <Bone lit="lit-avatar" className="h-[72px] w-[72px] rounded-full" />
+      <BoxSkeleton lit="flat" label="Loading profile" className="flex flex-col gap-4">
+        <Bone lit="lit-avatar" className="h-18 w-18 rounded-full" />
         {[0, 1].map((key) => (
           <div key={key}>
-            <div className="mb-1.5 flex h-5 items-center">
-              <Bone lit="flat" className="h-3.5 w-28 rounded" />
+            <div className="mb-2 flex h-5 items-center">
+              <Bone lit="flat" className="h-3 w-28 rounded" />
             </div>
             <Bone lit="lit-well" className="h-11 w-full rounded-lg" />
           </div>
@@ -691,7 +692,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
 
   if (mode === 'error' || profile === null) {
     return (
-      <div className="max-w-[520px] flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         <p className="text-base text-bad">{errorText('load your profile', null)}</p>
         <div>
           <Button onClick={refetch}>Retry</Button>
@@ -703,9 +704,9 @@ export function ProfileSettingsPanel(): React.ReactElement {
   const photoSrc = shownPhoto(profile.avatar_url, photoView);
 
   return (
-    <div className="max-w-[520px] flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col items-start gap-3">
-        <div className="relative h-[72px] w-[72px]">
+        <div className="relative h-18 w-18">
           <Avatar
             key={photoSrc ?? 'none'}
             role="profile"
@@ -764,7 +765,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
           }}
         />
         {nameError !== null ? (
-          <ErrorNote className="mt-1.5">
+          <ErrorNote className="mt-2">
             <span id="settings-display-name-error">{nameError}</span>
           </ErrorNote>
         ) : null}
@@ -942,12 +943,9 @@ export function AlertsBlock(props: { userId: string | null }): React.ReactElemen
   const activeHours = paused ? prefs.pausedHours : null;
   return (
     <section data-alerts-block="" aria-labelledby="settings-alerts-label">
-      <h3
-        id="settings-alerts-label"
-        className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
-      >
+      <Text as="h3" role="section" id="settings-alerts-label">
         Alerts on this device
-      </h3>
+      </Text>
       <div className="mt-2 flex flex-col">
         <AlertSwitchRow
           label="Sound"

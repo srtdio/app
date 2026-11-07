@@ -36,7 +36,9 @@ export function columnLabel(index: number): string {
   return out;
 }
 
-const fmt = (n: number): string => n.toLocaleString('en-US');
+// Counts ("1,234"): a number format, never a date one (dates live in src/lib/time.ts).
+const COUNT_FORMAT = new Intl.NumberFormat('en-US');
+const fmt = (n: number): string => COUNT_FORMAT.format(n);
 
 /** "Calendar · 31 rows". Pure. */
 export function sheetTitle(sheet: SheetView): string {
@@ -196,7 +198,7 @@ function SheetGrid(props: {
   for (let r = start; r < end; r++) {
     rows.push(
       <tr key={r} data-row={r + 1}>
-        <th scope="row" className={cn(HEAD, 'sticky left-0 z-10 h-7 font-mono tabular-nums')}>
+        <th scope="row" className={cn(HEAD, 'sticky left-0 z-raised h-7 font-mono tabular-nums')}>
           {r + 1}
         </th>
         {rowCells(sheet, index, r, start, end)}
@@ -227,9 +229,9 @@ function SheetGrid(props: {
         </colgroup>
         <thead>
           <tr>
-            <th aria-hidden="true" className={cn(HEAD, 'sticky left-0 top-0 z-30 h-7')} />
+            <th aria-hidden="true" className={cn(HEAD, 'sticky left-0 top-0 z-nav h-7')} />
             {sheet.colWidths.map((_, c) => (
-              <th key={c} scope="col" className={cn(HEAD, 'sticky top-0 z-20 h-7')}>
+              <th key={c} scope="col" className={cn(HEAD, 'sticky top-0 z-sticky h-7')}>
                 {columnLabel(c)}
               </th>
             ))}
@@ -277,7 +279,7 @@ export function SheetViewer(props: {
       {note !== null ? (
         <p
           data-sheet-cap=""
-          className="shrink-0 border-t border-border px-3 py-2 text-sm leading-snug text-fg-2"
+          className="shrink-0 border-t border-border px-3 py-2 text-sm text-fg-2"
         >
           {note}
         </p>
@@ -291,7 +293,7 @@ export function SheetViewer(props: {
           const selected = s === sheet;
           return (
             <button
-              key={i}
+              key={s.name}
               type="button"
               role="tab"
               aria-selected={selected}
@@ -299,7 +301,7 @@ export function SheetViewer(props: {
               data-sheet-tab={s.name}
               onClick={() => setActive(i)}
               className={cn(
-                'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
+                'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
                 'focus-visible:lit-focus',
                 selected
                   ? 'bg-accent font-medium text-accent-fg lit-pill'

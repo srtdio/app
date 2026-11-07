@@ -137,7 +137,10 @@ describe('PostSheetExtras', () => {
     over: Partial<PostSheetExtrasProps> = {},
   ): string {
     return renderToStaticMarkup(
-      <PostSheetExtras hint={agencyWaitingHint(side, post, 'UTC')} {...over} />,
+      <PostSheetExtras
+        hint={agencyWaitingHint(side, post, new Date('2026-09-23T12:00:00Z'))}
+        {...over}
+      />,
     );
   }
 
@@ -149,7 +152,7 @@ describe('PostSheetExtras', () => {
   });
 
   it("the agency's waiting line in review", () => {
-    expect(extras('agency', row())).toContain('Waiting on approvers since 20 Sep');
+    expect(extras('agency', row())).toContain('Waiting on approvers · Sun');
     expect(extras('agency', row({ stage: 'draft' }))).toBe('');
   });
 
@@ -312,7 +315,10 @@ describe('PostSheetDetails', () => {
       />,
     );
     expect(html).toContain('data-sheet-row="approved"');
-    expect(html).toContain('Asha · 1 Oct');
+    // The approval reads short on the shared minute clock (formatAgo).
+    expect(html).toMatch(
+      /Asha · (just now|\d+[mh]|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2} [A-Z][a-z]{2}( \d{4})?)/,
+    );
   });
 });
 
@@ -326,7 +332,10 @@ describe('no KEY-N codes in the sheet', () => {
   it('extras and decision labels render no KEY-N code', () => {
     const htmls = [
       renderToStaticMarkup(
-        <PostSheetExtras hint={agencyWaitingHint('agency', row(), 'UTC')} onTalkAbout={vi.fn()} />,
+        <PostSheetExtras
+          hint={agencyWaitingHint('agency', row(), new Date('2026-09-23T12:00:00Z'))}
+          onTalkAbout={vi.fn()}
+        />,
       ),
       ...STAGES.flatMap((stage) =>
         (['client', 'agency'] as const).flatMap((side) => {

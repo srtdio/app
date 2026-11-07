@@ -57,7 +57,8 @@ const FIELD_OWNS_TEXTAREA =
  * The one composer row (chat Composer, CommentComposer, SlotComposer,
  * PersonMessageInput). [leading 44] 8 [input] 8 [side 44]* 8 [send/mic 44].
  * Every state keeps the row: recording swaps the field's contents (dot,
- * "Recording", m:ss in meta) and the leading slot (the bin); sending puts the
+ * "Recording", m:ss in meta) and the leading slot (the bin), and holds the
+ * side slot's width (invisible); sending puts the
  * spinner in the send slot (the caller's Button busy); scheduling keeps the
  * round shape and reads "Scheduling…" in the field.
  */
@@ -122,7 +123,18 @@ export function ComposerFrame({
             input
           )}
         </div>
-        {recording ? null : side}
+        {/* The side buttons keep their slot in every state: while recording
+            they stay in place, invisible (never focused or tapped), so the
+            field never widens and the stop button never moves. */}
+        {side !== undefined && side !== null ? (
+          <span
+            data-composer-side=""
+            aria-hidden={recording ? true : undefined}
+            className={cn('flex shrink-0 items-end gap-2 empty:hidden', recording && 'invisible')}
+          >
+            {side}
+          </span>
+        ) : null}
         {send}
       </div>
     </div>

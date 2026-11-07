@@ -29,7 +29,7 @@ describe('AssetTabs', () => {
     }
     expect(html).not.toContain(`${slot}0</span>`);
     expect(html.match(/data-asset-tab-count=""/g)).toHaveLength(6);
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('min-h-11');
     // The shared Chip selected style on the selected tab.
     expect(html).toMatch(/aria-selected="true"[^>]*class="[^"]*bg-accent text-accent-fg lit-pill/);
     // Tokens only, no hex, no dark: literals: light and dark are the same markup.

@@ -60,8 +60,8 @@ describe('SlotComposer composer row', () => {
     expect(another?.className).toContain('h-11');
     expect(another?.className).toContain('rounded-lg');
     expect(another?.className).not.toContain('h-8');
-    expect(another?.className).toContain('min-h-[44px]');
-    expect(another?.className).toContain('min-w-[44px]');
+    expect(another?.className).toContain('min-h-11');
+    expect(another?.className).toContain('min-w-11');
     expect(button('Send')).toBeDefined();
   });
 

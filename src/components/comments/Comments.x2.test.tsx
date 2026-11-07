@@ -172,7 +172,9 @@ describe('caption quote inside the comment (item 3)', () => {
     expect(quote).toBeGreaterThan(-1);
     expect(quote).toBeLessThan(body);
     expect(SRC).toContain('data-comment-role=""');
-    expect(SRC).toContain('formatRelative(comment.created_at)');
+    expect(SRC).toContain('formatAgo(comment.created_at, new Date(nowMs))');
+    // The retired long formatter (split so the src/** guard scan stays clean).
+    expect(SRC).not.toContain('format' + 'When');
   });
 });
 
@@ -193,7 +195,9 @@ describe('section title, empty states and the top pill', () => {
 describe('action row and composer (items 3, 4)', () => {
   it('Resolve/Reopen, Reply and Copy are visible on every thread; the kebab holds only Edit / Delete', () => {
     expect(SRC).toContain('{opts.actions.canCopy ? copyControl(comment) : null}');
-    expect(SRC).toContain("{isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}");
+    // Busy shows on the button (Button busy); the label never swaps.
+    expect(SRC).toContain('busy={isResolving}');
+    expect(SRC).toContain("{isResolved ? 'Reopen' : 'Resolve'}");
     // Copy is icon-only: clipboard, a tick for 2000 ms after a copy, failure as a toast.
     expect(SRC).toContain('<IconCopy size={ICON_SIZE.nav} />');
     expect(SRC).toContain("toast?.show({ title: COPY_FAILED, tone: 'error' })");

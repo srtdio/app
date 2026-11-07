@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
@@ -62,7 +63,6 @@ export interface BucketWrites {
 }
 
 const CARD = 'lit-card flex flex-col gap-3 rounded-xl border bg-panel p-4';
-const LABEL = 'text-base font-medium text-fg';
 
 export function BankFilterSheet(props: {
   open: boolean;
@@ -91,7 +91,9 @@ export function BankFilterSheet(props: {
     >
       <div data-bank-filter-sheet="" className="flex flex-col gap-3 bg-bg p-4">
         <section className={CARD}>
-          <h3 className={LABEL}>Buckets</h3>
+          <Text as="h3" role="label" className="text-fg">
+            Buckets
+          </Text>
           <BucketChips
             buckets={props.buckets}
             picked={filter.bucketId}
@@ -101,7 +103,9 @@ export function BankFilterSheet(props: {
           />
         </section>
         <section className={CARD}>
-          <h3 className={LABEL}>Sort</h3>
+          <Text as="h3" role="label" className="text-fg">
+            Sort
+          </Text>
           <div role="radiogroup" aria-label="Sort" className="flex flex-col">
             {BANK_SORT_OPTIONS.map((o) => (
               <SortOption

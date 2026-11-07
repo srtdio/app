@@ -37,12 +37,12 @@ export const METRICS = {
   zValues: {
     distinct: true,
     what: 'distinct z-index values',
-    fix: 'Reuse an existing z value; the named stacking scale lands next (CLAUDE.md Stacking).',
+    fix: 'Use a named stacking token (z-raised, z-sticky, z-nav, z-dock, z-sheet, z-dialog, z-toast; tailwind.config.ts zIndex).',
   },
   zArbitrary: {
     distinct: false,
     what: 'arbitrary z-[N]',
-    fix: 'Never z-[N]; use the stacking scale (CLAUDE.md Stacking).',
+    fix: 'Never z-[N]; use a named stacking token (tailwind.config.ts zIndex).',
   },
   leading: {
     distinct: false,

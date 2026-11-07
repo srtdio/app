@@ -1,8 +1,8 @@
 // One task row of the shared list, and the priority chip with its menu.
 // Row: tick box (to do / done), title (tap to edit in place: Enter or blur
 // keeps, Esc cancels, empty keeps the old title), priority chip. Under the
-// title, only when there is something to say, a date line ("3 Nov" in the bad
-// tone when overdue, "7 Nov", "Due 31 Oct · done 30 Oct"). Every change is
+// title, only when there is something to say, a date line ("Overdue 2d" in
+// the bad tone, "Due Fri", "Due 31 Oct · done Mon"). Every change is
 // local to the page's draft until Save. A row may carry an accent dot (changed
 // by someone else since you looked, or your own unsaved change), its changed
 // chip ringed, and sub-lines: what it was ("was <s>old</s>", "priority was
@@ -153,7 +153,7 @@ export function PriorityChip(props: {
         disabled={props.disabled}
         onClick={() => setOpen((v) => !v)}
         onContextMenu={(e) => e.preventDefault()}
-        className={cn('flex min-w-[44px] shrink-0 items-center justify-center', NO_TOUCH_SELECT)}
+        className={cn('flex min-w-11 shrink-0 items-center justify-center', NO_TOUCH_SELECT)}
       >
         {chip}
       </PressableRow>
@@ -232,7 +232,7 @@ function PriorityMenu(props: {
       aria-label="Priority"
       data-task-menu=""
       style={{ top: pos.top, left: pos.left, width: MENU_W }}
-      className="fixed z-[60] rounded-xl border bg-panel p-1 lit-overlay"
+      className="fixed z-dialog rounded-xl border bg-panel p-1 lit-overlay"
     >
       {TASK_PRIORITIES.map((p) => (
         <PressableRow
@@ -244,7 +244,7 @@ function PriorityMenu(props: {
           data-task-menu-p={p}
           onClick={() => props.onPick(p)}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn('flex h-11 items-center gap-2 px-2.5 text-base text-fg', NO_TOUCH_SELECT)}
+          className={cn('flex h-11 items-center gap-2 px-3 text-base text-fg', NO_TOUCH_SELECT)}
         >
           <span className={cn('rounded-lg px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
@@ -261,7 +261,7 @@ function PriorityMenu(props: {
 /** The inline failure line: "Not saved · Retry" (44px Retry). */
 export function NotSaved(props: { onRetry: () => void; message?: string }): ReactElement {
   return (
-    <div data-task-not-saved="" className="flex items-center gap-1 pl-[52px] pr-3 text-md">
+    <div data-task-not-saved="" className="flex items-center gap-1 pl-13 pr-3 text-md">
       <span className="text-bad">{props.message ?? NOT_SAVED} ·</span>
       <Button
         type="button"
@@ -338,7 +338,7 @@ function TitleCell(props: {
             inputRef.current?.blur();
           }
         }}
-        className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input font-medium text-fg focus:outline-none md:text-base"
+        className="min-h-11 min-w-0 flex-1 bg-transparent text-input font-medium text-fg focus:outline-none md:text-base"
       />
     );
   }
@@ -356,7 +356,7 @@ function TitleCell(props: {
         e.preventDefault();
         onMenu();
       }}
-      className={cn('flex min-w-0 flex-1 flex-col items-start py-2.5', NO_TOUCH_SELECT)}
+      className={cn('flex min-w-0 flex-1 flex-col items-start py-3', NO_TOUCH_SELECT)}
     >
       <span
         className={cn('text-base font-medium', props.done ? 'text-fg-3 line-through' : 'text-fg')}
@@ -609,7 +609,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         {...swipe.handlers}
         onClickCapture={swipe.onClickCapture}
         // Vertical scroll stays the list's; a horizontal move is the swipe's.
-        className="relative flex min-h-[44px] touch-pan-y touch-pinch-zoom items-start gap-1 pl-1 pr-1"
+        className="relative flex min-h-11 touch-pan-y touch-pinch-zoom items-start gap-1 pl-1 pr-1"
       >
         <IconButton
           buttonRef={tickRef}
@@ -626,7 +626,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           <TaskGlyph status={props.done ? 'done' : 'todo'} />
         </IconButton>
         {props.queuedDelete ? (
-          <span className="min-h-[44px] min-w-0 flex-1 py-3 text-base font-medium text-fg-3 line-through">
+          <span className="min-h-11 min-w-0 flex-1 py-3 text-base font-medium text-fg-3 line-through">
             {props.title}
           </span>
         ) : (
@@ -682,7 +682,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       {props.marks.length > 0 ? (
         <p
           data-task-mark=""
-          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-[52px] pr-3 text-sm text-fg-3"
+          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-13 pr-3 text-sm text-fg-3"
         >
           {props.marks.map((m, k) => (
             <MarkLine key={k} mark={m} />
@@ -690,7 +690,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         </p>
       ) : null}
       {props.notice !== null ? (
-        <div data-task-conflict="" className="-mt-1 flex flex-col gap-1 pb-2 pl-[52px] pr-3">
+        <div data-task-conflict="" className="-mt-1 flex flex-col gap-1 pb-2 pl-13 pr-3">
           <p className="text-sm text-stage-review">{props.notice.text}</p>
           <div className="flex gap-2">
             <Button

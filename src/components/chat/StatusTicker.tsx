@@ -116,7 +116,8 @@ const ICON_TONE: Record<StatusTone, string> = {
 /** Room full mode keeps between the last item and the chevron (px). */
 const FULL_CHEVRON_GAP = 12;
 
-const BAR = 'relative z-10 flex h-9 w-full shrink-0 items-center border-b bg-panel px-4 lit-header';
+const BAR =
+  'relative z-raised flex h-9 w-full shrink-0 items-center border-b bg-panel px-4 lit-header';
 
 /**
  * One bar item; compact drops the word and the "+K" (a plan keeps its lead).
@@ -139,7 +140,7 @@ function TickerItem(props: {
     item.lead === null ? null : props.measure === true && compact && item.trim ? (
       <span data-status-title={item.id}>
         {titleWords(item.lead).map((word, i) => (
-          <span key={i} data-title-word="">
+          <span key={`part-${i}`} data-title-word="">
             {i > 0 ? ` ${word}` : word}
           </span>
         ))}
@@ -157,11 +158,7 @@ function TickerItem(props: {
       {lead}
       <span
         data-status-number=""
-        className={cn(
-          'shrink-0 font-mono font-medium tabular-nums',
-          compact && 'tracking-tighter',
-          NUMBER_TONE[item.tone],
-        )}
+        className={cn('shrink-0 font-mono font-medium tabular-nums', NUMBER_TONE[item.tone])}
       >
         {item.number}
       </span>
@@ -174,7 +171,7 @@ function TickerItem(props: {
     </>
   );
   const box = cn(
-    'flex items-center gap-1 whitespace-nowrap text-sm leading-4 text-fg-2',
+    'flex items-center gap-1 whitespace-nowrap text-sm text-fg-2',
     shrink ? 'min-w-0 shrink' : 'shrink-0',
   );
   if (props.measure === true) return <span className={cn(box, 'h-9')}>{parts}</span>;
@@ -322,7 +319,7 @@ export function StatusTickerBar(props: {
       <div
         data-loops-strip="empty"
         data-status-ticker="empty"
-        className={cn(BAR, 'gap-1 text-sm leading-4 text-fg-3', NO_CALLOUT)}
+        className={cn(BAR, 'gap-1 text-sm text-fg-3', NO_CALLOUT)}
       >
         <IconCheck size={ICON_SIZE.inline} className="shrink-0" />
         <span>{NOTHING_OPEN_LINE}</span>
@@ -382,7 +379,7 @@ export function StatusTickerBar(props: {
           ref={ellipsisRef}
           aria-hidden="true"
           data-status-measure="ellipsis"
-          className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre text-sm leading-4"
+          className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre text-sm"
         >
           {TITLE_ELLIPSIS}
         </span>
@@ -393,7 +390,7 @@ export function StatusTickerBar(props: {
         data-status-chevron=""
         aria-label={open ? 'Hide open items' : 'Show open items'}
         aria-expanded={open}
-        className="relative -my-1 flex h-11 w-4 shrink-0 items-center justify-center text-fg-3 before:absolute before:-inset-x-3.5 before:-inset-y-1 before:content-[''] focus-visible:lit-focus"
+        className="relative -my-1 flex h-11 w-4 shrink-0 items-center justify-center text-fg-3 before:absolute before:-inset-x-4 before:-inset-y-1 before:content-[''] focus-visible:lit-focus"
       >
         <span
           data-status-chevron-icon={open ? 'up' : 'down'}

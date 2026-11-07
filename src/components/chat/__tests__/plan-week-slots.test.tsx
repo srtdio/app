@@ -218,16 +218,18 @@ describe('post item header (W7, W8)', () => {
     expect(itemSlotSubtitle(c, at(c, 'p1'), 'unknown')).toBeNull();
   });
 
-  it('PlanPage renders the action after a flex-1 min-w-0 title column with truncation', () => {
+  it('PlanPage renders the one HeaderBar: actions (the ⋯ last) after the title column', () => {
     const src = read('PlanScreen.tsx');
-    // The one-line header (Item, Compose, Edit mode); the Plan view's two-line one comes first.
-    const header = src.slice(src.lastIndexOf('<header'), src.lastIndexOf('</header>'));
-    expect(header).toMatch(/className="flex min-w-0 flex-1 flex-col[^"]*"/);
-    expect(header).toContain('<h2 className="truncate');
-    expect(header.indexOf('{props.action}')).toBeGreaterThan(header.indexOf('</h2>'));
-    // 16px on both sides for every header (no pl-1 with a back button).
-    expect(header).toContain('border-b bg-panel pl-4 pr-4 lit-header');
-    expect(header).not.toContain("showBack ? 'pl-1'");
+    const page = src.slice(
+      src.indexOf('export function PlanPage'),
+      src.indexOf('export type ScreenRead'),
+    );
+    // No hand-built header: the part owns the edge, the title role and the trailing rule.
+    expect(page).not.toContain('<header');
+    expect(page).toContain('<HeaderBar');
+    const actions = page.slice(page.indexOf('const actions'), page.indexOf('return createPortal'));
+    expect(actions.indexOf('{props.action}')).toBeGreaterThan(actions.indexOf('{props.twoLine'));
+    expect(actions.indexOf('{closeButton}')).toBeGreaterThan(actions.indexOf('{props.action}'));
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain('action: (');
     expect(item).toContain('data-plan-more=""');
@@ -334,7 +336,7 @@ describe('week list layout (L1-L4)', () => {
     const weekday = html.match(/<span data-plan-day-weekday="" class="([^"]*)">([^<]*)<\/span>/);
     expect(weekday?.[2]).toBe('Thu');
     expect(weekday?.[1]).toContain('uppercase');
-    expect(weekday?.[1]).toContain('tracking-[0.06em]');
+    expect(weekday?.[1]).toContain('tracking-label');
     expect(weekday?.[1]).not.toContain('tracking-[.08em]');
     const number = html.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
     expect(number?.[2]).toBe('15');
@@ -415,10 +417,13 @@ describe('week list layout (L1-L4)', () => {
     expect(row).toMatch(/data-plan-line="plan"[\s\S]*?>PLAN<[\s\S]*?data-plan-control="pill"/);
     expect(row).toMatch(/data-plan-post-status="review"[\s\S]*?>Review</);
     expect(html).toMatch(
-      /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-md text-fg-3">Planned posts show up here\./,
+      /data-plan-day-empty="" class="flex min-h-11 items-center text-md text-fg-3">Planned posts show up here\./,
     );
-    // Day block: a lit card, 12px padding, rows 16px apart.
-    expect(html).toContain('mx-4 flex flex-col gap-4 rounded-xl border bg-panel p-3');
+    // Day block: the shared Card on the page edge, rows 16px apart.
+    expect(html).toMatch(
+      /data-plan-day="[^"]+"[^>]*class="[^"]*rounded-xl border bg-panel lit-card[^"]*mx-4/,
+    );
+    expect(html).toContain('<div class="flex flex-col gap-4">');
     expect(html).toContain('flex min-w-0 flex-1 flex-col gap-0.5');
     // A client sees no Add, no drag.
     expect(html).not.toContain('data-plan-add=');

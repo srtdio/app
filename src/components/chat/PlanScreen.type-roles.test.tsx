@@ -122,12 +122,14 @@ afterEach(async () => {
 });
 
 describe('Plan screen type roles', () => {
-  it('page title: 3xl, 600, tight tracking, never bold', async () => {
+  it('bar title: the HeaderBar title role (lg, 600), never 3xl or bold', async () => {
     await mount();
-    const title = byText('h2', 'Week of 12 Oct');
-    expect(classes(title)).toEqual(
-      expect.arrayContaining(['text-3xl', 'font-semibold', 'tracking-tight', 'text-fg']),
-    );
+    const title = [
+      ...document.querySelectorAll('[data-header-bar] h1, [data-plan-title-text]'),
+    ].find((el) => el.textContent === 'Week of 12 Oct');
+    if (title === undefined) throw new Error('no bar title');
+    expect(classes(title)).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']));
+    expect(classes(title)).not.toContain('text-3xl');
     expect(title.className).not.toContain('font-bold');
     expect(title.className).not.toContain('tracking-[-0.02em]');
     expect(title.className).not.toMatch(/leading-\[/);
@@ -143,7 +145,7 @@ describe('Plan screen type roles', () => {
         'text-sm',
         'font-semibold',
         'uppercase',
-        'tracking-[0.06em]',
+        'tracking-label',
         'text-fg-2',
       ]),
     );

@@ -2,47 +2,41 @@ import { useState } from 'react';
 import { stripFormat } from '@srtdio/comments';
 import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
-import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
-import { cn } from '@/lib/cn';
-import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
-import { PersonTrigger } from '@/components/ui/PersonTrigger';
-import { Button } from '@/components/ui/Button';
-import { tagClass } from '@/components/ui/Tag';
-import { FORMER_MEMBER, splitAllMentions } from '@/lib/chat/mentions';
-import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { type FormatGlyphToken } from '@/components/ui/format-icon';
-import { postFormatLabel } from '@/lib/post-format';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
+import { Avatar } from '@/components/ui/Avatar';
+import { ListCard, LIST_CARD_UNREAD_DOT, type ListCardPicture } from '@/components/ui/ListCard';
+import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
+import { ActionMenu, ActionMenuTrigger, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { splitAllMentions } from '@/lib/chat/mentions';
+import { Thumbnail } from '@/components/media';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   ICON_SIZE,
+  IconActivity,
   IconAlarmClock,
+  IconBan,
+  IconBriefs,
   IconCalendarClock,
-  IconChat,
-  IconClock,
+  IconEdit,
   IconFile,
-  IconLock,
   IconPlan,
+  IconRotateCcw,
   IconTaskSquare,
   IconTickSingle,
+  type IconProps,
 } from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import {
-  ACTOR_ROW_EVENTS,
+  BRIEFS_SCOPE,
   MENTION_EVENT_TYPE,
   PLAN_ITEM_ENTITY,
-  UNKNOWN_ACTOR,
+  WELCOME_BODY,
   activityLine,
-  actorRowLine,
   alertBody,
   alertTitle,
-  alertTopLine,
   cardBodyLine,
-  cardTitle,
-  deletedCount,
   deletedFilesBody,
-  fileKindLabel,
-  filesPhrase,
   groupOpenEntry,
   isSnoozed,
   isChatMention,
@@ -51,6 +45,8 @@ import {
   segmentSelfMentions,
   upcomingChat,
   upcomingTag,
+  updatesLabel,
+  welcomeTitle,
   type ActivityItem,
   type AlertInfo,
   type SnoozeKind,
@@ -59,20 +55,23 @@ import {
 import { ONLY_YOU_LABEL, alertDisplayTime } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 
 interface ActivityCardProps {
-  /** A digest group: one entry (solo) or several on the same entity (threaded). */
+  /** A digest group: one entry (solo) or several on the same entity (one card). */
   group: ActivityItem[];
+  /** The list's one clock (the shared minute clock); the time reads "5m" against it. */
   nowMs: number;
-  /** The page-owned presign cache, threaded into the thumbnail tile. */
+  /** The zone "Yesterday" and the weekday read on (formatAgo). Absent: the device zone. */
+  timeZone?: string | null | undefined;
+  /** The page-owned presign cache, threaded into the picture. */
   cache: PresignCache;
-  /** False when presigning is unconfigured: the tile shows the fallback. */
+  /** False when presigning is unconfigured: the picture shows the fallback. */
   presignEnabled: boolean;
   /** Open the thread: mark it read and navigate from `entry` (groupOpenEntry:
    *  the newest entry that links to a comment, else the lead). */
   onOpenGroup: (group: ActivityItem[], entry: ActivityItem) => void;
-  /** Open a single thread entry: mark it read and navigate from that entry. */
+  /** Open a single entry (kept for callers; the card opens the group). */
   onOpenEntry: (entry: ActivityItem) => void;
   onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
   onMarkRead: (item: ActivityItem) => void;
@@ -116,120 +115,6 @@ function mentionPreview(body: string, selfName: string | null, chat = false): Re
   );
 }
 
-type LeadTone = 'accent' | 'neutral';
-
-/**
- * The event types whose lead rail is accented. Every other event type (and any
- * unrecognised value) is neutral. Colour is a two-state signal, keyed on the event
- * type alone: it never reads the stored tier or the stage.
- */
-const ACCENT_EVENTS = new Set<string>([
-  'mention',
-  'checkpoints_added',
-  'post_ready',
-  'trial_warning',
-  'billing_failure',
-]);
-
-/** The tone of the lead rail: accent for the five, neutral otherwise. */
-function leadTone(item: ActivityItem): LeadTone {
-  return ACCENT_EVENTS.has(item.eventType) ? 'accent' : 'neutral';
-}
-
-/**
- * Map the DB post format to a glyph token (single_image folds into 'image'),
- * mirroring Pipeline's PostCard so the fallback tile speaks the same vocabulary.
- */
-function formatToken(format: string): FormatGlyphToken {
-  return format === 'single_image' ? 'image' : (format as FormatGlyphToken);
-}
-
-/**
- * The Thumbnail fallback for a lead. A post lead gets the format-aware premium
- * tile (the same kind Pipeline's PostCard builds: format glyph + caption body,
- * media layout for video/link), so an imageless post is never a flat colour
- * square. Every non-post lead uses the simplest glyph fallback.
- */
-function leadFallback(lead: ActivityItem): ThumbnailFallback {
-  if (lead.entityType === 'post' && lead.format !== null) {
-    const token = formatToken(lead.format);
-    const layout = token === 'video' || token === 'link' ? 'media' : 'text';
-    return {
-      kind: 'post',
-      glyph: token,
-      label: postFormatLabel(lead.format),
-      body: lead.caption ?? null,
-      layout,
-    };
-  }
-  return { kind: 'glyph' };
-}
-
-const SCOPE_TAG: Record<string, string> = {
-  posts: 'Posts',
-  briefs: 'Briefs',
-  people: 'People',
-  groups: 'Groups',
-  clients: 'Approvers',
-};
-
-/** The welcome row's top line. */
-const WELCOME_LABEL = 'Welcome';
-
-/** "1 point" / "N points". UI vocabulary: the DB stores these as checkpoints. */
-function pointsPhrase(n: number): string {
-  return `${n} ${n === 1 ? 'point' : 'points'}`;
-}
-
-/**
- * The short actor line for the top of a card. It carries NO entity name (the title
- * row already carries the entity): just who did what. `who` is the resolved actor
- * display name, or null when the group has no actor, in which case each event type
- * degrades to a name-free phrase. Unknown/other event types read as the bare actor
- * name, or fall back to the full activity line when there is no actor.
- */
-function actorLine(item: ActivityItem, who: string | null): string {
-  // A chat mention's title already reads "<who> mentioned you ...": the top line is the name.
-  if (isChatMention(item)) return who ?? 'New mention';
-  // A deleted post: "<who> deleted" over the post title (no body line).
-  if (item.eventType === 'post_deleted') return `${who ?? UNKNOWN_ACTOR} deleted`;
-  // Deleted files: "<who> deleted 3 files" over the first filename.
-  if (item.eventType === 'assets_deleted') {
-    return `${who ?? UNKNOWN_ACTOR} deleted ${filesPhrase(deletedCount(item))}`;
-  }
-  // Actor rows (approve, reject, park, review): the action rides the top line
-  // ("chitraaraj parked") over the post title, and no body line repeats the name.
-  if (ACTOR_ROW_EVENTS.has(item.eventType)) {
-    return actorRowLine({ ...item, actorName: who }, { title: false }) ?? who ?? UNKNOWN_ACTOR;
-  }
-  if (isWelcome(item)) return WELCOME_LABEL;
-  switch (item.eventType) {
-    case 'comment':
-      return who !== null ? `${who} commented` : 'New comment';
-    case 'mention':
-      return who !== null ? `${who} mentioned you` : 'New mention';
-    case 'comment_resolved':
-      return who !== null ? `${who} resolved a thread` : 'Thread resolved';
-    case 'checkpoints_added': {
-      const pts = item.pointsAdded;
-      if (pts === null) return who !== null ? `${who} sent points` : 'Points sent';
-      return who !== null ? `${who} sent ${pointsPhrase(pts)}` : `${pointsPhrase(pts)} sent`;
-    }
-    case 'checkpoint_asked':
-      return who !== null ? `${who} asked a question` : 'Question asked';
-    case 'checkpoint_reopened':
-      return who !== null ? `${who} reopened a point` : 'Point reopened';
-    case 'post_ready':
-      return who !== null ? `${who} sent for review` : 'Ready for review';
-    case 'plan_comment':
-      return who !== null ? `${who} commented` : 'New comment';
-    case 'plan_review':
-      return who ?? UNKNOWN_ACTOR;
-    default:
-      return who !== null ? who : activityLine(item);
-  }
-}
-
 /** The newest entry of a group, whatever the sort direction (ties keep the first). */
 function newestEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
   let newest: ActivityItem | undefined;
@@ -244,236 +129,244 @@ function newestEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
   return newest;
 }
 
-/**
- * An actor's photo or name wrapped in its person card trigger; the card's tap
- * stops there, the rest of the card keeps its own tap. No actor id: as is.
- */
-function asActor(
-  entry: Pick<ActivityItem, 'actorId' | 'actorName' | 'actorAvatarUrl'>,
-  node: ReactElement,
-  display: 'inline' | 'block',
-): ReactElement {
-  if (entry.actorId === null) return node;
-  return (
-    <PersonTrigger
-      userId={entry.actorId}
-      name={entry.actorName}
-      avatarUrl={entry.actorAvatarUrl}
-      {...(entry.actorName === FORMER_MEMBER ? { former: true } : {})}
-      display={display}
-    >
-      {node}
-    </PersonTrigger>
-  );
-}
-
-/** One expanded row's author: their photo and full name above the row's text. */
-function EntryAuthor({ entry }: { entry: ActivityItem }) {
-  if (entry.actorName === null) return null;
-  return (
-    <div data-activity-entry-author="" className="mb-0.5 flex items-center gap-1.5">
-      {asActor(
-        entry,
-        <Avatar
-          name={entry.actorName}
-          {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
-          role="inline"
-        />,
-        'block',
-      )}
-      <span className="truncate text-sm font-medium text-fg-3">
-        {asActor(entry, <>{entry.actorName}</>, 'inline')}
-      </span>
-    </div>
-  );
-}
-
-/** True when any entry in a group is unread: the whole card is highlighted. Pure. */
+/** True when any entry in a group is unread: the card shows the unread dot. Pure. */
 export function groupHasUnread(group: readonly ActivityItem[]): boolean {
   return group.some((entry) => entry.readAt === null);
 }
 
-/** The unread dot: one size (8px) on the card and on every expanded row. */
-export const UNREAD_DOT_CLASS = 'h-2 w-2 shrink-0 rounded-full bg-accent';
+/** The unread dot: one size (8px), ui/ListCard's. */
+export const UNREAD_DOT_CLASS = LIST_CARD_UNREAD_DOT;
 
-/** An alert card's icon tile: what kind of alert at a glance (a missed or failed one in bad). */
-function AlertIcon({ item, alert }: { item: ActivityItem; alert: AlertInfo }): ReactElement {
-  const bad = alert.kind === 'failed' || item.eventType === 'task_due';
-  const icon =
-    alert.kind === 'reminder' || item.eventType === 'task_due' ? (
-      <IconAlarmClock size={ICON_SIZE.status} />
-    ) : alert.kind === 'sent' ? (
-      <IconTickSingle size={ICON_SIZE.status} />
-    ) : alert.kind === 'failed' ? (
-      <IconCalendarClock size={ICON_SIZE.status} />
-    ) : alert.kind === 'plan' || alert.kind === 'bank' ? (
-      <IconPlan size={ICON_SIZE.status} />
-    ) : (
-      <IconTaskSquare size={ICON_SIZE.status} />
-    );
-  return (
-    <div
-      data-activity-alert-icon={alert.kind}
-      aria-hidden="true"
-      className={cn(
-        'flex aspect-square w-full items-center justify-center bg-panel-2',
-        bad ? 'text-bad' : 'text-fg-3',
-      )}
-    >
-      {icon}
-    </div>
-  );
-}
+/** The kind an Activity card names in its one tag. */
+export type ActivityKind = 'Mention' | 'Post' | 'Brief' | 'Plan' | 'Reminder';
 
-/** The square icon tile every iconic card shares: the panel-2 square, the icon in fg-3. */
-function IconTile({ kind, children }: { kind: string; children: ReactNode }): ReactElement {
-  return (
-    <div
-      data-activity-icon-tile={kind}
-      aria-hidden="true"
-      className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
-    >
-      {children}
-    </div>
-  );
+/**
+ * What one entry is, in one word: a reminder (or a missed due time), a
+ * mention (a comment's or a chat's), a plan (plan alerts, plan items, plan
+ * events), a brief, a post. A chat message, an invite, a file or the welcome
+ * row names none. Pure.
+ */
+export function activityKind(item: ActivityItem): ActivityKind | undefined {
+  const alert = item.alert ?? null;
+  if (isWelcome(item)) return undefined;
+  if (alert?.kind === 'reminder' || item.eventType === 'task_due') return 'Reminder';
+  if (item.eventType === MENTION_EVENT_TYPE || isChatMention(item)) return 'Mention';
+  if (
+    alert?.kind === 'plan' ||
+    alert?.kind === 'bank' ||
+    item.entityType === PLAN_ITEM_ENTITY ||
+    item.entityType === 'plan' ||
+    (item.planId !== null && item.planId !== undefined)
+  ) {
+    return 'Plan';
+  }
+  if (item.scope === BRIEFS_SCOPE || item.entityType === 'brief') return 'Brief';
+  if (item.entityType === 'post' || item.scope === 'posts') return 'Post';
+  return undefined;
 }
 
 /**
- * The post-style text tile: a small icon and an uppercase eyebrow at the top, the
- * body (a brief title, a filename) clamped to 3 lines at the bottom. Fills its box;
- * the caller supplies the square and the panel-3 background.
+ * The card's ONE grey tag on line 3: a scheduled send went to its sender
+ * alone ("Only you got this alert"); a digest group of several entries counts
+ * them ("3 updates"); else what the entry is (activityKind: Mention, Post,
+ * Brief, Plan, Reminder). None for the welcome row or a kindless entry. Pure.
  */
-function TextTile({
-  eyebrow,
-  icon,
-  body,
-}: {
-  eyebrow: string;
-  icon: ReactNode;
-  body: string;
-}): ReactElement {
-  return (
-    <div data-activity-text-tile={eyebrow} className="flex h-full w-full flex-col p-3">
-      <span className="flex items-center gap-1 text-fg-3">
-        {icon}
-        <span className="text-xs font-semibold uppercase tracking-[0.06em]">{eyebrow}</span>
-      </span>
-      <p className="mt-auto line-clamp-3 text-sm leading-snug text-fg-2 [overflow-wrap:anywhere]">
-        {body}
-      </p>
-    </div>
-  );
-}
-
-/** A brief card's tile: the text tile with the BRIEF eyebrow over the brief title. */
-function BriefTile({ title }: { title: string }): ReactElement {
-  return (
-    <div className="aspect-square w-full bg-panel-3">
-      <TextTile eyebrow="Brief" icon={<IconFile size={ICON_SIZE.inline} />} body={title} />
-    </div>
-  );
-}
-
-/** The welcome card's tile: the workspace's avatar colour with its initial in accent-fg ink (as ui/Avatar). */
-function WelcomeTile({ name }: { name: string }): ReactElement {
-  return (
-    <div
-      data-activity-welcome-tile=""
-      aria-hidden="true"
-      className={cn(
-        'flex aspect-square w-full items-center justify-center text-3xl font-semibold text-accent-fg',
-        avatarFillFor(name),
-      )}
-    >
-      {name.trim().charAt(0).toUpperCase()}
-    </div>
-  );
+export function activityCardTag(group: readonly ActivityItem[]): string | undefined {
+  const lead = group[0];
+  if (lead === undefined) return undefined;
+  const alert = lead.alert ?? null;
+  if (alert !== null && (alert.kind === 'sent' || alert.kind === 'failed')) return ONLY_YOU_LABEL;
+  if (group.length > 1) return updatesLabel(group.length);
+  return activityKind(lead);
 }
 
 /**
- * A deleted-files card's tile: the first file's thumbnail through the page's
- * presign cache, with a "+N" corner badge for the rest. A wiped file (the image
- * fails) or one without a version shows the text tile: its kind and its name.
+ * The card's title (line 1): who did what, the actor's name first ("Priya
+ * mentioned you", "Maya approved Watch launch"), named by the group's newest
+ * entry's actor (never an older row's). An alert reads in the bell's words;
+ * the welcome row names its workspace. Pure.
  */
-function DeletedFilesTile({
-  item,
-  cache,
-  presignEnabled,
-}: {
-  item: ActivityItem;
-  cache: PresignCache;
-  presignEnabled: boolean;
-}): ReactElement {
-  const file = item.deletedFiles?.[0];
-  const name = file?.filename ?? item.filenames?.[0] ?? filesPhrase(deletedCount(item));
-  const extra = deletedCount(item) - 1;
-  return (
-    <Thumbnail
-      assetVersionId={file?.assetVersionId ?? null}
-      cache={cache}
-      presignEnabled={presignEnabled}
-      aspect="square"
-      fallback={{ kind: 'glyph' }}
-      fallbackTile={
-        <TextTile
-          eyebrow={fileKindLabel({ filename: name, mimeType: file?.mimeType ?? null })}
-          icon={<IconFile size={ICON_SIZE.inline} />}
-          body={name}
+export function activityCardTitle(
+  group: readonly ActivityItem[],
+  side: ViewerSide = 'unknown',
+): string {
+  const lead = group[0];
+  if (lead === undefined) return '';
+  const alert = lead.alert ?? null;
+  if (alert !== null) return alertTitle(lead, alert, side);
+  if (isWelcome(lead)) return welcomeTitle(lead);
+  const actor = newestEntry(group) ?? lead;
+  const line = activityLine({
+    ...lead,
+    actorId: actor.actorId,
+    actorName: actor.actorName,
+    actorAvatarUrl: actor.actorAvatarUrl,
+  });
+  // A plan item row names its item (the old card's header) in place of "a plan item".
+  if (lead.entityType === PLAN_ITEM_ENTITY && lead.title !== null && lead.title !== '') {
+    return line.replace(PLAN_ITEM_PHRASE, lead.title);
+  }
+  return line;
+}
+
+/** How activityLine names a plan item when it does not name it. */
+const PLAN_ITEM_PHRASE = 'a plan item';
+
+/**
+ * The card's preview text (line 2) when it is plain text: the comment, the
+ * alert's second line, the files a delete also took, the welcome's line; else
+ * how many more updates the group holds ("+2 more"), else ''. A mention's
+ * preview is drawn (its @name accented) by the card. Pure.
+ */
+export function activityPreviewText(group: readonly ActivityItem[]): string {
+  const lead = group[0];
+  if (lead === undefined) return '';
+  const alert = lead.alert ?? null;
+  const more = group.length > 1 ? `+${group.length - 1} more` : '';
+  if (alert !== null) return alertBody(alert) ?? more;
+  if (isWelcome(lead)) return WELCOME_BODY;
+  if (lead.eventType === MENTION_EVENT_TYPE && lead.body !== null) return stripFormat(lead.body);
+  if (lead.eventType === 'assets_deleted') {
+    // The first file by name, then the others ("deck.pdf · Also hero.png and teaser.mov").
+    const first = lead.filenames?.[0];
+    const others = deletedFilesBody(lead);
+    if (first === undefined) return others ?? more;
+    return others !== null ? `${first} · ${others}` : first;
+  }
+  const hasBody =
+    lead.eventType === 'comment' ||
+    lead.eventType === 'checkpoints_added' ||
+    lead.eventType === 'plan_comment';
+  if (hasBody && lead.body !== null && lead.body.trim() !== '') {
+    return stripFormat(cardBodyLine(lead));
+  }
+  return more;
+}
+
+/** An alert's glyph: what kind of alert at a glance. */
+function alertIcon(item: ActivityItem, alert: AlertInfo): ComponentType<IconProps> {
+  if (alert.kind === 'reminder' || item.eventType === 'task_due') return IconAlarmClock;
+  if (alert.kind === 'sent') return IconTickSingle;
+  if (alert.kind === 'failed') return IconCalendarClock;
+  if (alert.kind === 'plan' || alert.kind === 'bank') return IconPlan;
+  return IconTaskSquare;
+}
+
+/** The event types that are about a person: the picture is their photo. */
+const PERSON_EVENTS: ReadonlySet<string> = new Set([MENTION_EVENT_TYPE, 'invite']);
+
+/**
+ * The picture (72): the thing the event is about (the post's picture, else
+ * its "Aa" / play placeholder; the brief, plan or alert icon; the first
+ * deleted file), or, for a mention or a person event, that person's photo.
+ */
+function activityPicture(
+  lead: ActivityItem,
+  actor: ActivityItem,
+  cache: PresignCache,
+  presignEnabled: boolean,
+  alt: string,
+): ListCardPicture {
+  const alert = lead.alert ?? null;
+  if (alert !== null) return { kind: 'icon', icon: alertIcon(lead, alert) };
+  if (isWelcome(lead) && lead.welcome != null) {
+    return {
+      kind: 'image',
+      node: <Avatar name={lead.welcome.workspaceName} role="profile" kind="group" decorative />,
+    };
+  }
+  if (PERSON_EVENTS.has(lead.eventType) && actor.actorName !== null) {
+    return { kind: 'person', name: actor.actorName, src: actor.actorAvatarUrl };
+  }
+  if (lead.entityType === 'post') {
+    const placeholder = postPlaceholderKind(lead.format);
+    if (lead.thumbnailAssetVersionId === null) return { kind: 'placeholder', placeholder };
+    return {
+      kind: 'image',
+      node: (
+        <Thumbnail
+          assetVersionId={lead.thumbnailAssetVersionId}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          aspect="square"
+          fallback={{ kind: 'glyph' }}
+          fallbackTile={<PostPlaceholder kind={placeholder} size={ICON_SIZE.picture} fill />}
+          alt={alt}
         />
-      }
-      alt={name}
-    >
-      {extra > 0 ? (
-        <span
-          data-activity-files-badge=""
-          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-lg bg-panel px-1.5 text-xs font-medium tabular-nums text-fg-2 lit-pill"
-        >
-          +{extra}
-        </span>
-      ) : null}
-    </Thumbnail>
-  );
+      ),
+    };
+  }
+  if (lead.entityType === 'brief' || lead.scope === BRIEFS_SCOPE) {
+    return { kind: 'icon', icon: IconBriefs };
+  }
+  if (lead.entityType === PLAN_ITEM_ENTITY || lead.entityType === 'plan') {
+    return { kind: 'icon', icon: IconPlan };
+  }
+  if (lead.eventType === 'assets_deleted') {
+    const file = lead.deletedFiles?.[0];
+    if (file === undefined || file.assetVersionId === null) return { kind: 'icon', icon: IconFile };
+    return {
+      kind: 'image',
+      node: (
+        <Thumbnail
+          assetVersionId={file.assetVersionId}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          aspect="square"
+          fallback={{ kind: 'glyph' }}
+          fallbackTile={
+            <span className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2">
+              <IconFile size={ICON_SIZE.picture} />
+            </span>
+          }
+          alt={file.filename}
+        />
+      ),
+    };
+  }
+  if (lead.eventType === 'asset_uploaded' || lead.eventType === 'asset_version_added') {
+    return { kind: 'icon', icon: IconFile };
+  }
+  if (actor.actorName !== null) {
+    return { kind: 'person', name: actor.actorName, src: actor.actorAvatarUrl };
+  }
+  return { kind: 'icon', icon: IconActivity };
+}
+
+/** A failed scheduled send's menu rows: Edit (opens its chat) and Retry. Pure. */
+export function failedSendItems(
+  lead: ActivityItem,
+  onEdit: ((item: ActivityItem) => void) | undefined,
+  onRetry: ((item: ActivityItem) => void) | undefined,
+): ActionMenuItem[] {
+  if (lead.alert?.kind !== 'failed') return [];
+  return [
+    ...(onEdit !== undefined
+      ? [{ id: 'edit', label: 'Edit', icon: IconEdit, onSelect: () => onEdit(lead) }]
+      : []),
+    ...(onRetry !== undefined
+      ? [{ id: 'retry', label: 'Retry', icon: IconRotateCcw, onSelect: () => onRetry(lead) }]
+      : []),
+  ];
 }
 
 /**
- * An alert card's title: a failed send's lead ("Couldn't send your scheduled
- * message to <receiver>.") and a missed due time in bad.
- */
-function AlertTitle({
-  item,
-  alert,
-  side,
-}: {
-  item: ActivityItem;
-  alert: AlertInfo;
-  side: ViewerSide;
-}): ReactElement {
-  const line = alertTitle(item, alert, side);
-  return alert.kind === 'failed' || item.eventType === 'task_due' ? (
-    <span className="text-bad">{line}</span>
-  ) : (
-    <>{line}</>
-  );
-}
-
-/**
- * One digest entry as a single contained card. The card is a flex row: a 3px lead
- * rail, then a column holding the content row (actor line, entity title, body)
- * beside a square media tile inset from the card edge, above a footer that carries
- * the meta (relative time, scope tag, snoozed chip). A threaded group (>1 entry)
- * adds a "+N more" toggle to the footer that expands the remaining events inside
- * the same card. The content row opens the thread (marking the lead read). The
- * footer's ⋯ opens the row menu (Mark as read, Snooze) for the whole card. A
- * chat, plan or task alert (lead.alert) reads in the bell's words beside its
- * own icon tile; a failed scheduled send adds Edit and Retry under its text.
+ * One digest group as one ui/ListCard: the picture (the thing, or the
+ * person), the who-did-what title with the unread dot, the comment or alert
+ * line as the preview, then the time (formatAgo on the list's clock), the
+ * one tag (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
+ * Reminder) and the ⋯ (Mark as read, Snooze; a failed
+ * send's Edit and Retry). A tap opens the group (the newest entry that links
+ * to a comment, else the lead). A threaded group is one card ("+N more" when
+ * it has no line of its own); its entries open from the page it lands on.
  */
 export function ActivityCard({
   group,
   nowMs,
+  timeZone,
   cache,
   presignEnabled,
   onOpenGroup,
-  onOpenEntry,
   onSnooze,
   onMarkRead,
   selfName,
@@ -482,328 +375,108 @@ export function ActivityCard({
   onEdit,
   entering = false,
 }: ActivityCardProps) {
-  const [expanded, setExpanded] = useState(false);
   // itemIn (docs/motion.md): a live-added card renders in place and rises
   // 8 px over its final state on its first frame. Y only, never a fade.
   // growFromCard: a tap remembers this card so the page grows out of it, and
   // Back grows the page back into it.
   const growKey = group[0]?.entityId ?? '';
-  const cardRef = useGrowBackIntoCard<HTMLDivElement>(growKey);
+  const cardRef = useGrowBackIntoCard<HTMLElement>(growKey);
   useMoveOnMount(cardRef, (el) => itemIn(el), entering);
   const rememberThisCard = (): void => {
     if (growKey !== '') rememberCard(growKey, cardRef.current);
   };
-  // Long-press on touch and right-click on laptop open the row's ⋯ menu.
+  // Long-press on touch and right-click on laptop open the card's ⋯ menu.
   const [menuOpen, setMenuOpen] = useState(false);
   const gesture = useMenuGesture(() => setMenuOpen(true));
 
   const lead = group[0];
   if (lead === undefined) return null;
-  const rest = group.slice(1);
   // The head opens the newest entry that links to a comment, else the lead.
   const openEntry = groupOpenEntry(group) ?? lead;
-  // A chat, plan or task alert reads in the bell's words, with its own icon.
   const alert = lead.alert ?? null;
-
   const unread = groupHasUnread(group);
   const snoozed = isSnoozed(lead, nowMs);
-  // An idea bank alert is a plan_item row too, but it reads as an alert (its
-  // line, no body), never as a plan comment card.
-  const planItem = lead.entityType === PLAN_ITEM_ENTITY && alert === null;
-  const hasEntity = lead.entityType === 'post' || lead.entityType === 'brief' || planItem;
-  // An assets_deleted card has no entity: a short title, and the who-did-what
-  // line in the body so it is never cut off.
-  const assetsDeleted = lead.eventType === 'assets_deleted';
-  // The welcome row: its title names the workspace, the body says what lands here.
-  const welcome = isWelcome(lead);
-  // An actor row (approve, park, deletes) says who did what on its top line: no
-  // body line repeats it. Deleted files list the other names instead.
-  const showsBody = (hasEntity || welcome) && !ACTOR_ROW_EVENTS.has(lead.eventType);
-  const filesBody = assetsDeleted ? deletedFilesBody(lead) : null;
-  const alertLine = alert !== null ? alertBody(alert) : null;
-  // An alert's title is its AlertTitle (the bell's line, partly in bad).
-  const title =
-    hasEntity || welcome
-      ? cardTitle(lead)
-      : assetsDeleted
-        ? (lead.filenames?.[0] ?? 'Files')
-        : activityLine(lead);
-  const leadTappable = !opensNothing(lead, side);
-  // A scheduled send's alert went to its sender alone: the footer says so in
-  // place of the scope tag, and its title (it names the receiver) may wrap.
-  const onlyYou = alert !== null && (alert.kind === 'sent' || alert.kind === 'failed');
-  const tag = onlyYou ? undefined : SCOPE_TAG[lead.scope];
-  // The header names the newest entry's actor (never an older row's).
-  const actorEntry = newestEntry(group) ?? lead;
-  const actorName = actorEntry.actorName;
-  const actorAvatarUrl = actorEntry.actorAvatarUrl;
-  const tone = leadTone(lead);
-
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      rememberThisCard();
-      onOpenGroup(group, openEntry);
-    }
-  }
+  const actor = newestEntry(group) ?? lead;
+  const title = activityCardTitle(group, side);
+  const previewText = activityPreviewText(group);
+  const preview: ReactNode =
+    lead.eventType === MENTION_EVENT_TYPE && lead.body !== null
+      ? mentionPreview(lead.body, selfName, isChatMention(lead))
+      : previewText;
+  const tappable = !opensNothing(lead, side);
+  const tag = activityCardTag(group);
+  // Line 3: how long ago, on the list's one clock ("just now", "3h", "Mon").
+  const time = formatAgo(
+    alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
+    new Date(nowMs),
+    timeZone ?? undefined,
+  );
+  const bad = alert?.kind === 'failed' || lead.eventType === 'task_due';
 
   return (
-    <div
-      ref={cardRef}
-      data-activity-event={lead.eventType}
-      data-activity-id={lead.id}
-      {...(entering ? { 'data-activity-entering': '' } : {})}
-      {...gesture.handlers}
-      onClickCapture={(event) => {
-        // The click that trails a long-press never also opens the row.
-        if (!gesture.consumeClickSuppression()) return;
-        event.preventDefault();
-        event.stopPropagation();
+    <ListCard
+      rootRef={cardRef}
+      surface={{
+        'data-activity-event': lead.eventType,
+        'data-activity-id': lead.id,
+        ...(entering ? { 'data-activity-entering': '' } : {}),
+        ...gesture.handlers,
+        onClickCapture: (event) => {
+          // The click that trails a long-press never also opens the card.
+          if (!gesture.consumeClickSuppression()) return;
+          event.preventDefault();
+          event.stopPropagation();
+        },
       }}
-      className={cn(
-        'flex overflow-hidden rounded-xl border bg-panel mv-tint',
-        unread ? 'lit-selected' : 'lit-card',
-      )}
-    >
-      <div
-        aria-hidden="true"
-        className={cn('w-[3px] shrink-0', tone === 'accent' ? 'bg-accent' : 'bg-border-strong')}
-      />
-
-      <div className="min-w-0 flex-1">
-        <div
-          {...(leadTappable
-            ? {
-                role: 'button',
-                tabIndex: 0,
-                onClick: () => {
-                  rememberThisCard();
-                  onOpenGroup(group, openEntry);
-                },
-                onKeyDown,
-              }
-            : {})}
-          data-activity-lead=""
-          className={cn(
-            'flex items-start gap-3 p-[14px]',
-            // Inside the overflow-hidden card: the inset focus line, the lit-hover overlay.
-            leadTappable && 'cursor-pointer mv-tint lit-hover focus-visible:lit-focus-inset',
-          )}
-        >
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex items-center gap-[7px]">
-              {actorName !== null
-                ? asActor(
-                    actorEntry,
-                    <Avatar
-                      name={actorName}
-                      {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-                      role="inline"
-                    />,
-                    'block',
-                  )
-                : null}
-              <span className="truncate text-sm font-medium text-fg-3">
-                {alert !== null ? alertTopLine(lead, alert) : actorLine(actorEntry, actorName)}
-              </span>
-              {unread ? (
-                // A plain label, not a live region: the dot is part of the
-                // card's name ("Unread"), never announced on its own.
-                <span className={cn('ml-auto', UNREAD_DOT_CLASS)} role="img" aria-label="Unread" />
-              ) : null}
-            </div>
-
-            <p
-              className={cn(
-                'text-base font-medium text-fg',
-                onlyYou ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'truncate',
-              )}
-            >
-              {alert !== null ? <AlertTitle item={lead} alert={alert} side={side} /> : title}
-            </p>
-
-            {alertLine !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
-                {alertLine}
-              </p>
-            ) : null}
-
-            {showsBody ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
-                {stripFormat(cardBodyLine(lead))}
-              </p>
-            ) : null}
-
-            {filesBody !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
-                {filesBody}
-              </p>
-            ) : null}
-
-            {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
-                {mentionPreview(lead.body, selfName, isChatMention(lead))}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg lit-media">
-            {alert !== null ? (
-              <AlertIcon item={lead} alert={alert} />
-            ) : planItem ? (
-              <div
-                data-activity-plan-icon=""
-                aria-hidden="true"
-                className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
-              >
-                <IconPlan size={ICON_SIZE.status} />
-              </div>
-            ) : isChatMention(lead) ? (
-              <IconTile kind="chat">
-                <IconChat size={ICON_SIZE.status} />
-              </IconTile>
-            ) : welcome && lead.welcome != null ? (
-              <WelcomeTile name={lead.welcome.workspaceName} />
-            ) : lead.entityType === 'brief' ? (
-              <BriefTile title={title} />
-            ) : assetsDeleted ? (
-              <DeletedFilesTile item={lead} cache={cache} presignEnabled={presignEnabled} />
-            ) : (
-              <Thumbnail
-                assetVersionId={lead.thumbnailAssetVersionId ?? null}
-                cache={cache}
-                presignEnabled={presignEnabled}
-                aspect="square"
-                fallback={leadFallback(lead)}
-                alt={title}
-                bodyLines={3}
-              />
-            )}
-          </div>
+      picture={activityPicture(lead, actor, cache, presignEnabled, title)}
+      {...(alert !== null
+        ? { pictureHooks: { 'data-activity-alert-icon': alert.kind } }
+        : lead.entityType === PLAN_ITEM_ENTITY
+          ? { pictureHooks: { 'data-activity-plan-icon': '' } }
+          : {})}
+      // A failed send's lead and a missed due time read in bad.
+      title={bad ? <span className="text-bad">{title}</span> : title}
+      unread={unread}
+      preview={preview}
+      previewHooks={{ 'data-activity-preview': '' }}
+      time={time}
+      timeHooks={{ 'data-activity-time': '' }}
+      tag={tag}
+      tagHooks={
+        tag === ONLY_YOU_LABEL
+          ? { 'data-activity-only-you': '' }
+          : group.length > 1
+            ? { 'data-activity-updates-tag': '' }
+            : { 'data-activity-scope-tag': '' }
+      }
+      menu={
+        <div data-activity-menu="" className="flex">
+          <ActivityRowMenu
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            snoozed={snoozed}
+            unread={unread}
+            extra={failedSendItems(lead, onEdit, onRetry)}
+            onSnooze={(kind) => {
+              for (const entry of group) onSnooze(entry, kind);
+            }}
+            onMarkRead={() => {
+              for (const entry of group) if (entry.readAt === null) onMarkRead(entry);
+            }}
+          />
         </div>
-
-        {alert?.kind === 'failed' && (onEdit !== undefined || onRetry !== undefined) ? (
-          <div data-activity-failed-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
-            {onEdit !== undefined ? (
-              <Button type="button" data-activity-action="edit" onClick={() => onEdit(lead)}>
-                Edit
-              </Button>
-            ) : null}
-            {onRetry !== undefined ? (
-              <Button
-                type="button"
-                variant="primary"
-                data-activity-action="retry"
-                onClick={() => onRetry(lead)}
-              >
-                Retry
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="h-px bg-border" />
-        <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
-          <span data-activity-time="" className="text-sm tabular-nums text-fg-3">
-            {formatRelative(
-              alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
-              new Date(nowMs),
-            )}
-          </span>
-          {tag !== undefined ? (
-            <span data-activity-scope-tag="" className={tagClass('neutral')}>
-              {tag}
-            </span>
-          ) : null}
-          {onlyYou ? (
-            <span data-activity-only-you="" className={cn(tagClass('neutral'), 'gap-1')}>
-              <IconLock size={ICON_SIZE.inline} inline />
-              {ONLY_YOU_LABEL}
-            </span>
-          ) : null}
-          {snoozed ? (
-            <span className={cn(tagClass('neutral'), 'gap-1')}>
-              <IconClock size={ICON_SIZE.inline} inline />
-              Snoozed
-            </span>
-          ) : null}
-          {rest.length > 0 ? (
-            <Button
-              variant="link"
-              type="button"
-              aria-expanded={expanded}
-              onClick={() => setExpanded((prev) => !prev)}
-              className="ml-auto"
-            >
-              {expanded ? 'Show less' : `+${rest.length} more`}
-            </Button>
-          ) : null}
-          <div data-activity-menu="" className={cn('-mr-2', rest.length === 0 && 'ml-auto')}>
-            <ActivityRowMenu
-              open={menuOpen}
-              onOpenChange={setMenuOpen}
-              snoozed={snoozed}
-              unread={unread}
-              onSnooze={(kind) => {
-                for (const entry of group) onSnooze(entry, kind);
-              }}
-              onMarkRead={() => {
-                for (const entry of group) if (entry.readAt === null) onMarkRead(entry);
-              }}
-            />
-          </div>
-        </div>
-        {rest.length > 0 && expanded ? (
-          <ul className="border-t border-border">
-            {rest.map((entry) => (
-              <li
-                key={entry.id}
-                {...(opensNothing(entry, side)
-                  ? {}
-                  : {
-                      role: 'button',
-                      tabIndex: 0,
-                      onClick: () => onOpenEntry(entry),
-                      onKeyDown: (event: KeyboardEvent<HTMLLIElement>) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          onOpenEntry(entry);
-                        }
-                      },
-                    })}
-                className={cn(
-                  'flex min-h-[44px] items-center gap-2 py-2 pl-[14px] pr-3',
-                  !opensNothing(entry, side) &&
-                    'cursor-pointer mv-tint lit-hover focus-visible:lit-focus-inset',
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <EntryAuthor entry={entry} />
-                  <p
-                    className={cn(
-                      'line-clamp-2 text-base',
-                      entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
-                    )}
-                  >
-                    {/* The author line above already names who: the text never repeats it. */}
-                    {cardBodyLine(entry, { name: entry.actorName === null })}
-                  </p>
-                  <p className="mt-0.5 text-sm text-fg-3">
-                    {formatRelative(
-                      alertDisplayTime(entry.eventType, entry.createdAt, entry.alert?.plan),
-                      new Date(nowMs),
-                    )}
-                  </p>
-                </div>
-                {entry.readAt === null ? (
-                  <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-    </div>
+      }
+      {...(tappable
+        ? {
+            onPress: () => {
+              rememberThisCard();
+              onOpenGroup(group, openEntry);
+            },
+            // Named by the card's own title, unread dot and preview (ListCard).
+            press: { 'data-activity-lead': '' },
+          }
+        : {})}
+    />
   );
 }
 
@@ -815,13 +488,31 @@ export function upcomingEditLabel(item: Pick<UpcomingItem, 'kind'>): string {
   return item.kind === 'reminder' ? CHANGE_TIME_LABEL : 'Edit';
 }
 
+/** An Upcoming card's menu rows: Edit (Change time on a reminder), then Cancel. Pure. */
+export function upcomingMenuItems(
+  item: UpcomingItem,
+  onEdit: (item: UpcomingItem) => void,
+  onCancel: (item: UpcomingItem) => void,
+): ActionMenuItem[] {
+  return [
+    { id: 'edit', label: upcomingEditLabel(item), icon: IconEdit, onSelect: () => onEdit(item) },
+    {
+      id: 'cancel',
+      label: 'Cancel',
+      icon: IconBan,
+      tone: 'danger',
+      onSelect: () => onCancel(item),
+    },
+  ];
+}
+
 /**
- * One Upcoming row, in the same card as every Notifications row: the neutral
- * rail, the tag (Reminder or Scheduled) as the top line, the chat as the
- * title, the message preview, the alarm clock or calendar clock tile, then
- * Edit (Change time on a reminder) and Cancel, and the due time in the footer.
- * Never unread: no dot, no accent border. A tap opens the chat at the
- * reminded message (a scheduled message opens its chat).
+ * One Upcoming row on ui/ListCard, like every Activity card: the alarm clock
+ * (a reminder) or calendar clock (a scheduled message) as the picture, the
+ * chat as the title, the message as the preview, the due time and the tag
+ * (Reminder or Scheduled); the ⋯ holds Edit (Change time on a reminder) and
+ * Cancel. Never unread. A tap opens the chat at the reminded message (a
+ * scheduled message opens its chat). Hook-free.
  */
 export function UpcomingCard({
   item,
@@ -836,77 +527,37 @@ export function UpcomingCard({
   onEdit: (item: UpcomingItem) => void;
   onCancel: (item: UpcomingItem) => void;
 }): ReactElement {
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onOpen(item);
-    }
-  }
+  const chat = upcomingChat(item);
   return (
-    <div
+    <ListCard
       data-upcoming-row={item.kind}
       data-upcoming-id={item.id}
-      className="lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint"
-    >
-      <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
-
-      <div className="min-w-0 flex-1">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => onOpen(item)}
-          onKeyDown={onKeyDown}
-          data-upcoming-open=""
-          className="flex cursor-pointer items-start gap-3 p-[14px] mv-tint lit-hover focus-visible:lit-focus-inset"
-        >
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex items-center gap-[7px]">
-              <span data-upcoming-tag="" className="truncate text-sm font-medium text-fg-3">
-                {upcomingTag(item)}
-              </span>
-            </div>
-            <p className="truncate text-base font-medium text-fg">{upcomingChat(item)}</p>
-            <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
-              {stripFormat(item.preview)}
-            </p>
-          </div>
-
-          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg lit-media">
-            <div
-              aria-hidden="true"
-              className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
-            >
-              {item.kind === 'reminder' ? (
-                <IconAlarmClock size={ICON_SIZE.status} />
-              ) : (
-                <IconCalendarClock size={ICON_SIZE.status} />
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div data-upcoming-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
-          <Button type="button" data-upcoming-action="edit" onClick={() => onEdit(item)}>
-            {upcomingEditLabel(item)}
-          </Button>
-          <Button
-            variant="secondary"
-            type="button"
-            data-upcoming-action="cancel"
-            className="text-bad hover:bg-bad-soft"
-            onClick={() => onCancel(item)}
-          >
-            Cancel
-          </Button>
-        </div>
-
-        <div className="h-px bg-border" />
-        <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
-          <span data-upcoming-due="" className="font-mono text-sm tabular-nums text-fg-3">
-            {formatSendLabel(new Date(item.dueAt), now)}
-          </span>
-        </div>
-      </div>
-    </div>
+      picture={{
+        kind: 'icon',
+        icon: item.kind === 'reminder' ? IconAlarmClock : IconCalendarClock,
+      }}
+      title={chat}
+      preview={stripFormat(item.preview)}
+      time={formatSendLabel(new Date(item.dueAt), now)}
+      timeHooks={{ 'data-upcoming-due': '' }}
+      tag={upcomingTag(item)}
+      tagHooks={{ 'data-upcoming-tag': '' }}
+      onPress={() => onOpen(item)}
+      press={{ 'aria-label': `Open ${chat}`, 'data-upcoming-open': '' }}
+      menu={
+        <ActionMenu
+          title={chat}
+          items={upcomingMenuItems(item, onEdit, onCancel)}
+          trigger={
+            <ActionMenuTrigger
+              type="button"
+              label={`Actions for ${chat}`}
+              data-upcoming-more=""
+              className="text-fg-3"
+            />
+          }
+        />
+      }
+    />
   );
 }

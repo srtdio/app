@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Input } from '@/components/ui/Input';
-import { Sheet } from '@/components/ui/Sheet';
+import { Sheet, SheetActions } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconLink } from '@/components/ui/icons';
 import { isValidLinkUrl, type LinkOutcome } from '@/lib/asset-upload';
 import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
@@ -91,15 +91,19 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
   }
 
   const footer = (
-    <span className="ml-auto flex gap-2.5">
-      <Button variant="ghost" onClick={onClose} disabled={submitting}>
-        Cancel
-      </Button>
-      <Button variant="primary" type="submit" form={formId} busy={submitting}>
-        {submitting ? null : <IconLink size={ICON_SIZE.inline} />}
-        Add link
-      </Button>
-    </span>
+    <SheetActions
+      cancel={
+        <Button variant="ghost" onClick={onClose} disabled={submitting}>
+          Cancel
+        </Button>
+      }
+      primary={
+        <Button variant="primary" type="submit" form={formId} busy={submitting}>
+          {submitting ? null : <IconLink size={ICON_SIZE.inline} />}
+          Add link
+        </Button>
+      }
+    />
   );
 
   return (
@@ -125,7 +129,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
           void submit();
         }}
       >
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label htmlFor={urlId} className="text-base font-medium text-fg-2">
             Link
           </label>
@@ -137,7 +141,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
             inputMode="url"
             spellCheck={false}
             autoCapitalize="none"
-            placeholder="https://..."
+            placeholder="https://…"
             value={url}
             autoFocus
             aria-invalid={showUrlError}
@@ -153,7 +157,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label htmlFor={nameId} className="text-base font-medium text-fg-2">
             Name
           </label>

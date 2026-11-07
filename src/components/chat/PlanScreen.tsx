@@ -85,6 +85,10 @@ import {
 import { postUpdate, type PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { HeaderBar } from '@/components/ui/HeaderBar';
+import { Card } from '@/components/ui/Card';
+import { SECTION_LABEL_INK, Text, TEXT_ROLE } from '@/components/ui/Text';
+import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
@@ -97,7 +101,6 @@ import {
   IconChat,
   IconCheck,
   IconChevronDown,
-  IconChevronLeft,
   IconChevronRight,
   IconEdit,
   IconBank,
@@ -306,7 +309,7 @@ import {
  * right on the first frame and a resize across 972px changes it with no
  * motion.
  */
-export const PLAN_PANEL_WIDTH = 'w-[360px] min-[972px]:w-[440px]';
+export const PLAN_PANEL_WIDTH = 'w-plan-narrow min-[972px]:w-plan-panel';
 
 /**
  * Anything other than a plan panel that owns an Escape pressed on the page
@@ -353,16 +356,13 @@ export function isTextField(target: EventTarget | null): boolean {
  * own layer (`onEscape`), a text field next (it is left), else Back. On the
  * page itself (focus on body) it closes the topmost panel only when no other
  * surface is open. Both: a scrolling body and an optional footer, rendered
- * into the body so no ancestor clips it; sheets (z-50) stack above it.
+ * into the body so no ancestor clips it; sheets (z-sheet) stack above it.
  */
 export function PlanPage(props: {
   open: boolean;
   title: string;
   subtitle?: string | undefined;
   backLabel: string;
-  backIcon?: ReactNode;
-  /** A text back button ("Cancel") instead of the icon, 44px tall. */
-  backText?: string;
   onBack: () => void;
   /** Laptop: keep the back button (the Item screen's Back to the list). */
   desktopBack?: boolean;
@@ -373,14 +373,11 @@ export function PlanPage(props: {
   /** Laptop: Escape for an inner layer (drag, pick-up, popover, menu, rename); true when taken. */
   onEscape?: () => boolean;
   footer?: ReactNode;
-  /** A header action (44px) after the title column, e.g. an overflow button. */
+  /** A header action (44px) after the title column, e.g. an overflow button (last, on the trailing rule). */
   action?: ReactNode;
   /** Replaces the title line (the agency's menu button, the inline rename). */
   titleSlot?: ReactNode;
-  /**
-   * The Plan screen's view header: line 1 the back button and a 28px title,
-   * line 2 the subtitle with these actions (Add, Edit) on the right.
-   */
+  /** The Plan screen's view actions (Add), before the ⋯ / X in the bar's actions. */
   twoLine?: { actions?: ReactNode };
   /** Drawn under the header, anchored to it (the header menu). */
   overlay?: ReactNode;
@@ -497,30 +494,8 @@ export function PlanPage(props: {
   useModalFocus(pageRef, !desktop && props.open && rendered);
   if (!rendered) return null;
   const showBack = !desktop || props.desktopBack === true;
-  const backButton = showBack ? (
-    props.backText !== undefined ? (
-      <Button
-        type="button"
-        variant="ghost"
-        aria-label={props.backLabel}
-        data-plan-back-text=""
-        onClick={props.onBack}
-        className="-ml-2 shrink-0 text-fg"
-      >
-        {props.backText}
-      </Button>
-    ) : (
-      <IconButton
-        type="button"
-        label={props.backLabel}
-        onClick={props.onBack}
-        className="-ml-[11px] shrink-0 text-fg"
-      >
-        {props.backIcon ?? <IconChevronLeft size={ICON_SIZE.control} />}
-      </IconButton>
-    )
-  ) : null;
-  // One exit per panel: the X shows only where there is no back "<".
+  // One exit per panel: the X shows only where there is no back "<". It is the
+  // bar's last action, so the bar's trailing rule puts its glyph on the edge.
   const closeButton =
     desktop && !showBack ? (
       <IconButton
@@ -528,11 +503,18 @@ export function PlanPage(props: {
         label={props.closeLabel ?? 'Close'}
         data-plan-close=""
         onClick={props.onDismiss ?? props.onBack}
-        className="-mr-3 shrink-0 text-fg"
       >
         <IconX size={ICON_SIZE.control} />
       </IconButton>
     ) : null;
+  const actions =
+    props.twoLine?.actions !== undefined || props.action !== undefined || closeButton !== null ? (
+      <>
+        {props.twoLine?.actions}
+        {props.action}
+        {closeButton}
+      </>
+    ) : undefined;
   return createPortal(
     <div
       ref={pageRef}
@@ -547,77 +529,32 @@ export function PlanPage(props: {
         desktop
           ? // Laptop: the box is final on its first frame and appears at once.
             cn(
-              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border',
+              'fixed inset-y-0 right-0 z-dock flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border',
               PLAN_PANEL_WIDTH,
             )
           : // Phone: the push's incoming edge is a 1px ring, no shadow.
-            'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border',
+            'fixed inset-0 z-dock flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border',
         'focus:outline-none',
       )}
     >
-      {props.twoLine !== undefined ? (
-        // Line 1 (48px): back, the 28px title (2 lines at most). Line 2 (44px,
-        // 2px below): the subtitle, then the actions on the 16px edge. Line 2
-        // is always drawn so the header never grows after the plan loads.
-        <header
-          data-plan-header-two-line=""
-          className="relative z-20 flex shrink-0 flex-col gap-[2px] border-b bg-panel px-4 lit-header"
-        >
-          <div data-plan-header-line="1" className="flex min-h-[48px] items-center gap-2">
-            {backButton}
-            <div
-              data-plan-page-titles=""
-              {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
-              className="flex min-w-0 flex-1 flex-col rounded-lg focus:outline-none"
-            >
-              {props.titleSlot ?? (
-                <h2 className={PLAN_HEADER_TITLE}>
-                  <Highlight text={props.title} />
-                </h2>
-              )}
-            </div>
-            {closeButton}
-          </div>
-          <div data-plan-header-line="2" className="flex min-h-[44px] items-center gap-2">
-            <span
-              {...(props.subtitle !== undefined ? { 'data-plan-page-subtitle': '' } : {})}
-              className="min-w-0 flex-1 truncate text-sm text-fg-3"
-            >
-              {props.subtitle}
-            </span>
-            {props.twoLine.actions}
-          </div>
-          {props.overlay}
-        </header>
-      ) : (
-        <header
-          className={cn(
-            // 16px on both sides: the back glyph and the last text action sit on the lines.
-            'relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b bg-panel pl-4 pr-4 lit-header',
-          )}
-        >
-          {backButton}
-          <div
-            data-plan-page-titles=""
-            {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
-            className="flex min-w-0 flex-1 flex-col rounded-lg focus:outline-none"
-          >
-            {props.titleSlot ?? (
-              <h2 className="truncate text-lg font-semibold text-fg">
-                <Highlight text={props.title} />
-              </h2>
-            )}
-            {props.subtitle !== undefined ? (
-              <span data-plan-page-subtitle="" className="truncate text-sm text-fg-3">
-                {props.subtitle}
-              </span>
-            ) : null}
-          </div>
-          {props.action}
-          {closeButton}
-          {props.overlay}
-        </header>
-      )}
+      {/* The one header bar: back "<" (leading pull), the title (title role)
+          with its subtitle line, the actions (Add, ⋯, the laptop X) last on
+          the trailing rule. */}
+      <HeaderBar
+        title={<Highlight text={props.title} />}
+        {...(showBack ? { onBack: props.onBack, backProps: { label: props.backLabel } } : {})}
+        {...(props.subtitle !== undefined
+          ? { subtitle: <span data-plan-page-subtitle="">{props.subtitle}</span> }
+          : {})}
+        {...(props.titleSlot !== undefined ? { titleSlot: props.titleSlot } : {})}
+        titleProps={{
+          'data-plan-page-titles': '',
+          ...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {}),
+        }}
+        {...(actions !== undefined ? { actions } : {})}
+        {...(props.overlay !== undefined ? { overlay: props.overlay } : {})}
+        compact
+      />
       <div
         ref={props.bodyRef}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-bg"
@@ -625,7 +562,7 @@ export function PlanPage(props: {
         {props.children}
       </div>
       {props.footer !== undefined ? (
-        <div className="shrink-0 border-t bg-panel px-4 pb-3 pt-2.5 lit-dock">{props.footer}</div>
+        <div className={cn('shrink-0 border-t bg-panel py-3 lit-dock', GUTTER)}>{props.footer}</div>
       ) : null}
     </div>,
     document.body,
@@ -787,7 +724,7 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
     <span
       data-plan-pill={props.pill.side}
       className={cn(
-        'inline-flex min-h-[24px] items-center rounded-lg px-2 text-md lit-pill',
+        'inline-flex min-h-6 items-center rounded-lg px-2 text-md lit-pill',
         PILL_TONES[props.pill.tone],
       )}
     >
@@ -840,9 +777,7 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
           data-plan-screen-progress={box.key}
           className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3 lit-card-muted"
         >
-          <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-            {box.label}
-          </span>
+          <span className={TEXT_ROLE.section}>{box.label}</span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
           <span className="block h-1 overflow-hidden rounded-full bg-panel-3 lit-well">
             <span
@@ -864,7 +799,7 @@ function ScreenSkeleton(): ReactElement {
       <Bone lit="lit-well" className="h-1.5 w-full rounded-full" />
       <Bone lit="lit-well" className="h-10 w-48 rounded-full" />
       {[0, 1, 2].map((i) => (
-        <Bone lit="lit-card" key={i} className="h-[104px] w-full rounded-xl" />
+        <Bone lit="lit-card" key={`bone-${i}`} className="h-24 w-full rounded-xl" />
       ))}
     </BoxSkeleton>
   );
@@ -2104,26 +2039,20 @@ export function PlanScreen(props: {
         onPress={onPrimary}
       />
     ) : undefined;
-  // Line 2's Add: the shared Button at 44 with IconPlus (B1: no hand-built
-  // 34px box), its right edge on the 16px line. No Edit: every change saves itself.
+  // The bar's Add: the shared Button at 44 with IconPlus (B1), before the X.
+  // No Edit: every change saves itself.
   const viewActions = (
-    <span data-plan-header-actions="" className="flex shrink-0 items-center gap-2">
-      <Button
-        type="button"
-        variant="secondary"
-        aria-label="Add to plan"
-        data-plan-add-header=""
-        onClick={openHeaderAdd}
-        className="shrink-0 px-0"
-      >
-        {/* The visible box spans the whole 44 button (its padding lives here),
-            so its right edge is the button's, on the 16px line. */}
-        <span data-plan-header-box="" className="inline-flex items-center gap-2 self-stretch px-4">
-          <IconPlus size={ICON_SIZE.inline} />
-          Add
-        </span>
-      </Button>
-    </span>
+    <Button
+      type="button"
+      variant="secondary"
+      aria-label="Add to plan"
+      data-plan-add-header=""
+      onClick={openHeaderAdd}
+      className="shrink-0"
+    >
+      <IconPlus size={ICON_SIZE.inline} />
+      Add
+    </Button>
   );
   return (
     <>
@@ -2436,11 +2365,10 @@ interface OutsidePost {
 /** The name an approver reads as when their name did not load. */
 export const MEMBER_NAME = 'Member';
 
-const PLAN_HEADER_TITLE = 'line-clamp-2 break-normal text-3xl font-semibold tracking-tight text-fg';
-
 /**
- * The agency's header title: a button with a chevron (18px, 6px gap) that
- * opens the header menu (Rename, Delete plan). At least 44px tall; 2 lines.
+ * The agency's header title: a button with a chevron (18px, 8px gap) that
+ * opens the header menu (Rename, Delete plan). The bar's title role on one
+ * line; its 44 box sits in the title line without growing the bar.
  */
 function PlanTitleButton(props: {
   title: string;
@@ -2457,11 +2385,14 @@ function PlanTitleButton(props: {
       onClick={props.onToggle}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        '-ml-1 flex min-w-0 max-w-full items-center gap-1.5 self-start px-1',
+        'flex min-w-0 max-w-full items-center gap-2 self-start',
+        CONTROL_IN_LINE,
         NO_TOUCH_SELECT,
       )}
     >
-      <h2 className={PLAN_HEADER_TITLE}>{props.title}</h2>
+      <Text role="title" data-plan-title-text="" className="min-w-0 truncate">
+        {props.title}
+      </Text>
       <span aria-hidden="true" className="shrink-0 text-fg-2">
         <IconChevronDown size={ICON_SIZE.nav} />
       </span>
@@ -2535,7 +2466,7 @@ export function PlanHeaderMenu(props: {
       data-plan-header-menu=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay',
+        'absolute left-12 top-full z-sticky mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay',
         NO_TOUCH_SELECT,
       )}
     >
@@ -2814,17 +2745,17 @@ export function PlanBody(props: {
   return (
     <>
       <PlanProgressRow bundle={bundle} side={side} />
-      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col gap-2.5 pb-4 pt-3">
+      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col gap-4 pb-4 pt-3">
         {props.groups.map((week, w) => (
           <section
             key={week.label ?? `days-${w}`}
             {...(week.label !== null ? { 'data-plan-week': week.label } : {})}
-            className="flex flex-col gap-2.5"
+            className="flex flex-col gap-4"
           >
             {week.label !== null ? (
               <h3
                 data-plan-week-header=""
-                className="sticky top-0 z-10 bg-bg px-4 py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+                className={cn(`sticky top-0 z-raised bg-bg py-2 ${TEXT_ROLE.section}`, GUTTER)}
               >
                 {week.label}
               </h3>
@@ -2841,72 +2772,73 @@ export function PlanBody(props: {
                 ) : (
                   <p
                     data-plan-day-empty=""
-                    className="flex min-h-[44px] items-center text-md text-fg-3"
+                    className="flex min-h-11 items-center text-md text-fg-3"
                   >
                     Planned posts show up here.
                   </p>
                 );
               return (
-                <div
+                <Card
                   key={day.day ?? 'none'}
                   data-plan-day={day.day ?? 'none'}
                   {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
                   {...(day.day === today ? { 'data-plan-day-today': '' } : {})}
-                  className={cn(
-                    // One card per day (12px in, 10px apart); today takes the selected edge.
-                    'mx-4 flex flex-col gap-4 rounded-xl border bg-panel p-3',
-                    day.day === today ? 'lit-selected' : 'lit-card',
-                  )}
+                  // One card per day on the page edge (16 in, 16 apart); today takes the selected edge.
+                  selected={day.day === today}
+                  className="mx-4 self-stretch md:mx-6"
                 >
-                  {items.map((item, index) => (
-                    <PlanRow
-                      key={item.id}
-                      bundle={bundle}
-                      item={item}
-                      side={side}
-                      thumb={item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null}
-                      conceptThumb={props.conceptThumbs?.[item.id] ?? null}
-                      pairThumb={
-                        item.linked_post_id != null
-                          ? (props.thumbs[item.linked_post_id] ?? null)
-                          : null
-                      }
-                      {...(props.onOpenLinkedPost !== undefined
-                        ? { onOpenLinkedPost: props.onOpenLinkedPost }
-                        : {})}
-                      commentCount={props.commentCounts?.[item.id] ?? 0}
-                      buckets={rowBucketNames(item, props.buckets)}
-                      tile={index === 0 ? tile : null}
-                      timeZone={props.timeZone}
-                      alsoIn={item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []}
-                      onOpen={() => props.onOpenItem(item.id)}
-                      onPlanOk={() => props.onPlanOk(item)}
-                      onPlanNotOk={() => props.onPlanNotOk(item)}
-                      {...(rowMenu !== undefined && (day.day === null || day.inRange)
-                        ? { menu: rowMenu }
-                        : {})}
-                    />
-                  ))}
-                  {empty ? (
-                    <div className="flex items-center">
-                      {tile}
-                      <div className="ml-3 min-w-0 flex-1">{emptyBody}</div>
-                    </div>
-                  ) : null}
-                  {dayTraces.length > 0 ? (
-                    <div className="flex items-start gap-3">
-                      <span aria-hidden="true" className="w-14 shrink-0" />
-                      <div className="flex min-w-0 flex-1 flex-col gap-2">
-                        {dayTraces.map((trace) => (
-                          <BankTraceLine key={trace.itemId} trace={trace} />
-                        ))}
+                  <div className="flex flex-col gap-4">
+                    {items.map((item, index) => (
+                      <PlanRow
+                        key={item.id}
+                        bundle={bundle}
+                        item={item}
+                        side={side}
+                        thumb={item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null}
+                        conceptThumb={props.conceptThumbs?.[item.id] ?? null}
+                        pairThumb={
+                          item.linked_post_id != null
+                            ? (props.thumbs[item.linked_post_id] ?? null)
+                            : null
+                        }
+                        {...(props.onOpenLinkedPost !== undefined
+                          ? { onOpenLinkedPost: props.onOpenLinkedPost }
+                          : {})}
+                        commentCount={props.commentCounts?.[item.id] ?? 0}
+                        buckets={rowBucketNames(item, props.buckets)}
+                        tile={index === 0 ? tile : null}
+                        timeZone={props.timeZone}
+                        alsoIn={item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []}
+                        onOpen={() => props.onOpenItem(item.id)}
+                        onPlanOk={() => props.onPlanOk(item)}
+                        onPlanNotOk={() => props.onPlanNotOk(item)}
+                        {...(rowMenu !== undefined && (day.day === null || day.inRange)
+                          ? { menu: rowMenu }
+                          : {})}
+                      />
+                    ))}
+                    {empty ? (
+                      <div className="flex items-center">
+                        {tile}
+                        <div className="ml-3 min-w-0 flex-1">{emptyBody}</div>
                       </div>
-                    </div>
-                  ) : null}
-                  {empty ? null : props.onAdd !== undefined && (day.day === null || day.inRange) ? (
-                    <AddRow day={day.day} empty={false} onAdd={props.onAdd} />
-                  ) : null}
-                </div>
+                    ) : null}
+                    {dayTraces.length > 0 ? (
+                      <div className="flex items-start gap-3">
+                        <span aria-hidden="true" className="w-14 shrink-0" />
+                        <div className="flex min-w-0 flex-1 flex-col gap-2">
+                          {dayTraces.map((trace) => (
+                            <BankTraceLine key={trace.itemId} trace={trace} />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {empty ? null : props.onAdd !== undefined &&
+                      (day.day === null || day.inRange) ? (
+                      <AddRow day={day.day} empty={false} onAdd={props.onAdd} />
+                    ) : null}
+                  </div>
+                </Card>
               );
             })}
           </section>
@@ -2931,10 +2863,7 @@ function AddRow(props: {
   return (
     <div
       data-plan-add-row=""
-      className={cn(
-        'flex min-h-[44px] items-center gap-2',
-        !props.empty && '-mb-3 -mt-2 pl-[68px]',
-      )}
+      className={cn('flex min-h-11 items-center gap-2', !props.empty && '-mb-3 -mt-2 pl-17')}
     >
       {props.empty ? (
         <p data-plan-day-empty="" className="flex-1 text-md text-fg-3">
@@ -2985,7 +2914,7 @@ export function DayColumn(props: {
       <span
         data-plan-day-weekday=""
         className={cn(
-          'flex h-[18px] shrink-0 items-center justify-center whitespace-nowrap text-xs font-semibold uppercase leading-3 tracking-[0.06em]',
+          `flex h-5 shrink-0 items-center justify-center whitespace-nowrap ${SECTION_LABEL_INK}`,
           isToday ? 'bg-accent text-accent-fg' : 'bg-panel-2 text-fg-2',
         )}
       >
@@ -2996,9 +2925,9 @@ export function DayColumn(props: {
         className={cn(
           'flex flex-1 items-center justify-center',
           props.day === null
-            ? 'whitespace-nowrap text-xs font-semibold text-fg-2'
+            ? 'shrink-0 whitespace-nowrap text-xs font-semibold text-fg-2'
             : cn(
-                'font-mono text-2xl font-medium leading-6 tabular-nums',
+                'font-mono text-2xl font-medium tabular-nums',
                 isToday ? 'text-accent-fg' : 'text-fg',
               ),
         )}
@@ -3022,7 +2951,7 @@ export function DayColumn(props: {
 }
 
 /** The PLAN / POST line label: 36px column, the section label (12/16, 600, uppercase). */
-const LINE_LABEL = 'w-9 shrink-0 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+const LINE_LABEL = `w-9 shrink-0 ${TEXT_ROLE.section}`;
 
 /**
  * The PLAN switch: "OK" and "Not OK" joined, each the shared 44px Button
@@ -3038,7 +2967,7 @@ export function PlanSwitch(props: {
   onOk: () => void;
   onNotOk: () => void;
 }): ReactElement {
-  const segment = 'min-w-[84px] border';
+  const segment = 'min-w-20 border';
   return (
     <span
       role="group"
@@ -3199,7 +3128,7 @@ function PlanStatusLines(props: {
   return (
     <div data-plan-row-lines="" className="mt-1 flex flex-col">
       {plan !== null ? (
-        <div data-plan-line="plan" className="flex min-h-[44px] items-center gap-3">
+        <div data-plan-line="plan" className="flex min-h-11 items-center gap-3">
           <span className={LINE_LABEL}>{PLAN_LINE_LABEL}</span>
           {plan}
         </div>
@@ -3220,7 +3149,7 @@ function PlanStatusLines(props: {
 function PostStatusLine(props: { post: { label: string; tone: PostLineTone } }): ReactElement {
   const { post } = props;
   return (
-    <div data-plan-line="post" className="flex min-h-[24px] items-center gap-3">
+    <div data-plan-line="post" className="flex min-h-6 items-center gap-3">
       <span className={LINE_LABEL}>{POST_LINE_LABEL}</span>
       <span
         data-plan-post-status={post.tone}
@@ -3270,17 +3199,14 @@ function PairedPostRow(props: {
     return (
       <div
         data-plan-pair={link.postId}
-        className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
+        className="mt-2 flex flex-col border-l border-border-strong pl-3"
       >
         <div
           role="button"
           aria-disabled="true"
           data-plan-pair-row="locked"
           onContextMenu={(event) => event.preventDefault()}
-          className={cn(
-            'flex min-h-[44px] min-w-0 cursor-default items-start gap-3',
-            NO_TOUCH_SELECT,
-          )}
+          className={cn('flex min-h-11 min-w-0 cursor-default items-start gap-3', NO_TOUCH_SELECT)}
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             {label}
@@ -3303,7 +3229,7 @@ function PairedPostRow(props: {
   return (
     <div
       data-plan-pair={link.postId}
-      className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
+      className="mt-2 flex flex-col border-l border-border-strong pl-3"
     >
       <PressableRow
         type="button"
@@ -3404,7 +3330,7 @@ function RowTile(props: {
     return (
       <span
         data-plan-row-tile="concept"
-        className="h-14 w-14 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
+        className="h-14 w-14 shrink-0 rounded-lg border border-dashed border-border-strong"
       />
     );
   }

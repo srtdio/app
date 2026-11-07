@@ -129,7 +129,7 @@ export function PlatformFrameUpload({
       maxHeight={maxHeight}
       empty
       bordered={false}
-      className="min-h-[44px] rounded-xl"
+      className="min-h-11 rounded-xl"
     >
       {/* The DropZone draws the dashed outline, so the frame drops its own. */}
       <DropZone

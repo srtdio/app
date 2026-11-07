@@ -97,7 +97,7 @@ describe('EmojiPicker parts', () => {
     const onQuery = vi.fn();
     const field = EmojiSearchField({ query: '', onQuery, layout: 'touch' });
     const input = all(field).find((e) => e.type === 'input');
-    expect(String(input?.props.className)).toContain('text-[17px]');
+    expect(String(input?.props.className)).toContain('text-xl');
     (input?.props.onChange as (e: { target: { value: string } }) => void)({
       target: { value: 'cat' },
     });
@@ -277,7 +277,7 @@ describe('R3: the picker chunk fails to load', () => {
     expect(line?.props.children).toBe(EMOJI_LOAD_FAILED);
     expect(EMOJI_LOAD_FAILED).toBe("Couldn't load emoji. Try again.");
     expect(html).toContain('>Retry<');
-    expect(html).toMatch(/h-11[^"]*min-w-\[44px\]|min-w-\[44px\][^"]*h-11/);
+    expect(html).toMatch(/h-11[^"]*min-w-11|min-w-11[^"]*h-11/);
     expect(html).not.toContain('chunk');
     const el = EmojiPickerLoadFailed({ onRetry });
     const retry = all(el).find((e) => e.props['data-emoji-retry'] !== undefined);

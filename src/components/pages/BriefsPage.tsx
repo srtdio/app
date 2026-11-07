@@ -69,10 +69,14 @@ import {
   type BriefGroup,
 } from '@/lib/brief-groups';
 import { cn } from '@/lib/cn';
+import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
+import { GUTTER } from '@/components/ui/layout';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { errorText } from '@/lib/error-copy';
+import { Text } from '@/components/ui/Text';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -168,6 +172,8 @@ interface BriefCardListDeps {
   hrefFor: (brief: BriefWithThumbnail) => string;
   /** The workspace zone each card's due date reads on. Absent: the device zone. */
   timeZone?: string;
+  /** The list's one clock (useMinuteClock) every card's time reads against. Default: now. */
+  now?: Date;
 }
 
 /**
@@ -185,6 +191,7 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
       presignEnabled={deps.presignEnabled}
       href={deps.hrefFor(brief)}
       timeZone={deps.timeZone}
+      now={deps.now}
     />
   ));
 }
@@ -243,8 +250,10 @@ export function deriveSortedBriefs(
   return sortBriefs(narrowed, sort);
 }
 
-const LIST_CLASS = 'px-4 md:px-6 py-4 flex flex-col gap-6';
-const GRID_CLASS = 'pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
+const LIST_CLASS = cn(GUTTER, 'py-4 flex flex-col gap-6');
+// ui/ListCard's page grid: one column on phone, auto-fill columns (at least 360)
+// on laptop, 12 between cards.
+const GRID_CLASS = cn('pt-3', LIST_CARD_GRID);
 
 /**
  * One search answer (2+ characters): the first page of matches (title or
@@ -275,7 +284,7 @@ export function briefsLoadMore(
 ): ReactElement[] {
   if (next.done) return [];
   return [
-    <div key="load-more" className="px-4 md:px-6 pb-6 flex justify-center">
+    <div key="load-more" className={cn(GUTTER, 'pb-6 flex justify-center')}>
       <Button
         variant="secondary"
         type="button"
@@ -292,8 +301,8 @@ export function briefsLoadMore(
 
 /**
  * The loading state: a static skeleton in the real list's shape (a section
- * header bar, a day label, then card-shaped blocks with the 64px tile, title,
- * objective and status pill lines), in the same container and grid, so nothing
+ * header bar, a day label, then ui/ListCardBox: the ListCard's frame, 72
+ * picture and three lines), in the same container and grid, so nothing
  * jumps when the cards arrive. Shared Bone boxes (a top-lit sweep, never a pulse).
  */
 export function BriefsListSkeleton(): ReactElement {
@@ -313,21 +322,7 @@ export function BriefsListSkeleton(): ReactElement {
         </div>
         <div className={GRID_CLASS}>
           {[0, 1, 2].map((key) => (
-            <div
-              key={key}
-              data-brief-card-skeleton=""
-              className="lit-card rounded-xl border bg-panel p-4 flex gap-3 min-w-0"
-            >
-              <Bone lit="lit-media" as="div" className="w-16 shrink-0 aspect-square rounded-lg" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-                <div className="flex items-start gap-3">
-                  <Bone lit="flat" as="div" className="h-4 flex-1 rounded" />
-                  <Bone lit="lit-badge" as="div" className="h-6 w-14 shrink-0 rounded-full" />
-                </div>
-                <Bone lit="flat" as="div" className="h-4 w-4/5 rounded" />
-                <Bone lit="flat" as="div" className="h-3 w-16 rounded" />
-              </div>
-            </div>
+            <ListCardBox key={key} data-brief-card-skeleton="" />
           ))}
         </div>
       </section>
@@ -365,19 +360,19 @@ interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
   groups: BriefGroup<BriefWithThumbnail>[];
   /** The workspace zone the day headings inside each section are read in. */
   timeZone: string;
-  /** The clock the day headings' year rule reads. Default: now. */
+  /** The clock the day headings' year rule and every card's time read. Default: now. */
   now?: Date;
 }
 
 // Sticky per-section header: pinned to the top of the scroll area (below the app
 // top bar) on a solid bg-bg, lit as a header (lit-header) so cards slide under
-// its shade. var(--bg) flips with the theme, so light/dark parity is automatic; z-20 sits
+// its shade. var(--bg) flips with the theme, so light/dark parity is automatic; z-sticky sits
 // above the card grid, matching SectionHeader's sticky choice. Positioning only:
 // no transforms, no transitions.
 // In page mode on a phone or a touch tablet the window scrolls, so it pins
 // below the sticky Topbar instead (SHELL_STICKY_TOP_CLASS; 0 in <main> and on laptop).
 const SECTION_HEADER_CLASS = cn(
-  'sticky z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
+  'sticky z-sticky -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
   SHELL_STICKY_TOP_CLASS,
   'bg-bg lit-header',
 );
@@ -401,16 +396,16 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
     <section key={group.key}>
       {/* No count here: counts live on the chips only. */}
       <div className={SECTION_HEADER_CLASS}>
-        <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <Text as="h3" role="section">
           {group.label}
-        </h3>
+        </Text>
       </div>
       {groupBriefsByDay(group.items, timeZone, now).flatMap((day) => [
         <div key={`${day.key}-label`} className={DAY_HEADING_CLASS}>
           {day.label}
         </div>,
         <div key={day.key} className={GRID_CLASS}>
-          {briefCardList({ ...cardDeps, timeZone, briefs: day.items })}
+          {briefCardList({ ...cardDeps, timeZone, now, briefs: day.items })}
         </div>,
       ])}
     </section>
@@ -846,6 +841,10 @@ export function BriefsPage() {
     [showSort, shownBriefs, filter, sort],
   );
 
+  // The list's one clock: every card's time ("Due today", "3h")
+  // reads the same instant and ages once a minute; no timer per card.
+  const nowMs = useMinuteClock();
+
   const shownCount = showSort
     ? sortedBriefs.length
     : groups.reduce((sum, group) => sum + group.items.length, 0);
@@ -910,7 +909,7 @@ export function BriefsPage() {
       })}
 
       {listFailed ? (
-        <div className="px-4 md:px-6 mt-4">
+        <div className={cn(GUTTER, 'mt-4')}>
           <LoadError
             title="briefs"
             onRetry={() => (searchActive ? briefSearch.refresh() : void loadBriefs())}
@@ -927,12 +926,26 @@ export function BriefsPage() {
       ) : showSort ? (
         <div ref={listRef} className={LIST_CLASS}>
           <div className={GRID_CLASS}>
-            {briefCardList({ briefs: sortedBriefs, cache, presignEnabled, hrefFor })}
+            {briefCardList({
+              briefs: sortedBriefs,
+              cache,
+              presignEnabled,
+              hrefFor,
+              timeZone,
+              now: new Date(nowMs),
+            })}
           </div>
         </div>
       ) : (
         <div ref={listRef} className={LIST_CLASS}>
-          {briefSections({ groups, timeZone, cache, presignEnabled, hrefFor })}
+          {briefSections({
+            groups,
+            timeZone,
+            now: new Date(nowMs),
+            cache,
+            presignEnabled,
+            hrefFor,
+          })}
         </div>
       )}
 

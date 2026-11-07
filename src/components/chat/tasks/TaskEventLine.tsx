@@ -41,7 +41,7 @@ export interface TaskLineContext {
 const OPEN_TASKS_LABEL = 'Open tasks';
 
 const PILL =
-  'rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-sm font-medium leading-4 text-fg-3 lit-pill';
+  'rounded-full border border-border bg-panel-2 px-3 py-0.5 text-sm font-medium text-fg-3 lit-pill';
 // The pill's tap target: a ghost Button (44 tall) around the visual pill.
 const PRESS = cn('max-w-full', NO_TOUCH_SELECT);
 
@@ -173,7 +173,7 @@ function TaskBatch(props: {
         >
           <span className="flex min-w-0 flex-1 flex-col gap-1">
             {rows.map((row, k) => (
-              <span key={k} data-task-batch-row={row.kind} className="block leading-5">
+              <span key={k} data-task-batch-row={row.kind} className="block">
                 <BatchRowView row={row} />
               </span>
             ))}

@@ -158,6 +158,8 @@ export const AREAS: Area[] = [
       'browser-bar-tint',
       'tablet-scroll',
       'pipeline-back-scroll',
+      // Phone paint marks + image bytes across the six list screens (S8).
+      'list-paint-marks',
       'plan-desktop',
       'post-open-media-cover',
       'workspace-platform',

@@ -53,10 +53,10 @@ describe('Reply privately bubble width', () => {
     it(`${layout}: album and voice keep their min widths beside the cap`, () => {
       const shape = { mine: true, head: true, tail: true, layout, failed: false };
       expect(tokens(bubbleClass({ ...shape, voiceOnly: false, album: true }))).toEqual(
-        expect.arrayContaining(['max-w-full', 'min-w-[240px]']),
+        expect.arrayContaining(['max-w-full', 'min-w-60']),
       );
       expect(tokens(bubbleClass({ ...shape, voiceOnly: true }))).toEqual(
-        expect.arrayContaining(['max-w-full', 'min-w-[220px]']),
+        expect.arrayContaining(['max-w-full', 'min-w-56']),
       );
     });
 

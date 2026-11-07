@@ -105,7 +105,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
       aria-modal="true"
       aria-label={props.name}
       data-photo-viewer={props.userId}
-      className="fixed inset-0 z-50 flex touch-none flex-col items-center justify-center bg-overlay"
+      className="fixed inset-0 z-sheet flex touch-none flex-col items-center justify-center bg-overlay"
       {...drag}
       // A tap anywhere but the photo and the X closes it.
       onClick={(event) => {
@@ -128,7 +128,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
       </IconButton>
       <div
         ref={contentRef}
-        className="flex flex-col items-center gap-[88px]"
+        className="flex flex-col items-center gap-24"
         onClick={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}

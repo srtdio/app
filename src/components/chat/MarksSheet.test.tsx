@@ -90,7 +90,7 @@ describe('MarkSheetRow (Open)', () => {
       // 44x44 minimum hit area: the shared Button (always h-11, no size prop).
       expect(actions[0]?.type).toBe(Button);
       expect(actions[0]?.props.size).toBeUndefined();
-      expect(String(actions[0]?.props.className)).toContain('min-w-[44px]');
+      expect(String(actions[0]?.props.className)).toContain('min-w-11');
       expect(text(el)).not.toContain('Resolve');
     }
   });
@@ -281,7 +281,9 @@ describe('Open tab posts section', () => {
       />,
     );
     expect(html).toContain('h-16');
-    expect(html).toMatch(/data-open-post-thumb=""[^>]*h-11 w-11[^>]*><svg/);
+    expect(html).toMatch(
+      /data-open-post-thumb=""[^>]*h-11 w-11[^>]*><span data-post-placeholder="text"/,
+    );
     expect(html).not.toMatch(/data-open-post-thumb=""[^>]*>GBL/);
     expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });

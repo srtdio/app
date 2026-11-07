@@ -222,7 +222,7 @@ describe('concept: files, order, links (U1, U2, U3, U9)', () => {
       'Open Detail',
     ]);
     expect(tiles.every((t) => t.tagName === 'BUTTON')).toBe(true);
-    expect(tiles.every((t) => t.className.includes('min-h-[44px]'))).toBe(true);
+    expect(tiles.every((t) => t.className.includes('min-h-11'))).toBe(true);
     expect(tiles.map((t) => t.querySelector('[data-plan-file-name]')?.textContent)).toEqual([
       'Hero shot',
       'Brief.pdf',

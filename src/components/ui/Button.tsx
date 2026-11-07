@@ -30,7 +30,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light
 // and dark match. cn() merges classes (tailwind-merge): a caller's class of the
-// same group replaces the base one (px-3 over px-4, min-w-0 over min-w-[44px]).
+// same group replaces the base one (px-3 over px-4, min-w-0 over min-w-11).
 // Callers never override a base property with the ! modifier (no-raw-button
 // test): pick another variant or primitive instead.
 // Press (motion move 5): MOVE_CLASS.press sinks to .97 while held, 120 ms, and
@@ -40,7 +40,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // Disabled never fades: filled buttons turn solid fg-3 with accent-fg text,
 // the rest take text-fg-3; no hover (pointer-events-none), default cursor.
 const BUTTON_BASE =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none disabled:pointer-events-none disabled:cursor-default focus-visible:lit-focus';
+  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 text-base font-medium select-none disabled:pointer-events-none disabled:cursor-default focus-visible:lit-focus';
 
 const FILLED_DISABLED = 'disabled:bg-fg-3 disabled:text-accent-fg';
 const QUIET_DISABLED = 'disabled:text-fg-3';

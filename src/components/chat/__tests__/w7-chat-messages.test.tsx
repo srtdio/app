@@ -157,7 +157,7 @@ describe('fix 3: a failed text message', () => {
     expect(html).toContain('Not sent');
     expect(html).toContain('data-failed-line-retry');
     expect(html).toContain('data-failed-delete');
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('min-h-11');
   });
 
   it('offers Delete in its menu, with no window hint, and the row leaves the thread', () => {

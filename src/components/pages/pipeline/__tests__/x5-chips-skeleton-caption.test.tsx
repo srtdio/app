@@ -1,6 +1,6 @@
-// X5 fix 7: stage chips fade at the scroll edge (FN12); a no-media card shows
-// its caption in fg-3 with no "Caption:" prefix (FN14, post flow C fix 5);
-// loading is card skeletons (N12).
+// X5 fix 7: stage chips fade at the scroll edge (FN12); a card shows its
+// caption in the secondary role (fg-2) with no "Caption:" prefix (FN14, post
+// flow C fix 5), on ListCard's line 2; loading is ListCardBox skeletons (N12).
 import { describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
 vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
@@ -27,40 +27,31 @@ describe('X5 chips fade, caption preview, skeletons', () => {
     expect(chipRowMask(true, true)).not.toMatch(/#[0-9a-f]{3,6}|rgb/i);
   });
 
-  it('a no-media card shows its caption in fg-3, with no "Caption" label', () => {
-    const out = renderToStaticMarkup(
-      <MemoryRouter>
-        <PostCard
-          post={x5Post({ format: 'text', caption: 'Diwali offer copy' })}
-          cache={cache}
-          presignEnabled={false}
-        />
-      </MemoryRouter>,
-    );
-    const caption = /<p[^>]*data-post-card-caption=""[^>]*>.*?<\/p>/.exec(out)?.[0] ?? '';
-    expect(caption).toContain('text-fg-3');
-    expect(caption).not.toContain('Caption');
-    expect(caption).toContain('Diwali offer copy');
+  it('a card shows its caption on line 2 in the secondary role (fg-2), with no "Caption" label', () => {
+    for (const thumbnailAssetVersionId of [null, 'av1']) {
+      const out = renderToStaticMarkup(
+        <MemoryRouter>
+          <PostCard
+            post={x5Post({ format: 'text', caption: 'Diwali offer copy', thumbnailAssetVersionId })}
+            cache={cache}
+            presignEnabled={false}
+          />
+        </MemoryRouter>,
+      );
+      const caption = /<span[^>]*data-post-card-caption=""[^>]*>.*?<\/span>/.exec(out)?.[0] ?? '';
+      expect(caption).toContain('data-list-card-preview=""');
+      expect(caption).toContain('text-fg-2');
+      expect(caption).not.toContain('Caption');
+      expect(caption).toContain('Diwali offer copy');
+    }
   });
 
-  it('a media card shows no caption preview line', () => {
-    const out = renderToStaticMarkup(
-      <MemoryRouter>
-        <PostCard
-          post={x5Post({ caption: 'Has media', thumbnailAssetVersionId: 'av1' })}
-          cache={cache}
-          presignEnabled={false}
-        />
-      </MemoryRouter>,
-    );
-    expect(out).not.toContain('data-post-card-caption');
-  });
-
-  it('loading renders card skeletons, not a bare "Loading posts" line', () => {
-    const out = renderToStaticMarkup(postsSkeleton(false));
+  it('loading renders ListCardBox skeletons in the list grid, not a bare "Loading posts" line', () => {
+    const out = renderToStaticMarkup(postsSkeleton());
     expect(out).toContain('data-posts-skeleton');
     expect(out).toContain('aria-busy="true"');
-    expect(out.match(/aspect-square/g)?.length ?? 0).toBeGreaterThan(1);
+    expect(out.match(/data-list-card-box=""/g)?.length ?? 0).toBeGreaterThan(1);
+    expect(out).toContain('md:grid-cols-list-cards');
     // The words stay for screen readers only.
     expect(out).toContain('<span class="sr-only">Loading posts</span>');
   });

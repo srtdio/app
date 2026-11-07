@@ -27,8 +27,8 @@ import { MOVE_CLASS, stepX } from '@/lib/motion';
 import { GUIDE_RIPPLE_REST_SCALE, guideNudge, handPress, handRipple } from '@/lib/motion/touches';
 import { CHROME_ATTR } from './guide-dom';
 
-/** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */
-const GUIDE_Z = 'z-[55]';
+/** Above page content and Sheet (z-sheet); below toasts (z-dialog/70) and the lightbox (z-viewer). */
+const GUIDE_Z = 'z-guide';
 
 /**
  * The guide tokens (src/index.css): amber fill and ink, the deep fill, the light
@@ -171,7 +171,7 @@ export const GuideLabel = forwardRef<
       ref={setRef}
       data-induction-label=""
       data-guide-nudge={nudge > 0 ? 'on' : 'off'}
-      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-base font-semibold leading-tight ${LABEL_EDGE} lit-float ${AMBER_BG} ${AMBER_INK}`}
+      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1 text-base font-semibold ${LABEL_EDGE} lit-float ${AMBER_BG} ${AMBER_INK}`}
       style={{ top: at.top, left: at.left }}
     >
       {text}
@@ -217,12 +217,13 @@ function dockStyle(dock: DockAt): { className: string; style: Record<string, num
     dock.side === 'top'
       ? { top: dock.insets.top + DOCK_GAP }
       : { bottom: dock.insets.bottom + DOCK_GAP };
-  if (dock.laptop) return { className: 'right-4 w-[340px]', style: vertical };
-  return { className: 'left-2 right-2', style: vertical };
+  // On the page edge (L2): 16 phone, 24 laptop.
+  if (dock.laptop) return { className: 'right-6 w-80', style: vertical };
+  return { className: 'left-4 right-4', style: vertical };
 }
 
 /** Layout added to every guide control (each is a <Button>: 44 tall, 8px radius, 14 / 500). */
-const GUIDE_ACTION = 'min-w-[44px] shrink-0';
+const GUIDE_ACTION = 'min-w-11 shrink-0';
 
 export const GuideBar = forwardRef<
   HTMLElement,
@@ -269,11 +270,11 @@ export const GuideBar = forwardRef<
           style={{ width: `${Math.round(progress * 1000) / 10}%` }}
         />
       </div>
-      <div className="flex items-center gap-2 px-3 py-1.5">
+      <div className="flex items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
           <PhaseRow copy={copy} />
           {copy.why !== '' ? (
-            <p className="text-base leading-snug text-fg [text-wrap:pretty]">{copy.why}</p>
+            <p className="text-base text-fg [text-wrap:pretty]">{copy.why}</p>
           ) : null}
         </div>
         <BarButtons copy={copy} actions={actions} />
@@ -288,13 +289,13 @@ function PhaseRow({ copy }: { copy: BarCopy }): ReactElement {
   }
   const { names, current } = copy.chapters;
   return (
-    <p className="flex items-center gap-1.5 text-sm text-fg-3">
+    <p className="flex items-center gap-1 text-sm text-fg-3">
       {names.map((name, i) => (
         <span
           key={name}
           aria-hidden="true"
           data-induction-chapter={i === current ? 'current' : i < current ? 'done' : 'upcoming'}
-          className={`h-1.5 w-1.5 rounded-full ${i === current ? AMBER_BG : i < current ? 'bg-good' : 'bg-border-strong'}`}
+          className={`h-2 w-2 rounded-full ${i === current ? AMBER_BG : i < current ? 'bg-good' : 'bg-border-strong'}`}
         />
       ))}
       <span className="font-semibold text-fg-2">{names[current] ?? ''}</span>
@@ -372,10 +373,13 @@ export function GuideCard({
   onPress,
   onSkip,
   dock,
+  busy = false,
 }: {
   kind: 'intro' | 'closing' | 'clear';
   copy: CardCopy;
   onPress: () => void;
+  /** The press is running (the clear card): Button busy, the label kept. */
+  busy?: boolean;
   /** Skip tour beside the button; undefined hides it. */
   onSkip?: (() => void) | undefined;
   dock: DockAt;
@@ -402,13 +406,13 @@ export function GuideCard({
     >
       {copy.eyebrow !== '' ? <p className="font-mono text-sm text-fg-3">{copy.eyebrow}</p> : null}
       <p className="mt-1 text-base font-medium [text-wrap:balance]">{copy.title}</p>
-      <p className="mt-1 text-base leading-snug text-fg-2 [text-wrap:pretty]">{copy.body}</p>
+      <p className="mt-1 text-base text-fg-2 [text-wrap:pretty]">{copy.body}</p>
       {copy.stats !== undefined && copy.stats.length > 0 ? (
         <div className="mt-3 flex gap-3">
           {copy.stats.map((stat) => (
             <div
               key={stat.label}
-              className="flex-1 rounded-xl border bg-panel-2 px-3 py-2.5 lit-card-muted"
+              className="flex-1 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
             >
               <p className="text-2xl font-semibold tabular-nums text-accent">{stat.value}</p>
               <p className="text-sm text-fg-2">{stat.label}</p>
@@ -417,11 +421,11 @@ export function GuideCard({
         </div>
       ) : null}
       {copy.pills.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-2">
           {copy.pills.map((pill) => (
             <span
               key={pill}
-              className="rounded-full bg-panel-2 px-2.5 py-1 text-sm font-semibold text-fg-2 lit-pill"
+              className="rounded-full bg-panel-2 px-3 py-1 text-sm font-semibold text-fg-2 lit-pill"
             >
               {pill}
             </span>
@@ -440,7 +444,7 @@ export function GuideCard({
             {copy.skip}
           </Button>
         ) : null}
-        <Button variant="primary" onClick={onPress}>
+        <Button variant="primary" busy={busy} onClick={onPress}>
           {copy.button}
         </Button>
       </div>

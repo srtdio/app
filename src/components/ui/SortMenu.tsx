@@ -36,7 +36,7 @@ export function sortOptionButtons<T extends string>(
         aria-checked={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
+          'flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
           selected ? 'lit-selected text-fg' : 'lit-hover text-fg-2',
         )}
       >
@@ -111,14 +111,14 @@ export function SortMenu<T extends string>({
           <>
             {open ? (
               <div
-                className="fixed inset-0 z-40"
+                className="fixed inset-0 z-dock"
                 aria-hidden="true"
                 onClick={() => setOpen(false)}
               />
             ) : null}
             <div
               ref={panelRef}
-              className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border bg-panel p-1.5 lit-overlay"
+              className="absolute right-0 top-full z-sheet mt-2 w-44 rounded-xl border bg-panel p-1 lit-overlay"
             >
               {list}
             </div>

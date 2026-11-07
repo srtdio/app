@@ -211,7 +211,18 @@ describe('X6 bulk delete keeps the files in use', () => {
     assetDeleteMany.mockResolvedValue({ ok: true, data: null });
     await mount();
 
-    for (const name of ['one.png', 'two.png', 'three.png']) {
+    // Selecting starts from the first card's ⋮ Select row (ui/ListCard has no corner box);
+    // in select mode each card toggles.
+    await act(async () =>
+      document.querySelector<HTMLElement>('[aria-label="More actions for one.png"]')?.click(),
+    );
+    await flush();
+    await act(async () =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((row) => row.textContent?.trim() === 'Select')
+        ?.click(),
+    );
+    for (const name of ['two.png', 'three.png']) {
       await act(async () =>
         document.querySelector<HTMLElement>(`[aria-label="Select ${name}"]`)?.click(),
       );
@@ -291,8 +302,15 @@ describe('Assets has no folders', () => {
     });
     await mount();
 
+    // Selecting starts from the card's ⋮ Select row (ui/ListCard has no corner box).
     await act(async () =>
-      document.querySelector<HTMLElement>('[aria-label="Select one.png"]')?.click(),
+      document.querySelector<HTMLElement>('[aria-label="More actions for one.png"]')?.click(),
+    );
+    await flush();
+    await act(async () =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((row) => row.textContent?.trim() === 'Select')
+        ?.click(),
     );
 
     expect(button('Delete')).toBeDefined();
@@ -339,7 +357,7 @@ describe('Assets Load more (keyset pages)', () => {
     expect(control).not.toBeNull();
     expect(control?.textContent?.trim()).toBe('Load more');
     // The shared Button: 44px touch target, token classes only.
-    expect(control?.className).toContain('min-h-[44px]');
+    expect(control?.className).toContain('min-h-11');
     expect(control?.className).not.toContain('dark:');
 
     await act(async () => control?.click());

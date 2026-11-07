@@ -153,7 +153,7 @@ describe('AssetLightbox opens files in the FileViewer', () => {
       `<button[^>]*class="([^"]*)"[^>]*>(?:<svg.*?</svg>)?${label}</button>`,
     ).exec(card);
     if (button === null) throw new Error(`no ${label} button`);
-    expect(button[1]).toContain('min-h-[44px]');
+    expect(button[1]).toContain('min-h-11');
     expect(button[1]).toContain('h-11');
     expect(button[1]).toContain('rounded-lg');
     expect(button[1]).not.toContain('rounded-md');

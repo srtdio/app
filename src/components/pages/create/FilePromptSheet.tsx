@@ -49,7 +49,7 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center"
+      className="fixed inset-0 z-dialog flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center"
       onClick={(event) => {
         if (event.target === event.currentTarget) onKeep();
       }}

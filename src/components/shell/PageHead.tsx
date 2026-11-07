@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 
 interface PageHeadProps {
   title: string;
@@ -23,14 +24,9 @@ export function PageHead({ title, actions, hidden = false }: PageHeadProps) {
       </h1>
     );
   }
+  // The one header bar (ui/HeaderBar): title role, gutter 16/24, 56 tall,
+  // trailing actions under the trailing rule.
   return (
-    <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
-      <h1 tabIndex={-1} className="text-lg font-semibold focus:outline-none">
-        {title}
-      </h1>
-      {actions !== undefined ? (
-        <div className="ml-auto flex items-center gap-2">{actions}</div>
-      ) : null}
-    </div>
+    <HeaderBar title={title} compact routeFocus {...(actions !== undefined ? { actions } : {})} />
   );
 }

@@ -192,7 +192,7 @@ export function PersonCardBody({
           <p className="w-full truncate text-lg font-semibold text-fg">{data.name}</p>
         ) : null}
         {/* Reserved line: an unheld username or role fills in place, no jump. */}
-        <p className="h-5 w-full truncate text-sm leading-5 text-fg-2" data-person-meta="">
+        <p className="h-5 w-full truncate py-0.5 text-sm text-fg-2" data-person-meta="">
           {meta}
         </p>
       </div>
@@ -252,7 +252,7 @@ export function PersonMessageCard(props: PersonMessageCardProps): ReactElement {
             <p className="truncate text-base font-medium text-fg">{data.name}</p>
           ) : null}
           {/* Reserved line: an unheld username or role fills in place, no jump. */}
-          <p className="h-5 truncate text-sm leading-5 text-fg-2" data-person-meta="">
+          <p className="h-5 truncate py-0.5 text-sm text-fg-2" data-person-meta="">
             {meta}
           </p>
         </div>
@@ -489,14 +489,14 @@ function PersonPopover({
   const pos = personPopoverPosition(request.anchor, viewportSize());
   return createPortal(
     <>
-      <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} />
+      <div className="fixed inset-0 z-dock" aria-hidden="true" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-label={data.name}
         tabIndex={-1}
         style={{ top: pos.top, left: pos.left, width: PERSON_POPOVER_W }}
-        className={cn('fixed z-50 p-4 focus:outline-none', popoverClass())}
+        className={cn('fixed z-sheet p-4 focus:outline-none', popoverClass())}
       >
         {children}
       </div>

@@ -226,7 +226,7 @@ describe('Briefs list read', () => {
     const control = loadMore();
     expect(control?.textContent?.trim()).toBe('Load more');
     // The shared Button: 44px touch target, token classes only.
-    expect(control?.className).toContain('min-h-[44px]');
+    expect(control?.className).toContain('min-h-11');
     expect(control?.className).not.toContain('dark:');
 
     await act(async () => control?.click());

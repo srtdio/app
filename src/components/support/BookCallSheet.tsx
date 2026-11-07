@@ -150,7 +150,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
           </Button>
         }
       >
-        <p className="text-base leading-relaxed text-fg-2">
+        <p className="text-base text-fg-2">
           {booked}. The team sends a Google Meet link to your email before the call.
         </p>
       </Sheet>
@@ -177,7 +177,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="text-base leading-relaxed text-fg-2">
+        <p className="text-base text-fg-2">
           Pick a time. We send a Google Meet link to your email.
         </p>
         <div role="radiogroup" aria-label="Book a call" className="flex flex-col gap-2">
@@ -196,7 +196,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
           />
         </div>
         {choice?.kind === 'other' ? (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-2">
               <Input
                 type="date"

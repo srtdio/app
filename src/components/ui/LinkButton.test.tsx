@@ -58,7 +58,7 @@ describe('LinkButton', () => {
     const out = render(
       'https://a-very-long-subdomain.of-some-extremely-long-host.example.com/path',
     );
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
     expect(out).toContain('max-w-full');
     expect(out).toContain('truncate');
     expect(out).toContain('a-very-long-subdomain.of-some-extremely-long-host.example.com');
@@ -68,7 +68,7 @@ describe('LinkButton', () => {
     const out = render('https://srtd.io/x', 'w-full');
     expect(out).toContain('w-full');
     expect(out).toContain('lit-btn-secondary');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
   });
 
   it('uses the shared 44px, 8px-radius secondary button recipe', () => {

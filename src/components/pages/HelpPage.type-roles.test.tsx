@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Type roles on Help (design rules, 24 Oct 2026): the hero heading is the
 // screen header (lg/600, was 2xl/3xl), "Help articles" is the section label
-// (sm/600 uppercase tracking-[0.06em] fg-2), the article count is sm fg-3 meta,
+// (sm/600 uppercase tracking-label fg-2), the article count is sm fg-3 meta,
 // an article row title is base/500, and no match reads as an empty state
 // (lg/600 title, base fg-2 description).
 import { act } from 'react';
@@ -70,7 +70,7 @@ describe('Help page type roles', () => {
   it('"Help articles" is the section label and the count is sm fg-3 meta', async () => {
     await mount();
     const label = byText('Help articles');
-    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']);
+    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']);
     const count = label.nextElementSibling as HTMLElement;
     expect(count.textContent).toMatch(/^\d+ articles?$/);
     expectRole(count, ['text-sm', 'text-fg-3']);

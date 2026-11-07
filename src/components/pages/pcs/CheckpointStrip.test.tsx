@@ -147,8 +147,8 @@ describe('checkpointChips', () => {
       // The rendered <button>'s classes come from IconButton itself.
       const rendered = IconButton(chip.props as Parameters<typeof IconButton>[0]);
       const cls = (rendered.props as { className: string }).className;
-      expect(cls).toContain('min-h-[44px]');
-      expect(cls).toContain('min-w-[44px]');
+      expect(cls).toContain('min-h-11');
+      expect(cls).toContain('min-w-11');
       // No important overrides on the shared primitive.
       expect((chip.props as { className?: string }).className ?? '').not.toMatch(/(^|\s|:)!/);
     }

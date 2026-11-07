@@ -93,7 +93,7 @@ export function Avatar({ presence, ...props }: AvatarProps) {
       <span
         data-presence="online"
         aria-hidden="true"
-        className="lit-avatar absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-good outline outline-2 outline-panel"
+        className="lit-avatar absolute bottom-0 right-0 h-3 w-3 rounded-full bg-good outline outline-2 outline-panel"
       />
     </span>
   );
@@ -125,6 +125,8 @@ function AvatarFace({
       <img
         src={src}
         alt={decorative ? '' : label}
+        width={px}
+        height={px}
         style={style}
         data-avatar-role={role}
         onError={() => setErrored(true)}

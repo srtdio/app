@@ -11,14 +11,14 @@ function render(status: string): string {
   );
 }
 
-// The chat brief card wears the same pill as the Briefs list and detail, so
-// Open and Closed read clearly apart in a thread.
+// The chat brief card wears the same grey tag as the Briefs list and detail;
+// the word tells Open and Closed apart.
 describe('chat brief card status pill', () => {
-  it('Open: the accent Tag, text only', () => {
+  it('Open: the grey (neutral) Tag, text only', () => {
     const out = render('open');
     expect(out).toContain('data-brief-status="open"');
-    expect(out).toContain('bg-accent-soft text-accent');
-    expect(out).not.toContain('rounded-full bg-accent');
+    expect(out).toContain('bg-panel-2 text-fg-2');
+    expect(out).not.toContain('bg-accent-soft');
     expect(out).toContain('Open');
     expect(out).not.toContain('Closed');
   });

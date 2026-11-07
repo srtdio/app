@@ -90,11 +90,13 @@ import {
   type PlanSegment,
   type StatusKey,
 } from '@/lib/chat/status-bar';
-import { formatChatTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
+import { SECTION_LABEL_INK } from '@/components/ui/Text';
 
 /** Each section's icon, shared with the bar. */
 export const STATUS_ICON: Record<
@@ -153,11 +155,10 @@ export interface StatusDrawerActions {
 const ROW_RULE = '[&+&]:border-t [&+&]:border-border';
 const ROW_BASE = 'flex items-center gap-3 py-1 mv-tint';
 const ROW = `${ROW_BASE} -mx-3 px-3 ${ROW_RULE}`;
-const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
-const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
-const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
-const PILL =
-  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-4 lit-pill';
+const DATE_COL = 'w-12 shrink-0 font-mono text-sm tabular-nums text-fg-3';
+const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base text-fg';
+const ROW_SUB = 'block truncate text-sm text-fg-3';
+const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold lit-pill';
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
@@ -202,9 +203,7 @@ function SectionHeader(props: {
   return (
     <div className="mb-2 flex h-6 items-center gap-2 text-fg-2">
       <Icon size={ICON_SIZE.inline} className="shrink-0" />
-      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-[0.06em]">
-        {props.label}
-      </h3>
+      <h3 className={`min-w-0 flex-1 truncate ${SECTION_LABEL_INK}`}>{props.label}</h3>
       <CountBadge tone="section" count={props.count} />
     </div>
   );
@@ -272,7 +271,7 @@ function PlanItemTile(props: {
     <span
       aria-hidden="true"
       data-plan-tile="concept"
-      className="h-12 w-12 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
+      className="h-12 w-12 shrink-0 rounded-lg border border-dashed border-border-strong"
     />
   );
 }
@@ -325,9 +324,7 @@ export function PlanBlock(props: {
     >
       <PressableRow type="button" flat data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-lg font-semibold leading-5 text-fg">
-            {bundle.plan.title}
-          </span>
+          <span className="block truncate text-lg font-semibold text-fg">{bundle.plan.title}</span>
           <span className={ROW_SUB}>
             {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
           </span>
@@ -346,7 +343,7 @@ export function PlanBlock(props: {
           );
         })}
       </div>
-      <p className="mb-1 mt-2 text-sm leading-4 text-fg-2">{progressLabel(progress, side)}</p>
+      <p className="mb-1 mt-2 text-sm text-fg-2">{progressLabel(progress, side)}</p>
       {rows.map((item) => {
         const seg = itemSegment(bundle, item, side);
         const date = itemDateLabel(bundle, item);
@@ -444,7 +441,7 @@ export function StatusMarkRow(props: {
             aria-expanded={props.confirming}
             disabled={props.busy}
             onClick={props.onAsk}
-            className="min-w-[44px] shrink-0"
+            className="min-w-11 shrink-0"
           >
             <IconCheck size={ICON_SIZE.inline} />
             <span>{STAMP_WORD[mark.type]}</span>
@@ -490,6 +487,7 @@ export function StatusDrawerList(
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const now = new Date(useMinuteClock());
   const { messageFor, profiles } = props;
 
   // A closed drawer drops any half-asked confirm.
@@ -635,9 +633,11 @@ export function StatusDrawerList(
                   onClick={() => props.onOpenBrief(brief.id)}
                   className={ROW}
                 >
-                  <span className={DATE_COL}>{drawerDay(brief.created_at)}</span>
                   <span className="min-w-0 flex-1">
                     <span className={ROW_TITLE}>{brief.title}</span>
+                    <span className={cn(ROW_SUB, 'font-mono tabular-nums')}>
+                      {formatAgo(brief.created_at, now)}
+                    </span>
                   </span>
                   <Chevron />
                 </PressableRow>
@@ -659,8 +659,8 @@ export function StatusDrawerList(
               const message = messageFor(mark.messageId);
               const when =
                 message !== undefined && message.createdAt !== ''
-                  ? formatChatTime(message.createdAt)
-                  : formatChatTime(mark.markedAt);
+                  ? formatAgo(message.createdAt, now)
+                  : formatAgo(mark.markedAt, now);
               return (
                 <StatusMarkRow
                   key={mark.messageId}
@@ -711,7 +711,7 @@ export function StatusDrawerPanel(props: {
     <div
       data-status-drawer={props.open ? 'open' : 'moving'}
       className={cn(
-        'absolute inset-x-0 bottom-0 z-30 overflow-hidden',
+        'absolute inset-x-0 bottom-0 z-nav overflow-hidden',
         !props.open && 'pointer-events-none',
         NO_CALLOUT,
       )}

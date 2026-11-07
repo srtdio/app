@@ -9,7 +9,7 @@
 import { matchRuns } from '@/lib/chat/search';
 import { addCivilDays } from '@/lib/list-sort';
 import { weekBounds } from '@/lib/plan-week';
-import { civilDay, formatDate, formatDue, formatDueDate, formatOverdue } from '@/lib/time';
+import { civilDay, formatDue, formatOverdue, formatAgo } from '@/lib/time';
 import type { ChatTask } from '@/lib/chat/tasks';
 
 export type TaskWhen = 'past' | 'today' | 'week' | 'later' | 'none';
@@ -87,28 +87,28 @@ export interface TaskDateLine {
 
 /**
  * The line under a row, or null when the chip already says it all:
- *   overdue: "Overdue · 3 Nov" (bad tone); today or undated: nothing
- *   this week or later: "7 Nov"
- *   done with a date: "Due 31 Oct · done 30 Oct"; done, no date: "Done 30 Oct"
- * A done task with no done time (done before the stamp existed) shows its due
- * day alone. Due days read on the workspace zone, the done time on the device's. Pure.
+ *   overdue: "Overdue 2d" (bad tone); today or undated: nothing
+ *   tomorrow or later: "Due tomorrow", "Due Fri", "Due 2 Jan 2027" (formatDue)
+ *   done with a date: "Due 31 Oct · done Mon"; done, no date: "Done 3h"
+ * The done time is short (formatAgo). A done
+ * task is never overdue; one with no done time (done before the stamp
+ * existed) shows its due day alone. Due days read on the workspace zone. Pure.
  */
 export function rowDateLine(
   task: Pick<ChatTask, 'dueOn' | 'status' | 'doneAt'>,
   cal: TaskCalendar,
-  deviceZone?: string,
 ): TaskDateLine | null {
   const { today } = calendarDays(cal);
   const due = task.dueOn;
   if (task.status === 'done') {
-    const doneDay = task.doneAt !== null ? formatDate(task.doneAt, cal.now, deviceZone) : '';
+    const doneDay = task.doneAt !== null ? formatAgo(task.doneAt, cal.now, cal.timeZone) : '';
     if (due === null) return doneDay === '' ? null : { text: `Done ${doneDay}`, bad: false };
     const dueText = formatDue(due, cal.timeZone, cal.now);
     return { text: doneDay === '' ? dueText : `${dueText} · done ${doneDay}`, bad: false };
   }
   if (due === null || due === today) return null;
   if (due < today) return formatOverdue(due, cal.timeZone, cal.now);
-  return { text: formatDueDate(due, cal.timeZone, cal.now), bad: false };
+  return { text: formatDue(due, cal.timeZone, cal.now), bad: false };
 }
 
 const TODAY_LABEL = 'Today';

@@ -122,7 +122,10 @@ test('agency: Plans lists upcoming plans; a row opens the plan, never sends; sen
   await expect(picker).toBeHidden();
   const plan = page.locator('[data-plan-page="plan"]');
   await expect(plan).toBeVisible();
-  await expect(plan.getByRole('heading', { name: UPCOMING_CLIENT_PLAN_TITLE })).toBeVisible();
+  // The agency's title is the header menu button (Rename, Delete plan).
+  await expect(plan.locator('[data-plan-title-menu] [data-plan-title-text]')).toHaveText(
+    UPCOMING_CLIENT_PLAN_TITLE,
+  );
   expect(sharedPlans(network, DM_CHANNEL)).toEqual([]);
   expect(network.rpcCalls.filter((c) => c.name === 'chat_plan_share')).toHaveLength(0);
   // Send in this chat from the screen (an Open plan): the one footer button.

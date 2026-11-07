@@ -54,8 +54,8 @@ describe('X7 H5: the row ⋯', () => {
         onLongPress={() => {}}
       />,
     );
-    // The Row's trailing slot holds the ActionMenuTrigger (a 44 IconButton).
-    expect(out).toContain('data-row-more=""');
+    // The ListCard's line 3 trailing slot holds the ActionMenuTrigger (a 44 IconButton).
+    expect(out).toContain('data-list-card-more=""');
     expect(out).toContain('aria-label="Actions for Launch"');
     expect(out).toContain('aria-haspopup="menu"');
     expect(out).toMatch(/aria-label="Actions for Launch"[^>]*h-11 w-11/);
@@ -75,10 +75,10 @@ describe('X7 H5: the row ⋯', () => {
         input={DEFAULT_LIST_INPUT}
       />,
     );
-    expect(out).not.toContain('data-row-more');
+    expect(out).not.toContain('data-list-card-more');
   });
 
-  it('the ⋯ is a sibling of the tap surface, its glyph on the 16 edge (the trailing rule)', () => {
+  it('the ⋯ is a sibling of the tap surface, its glyph on the card content edge (the trailing rule)', () => {
     const out = renderToStaticMarkup(
       <ChannelCard
         channel={group}
@@ -91,8 +91,10 @@ describe('X7 H5: the row ⋯', () => {
         onLongPress={() => {}}
       />,
     );
-    // Row slot pr-4, trigger pulled -mr-3: the 20 glyph's edge sits on 16.
-    expect(out).toMatch(/data-row-more=""[^>]*pr-4/);
+    // The card pads 16; the trigger is pulled -mr-3, so the 20 glyph's edge sits on the 16 content edge.
+    expect(out).toMatch(/data-list-card-body="" class="[^"]*\bp-4\b/);
+    const tap = out.indexOf('data-list-card-press');
+    expect(out.slice(tap, out.indexOf('aria-label="Actions for Launch"'))).toContain('</button>');
     expect(out).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
   });
 });

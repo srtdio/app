@@ -58,7 +58,14 @@ describe('brief target dates in America/Los_Angeles', () => {
     expect(briefDueLabel('2026-10-08', 'Asia/Kolkata', NOW)).toBe('Due 8 Oct');
     const out = renderToStaticMarkup(
       <MemoryRouter>
-        <BriefCard brief={brief('2026-10-08')} cache={cache} presignEnabled href="/briefs/b1" />
+        <BriefCard
+          brief={brief('2026-10-08')}
+          cache={cache}
+          presignEnabled
+          href="/briefs/b1"
+          timeZone="Asia/Kolkata"
+          now={new Date('2026-09-01T12:00:00Z')}
+        />
       </MemoryRouter>,
     );
     expect(out).toContain('Due 8 Oct');

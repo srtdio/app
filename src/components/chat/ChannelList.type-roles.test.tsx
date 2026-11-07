@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Type roles on the chat home list: the Groups / People section labels (12,
-// 600, uppercase, .06em, fg-2), the tile names as card titles (the chat list
-// keeps its chat sizes: 17/600 wide, 15/600 square), the time as meta (12,
-// tabular) and the no-match state (title lg/600, description base fg-2).
+// 600, uppercase, .06em, fg-2), group and person names as the Row heading
+// role (one row style for both), the time as meta (12, tabular) and the
+// no-match state (title lg/600, description base fg-2).
 // Pure renders; nothing reads.
 
 import { describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,6 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { channelListView } from '@/components/chat/ChannelList';
-import { formatChatTime } from '@/lib/time';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
 
@@ -65,7 +64,7 @@ function paint(node: ReactElement, selector: string, text: string): HTMLElement[
 }
 
 const classes = (el: Element): string[] => el.className.split(/\s+/);
-const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2'];
+const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2'];
 
 describe('chat list type roles', () => {
   it('section labels: Groups and People are sm, 600, uppercase, .06em, fg-2', () => {
@@ -76,7 +75,7 @@ describe('chat list type roles', () => {
     }
   });
 
-  it('titles: group row name heading (lg/600); person tile name secondary, full ink', () => {
+  it('titles: group and person rows both name in the Row heading role (lg/600)', () => {
     const wide = paint(list([group]), 'span', 'Launch').find((e) =>
       e.classList.contains('truncate'),
     );
@@ -87,7 +86,7 @@ describe('chat list type roles', () => {
       e.classList.contains('truncate'),
     );
     expect(classes(square as Element)).toEqual(
-      expect.arrayContaining(['truncate', 'text-fg', 'text-md', 'font-normal']),
+      expect.arrayContaining(['truncate', 'text-lg', 'font-semibold']),
     );
     for (const el of [wide, square]) {
       expect((el as Element).className).not.toMatch(/text-\[|leading-\[|font-bold/);
@@ -95,12 +94,13 @@ describe('chat list type roles', () => {
   });
 
   it('meta: the row time is the meta role (sm, mono, tabular); the preview is secondary', () => {
-    const time = formatChatTime(SENT, new Date(NOW), 'UTC');
+    // formatAgo on the list's clock: sent an hour before NOW.
+    const time = '1h';
     const [stamp] = paint(list([group]), 'span', time);
     expect(classes(stamp as Element)).toEqual(
       expect.arrayContaining(['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']),
     );
-    // Line 2 is a flex wrapper (preview + badge slot); the preview is its text span.
+    // Line 2 is the ListCard preview (secondary role, two lines).
     const preview = paint(list([group]), 'span', 'See you then').find((e) =>
       e.classList.contains('text-md'),
     );

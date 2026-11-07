@@ -9,6 +9,7 @@ import type {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -24,7 +25,7 @@ import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
 import { readMentionProfiles, READ_TIMEOUT_MS } from '@/lib/chat-reads';
-import { formatChatTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { UNDO_MS } from '@/lib/undo';
 import {
   mentionIds,
@@ -334,7 +335,7 @@ export function paletteSections(input: {
   workspaceId: string | null;
   workspaceKey: string | null;
   nowMs: number;
-  /** For tests; the app passes none (the viewer's device zone). */
+  /** The zone result times read "Yesterday" / the weekday on (formatAgo). Absent: the device zone. */
   timeZone?: string;
 }): PaletteSection[] {
   const query = normalizeQuery(input.query);
@@ -360,7 +361,7 @@ export function paletteSections(input: {
   const words = queryWords(search.query);
   const time = (createdAt: string): string => {
     const ts = Date.parse(createdAt);
-    return Number.isNaN(ts) ? '' : formatChatTime(ts, new Date(input.nowMs), input.timeZone);
+    return Number.isNaN(ts) ? '' : formatAgo(ts, new Date(input.nowMs), input.timeZone);
   };
   const ctx = {
     query: search.query,
@@ -517,10 +518,10 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           className="px-2 pb-1"
         >
           {section.label === RECENT_LABEL ? (
-            <div className="flex min-h-[44px] items-center justify-between">
-              <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+            <div className="flex min-h-11 items-center justify-between">
+              <Text as="div" role="section" className="px-2 py-1">
                 {section.label}
-              </div>
+              </Text>
               {props.onClearRecents !== undefined ? (
                 <Button
                   type="button"
@@ -534,9 +535,9 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               ) : null}
             </div>
           ) : (
-            <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+            <Text as="div" role="section" className="px-2 py-1">
               {section.label}
-            </div>
+            </Text>
           )}
           {section.items.map((item) => {
             const index = flat.indexOf(item);
@@ -576,7 +577,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                     {...common}
                     className={cn(
                       ROW,
-                      'min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 py-1.5',
+                      'min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 py-1',
                       tone,
                     )}
                   >
@@ -602,7 +603,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               <PressableRow
                 key={`${section.label}:${item.id}`}
                 {...common}
-                className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
+                className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1', tone)}
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="min-w-0 flex-1 truncate font-medium text-fg">
@@ -958,7 +959,7 @@ export function CommandPalette({
   return (
     <div
       data-palette-overlay=""
-      className="fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12svh] sm:px-4"
+      className="fixed inset-0 z-sheet bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12svh] sm:px-4"
       onClick={onOverlayClick}
     >
       <div
@@ -968,11 +969,11 @@ export function CommandPalette({
         aria-label="Command palette"
         // Phones: a full-screen sheet. Wider: the centred card. Rendered at
         // rest; dropIn (Y, 8 px) is laid over it.
-        className="flex flex-col w-full h-full scale-100 bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border"
+        className="flex flex-col w-full h-full scale-100 bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-xl sm:rounded-xl sm:border"
       >
         {/* The search is a tool: quiet at rest, ink line and lift while focused
             (ui/Input tone search); the icon takes full ink with it. */}
-        <div className="group/sfield flex shrink-0 items-center gap-2.5 px-4 py-2 border-b border-border pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
+        <div className="group/sfield flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
           {/* One search field: the icon and the ONE clear X sit inside the box. */}
           <div data-palette-field="" className="relative min-w-0 flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 text-fg-3 group-focus-within/sfield:text-fg">
@@ -1013,7 +1014,7 @@ export function CommandPalette({
               </IconButton>
             ) : null}
           </div>
-          <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1.5 py-0.5">
+          <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1 py-0.5">
             Esc
           </kbd>
           <Button

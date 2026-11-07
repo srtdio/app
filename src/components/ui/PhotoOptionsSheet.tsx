@@ -59,7 +59,7 @@ function PhotoOptionRow(props: {
       data-row={`photo-${props.option}`}
       onClick={() => props.onSelect(props.option)}
       className={cn(
-        'flex min-h-[48px] w-full select-none items-center gap-3 rounded-lg px-3 text-left text-base font-medium [-webkit-touch-callout:none]',
+        'flex min-h-12 w-full select-none items-center gap-3 rounded-lg px-3 text-left text-base font-medium [-webkit-touch-callout:none]',
         'lit-hover focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none',
         danger ? 'text-bad' : 'text-fg',
       )}

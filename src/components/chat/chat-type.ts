@@ -43,82 +43,82 @@ export function sized(size: ChatSize, layout: ChatLayout): string {
   return size[layout];
 }
 
-/** Message body in a bubble: 17/22 touch, 14/19 laptop, 400. */
+/** Message body in a bubble: 17/22 touch (xl), 14/20 laptop (base), 400. */
 export const BUBBLE_BODY_TYPE: ChatSize = {
-  touch: 'text-[17px] leading-[22px] font-normal',
-  laptop: 'text-[14px] leading-[19px] font-normal',
+  touch: 'text-xl font-normal',
+  laptop: 'text-base font-normal',
 };
 
-/** In-bubble meta (time, "edited"): 11/15, 400 on both. */
-export const BUBBLE_META_TYPE = 'text-[11px] leading-[15px] font-normal tabular-nums';
+/** In-bubble meta (time, "edited"): 11/14 (xs), 400 on both. */
+export const BUBBLE_META_TYPE = 'text-xs font-normal tabular-nums';
 
 /** The meta's tick (and clock) glyph box: 20x12, the double tick's box. */
 export const TICK_ICON_BOX = 'h-3 w-5 shrink-0';
 
-/** The sender name over a group run: 13/18/600 touch, 13/22/500 laptop. */
+/** The sender name over a group run: 13/18 (md), 600 touch, 500 laptop. */
 export const GROUP_SENDER_TYPE: ChatSize = {
-  touch: 'text-[13px] leading-[18px] font-semibold',
-  laptop: 'text-[13px] leading-[22px] font-medium',
+  touch: 'text-md font-semibold',
+  laptop: 'text-md font-medium',
 };
 
-/** A bubble's reply quote author: 13/18/600 touch, 13/20/500 laptop. */
+/** A bubble's reply quote author: 13/18 (md), 600 touch, 500 laptop. */
 export const QUOTE_AUTHOR_TYPE: ChatSize = {
-  touch: 'text-[13px] leading-[18px] font-semibold',
-  laptop: 'text-[13px] leading-[20px] font-medium',
+  touch: 'text-md font-semibold',
+  laptop: 'text-md font-medium',
 };
 
-/** A bubble's reply quote text: 14/18 touch, 13/20 laptop, 400. */
+/** A bubble's reply quote text: 14/20 (base) touch, 13/18 (md) laptop, 400. */
 export const QUOTE_TEXT_TYPE: ChatSize = {
-  touch: 'text-[14px] leading-[18px] font-normal',
-  laptop: 'text-[13px] leading-[20px] font-normal',
+  touch: 'text-base font-normal',
+  laptop: 'text-md font-normal',
 };
 
-/** Shared post card title: 15/20 touch, 14/19 laptop, 500. */
+/** Shared post card title: 15/20 (lg) touch, 14/20 (base) laptop, 500. */
 export const POST_CARD_TITLE_TYPE: ChatSize = {
-  touch: 'text-[15px] leading-[20px] font-medium',
-  laptop: 'text-[14px] leading-[19px] font-medium',
+  touch: 'text-lg font-medium',
+  laptop: 'text-base font-medium',
 };
 
 /** Shared post card meta: 12/16, 400 on both. */
 export const POST_CARD_META_TYPE = 'text-sm font-normal';
 
-/** Thread header name: 17/22/600 touch; laptop is the screen header size (lg, 15/20), 500. */
+/** Thread header name: 17/22 (xl) 600 touch; laptop is the screen header size (lg, 15/20), 500. */
 export const HEADER_NAME_TYPE: ChatSize = {
-  touch: 'text-[17px] leading-[22px] font-semibold',
+  touch: 'text-xl font-semibold',
   laptop: 'text-lg font-medium',
 };
 
-/** Thread header second line: 13/16 touch, 13/20 laptop, 400. */
+/** Thread header second line: 13/18 (md), 400 on both. */
 export const HEADER_LINE_TYPE: ChatSize = {
-  touch: 'text-[13px] leading-[16px] font-normal',
-  laptop: 'text-[13px] leading-[20px] font-normal',
+  touch: 'text-md font-normal',
+  laptop: 'text-md font-normal',
 };
 
 /**
- * Composer input and placeholder: 17/22 touch (never under 16px, so iOS never
- * zooms), 15/20 laptop, 400. Important, so it wins over the compact Textarea's
- * inline 16px default.
+ * Composer input and placeholder: 17/22 (xl) touch (never under 16px, so iOS
+ * never zooms), 15/20 (lg) laptop, 400. Important, so it wins over the compact
+ * Textarea's inline 16px default.
  */
 export const COMPOSER_INPUT_TYPE: ChatSize = {
-  touch: '!text-[17px] !leading-[22px] font-normal',
-  laptop: '!text-[15px] !leading-[20px] font-normal',
+  touch: '!text-xl font-normal',
+  laptop: '!text-lg font-normal',
 };
 
-/** Chat list name: 17/22/600 touch, 17/21/400 laptop. */
+/** Chat list name: 17/22 (xl), 600 touch, 400 laptop. */
 export const CHAT_LIST_NAME_TYPE: ChatSize = {
-  touch: 'text-[17px] leading-[22px] font-semibold',
-  laptop: 'text-[17px] leading-[21px] font-normal',
+  touch: 'text-xl font-semibold',
+  laptop: 'text-xl font-normal',
 };
 
-/** Chat list preview: 15/20 touch, 14/20 laptop, 400. */
+/** Chat list preview: 15/20 (lg) touch, 14/20 (base) laptop, 400. */
 export const CHAT_LIST_PREVIEW_TYPE: ChatSize = {
-  touch: 'text-[15px] leading-[20px] font-normal',
-  laptop: 'text-[14px] leading-[20px] font-normal',
+  touch: 'text-lg font-normal',
+  laptop: 'text-base font-normal',
 };
 
-/** Chat list time: 14/18 touch, 12/16 laptop, 400; sans with tabular figures. */
+/** Chat list time: 14/20 (base) touch, 12/16 (sm) laptop, 400; sans with tabular figures. */
 export const CHAT_LIST_TIME_TYPE: ChatSize = {
-  touch: 'font-sans text-[14px] leading-[18px] font-normal tabular-nums',
+  touch: 'font-sans text-base font-normal tabular-nums',
   laptop: 'font-sans text-sm font-normal tabular-nums',
 };
 
@@ -134,17 +134,17 @@ export const DATE_PILL_TYPE: ChatSize = {
   laptop: 'font-mono text-sm font-normal tabular-nums uppercase',
 };
 
-/** The typing row above the composer: 13/16, 400. */
-export const TYPING_ROW_TYPE = 'text-[13px] leading-[16px] font-normal';
+/** The typing row above the composer: 13/18 (md), 400. */
+export const TYPING_ROW_TYPE = 'text-md font-normal';
 
-/** The emoji in a reaction badge: 14. */
-export const REACTION_EMOJI_TYPE = 'text-[14px] leading-none';
+/** The emoji in a reaction badge: 14 (base), no line box. */
+export const REACTION_EMOJI_TYPE = 'text-base leading-emoji';
 
 /** The "Draft:" prefix in a chat list preview: weight 500 (the accent comes from a token). */
 export const DRAFT_PREFIX_TYPE = 'font-medium';
 
-/** An inline notice in a chat sheet (group info): 13/18, 400 on both. */
-export const SHEET_NOTICE_TYPE = 'text-[13px] leading-[18px] font-normal';
+/** An inline notice in a chat sheet (group info): 13/18 (md), 400 on both. */
+export const SHEET_NOTICE_TYPE = 'text-md font-normal';
 
 /**
  * Bubble radius: 18px touch (the WhatsApp lock), 12px laptop (the card role).
@@ -161,10 +161,10 @@ export const BUBBLE_TAIL = {
   theirs: 'rounded-bl-[4px]',
 } as const;
 
-/** Bubble padding: 8/12 touch, 6/7/8/9 laptop. */
+/** Bubble padding: 8/12 touch, 8 laptop. */
 export const BUBBLE_PAD: ChatSize = {
   touch: 'px-3 py-2',
-  laptop: 'pb-[8px] pl-[9px] pr-[7px] pt-[6px]',
+  laptop: 'p-2',
 };
 
 /** The bubble column's max width: 76% touch, 65% laptop. */
@@ -174,19 +174,22 @@ export const BUBBLE_MAX: ChatSize = {
 };
 
 /** A glyph in the emoji picker grid and its group tabs: the 3xl size (28), no line box. */
-export const EMOJI_GLYPH_TYPE = 'text-3xl leading-none';
+export const EMOJI_GLYPH_TYPE = 'text-3xl leading-emoji';
 
-/** The emoji picker's search field: 17 touch (never under 16px, no iOS zoom), 14 laptop. */
+/** A quick-pick or reaction-list emoji: 20 (2xl), no line box. */
+export const EMOJI_PICK_TYPE = 'text-2xl leading-emoji';
+
+/** The emoji picker's search field: 17 (xl) touch (never under 16px, no iOS zoom), 14 (base) laptop. */
 export const EMOJI_SEARCH_TYPE: ChatSize = {
-  touch: 'text-[17px] leading-[22px] font-normal',
-  laptop: 'text-[14px] leading-[20px] font-normal',
+  touch: 'text-xl font-normal',
+  laptop: 'text-base font-normal',
 };
 
 /** The emoji picker's group heading: 12/16/500, both. */
 export const EMOJI_GROUP_TYPE = 'text-sm font-medium';
 
-/** The reason line under a disabled selection Delete: 13/18, 400 on both. */
-export const SELECTION_REASON_TYPE = 'text-[13px] leading-[18px] font-normal';
+/** The reason line under a disabled selection Delete: 13/18 (md), 400 on both. */
+export const SELECTION_REASON_TYPE = 'text-md font-normal';
 
 /**
  * Never native text selection or the iOS callout on a long-press: the thread

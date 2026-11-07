@@ -22,6 +22,7 @@ import { anotherWorkspaceRequest } from '@/lib/support';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import { Text } from '@/components/ui/Text';
 
 /** The free allowance the meter is drawn against: 1 GB (1024 MB). */
 const ALLOWANCE_BYTES = 1024 * 1024 * 1024;
@@ -54,15 +55,13 @@ const TONE_CLASS: Record<MeterTone, string> = {
   bad: 'bg-bad',
 };
 
-const SECTION_LABEL = 'px-3 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
-
 function mb(bytes: number): string {
   return `${wholeMb(bytes)} MB`;
 }
 
 function UsageLine(props: { label: string; bytes: number }) {
   return (
-    <div className="flex min-h-[44px] items-center gap-3 px-3 text-base">
+    <div className="flex min-h-11 items-center gap-3 px-3 text-base">
       <span className="min-w-0 flex-1 truncate text-fg">{props.label}</span>
       <span className="shrink-0 tabular-nums text-fg-2">{mb(props.bytes)}</span>
     </div>
@@ -110,8 +109,8 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
   const fill = Math.min(usedBytes / ALLOWANCE_BYTES, 1);
 
   return (
-    <div className="flex max-w-[520px] flex-col gap-6">
-      <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
         <p className="flex items-baseline gap-2">
           <span className="text-3xl font-semibold tabular-nums text-fg">{mb(usedBytes)}</span>
           <span className="text-sm text-fg-3">of 1 GB</span>
@@ -135,7 +134,9 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
 
       {breakdown !== null ? (
         <section className="-mx-3 flex flex-col">
-          <h3 className={SECTION_LABEL}>WHAT&apos;S USING IT</h3>
+          <Text as="h3" role="section" className="px-3">
+            WHAT&apos;S USING IT
+          </Text>
           <UsageLine label="Assets" bytes={breakdown.library_bytes} />
           <UsageLine label="Chat files" bytes={breakdown.chat_bytes} />
           <UsageLine label="Voice notes" bytes={breakdown.voice_bytes} />
@@ -145,7 +146,9 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
 
       {showsNeedMoreSpace(usedBytes, usage) ? (
         <section className="-mx-3 flex flex-col gap-1">
-          <h3 className={SECTION_LABEL}>NEED MORE SPACE?</h3>
+          <Text as="h3" role="section" className="px-3">
+            NEED MORE SPACE?
+          </Text>
           <p className="px-3 pb-1 text-base text-fg-2">
             Free up space in Recently deleted, or talk to us about more storage for {workspace}.
           </p>

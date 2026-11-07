@@ -25,6 +25,7 @@ import {
   formatCivilDayHeader,
   formatCivilShort,
 } from '@/lib/plan-week';
+import { SECTION_LABEL_INK, TEXT_ROLE } from '@/components/ui/Text';
 
 /** The tile's last line: "{n} items" when the day holds any, else the month. Pure. */
 export function tileCaption(day: string, count: number): string {
@@ -73,9 +74,7 @@ export function PlanDayTiles(props: {
       {dayTileWeeks(props.range).map((week) => (
         <div key={week.days[0]} className="flex flex-col gap-2">
           {week.label !== null ? (
-            <p className="mt-0.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-              {week.label}
-            </p>
+            <p className={`mt-0.5 ${TEXT_ROLE.section}`}>{week.label}</p>
           ) : null}
           <div className="grid grid-cols-4 gap-2">
             {week.days.map((day) => {
@@ -93,7 +92,7 @@ export function PlanDayTiles(props: {
                   disabled={props.disabled === true}
                   onClick={() => props.onPick(day)}
                   className={cn(
-                    'relative flex min-h-[62px] flex-col items-center justify-center gap-px',
+                    'relative flex min-h-16 flex-col items-center justify-center gap-px',
                     // The pick is the ink fill (slides within the week); idle
                     // days rest on the grey fill like every chip.
                     on
@@ -103,13 +102,13 @@ export function PlanDayTiles(props: {
                 >
                   <span
                     className={cn(
-                      'text-xs font-semibold uppercase tracking-[0.06em]',
+                      SECTION_LABEL_INK,
                       on ? 'text-accent-fg' : day === props.today ? 'text-accent' : 'text-fg-2',
                     )}
                   >
                     {civilWeekdayShort(day)}
                   </span>
-                  <span className="font-mono text-2xl font-medium leading-[1.15] tabular-nums">
+                  <span className="font-mono text-2xl font-medium tabular-nums">
                     {dayOfMonth(day)}
                   </span>
                   <span
@@ -285,7 +284,7 @@ export function PlanDatesSheet(props: {
           ))}
         </div>
         {error !== null ? (
-          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-2.5 text-md text-bad lit-tint">
+          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-3 text-md text-bad lit-tint">
             {error}
           </p>
         ) : null}

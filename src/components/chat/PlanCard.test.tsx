@@ -109,7 +109,7 @@ describe('PlanCardBody', () => {
       /class="text-lg font-semibold[^"]*\btruncate\b"><span data-plan-title="">/,
     );
     expect(html).not.toContain('text-xl');
-    expect(html).toMatch(/data-plan-progress="" class="truncate text-sm leading-4/);
+    expect(html).toMatch(/data-plan-progress="" class="truncate text-sm/);
     expect(html).toMatch(/data-plan-range="" class="font-mono text-sm[^"]*\btruncate\b/);
   });
 
@@ -319,7 +319,7 @@ describe('Plan shared notice (F6)', () => {
   it('sits in the chat (absolute, below plan pages), opacity only, hidden until a share', () => {
     const html = renderToStaticMarkup(<PlanSharedNotice shareCount={0} text="Plan shared" />);
     expect(html).toContain('absolute');
-    expect(html).toContain('z-30');
+    expect(html).toContain('z-nav');
     expect(html).not.toContain('fixed');
     expect(html).not.toContain('translate');
     expect(html).toContain('data-plan-shared-notice="hidden"');

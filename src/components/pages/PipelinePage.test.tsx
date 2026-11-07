@@ -72,7 +72,6 @@ vi.mock('@/lib/workspace-context', () => ({
 import {
   INITIAL_STAGE,
   MOVE_FALLBACK_MESSAGE,
-  boardStages,
   filteredEmpty,
   moveErrorMessage,
   pipelineHeader,
@@ -80,7 +79,6 @@ import {
   postCountLabel,
   postsSkeleton,
   runUndoableMove,
-  skeletonRatio,
   undoMoveLabel,
   sanitizePostSort,
   stageCounts,
@@ -91,7 +89,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { parsePipelineQuery } from '@/components/pages/pipeline/pipeline-query';
 import type { UndoableAction } from '@/lib/use-undoable-action';
 import { NoResults } from '@/components/ui/NoResults';
-import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
@@ -105,7 +102,6 @@ import {
   sortControlBody,
 } from '@/components/pages/pipeline/PipelineSortControl';
 import { IconFilterLines, IconSort } from '@/components/ui/icons';
-import { BoardColumns } from '@/components/pages/pipeline/board-columns';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
@@ -390,30 +386,30 @@ describe('opens on the Review chip by default', () => {
 });
 
 describe('the surface', () => {
-  function surface(stage: string, isDesktop: boolean): ReactElement {
+  function surface(stage: string): ReactElement {
     return pipelineSurface({
-      role: 'agency',
       stage,
-      isDesktop,
       sorted: [],
-      grouped: groupByStage([], STAGES),
       // The tree is walked and no card is ever expanded, so the cache is untouched.
       cache: {} as unknown as PresignCache,
       presignEnabled: false,
       workspaceKey: null,
-      onViewAll: () => {},
-      onMovePost: () => {},
       onLongPressPost: () => {},
-      onBlockedMove: () => {},
       shownKey: 'pipeline:shown:',
     });
   }
 
-  it('is the board on desktop and the feed on a phone for every chip (no Plan week)', () => {
+  it('is the one list (the feed) on phone and laptop for every chip (no board, no Plan week)', () => {
     for (const stage of [...STAGES, 'all', 'plan']) {
-      expect(findAll(surface(stage, true), (el) => el.type === PipelineBoard)).toHaveLength(1);
-      expect(findAll(surface(stage, false), (el) => el.type === PipelineFeed)).toHaveLength(1);
+      const tree = surface(stage);
+      expect(tree.type).toBe(PipelineFeed);
+      expect((tree.props as { activeStage: string }).activeStage).toBe(stage);
     }
+  });
+
+  it('the page no longer imports the retired kanban', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/PipelineBoard|board-columns|BoardColumns|useIsLaptop/);
   });
 });
 
@@ -1019,40 +1015,10 @@ describe('W4 fix 7: undoable moves (Rejected / Parked)', () => {
 });
 
 describe('E: clients never see Draft', () => {
-  it('the laptop board has no Draft column for a client; the agency side keeps it', () => {
-    expect(boardStages('all', 'client')).toEqual(['review', 'approved', 'parked', 'rejected']);
-    expect(boardStages('all', 'agency')).toEqual(STAGES);
-    expect(boardStages('all', 'owner')).toContain('draft');
-    expect(boardStages('draft', 'client')).toEqual([]);
-    expect(boardStages('review', 'client')).toEqual(['review']);
-  });
-
   it('a client on a Draft link lands on Review', () => {
     expect(visibleStage('draft', 'client')).toBe('review');
     expect(visibleStage('draft', 'agency')).toBe('draft');
     expect(visibleStage('all', 'client')).toBe('all');
-  });
-
-  it('the surface hands the board the client columns', () => {
-    const tree = pipelineSurface({
-      role: 'client',
-      stage: 'all',
-      isDesktop: true,
-      sorted: [],
-      grouped: groupByStage([], STAGES),
-      cache: {} as unknown as PresignCache,
-      presignEnabled: false,
-      workspaceKey: null,
-      onViewAll: () => {},
-      onMovePost: () => {},
-      onLongPressPost: () => {},
-      onBlockedMove: () => {},
-      shownKey: 'pipeline:shown:',
-      roleReady: false,
-    });
-    const props = tree.props as { stages: Stage[]; roleReady: boolean };
-    expect(props.stages).not.toContain('draft');
-    expect(props.roleReady).toBe(false);
   });
 });
 
@@ -1090,29 +1056,14 @@ describe('E: no jumps while loading', () => {
     expect(props.onClick).toBeUndefined();
   });
 
-  it('the laptop All skeleton is the kanban, one column per stage, cards in the platform frame', () => {
-    const ratio = skeletonRatio('instagram');
-    expect(ratio).toBeCloseTo(0.8);
-    expect(skeletonRatio(null)).toBeNull();
-    const kanban = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 5 }));
-    expect(kanban).toContain('data-posts-skeleton="kanban"');
-    expect((kanban.match(/w-\[260px\]/g) ?? []).length).toBe(5);
-    expect(kanban).toContain('aspect-ratio:0.8');
-    expect(kanban).not.toContain('aspect-square');
-    // The card shape: full height, a two-line title block and the meta row.
-    expect(kanban).toContain('min-h-[2.75em]');
-    expect(kanban).toContain('h-5');
-    const client = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 4 }));
-    expect((client.match(/w-\[260px\]/g) ?? []).length).toBe(4);
-    // A stage view on a laptop draws the same column stacks as the cards.
-    const stacks = postsSkeleton(true, { ratio });
-    expect(stacks.type).toBe(BoardColumns);
-    const grid = renderToStaticMarkup(stacks);
-    expect(grid).toContain('flex items-start gap-4');
-    expect(grid).toContain('data-board-column=""');
-    expect(grid).toContain('flex min-w-0 flex-1 flex-col gap-4');
-    expect(grid).not.toContain('grid-cols-[repeat(auto-fill,minmax(220px,1fr))]');
-    expect(grid).toContain('<span class="sr-only">Loading posts</span>');
+  it('the skeleton is ListCardBox boxes in the list grid, the same on phone and laptop', () => {
+    const out = renderToStaticMarkup(postsSkeleton());
+    expect(out).toContain('data-posts-skeleton=""');
+    expect(out).toContain('md:grid-cols-list-cards');
+    expect((out.match(/data-list-card-box=""/g) ?? []).length).toBe(6);
+    expect(out).not.toContain('kanban');
+    expect(out).not.toContain('aspect-ratio');
+    expect(out).toContain('<span class="sr-only">Loading posts</span>');
   });
 });
 

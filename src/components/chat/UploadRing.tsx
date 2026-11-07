@@ -48,9 +48,9 @@ const RING_CLASS: Readonly<Record<UploadRingVariant, string>> = {
  * content) with a 44px floor.
  */
 const HIT_CLASS: Readonly<Record<UploadRingVariant, string>> = {
-  voice: 'h-11 min-w-[44px]',
-  image: 'h-14 min-w-[56px]',
-  file: 'h-11 min-w-[44px]',
+  voice: 'h-11 min-w-11',
+  image: 'h-14 min-w-14',
+  file: 'h-11 min-w-11',
 };
 
 const STROKE = 3;
@@ -121,7 +121,7 @@ export function UploadRing({
           trackClass="text-overlay-dot"
           arcClass="text-overlay-fg"
         />
-        <IconX size={UPLOAD_RING_X} className={LAYER} />
+        <IconX size={ICON_SIZE.inline} className={LAYER} />
       </PressableRow>
       {/* The progress for screen readers: a button's children are not read, so
           the progressbar sits beside it, sr-only (out of flow, nothing paints). */}

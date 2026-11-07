@@ -236,13 +236,17 @@ describe('SharedPostCardList', () => {
         {},
         new Map([['u1', 'Asha Rao']]),
       );
+    // Short on the shared minute clock (formatAgo), the same in every locale.
+    const AGO =
+      /just now|\d+[mh]|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2} [A-Z][a-z]{2}( \d{4})?/
+        .source;
     deviceLocale('en-IN');
-    expect(named()).toContain('Approved by Asha · 21 Sep, 2:05 PM');
+    expect(named()).toMatch(new RegExp(`Approved by Asha · (${AGO})`));
     vi.restoreAllMocks();
     deviceLocale('en-GB');
-    expect(named()).toContain('Approved by Asha · 21 Sep, 2:05 PM');
+    expect(named()).toMatch(new RegExp(`Approved by Asha · (${AGO})`));
     const fallback = render(['p1'], [cardRow('p1', { stage: 'approved' })]);
-    expect(fallback).toContain('Approved · 20 Sep');
+    expect(fallback).toMatch(new RegExp(`Approved · (${AGO})`));
   });
 
   it('shows the target date when set', () => {
@@ -443,7 +447,10 @@ describe('post sheet: Talk about', () => {
   function actions(onTalkAbout?: () => void): string {
     const post = cardRow('p1');
     return renderToStaticMarkup(
-      <PostSheetExtras hint={agencyWaitingHint('agency', post, 'UTC')} onTalkAbout={onTalkAbout} />,
+      <PostSheetExtras
+        hint={agencyWaitingHint('agency', post, new Date('2026-09-23T12:00:00Z'))}
+        onTalkAbout={onTalkAbout}
+      />,
     );
   }
 

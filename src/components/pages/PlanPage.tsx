@@ -264,8 +264,8 @@ export function PlanBankItemPage(): ReactElement {
           <p className="text-base">{PLAN_NOT_AVAILABLE}</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3.5 p-4">
-          <Bone lit="lit-card" as="div" className="h-[120px] rounded-xl" />
+        <div className="flex flex-col gap-3 p-4">
+          <Bone lit="lit-card" as="div" className="h-28 rounded-xl" />
         </div>
       )}
     </PlanFrame>

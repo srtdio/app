@@ -6,7 +6,7 @@ import { useSearchJump } from '@/lib/search/jump';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -14,14 +14,17 @@ import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
 import { renderFormatted } from '@/components/chat/message-body';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconButton } from '@/components/ui/IconButton';
+import { HeaderBar } from '@/components/ui/HeaderBar';
+import { STATUS_DOT_TONE, StatusDot, type StatusDotStage } from '@/components/ui/StatusDot';
+import { SECTION_LABEL, Text, textRole } from '@/components/ui/Text';
+import { GUTTER } from '@/components/ui/layout';
+import { cn } from '@/lib/cn';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import {
   ICON_SIZE,
   IconBriefs,
   IconCheck,
-  IconChevronLeft,
   IconCopy,
   IconLink,
   IconPlus,
@@ -39,7 +42,8 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { civilDay, formatDate, formatDue, formatDueDate, formatOverdue } from '@/lib/time';
+import { civilDay, formatDue, formatDueDate, formatOverdue, formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { postFormatLabel } from '@/lib/post-format';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
@@ -62,11 +66,6 @@ import { currentEntryState } from '@/lib/focus-target';
 
 // The line under a closed brief's title (and in the Close confirm).
 export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to comments.';
-
-// The brief title matches the post title on the same screen size (Post detail
-// uses this exact size on phone and desktop). It wraps, never scrolls sideways.
-export const BRIEF_TITLE_CLASS =
-  'min-w-0 break-words text-3xl font-semibold tracking-tight text-fg';
 
 /**
  * The comment box inside the Comments section, for "Add note" (the note failed
@@ -98,11 +97,11 @@ export function BriefDetailSkeleton(): ReactElement {
       lit="flat"
       label="Loading brief"
       data-testid="brief-detail-skeleton"
-      className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6"
+      className={cn(GUTTER, 'py-6 grid grid-cols-1 md:grid-cols-3 gap-6')}
     >
       <div className="md:col-span-2 flex flex-col gap-6">
         <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
-        <div className="flex flex-col gap-1.5 md:hidden">
+        <div className="flex flex-col gap-2 md:hidden">
           <Bone lit="flat" as="div" className="h-4 w-52 rounded" />
           <Bone lit="flat" as="div" className="h-4 w-28 rounded" />
         </div>
@@ -139,14 +138,14 @@ export function briefDueDateLabel(
 
 export interface BriefStatusLine {
   status: 'Open' | 'Closed';
-  /** "Due 14 Aug", or the overdue wording ("Overdue 2 months"); null when not shown. */
+  /** "Due 14 Aug", or the overdue wording ("Overdue 2mo"); null when not shown. */
   due: string | null;
   /** True when the due part reads overdue (painted text-bad). */
   overdue: boolean;
 }
 
 /**
- * The top bar's status line: "Open · Due 14 Aug", "Open · Overdue 2 months"
+ * The top bar's status line: "Open · Due 14 Aug", "Open · Overdue 2mo"
  * once the due day has passed in the workspace zone, plain "Open" with no due
  * date, and plain "Closed" for a closed brief. The date-only target_date is read
  * as written; the workspace zone only decides which day is today. Pure.
@@ -208,14 +207,10 @@ export function linkedPostsFor(
     .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
 }
 
-// posts.stage is a plain text column; an unknown value gets the draft dot.
-const LINKED_STAGE_DOT: Record<string, string> = {
-  draft: 'bg-fg-3',
-  review: 'bg-accent',
-  approved: 'bg-good',
-  parked: 'bg-warn',
-  rejected: 'bg-bad',
-};
+/** A linked post's stage as the status dot's stage (posts.stage is plain text; an unknown value reads as Draft). */
+function linkedDotStage(stage: string): StatusDotStage {
+  return Object.hasOwn(STATUS_DOT_TONE, stage) ? (stage as StatusDotStage) : 'draft';
+}
 
 /**
  * Whether the viewer may close this brief: brief.close, or brief.close_own on a
@@ -237,17 +232,12 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 }
 
 /**
- * The day this brief was raised, read on the viewer's clock (`timeZone` is for
- * tests) with the app day format: "22 Sep", or "22 Sep 2025" outside now's
- * year. An unparseable created_at is returned unchanged, and an unknown zone
- * never throws.
+ * When this brief was raised, short (formatAgo): "just now", "5m", "3h",
+ * "Yesterday", "Mon", "2 Nov" ("2 Nov 2025" off-year). An unparseable
+ * created_at is returned unchanged.
  */
-export function briefRaisedLabel(
-  createdAt: string,
-  timeZone?: string,
-  now: Date = new Date(),
-): string {
-  return formatDate(createdAt, now, timeZone) || createdAt;
+export function briefRaisedLabel(createdAt: string, now: Date = new Date()): string {
+  return formatAgo(createdAt, now) || createdAt;
 }
 
 /**
@@ -291,8 +281,6 @@ export function briefAuthorLabel(
   if (legacyAuthorName !== null) return legacyAuthorName;
   return hasCreator && !membersLoaded ? '' : FORMER_MEMBER;
 }
-
-const SECTION_LABEL = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /**
  * A failed reopen in plain words: invalid_payload means the brief is no longer
@@ -371,6 +359,8 @@ export function BriefDetailPage({
    */
   resolving?: boolean;
 } = {}) {
+  // The one shared minute clock: the Raised time and the due line age with it.
+  const nowMs = useMinuteClock();
   const params = useParams();
   // The pretty-link resolver (/b/:ref) passes the resolved id as a prop; the
   // classic /briefs/:briefId route supplies it via the URL. The prop wins so the
@@ -380,7 +370,7 @@ export function BriefDetailPage({
   // growFromCard (kept on laptop): opened from a card tap, the page grows out
   // of that card on its first frame (layout effect, no wait); Back grows it
   // back into the card. Never on a kept-view tab return.
-  const pageAnchorRef = useRef<HTMLDivElement>(null);
+  const pageAnchorRef = useRef<HTMLElement>(null);
   useGrowFromCard(briefId, pageAnchorRef);
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
@@ -658,21 +648,22 @@ export function BriefDetailPage({
     } else navigate(target);
   }
 
-  // The same chevron as Post detail.
-  const backButton = (
-    <IconButton label="Back" className="shrink-0" onClick={goBack}>
-      <IconChevronLeft size={ICON_SIZE.control} />
-    </IconButton>
+  // The brief screen's top bar is ui/HeaderBar (Back "<" with the leading
+  // pull, the status line in the title slot, the ⋯ last), as Post detail. The
+  // brief title is the page's one h1 (below), so the bar's title is never an h1.
+  const topBar = (title: ReactNode, actions?: ReactNode): ReactElement => (
+    <HeaderBar
+      barRef={pageAnchorRef}
+      compact
+      onBack={goBack}
+      title={title}
+      titleSlot={<span className={textRole('title', 'truncate')}>{title}</span>}
+      {...(actions !== undefined ? { actions } : {})}
+      className={SAFE_TOP_BAR_CLASS}
+    />
   );
 
-  const bareHeader = (
-    <div
-      ref={pageAnchorRef}
-      className={`lit-header flex items-center gap-3 px-4 md:px-6 border-b ${SAFE_TOP_BAR_CLASS}`}
-    >
-      {backButton}
-    </div>
-  );
+  const bareHeader = topBar(null);
 
   // The page settles once when it lands after the boxes (never on a kept read).
   const showingBoxes = loading || (linkedPending && !loadFailed && !notFound);
@@ -693,7 +684,7 @@ export function BriefDetailPage({
     return (
       <>
         {bareHeader}
-        <div className="px-4 md:px-6 mt-4">
+        <div className={cn(GUTTER, 'mt-4')}>
           <LoadError title="this brief" onRetry={() => void load()} />
         </div>
       </>
@@ -726,7 +717,7 @@ export function BriefDetailPage({
   const canClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
   const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
-  const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone);
+  const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone, new Date(nowMs));
   const showNewPost = canCreatePost && !isApprover && !closed && briefId !== undefined;
   // The brief's one action, placed as Post detail places its decision: the
   // right of the header on laptop (useIsLaptop), a bottom bar on phone.
@@ -748,13 +739,13 @@ export function BriefDetailPage({
   const creatorFormer =
     creatorId !== null && membersLoaded && (memberById.get(creatorId) ?? null) === null;
   // The details as two short lines, the same on phone (under the title) and
-  // desktop (the side column): "Raised 15 Jun by Priya Raman", then "Format
+  // desktop (the side column): "Raised Mon by Priya Raman", then "Format
   // Carousel" when a format is set. Status and due date live in the top bar.
   const detailsLines = (
     <div className="flex min-w-0 flex-col gap-1 text-base">
       <p data-brief-raised="" className="min-w-0 break-words text-fg">
         <span className="text-fg-3">Raised</span>{' '}
-        <span className="tabular-nums">{briefRaisedLabel(brief.created_at)}</span>
+        <span className="tabular-nums">{briefRaisedLabel(brief.created_at, new Date(nowMs))}</span>
         {authorLabel === '' && membersLoading ? (
           <span
             data-testid="created-by-skeleton"
@@ -799,12 +790,9 @@ export function BriefDetailPage({
                 <Link
                   to={`/posts/${post.id}`}
                   data-linked-post=""
-                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint lit-hover focus-visible:lit-focus"
+                  className="-mx-2 flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint lit-hover focus-visible:lit-focus"
                 >
-                  <span
-                    aria-hidden="true"
-                    className={`h-[7px] w-[7px] shrink-0 rounded-full ${LINKED_STAGE_DOT[post.stage] ?? 'bg-fg-3'}`}
-                  />
+                  <StatusDot stage={linkedDotStage(post.stage)} />
                   <span className="min-w-0 flex-1 truncate">{post.title}</span>
                   {/* The dot's stage in words, so the row name never rests on colour. */}
                   <span className="sr-only">, {stageLabel(post.stage as Stage)}</span>
@@ -816,7 +804,7 @@ export function BriefDetailPage({
           <Link
             to="/pipeline"
             data-linked-posts-count=""
-            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint lit-hover focus-visible:lit-focus"
+            className="-mx-2 inline-flex min-h-11 min-w-11 items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint lit-hover focus-visible:lit-focus"
           >
             {linkedCount}
           </Link>
@@ -826,18 +814,11 @@ export function BriefDetailPage({
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
-      <div
-        ref={pageAnchorRef}
-        className={`lit-header flex items-center gap-3 px-4 md:px-6 border-b ${SAFE_TOP_BAR_CLASS}`}
-      >
-        {backButton}
-        {/* The status line, as the post screen's: a 7px dot and 15px semibold. */}
-        <div data-brief-status-line="" className="flex min-w-0 flex-1 items-center gap-2">
-          <span
-            aria-hidden="true"
-            className={`h-[7px] w-[7px] shrink-0 rounded-full ${closed ? 'bg-fg-3' : 'bg-accent'}`}
-          />
-          <span className="truncate text-lg font-semibold text-fg">
+      {topBar(
+        // The status line, as the post screen's: the status dot and the title role.
+        <span data-brief-status-line="" className="flex min-w-0 items-center gap-2">
+          <StatusDot stage={closed ? 'closed' : 'open'} />
+          <span className="truncate">
             <span data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}>
               {statusLine.status}
             </span>
@@ -854,41 +835,45 @@ export function BriefDetailPage({
               </>
             ) : null}
           </span>
-        </div>
-        {showNewPost && isLaptop ? (
-          <Button
-            variant="primary"
-            data-new-post-from-brief="top"
-            className="shrink-0"
-            onClick={startPost}
-          >
-            {newPostLabel}
-          </Button>
-        ) : null}
-        <div data-brief-more="" className="shrink-0">
-          <ActionMenu
-            title="Brief actions"
-            items={briefMenuItems({
-              closed,
-              canClose,
-              onCopyLink: copyLink,
-              onCopyBrief: copyBrief,
-              onCloseBrief: closeWithUndo,
-              onReopenBrief: reopenWithUndo,
-            })}
-          />
-        </div>
-      </div>
+        </span>,
+        <>
+          {showNewPost && isLaptop ? (
+            <Button
+              variant="primary"
+              data-new-post-from-brief="top"
+              className="shrink-0"
+              onClick={startPost}
+            >
+              {newPostLabel}
+            </Button>
+          ) : null}
+          <span data-brief-more="" className="flex shrink-0">
+            <ActionMenu
+              title="Brief actions"
+              items={briefMenuItems({
+                closed,
+                canClose,
+                onCopyLink: copyLink,
+                onCopyBrief: copyBrief,
+                onCloseBrief: closeWithUndo,
+                onReopenBrief: reopenWithUndo,
+              })}
+            />
+          </span>
+        </>,
+      )}
 
-      <div ref={landedRef} className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div ref={landedRef} className={cn(GUTTER, 'py-6 grid grid-cols-1 md:grid-cols-3 gap-6')}>
         {/* One order on phone and desktop: title (details lines under it on
             phone), Objective, Brand requirements, Attachments, Reference links,
             Comments. Desktop's side column holds the details and linked posts. */}
         <div className="md:col-span-2 flex min-w-0 flex-col gap-6">
           <div className="flex min-w-0 flex-col gap-2">
-            <h1 className={BRIEF_TITLE_CLASS}>
+            {/* The brief title matches the post title (display role); it wraps,
+                never scrolls sideways. */}
+            <Text as="h1" role="display" className="min-w-0 break-words text-fg">
               <Highlight text={brief.title} />
-            </h1>
+            </Text>
             {closed ? <p className="text-base text-fg-2">{CLOSED_BRIEF_LINE}</p> : null}
             <div data-brief-details="phone" className="md:hidden">
               {detailsLines}
@@ -899,7 +884,7 @@ export function BriefDetailPage({
 
           <section className="min-w-0">
             <div className={`${SECTION_LABEL} mb-1`}>Objective</div>
-            <p className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg">
+            <p className="text-base whitespace-pre-wrap break-words text-fg">
               {renderFormatted(brief.objective, (text) => [<Highlight key="h" text={text} />])}
             </p>
           </section>
@@ -907,7 +892,7 @@ export function BriefDetailPage({
           {hasBrand ? (
             <section className="min-w-0">
               <div className={`${SECTION_LABEL} mb-1`}>Brand requirements</div>
-              <p className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg">
+              <p className="text-base whitespace-pre-wrap break-words text-fg">
                 {renderFormatted(brief.brand_requirements ?? '', (text) => [text])}
               </p>
             </section>
@@ -973,11 +958,11 @@ export function BriefDetailPage({
           top bar instead. */}
       {showNewPost && !isLaptop ? (
         <>
-          <div aria-hidden="true" data-brief-action-space="" className="h-[76px]" />
+          <div aria-hidden="true" data-brief-action-space="" className="h-20" />
           <div
             data-brief-action-bar=""
             {...bottomAnchorProps}
-            className="lit-dock fixed inset-x-0 bottom-0 z-40 border-t bg-panel pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+            className="lit-dock fixed inset-x-0 bottom-0 z-dock border-t bg-panel pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           >
             <Button
               variant="primary"

@@ -40,7 +40,8 @@ import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
 import { Bone, GlideItem, itemIn, itemOut } from '@/lib/motion';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { formatDateTime, formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { UNDO_MS } from '@/lib/undo';
 import { useBackGuard } from '@/lib/back-guard';
@@ -259,12 +260,12 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
  * IconButtons with the same overlay. The row's 12px side padding comes from
  * COMMENT_ACTIONS_ROW_CLASS.
  */
-export const ROW_ACTION_CLASS = 'min-w-[44px]';
+export const ROW_ACTION_CLASS = 'min-w-11';
 
 /** The passive (non-interactive) checkbox: the same box, height and padding as
  *  a ghost row-action Button without the hover or focus treatment. */
 export const ROW_ACTION_STATIC_CLASS =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-3 text-base font-medium';
+  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 px-3 text-base font-medium';
 
 /**
  * Extra classes for the icon-only row actions (Reply privately, Copy): none,
@@ -378,13 +379,13 @@ export function annotationChip(
   );
 }
 
-// Format a stored timestamp with the app formatter ("23 Oct, 2:14 PM", the
-// viewer's clock). Falls back to the raw value if it is
+// Format a stored timestamp in the app's one past-time format (formatAgo:
+// "just now", "5m", "Yesterday", "Mon"). Falls back to the raw value if it is
 // somehow unparseable so nothing is silently dropped.
-function formatTimestamp(value: string): string {
+function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatDateTime(value);
+  return formatAgo(value, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -591,7 +592,7 @@ export function CommentLinkCard(props: { body: string; url?: string | null }): R
   // The row passes the url it already found for the body (one scan per row).
   const url = props.url !== undefined ? props.url : firstExternalUrl(props.body);
   return url !== null ? (
-    <LinkPreviewCard key={url} url={url} className="mt-1.5 w-full max-w-[360px]" />
+    <LinkPreviewCard key={url} url={url} className="mt-2 w-full max-w-sm" />
   ) : null;
 }
 
@@ -610,8 +611,9 @@ interface TombstoneRow {
 export function tombstoneText(
   comment: TombstoneRow,
   nameOf: (id: string) => string | null,
+  now: Date = new Date(),
 ): string {
-  const when = formatTimestamp(comment.deleted_at ?? comment.created_at);
+  const when = formatTimestamp(comment.deleted_at ?? comment.created_at, now);
   const who = comment.legacy_author_name ?? nameOf(comment.author_user_id);
   const noun =
     comment.ledger_seq !== undefined && comment.ledger_seq !== null ? 'Checkpoint' : 'Comment';
@@ -904,10 +906,11 @@ export function pointActions(
   return base;
 }
 
-/** When an edit happened, via the app formatter: "1 Mar, 2:14 PM" (the
- *  viewer's clock). Unparseable input yields '' so nothing raw is shown. */
+/** When an edit happened, in the app's one past-time format (formatAgo:
+ *  "just now", "5m", "Yesterday", "Mon"). Unparseable input yields '' so
+ *  nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
-  return formatDateTime(ts, now);
+  return formatAgo(ts, now);
 }
 
 /** The "edited <time>" marker shared by comments and ledger points, or null when
@@ -1240,6 +1243,8 @@ export function Comments({
   whereLabel = '',
 }: CommentsProps) {
   const newTrace = useNewTrace();
+  // The one shared minute clock: every row's time ages together, no per-row timer.
+  const nowMs = useMinuteClock();
   // The Open / All thread filter (posts' header); All by default.
   const [filter, setFilter] = useState<CommentFilter>('all');
   const { canAttach, presignEnabled, presignCache, uploadFile } = useCommentAttachments();
@@ -2336,7 +2341,7 @@ export function Comments({
         <div className="flex items-center gap-2">
           <Button
             variant="primary"
-            className="min-w-[44px]"
+            className="min-w-11"
             disabled={editBody.trim() === ''}
             busy={editSaving}
             onClick={() => void handleSaveEdit(commentId)}
@@ -2345,7 +2350,7 @@ export function Comments({
           </Button>
           <Button
             variant="ghost"
-            className="min-w-[44px]"
+            className="min-w-11"
             disabled={editSaving}
             onClick={() => {
               setEditingId(null);
@@ -2411,7 +2416,7 @@ export function Comments({
     const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
     // One link scan per row: the body's card link feeds both the text and the card.
     const cardUrl = firstExternalUrl(comment.body);
-    const edited = pointEditedMarker(comment.edited_at, new Date());
+    const edited = pointEditedMarker(comment.edited_at, new Date(nowMs));
 
     const meta = (
       <>
@@ -2426,10 +2431,13 @@ export function Comments({
           </span>
         ) : null}
         <span data-comment-time="" className={ROW_TIME_CLASS}>
-          {formatRelative(comment.created_at)}
+          {formatAgo(comment.created_at, new Date(nowMs))}
         </span>
         {opts.seq !== null ? (
-          <span data-checkpoint-seq="" className="whitespace-nowrap text-sm tabular-nums text-fg-3">
+          <span
+            data-checkpoint-seq=""
+            className="shrink-0 whitespace-nowrap text-sm tabular-nums text-fg-3"
+          >
             #{opts.seq}
           </span>
         ) : null}
@@ -2472,7 +2480,7 @@ export function Comments({
     return (
       <div
         data-comment-row={opts.reply ? 'reply' : 'root'}
-        className="flex min-w-0 items-start gap-2.5"
+        className="flex min-w-0 items-start gap-3"
       >
         <span className="flex shrink-0">
           {asPerson(
@@ -2491,10 +2499,10 @@ export function Comments({
             {opts.reply ? (
               <div className="min-w-0 flex-1">
                 {name}
-                <div className="flex flex-wrap items-center gap-x-1.5">{meta}</div>
+                <div className="flex flex-wrap items-center gap-x-2">{meta}</div>
               </div>
             ) : (
-              <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-1.5">
+              <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-2">
                 {name}
                 {meta}
               </div>
@@ -2514,7 +2522,7 @@ export function Comments({
               {comment.body.trim() !== '' ? (
                 <p
                   className={cn(
-                    'text-base leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
+                    'text-base whitespace-pre-wrap [overflow-wrap:anywhere]',
                     opts.muted === true ? 'text-fg-2' : 'text-fg',
                   )}
                 >
@@ -2625,7 +2633,7 @@ export function Comments({
   function renderTombstone(root: CommentRow, replies: CommentRow[]): ReactNode {
     return (
       <>
-        <p className="text-sm italic text-fg-3">{tombstoneText(root, nameOf)}</p>
+        <p className="text-sm italic text-fg-3">{tombstoneText(root, nameOf, new Date(nowMs))}</p>
         {renderThreadBelow(root, replies, true, false)}
       </>
     );
@@ -2663,12 +2671,12 @@ export function Comments({
                   data-comment-resolve=""
                   variant="ghost"
                   className={ROW_ACTION_CLASS}
-                  disabled={isResolving}
+                  busy={isResolving}
                   onClick={() =>
                     isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
                   }
                 >
-                  {isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}
+                  {isResolved ? 'Reopen' : 'Resolve'}
                 </Button>
               ),
               replyButton: rootReplyButton(comment),
@@ -2813,7 +2821,7 @@ export function Comments({
       variant={filter === value ? 'secondary' : 'ghost'}
       aria-pressed={filter === value}
       onClick={() => setFilter(value)}
-      className="min-w-[44px]"
+      className="min-w-11"
     >
       {label}
     </Button>
@@ -2881,22 +2889,18 @@ export function Comments({
           <span>Couldn&apos;t load older comments.</span>
           <Button
             variant="ghost"
-            className="ml-auto min-w-[44px]"
-            disabled={loadingMore}
+            className="ml-auto min-w-11"
+            busy={loadingMore}
             onClick={() => void loadPage(page + 1)}
           >
-            {loadingMore ? 'Loading' : 'Retry'}
+            Retry
           </Button>
         </ErrorNote>
       ) : null}
 
       {!loading && !loadError && !moreError && hasMore ? (
-        <Button
-          className="self-start"
-          disabled={loadingMore}
-          onClick={() => void loadPage(page + 1)}
-        >
-          {loadingMore ? 'Loading' : 'Load more'}
+        <Button className="self-start" busy={loadingMore} onClick={() => void loadPage(page + 1)}>
+          Load more
         </Button>
       ) : null}
 

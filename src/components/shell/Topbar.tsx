@@ -10,6 +10,8 @@ import { dispatchSorted } from '@/lib/events';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { Bone } from '@/lib/motion';
 import { cn } from '@/lib/cn';
+import { textRole } from '@/components/ui/Text';
+import { GUTTER } from '@/components/ui/layout';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 
 interface TopbarProps {
@@ -44,7 +46,10 @@ export function Topbar({
     // status bar strip above the 56px bar is part of this same solid, lit surface.
     <header
       className={cn(
-        'sticky top-0 z-30 flex items-center gap-2 px-3 md:px-4 border-b bg-panel lit-header',
+        // The page edge (GUTTER): 16 phone, 24 laptop, the same edge as the
+        // search row under it.
+        'sticky top-0 z-nav flex items-center gap-2 border-b bg-panel lit-header',
+        GUTTER,
         SAFE_TOP_BAR_CLASS,
       )}
     >
@@ -70,11 +75,13 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="md:hidden min-w-0 max-w-[190px] text-left"
+          // L6: the tap area keeps the button's 16 inset; the name itself
+          // starts on the 16 edge (the box is pulled out by its own inset).
+          className="md:hidden -ml-4 min-w-0 max-w-48 text-left"
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
               short lines at word breaks instead of clipping the platform. */}
-          <span className="min-w-0 text-fg leading-tight line-clamp-2 break-words">
+          <span className={textRole('title', 'min-w-0 line-clamp-2 break-words')}>
             {workspaceName}
           </span>
           <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
@@ -86,11 +93,11 @@ export function Topbar({
           type="button"
           variant="secondary"
           onClick={onOpenPalette}
-          className="hidden md:flex min-w-[240px]"
+          className="hidden md:flex min-w-60"
         >
           <IconSearch size={ICON_SIZE.inline} className="text-fg-3" />
           <span className="flex-1 text-left text-fg-3">Search</span>
-          <kbd className="text-xs text-fg-3 border border-border rounded px-1.5 py-0.5 lit-pill">
+          <kbd className="text-xs text-fg-3 border border-border rounded px-1 py-0.5 lit-pill">
             ⌘K
           </kbd>
         </Button>

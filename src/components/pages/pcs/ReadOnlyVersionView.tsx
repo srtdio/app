@@ -8,10 +8,13 @@
 // owns entering/leaving this mode; Back returns to the live, editable current
 // version.
 
+import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { Button } from '@/components/ui/Button';
 import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
 import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
 import type { VersionThumbs } from '@/components/pages/pcs/VersionHistorySheet';
+import { SECTION_LABEL } from '@/components/ui/Text';
 
 /** "1 image" / "3 images" / "No images". Pure. */
 export function imageCountLabel(count: number): string {
@@ -45,7 +48,7 @@ export function ReadOnlyVersionView({
   const showPictures = thumbs !== undefined && galleryVersionIds.length > 0;
 
   return (
-    <div className="px-4 md:px-6 py-6 flex flex-col gap-6">
+    <div className={cn('flex flex-col gap-6 py-6', GUTTER)}>
       <div
         role="status"
         data-version-banner=""
@@ -60,9 +63,7 @@ export function ReadOnlyVersionView({
       </div>
 
       <section>
-        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-          Gallery
-        </div>
+        <div className={cn(SECTION_LABEL, 'mb-2')}>Gallery</div>
         {showPictures && thumbs !== undefined ? (
           <SnapshotThumbs
             items={snapshotItems(galleryVersionIds, thumbs.gallery)}
@@ -79,9 +80,7 @@ export function ReadOnlyVersionView({
       </section>
 
       <section>
-        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-          Caption
-        </div>
+        <div className={cn(SECTION_LABEL, 'mb-2')}>Caption</div>
         {hasCaption ? (
           <p className="whitespace-pre-wrap text-base text-fg">{caption}</p>
         ) : (

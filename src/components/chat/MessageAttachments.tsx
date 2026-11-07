@@ -154,7 +154,7 @@ export function useAttachmentUrl(
  * layout space. The container clips (overflow-hidden), so the 56px ring never
  * leaves the bubble.
  */
-export const RING_CENTRE = 'absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2';
+export const RING_CENTRE = 'absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2';
 
 /**
  * The ring for these attachments while the send can still be cancelled: null
@@ -330,7 +330,7 @@ function AttachmentItem({
             alt={view.alt}
             draggable={false}
             className={cn(
-              'block max-h-48 max-w-[260px] object-cover',
+              'block max-h-48 max-w-64 object-cover',
               view.progress !== null && 'brightness-75',
             )}
           />
@@ -402,7 +402,7 @@ export function albumGridClass(count: number): string {
  */
 export function albumTiles(count: number): AlbumTile[] {
   if (count <= 0) return [];
-  if (count === 1) return [{ index: 0, className: 'aspect-[4/3] max-h-[320px]', more: 0 }];
+  if (count === 1) return [{ index: 0, className: 'aspect-[4/3] max-h-80', more: 0 }];
   if (count === 2) {
     return [0, 1].map((index) => ({ index, className: 'aspect-square', more: 0 }));
   }
@@ -514,7 +514,7 @@ export function AlbumGrid({
       data-album={count}
       className={cn(
         albumGridClass(count),
-        'relative w-[320px] max-w-full gap-[2px] overflow-hidden',
+        'relative w-80 max-w-full gap-0.5 overflow-hidden',
         corners,
       )}
     >
@@ -569,7 +569,7 @@ export function FilesRemovedLine(props: {
       data-testid="files-removed-line"
       className={cn(
         'flex min-w-0 items-center gap-1.5 italic',
-        props.mine ? 'text-[color:var(--bubble-meta-own)]' : 'text-[color:var(--bubble-meta)]',
+        props.mine ? 'text-bubble-meta-own' : 'text-bubble-meta',
         sized(BUBBLE_BODY_TYPE, props.layout),
         props.className,
       )}
@@ -634,7 +634,7 @@ export function AttachmentsFallback(props: {
         return (
           <div
             key={`${attachment.assetId}-${index}`}
-            className="flex min-w-0 items-center gap-2.5 rounded-xl border bg-panel px-3 py-2 lit-card"
+            className="flex min-w-0 items-center gap-3 rounded-xl border bg-panel px-3 py-2 lit-card"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
               <IconFile size={ICON_SIZE.nav} />
@@ -720,7 +720,7 @@ function MessageAttachmentsBody({
             {...(albumCorners !== undefined ? { corners: albumCorners } : {})}
           />
           {hasBelow ? (
-            <div className="flex flex-col items-start gap-1.5 px-[9px] pb-[5px] pt-1.5">
+            <div className="flex flex-col items-start gap-1.5 px-2 pb-1 pt-1.5">
               {caption}
               {others.map((attachment, index) => (
                 <AttachmentItem

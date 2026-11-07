@@ -250,7 +250,7 @@ describe('shared Tasks sheet', () => {
         el.getAttribute('data-task-section'),
       );
       expect(sections).toEqual(['open', 'done']);
-      expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('Overdue · 3 Nov');
+      expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('Overdue 2d');
       expect(q('[data-task-row-id="p2"] [data-task-when]')?.textContent).toContain(
         'Due 2 Nov · done',
       );
@@ -287,7 +287,7 @@ describe('shared Tasks sheet', () => {
       await pickRow(rows, 'Tomorrow');
       // The sheet follows the row to This week.
       expect(chipOf()).toBe('week');
-      expect(q('[data-task-row-id="a"] [data-task-when]')?.textContent).toBe('6 Nov');
+      expect(q('[data-task-row-id="a"] [data-task-when]')?.textContent).toBe('Due tomorrow');
       rows = await openRowMenu('a');
       expect(rows.map(rowLabel)).toEqual(['Today', 'Tomorrow', 'Pick a date', 'No date', 'Delete']);
       await closeMenu();

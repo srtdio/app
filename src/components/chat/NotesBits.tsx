@@ -20,7 +20,7 @@ import { avatarShapeClass, type AvatarRole } from '@/components/ui/Avatar';
 type NotesAvatarRole = Extract<AvatarRole, 'profile' | 'header' | 'row'>;
 
 const NOTES_AVATAR_SIZE: Record<NotesAvatarRole, string> = {
-  profile: 'h-[72px] w-[72px]',
+  profile: 'h-18 w-18',
   header: 'h-8 w-8',
   row: 'h-10 w-10',
 };
@@ -35,14 +35,14 @@ const NOTES_GLYPH_SIZE: Record<NotesAvatarRole, number> = {
   row: ICON_SIZE.tray,
 };
 
-/** The badge: 30px, -5px, 3px ring on the profile tile; 20px, -4px, 2px ring on the smaller roles. */
+/** The badge: 32px, -4px, 3px ring on the profile tile; 20px, -4px, 2px ring on the smaller roles. */
 const NOTES_BADGE: Record<NotesAvatarRole, { box: string; glyph: number }> = {
   profile: {
-    box: 'h-[30px] w-[30px] -bottom-[5px] -right-[5px] border-[3px]',
+    box: 'h-8 w-8 -bottom-1 -right-1 border-cutout',
     glyph: ICON_SIZE.inline,
   },
-  header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
-  row: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
+  header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: ICON_SIZE.text },
+  row: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: ICON_SIZE.text },
 };
 
 /** The surface behind the avatar: the badge ring takes it, so it cuts out cleanly. */

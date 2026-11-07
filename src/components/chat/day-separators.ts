@@ -3,25 +3,16 @@
 // before every message whose calendar day, on the viewer's clock, differs from
 // the one above it. Labels are computed against a supplied now, so no timer.
 
-import { civilDay } from '@/lib/time';
+import { civilDay, formatDayLabel } from '@/lib/time';
 import type { ThreadMessage } from '@/lib/chat/thread';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** The civil day (YYYY-MM-DD) before a civil day, by calendar, not by 24h. */
-function previousDay(day: string): string {
-  const [y, m, d] = day.split('-').map(Number);
-  const date = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) - 1));
-  return date.toISOString().slice(0, 10);
-}
-
-/** "Today", "Yesterday", else "D MMM" for a civil day key. `timeZone` is for tests. */
+/**
+ * The pill for a civil day key (src/lib/time.ts formatDayLabel, absolute by
+ * rule): "Today", "Yesterday", else "Thu 24 Sep" ("Wed 31 Dec 2025" off the
+ * current year). `timeZone` is for tests.
+ */
 export function dayPillLabel(day: string, nowMs: number, timeZone?: string): string {
-  const today = civilDay(nowMs, timeZone);
-  if (day === today) return 'Today';
-  if (day === previousDay(today)) return 'Yesterday';
-  const [, m, d] = day.split('-').map(Number);
-  return `${d ?? ''} ${MONTHS[(m ?? 1) - 1] ?? ''}`;
+  return formatDayLabel(day, new Date(nowMs), timeZone);
 }
 
 export type ThreadItem =

@@ -32,7 +32,7 @@ import {
   type CardPlacement,
 } from '@/components/chat/PostCard';
 import { ChatCard } from '@/components/ui/ChatCard';
-import { textRole } from '@/components/ui/Text';
+import { SECTION_LABEL_INK, textRole } from '@/components/ui/Text';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
 import {
@@ -239,12 +239,7 @@ export function CardEyebrow(props: {
   className: string;
 }): ReactElement {
   return (
-    <span
-      className={cn(
-        'flex h-4 items-center text-sm font-semibold uppercase tracking-[0.06em]',
-        props.className,
-      )}
-    >
+    <span className={cn(`flex h-4 items-center ${SECTION_LABEL_INK}`, props.className)}>
       {props.icon}
       {props.label}
     </span>
@@ -271,7 +266,7 @@ export function PlanCardTop(props: {
       >
         {props.plan.title}
       </span>
-      <span data-plan-range="" className="truncate font-mono text-md leading-5 text-fg-3">
+      <span data-plan-range="" className="truncate font-mono text-md text-fg-3">
         {planRangeLabel(props.plan.starts_on, props.plan.ends_on)}
       </span>
     </>
@@ -387,7 +382,7 @@ export function PlanCardBody(props: {
           percent={progressPercent(progress)}
           side={draft ? 'team' : 'client'}
         />
-        <span data-plan-progress="" className="truncate text-sm leading-4 text-fg-3">
+        <span data-plan-progress="" className="truncate text-sm text-fg-3">
           {progressLabel(progress)}
         </span>
       </span>
@@ -615,7 +610,7 @@ export function chatPickList(
   onPick: (channel: ChannelSummary) => void,
 ): ReactElement {
   return (
-    <div className="h-[288px] overflow-y-auto">
+    <div className="h-72 overflow-y-auto">
       <div className={cn('flex flex-col gap-1', NO_TOUCH_SELECT)}>
         {channels.map((channel) => (
           <PressableRow
@@ -629,8 +624,8 @@ export function chatPickList(
               <IconChat size={ICON_SIZE.nav} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-base font-medium leading-snug">{channel.title}</span>
-              <span className="truncate text-sm leading-snug text-fg-3">
+              <span className="truncate text-base font-medium">{channel.title}</span>
+              <span className="truncate text-sm text-fg-3">
                 {sendingId === channel.channelId
                   ? 'Sending'
                   : channel.channelType === 'group'
@@ -641,7 +636,7 @@ export function chatPickList(
             {agencyOnly && summaryHasClient(channel) === true ? (
               <span
                 data-plan-has-client=""
-                className="shrink-0 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold leading-4 text-warn lit-pill"
+                className="shrink-0 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold text-warn lit-pill"
               >
                 {HAS_CLIENT_TAG}
               </span>

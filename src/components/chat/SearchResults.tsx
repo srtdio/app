@@ -31,6 +31,7 @@ import {
 } from '@/lib/chat/search';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { NotesAvatar } from '@/components/chat/NotesBits';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 /**
  * The search runner for one surface (chat home, or one chat's bar): created per
@@ -72,11 +73,11 @@ export function useMessageSearch(params: {
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
-export const RESULT_LABEL = 'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+export const RESULT_LABEL = `px-1 pt-1 ${TEXT_ROLE.section}`;
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(
-  'group/notes-row flex min-h-[64px] min-w-0 items-center gap-3 px-2 py-2',
+  'group/notes-row flex min-h-16 min-w-0 items-center gap-3 px-2 py-2',
   NO_TOUCH_SELECT,
 );
 
@@ -117,11 +118,11 @@ export function highlightName(title: string, query: string): ReactNode {
 export function boldMatches(text: string, words: readonly string[]): ReactNode[] {
   return matchRuns(text, words).map((run, i) =>
     run.hit ? (
-      <b key={i} data-search-match="" className="font-semibold text-fg">
+      <b key={`part-${i}`} data-search-match="" className="font-semibold text-fg">
         {run.text}
       </b>
     ) : (
-      <span key={i}>{run.text}</span>
+      <span key={`part-${i}`}>{run.text}</span>
     ),
   );
 }
@@ -197,7 +198,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
   });
   const retryRow = searchRetryRow(props.onRetry);
   return (
-    <div data-search-results="" className="flex flex-col gap-2 px-[14px] pb-4">
+    <div data-search-results="" className="flex flex-col gap-2 px-4 pb-4">
       {props.chats.length > 0 && kind === null ? (
         <>
           <h3 data-section-label="chats" className={RESULT_LABEL}>
@@ -214,7 +215,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                   className={RESULT_ROW}
                 >
                   {resultAvatar(channel)}
-                  <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
+                  <span className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">
                     {highlightName(chatDisplayName(channel), query)}
                   </span>
                 </PressableRow>
@@ -230,10 +231,14 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         <ul data-section="messages" className="flex flex-col">
           {loading ? (
             Array.from({ length: LOADING_ROWS }, (_, i) => (
-              <li key={i} data-search-skeleton="" className="flex items-center gap-3 px-2 py-2">
+              <li
+                key={`bone-${i}`}
+                data-search-skeleton=""
+                className="flex items-center gap-3 px-2 py-2"
+              >
                 <Bone lit="lit-avatar" as="div" className="h-12 w-12 shrink-0 rounded-full" />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <Bone lit="flat" as="div" className="h-3.5 w-1/3 rounded" />
+                  <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
                   <Bone lit="flat" as="div" className="h-3 w-3/4 rounded" />
                 </div>
               </li>
@@ -275,14 +280,14 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                     {resultAvatar(channel)}
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex min-w-0 items-baseline gap-2">
-                        <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
+                        <span className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">
                           {chatDisplayName(channel)}
                         </span>
                         <span
                           data-search-date=""
                           className="shrink-0 font-mono text-sm tabular-nums text-fg-2"
                         >
-                          {searchDateLabel(hit.createdAt, props.nowMs, props.timeZone)}
+                          {searchDateLabel(hit.createdAt, props.nowMs)}
                         </span>
                       </span>
                       <span

@@ -78,7 +78,8 @@ export function undoStripCases(): void {
       expect(box.x).toBeCloseTo(16, 0);
       expect(viewport.width - (box.x + box.width)).toBeCloseTo(16, 0);
       expect(nav.y - (box.y + box.height)).toBeCloseTo(8, 0);
-      expect(box.height).toBeGreaterThanOrEqual(50 - 0.01);
+      // 48 on the 4px scale (value lock; was 50), still above the 44 Undo target.
+      expect(box.height).toBeGreaterThanOrEqual(48 - 0.01);
       // The Undo button is at the strip's right end.
       const undoBox = await undo.boundingBox();
       if (undoBox === null) throw new Error('Undo not laid out');

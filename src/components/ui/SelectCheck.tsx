@@ -8,7 +8,7 @@ interface SelectCheckProps {
 /** Classes for the 24px selection circle, on or off. */
 export function selectCheckClass(checked: boolean): string {
   return cn(
-    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 mv-tint',
+    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border mv-tint',
     checked ? 'border-transparent bg-accent text-accent-fg' : 'border-border-strong bg-panel',
   );
 }

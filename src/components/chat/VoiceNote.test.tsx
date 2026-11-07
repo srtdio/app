@@ -697,9 +697,9 @@ describe('first paint', () => {
   const order = (html: string, ...needles: string[]): number[] =>
     needles.map((needle) => html.indexOf(needle));
 
-  it('is a fixed 264px wide with the 4/6/4/0 inset in a bubble', () => {
+  it('is a fixed 256px wide (w-64) with the 4/6/4/0 inset in a bubble', () => {
     const html = render('fp-size');
-    expect(html).toMatch(/data-voice-note=""[^>]*class="[^"]*w-\[264px\][^"]*pb-1 pr-1\.5 pt-1/);
+    expect(html).toMatch(/data-voice-note=""[^>]*class="[^"]*w-64[^"]*pb-1 pr-1\.5 pt-1/);
     expect(html).toContain('font-sans');
     expect(html).not.toContain('font-mono');
   });
@@ -723,7 +723,7 @@ describe('first paint', () => {
       expect(duration).toBeLessThan(link as number);
       expect(link).toBeLessThan(meta as number);
       expect(html).toMatch(
-        /data-voice-foot=""[^>]*class="flex min-h-4 items-center[^"]*pl-\[46px\]/,
+        /data-voice-foot=""[^>]*class="flex min-h-4 shrink-0 items-center[^"]*pl-12/,
       );
     }
   });
@@ -737,23 +737,23 @@ describe('first paint', () => {
     const received = render('fp-play-r');
     // A PressableRow: class renders before the passed attributes.
     expect(received).toMatch(
-      /class="[^"]*flex h-11 min-w-\[44px\][^"]*text-accent(?![-\w])[^"]*"[^>]*aria-label="Play voice note"/,
+      /class="[^"]*flex h-11 min-w-11[^"]*text-accent(?![-\w])[^"]*"[^>]*aria-label="Play voice note"/,
     );
     expect(received).not.toMatch(
       /class="[^"]*\bbg-accent\b[^"]*"[^>]*aria-label="Play voice note"/,
     );
     expect(received).toContain('width="20" height="20"');
     expect(render('fp-play-s', true)).toMatch(
-      /class="[^"]*flex h-11 min-w-\[44px\][^"]*text-accent-fg[^"]*"[^>]*aria-label="Play voice note"/,
+      /class="[^"]*flex h-11 min-w-11[^"]*text-accent-fg[^"]*"[^>]*aria-label="Play voice note"/,
     );
   });
 
-  it('draws the 10px seek dot in the played colour on both sides', () => {
+  it('draws the 8px seek dot in the played colour on both sides', () => {
     expect(render('fp-dot-r')).toMatch(
-      /data-voice-dot=""[^>]*class="[^"]*h-2\.5 w-2\.5 rounded-full bg-accent\b/,
+      /data-voice-dot=""[^>]*class="[^"]*h-2 w-2 rounded-full bg-accent\b/,
     );
     expect(render('fp-dot-s', true)).toMatch(
-      /data-voice-dot=""[^>]*class="[^"]*h-2\.5 w-2\.5 rounded-full bg-on-bubble\b/,
+      /data-voice-dot=""[^>]*class="[^"]*h-2 w-2 rounded-full bg-on-bubble\b/,
     );
   });
 
@@ -775,10 +775,10 @@ describe('first paint', () => {
 
   it('the duration is Inter 12px medium tabular; Transcribe semibold with a 44px hit area', () => {
     const html = render('fp-type');
-    expect(html).toMatch(/data-voice-foot=""[^>]*text-sm leading-4/);
+    expect(html).toMatch(/data-voice-foot=""[^>]*text-sm/);
     expect(html).toContain('data-voice-duration="" class="font-medium tabular-nums"');
     expect(html).toMatch(
-      /class="[^"]*shrink-0 font-semibold flex -my-3\.5 items-center[^"]*"[^>]*data-voice-link="transcribe"/,
+      /class="[^"]*shrink-0 font-semibold flex -my-4 items-center[^"]*"[^>]*data-voice-link="transcribe"/,
     );
   });
 

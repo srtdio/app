@@ -241,7 +241,7 @@ describe('CommandPalette', () => {
       (el) => (el.props as { role: string }).role === 'dialog',
     );
     expect((dialog?.props as { className: string }).className).toContain('h-full');
-    expect((dialog?.props as { className: string }).className).toContain('sm:max-w-[560px]');
+    expect((dialog?.props as { className: string }).className).toContain('sm:max-w-xl');
     const all = texts(tree);
     expect(all).toContain('Cancel');
     expect(all).toContain('Esc');
@@ -471,14 +471,14 @@ describe('CommandPalette', () => {
     ]);
   });
 
-  it('shows the chat sender, highlights matched words, and the chat time', () => {
+  it('shows the chat sender, highlights matched words, and the chat time (formatAgo)', () => {
     const tree = body('diwali', ready('diwali', [], [chatHit]));
     const all = texts(tree);
     expect(all).toContain('asha');
     expect(sections('diwali', ready('diwali', [], [chatHit]))[0]?.items[0]).toMatchObject({
       title: 'asha',
     });
-    expect(all).toContain('11:30 AM');
+    expect(all).toContain('30m');
     const marked = findAll(tree, 'data-search-mark').map((el) => texts(el).join(''));
     expect(marked).toContain('diwali');
   });
@@ -598,7 +598,7 @@ describe('CommandPalette', () => {
   it('every row is at least 44px tall', () => {
     const search = ready('diwali', [wsHit('post', 1)], [], { post: 9 });
     for (const el of findAll(body('diwali', search), 'data-palette-item')) {
-      expect((el.props as { className: string }).className).toContain('min-h-[44px]');
+      expect((el.props as { className: string }).className).toContain('min-h-11');
     }
   });
 

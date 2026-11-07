@@ -5,39 +5,16 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   useIsLaptop: () => true,
 }));
 import { renderToStaticMarkup } from 'react-dom/server';
-import { isValidElement } from 'react';
-import type { ReactElement, ReactNode } from 'react';
-import { ActivityCard } from '@/components/pages/activity/ActivityCard';
-import { AvatarStack, STACK_OVERLAP_PX } from '@/components/pages/activity/AvatarStack';
+import {
+  ActivityCard,
+  activityCardTitle,
+  activityCardTag,
+  activityKind,
+  activityPreviewText,
+  failedSendItems,
+} from '@/components/pages/activity/ActivityCard';
 import { chatMentionPreview, type ActivityItem } from '@/components/pages/activity/data';
-import { avatarFillFor } from '@/components/ui/Avatar';
 import type { PresignCache } from '@/lib/asset-presign';
-
-// The unit env is `node` with no DOM, so events cannot be dispatched. We mock
-// React's useState with a pure shim that reproduces the server-render initial
-// state (so every existing renderToStaticMarkup test is unchanged), but lets a
-// single test flip the lead card's expand flag on. With the thread expanded we
-// invoke ActivityCard as a plain function and walk the returned element tree:
-// child components stay unrendered nodes, so no DOM or matchMedia is touched.
-const hooks = vi.hoisted(() => ({ forceExpand: false }));
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  return {
-    ...actual,
-    useState: <S,>(initial: S | (() => S)): [S, (next: S) => void] => {
-      const value = typeof initial === 'function' ? (initial as () => S)() : initial;
-      if (hooks.forceExpand && (value as unknown) === false) {
-        return [true as unknown as S, () => {}];
-      }
-      return [value, () => {}];
-    },
-    // Effects never run in SSR; a no-op keeps the plain-function call below hook-safe.
-    useEffect: () => undefined,
-    useLayoutEffect: () => undefined,
-    // The card's menu gesture (useMenuGesture) keeps its controller in a ref.
-    useRef: <T,>(initial: T): { current: T } => ({ current: initial }),
-  };
-});
 
 // The card's ⋯ menu picks popover vs Sheet by width; the node env has no matchMedia.
 
@@ -48,18 +25,6 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => ({
     .workspaceDisplayName,
   useWorkspace: () => ({ workspaceKey: 'gbl' }),
 }));
-
-/** Recursively collect every element of a given host type from a tree. */
-function collectByType(node: ReactNode, type: string, acc: ReactElement[]): void {
-  if (Array.isArray(node)) {
-    for (const child of node) collectByType(child, type, acc);
-    return;
-  }
-  if (!isValidElement(node)) return;
-  if (node.type === type) acc.push(node);
-  const props = node.props as { children?: ReactNode };
-  collectByType(props.children, type, acc);
-}
 
 // The same shim the pipeline board test uses: presignEnabled is false so the
 // tile renders its fallback and never touches the cache, so an empty stand-in is
@@ -102,11 +67,19 @@ function item(over: Partial<ActivityItem>): ActivityItem {
 
 const NOW = Date.parse('2026-06-14T01:00:00.000Z');
 
-function renderCard(group: ActivityItem[], extra: { entering?: boolean } = {}): string {
+function renderCard(
+  group: ActivityItem[],
+  extra: {
+    entering?: boolean;
+    onEdit?: (i: ActivityItem) => void;
+    onRetry?: (i: ActivityItem) => void;
+  } = {},
+): string {
   return renderToStaticMarkup(
     <ActivityCard
       group={group}
       nowMs={NOW}
+      timeZone="UTC"
       cache={cache}
       presignEnabled={false}
       onOpenGroup={() => {}}
@@ -123,792 +96,93 @@ function count(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-describe('ActivityCard', () => {
-  it('renders a single contained card with the title shown once as the header', () => {
+describe('ActivityCard on ui/ListCard', () => {
+  it('renders one ListCard with the activity hooks kept and the old layout gone', () => {
     const html = renderCard([
       item({ id: 'a', title: 'Q3 Launch', eventType: 'stage_change', toStage: 'review' }),
       item({ id: 'b', title: 'Q3 Launch', eventType: 'comment' }),
     ]);
-    // A single bordered, rounded card shell, laid out as a flex row with a rail.
-    expect(html).toContain('rounded-xl');
-    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
-    // The title appears once, in the header; the stage line never repeats it or a KEY-N.
+    expect(html).toContain('data-list-card=""');
+    expect(html).toContain('data-activity-id="a"');
+    expect(html).toContain('data-activity-event="stage_change"');
+    // No lead rail, no nested thread rows, no "+N more" toggle button.
+    expect(html).not.toContain('w-1 shrink-0');
+    expect(html).not.toContain('data-activity-thread');
+    expect(html).not.toContain('aria-expanded="false">+');
+    // The actor starts the title; the title names the thing once; no KEY-N.
+    expect(html).toContain('Someone sent Q3 Launch for review');
     expect(count(html, 'Q3 Launch')).toBe(1);
-    expect(html).toContain('Someone sent for review');
     expect(html).not.toMatch(/GBL-\d/);
   });
 
-  it('threads a group of >1 behind a "+N more" toggle, collapsed by default', () => {
-    const html = renderCard([
-      item({ id: 'a', title: 'Q3', eventType: 'comment' }),
+  it('a threaded group is one card; with no line of its own it previews "+N more"', () => {
+    const group = [
+      item({ id: 'a', title: 'Q3', eventType: 'stage_change', toStage: 'approved' }),
       item({ id: 'b', title: 'Q3', eventType: 'mention' }),
-      item({ id: 'c', title: 'Q3', eventType: 'stage_change', toStage: 'approved' }),
-    ]);
-    expect(html).toContain('+2 more');
-    // Collapsed: the hidden events are not in the markup yet.
-    expect(html).not.toContain('New mention');
-  });
-
-  it('renders a solo group as the same card shell with no "+N more"', () => {
-    const html = renderCard([item({ id: 'a', title: 'Solo', eventType: 'comment' })]);
-    expect(html).toContain('rounded-xl');
-    expect(html).toContain('New comment');
-    expect(html).not.toContain('more');
-  });
-
-  it('shows the unread dot and an accent-line border for an unread lead, hidden once read', () => {
-    const unread = renderCard([item({ id: 'a', readAt: null })]);
-    expect(unread).toContain('aria-label="Unread"');
-    expect(unread).toContain('lit-selected');
-    const read = renderCard([item({ id: 'a', readAt: '2026-06-14T00:30:00.000Z' })]);
-    expect(read).not.toContain('aria-label="Unread"');
-  });
-
-  it('renders a neutral lead rail when a non-accent group has no actor', () => {
-    const html = renderCard([
-      item({ id: 'a', actorName: null, eventType: 'stage_change', toStage: 'approved' }),
-    ]);
-    // stage_change is neutral now: stage no longer tints the rail.
-    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
-    expect(html).not.toContain('w-[3px] shrink-0 bg-accent');
-  });
-
-  // The lead rail: accent for the five accent events, neutral otherwise. The 3px
-  // rail is the card's first child and the two-state colour signal.
-  const ACCENT_RAIL = 'w-[3px] shrink-0 bg-accent';
-  const NEUTRAL_RAIL = 'w-[3px] shrink-0 bg-border-strong';
-
-  const ALL_EVENT_TYPES = [
-    'mention',
-    'checkpoints_added',
-    'comment',
-    'comment_resolved',
-    'stage_change',
-    'post_ready',
-    'brief_created',
-    'brief_closed',
-    'asset_uploaded',
-    'asset_version_added',
-    'invite',
-    'trial_warning',
-    'billing_failure',
-    'system',
-  ] as const;
-
-  it('accents exactly the five accent event types and leaves the other nine neutral', () => {
-    const accent = new Set([
-      'mention',
-      'checkpoints_added',
-      'post_ready',
-      'trial_warning',
-      'billing_failure',
-    ]);
-    for (const eventType of ALL_EVENT_TYPES) {
-      const html = renderCard([item({ eventType, actorName: null })]);
-      if (accent.has(eventType)) {
-        expect(html).toContain(ACCENT_RAIL);
-        expect(html).not.toContain(NEUTRAL_RAIL);
-      } else {
-        expect(html).toContain(NEUTRAL_RAIL);
-        expect(html).not.toContain(ACCENT_RAIL);
-      }
-    }
-    // Precisely five accent, nine neutral.
-    const accentCount = ALL_EVENT_TYPES.filter((t) => accent.has(t)).length;
-    expect(accentCount).toBe(5);
-    expect(ALL_EVENT_TYPES.length - accentCount).toBe(9);
-  });
-
-  it('renders an unrecognised event type as IconActivity on a neutral rail', () => {
-    const html = renderCard([item({ eventType: 'not_a_real_event', actorName: null })]);
-    expect(html).toContain(NEUTRAL_RAIL);
-    expect(html).not.toContain(ACCENT_RAIL);
-  });
-
-  it('renders no inline event glyph span in the actor row', () => {
-    const html = renderCard([item({ eventType: 'comment', actorName: 'Ann Lee' })]);
-    expect(html).not.toContain('shrink-0 text-accent');
-    expect(html).not.toContain('shrink-0 text-fg-3');
-  });
-
-  it('squares the thumbnail wrapper and insets it, dropping the stretched tile', () => {
-    const html = renderCard([item({ id: 'a', eventType: 'comment' })]);
-    expect(html).toContain('w-24 shrink-0 self-start overflow-hidden rounded-lg');
-    expect(html).not.toContain('min-h-[104px]');
-    expect(html).not.toContain('self-stretch');
-  });
-
-  it('renders a footer with the relative time for a solo group and no "+N more"', () => {
-    const html = renderCard([
-      item({ id: 'a', eventType: 'comment', createdAt: '2026-06-14T00:00:00.000Z' }),
-    ]);
-    // The footer container renders even with a single entry.
-    expect(html).toContain('min-h-[44px] items-center gap-1.5 px-[14px]');
-    expect(html).toContain('data-activity-time="" class="text-sm tabular-nums text-fg-3"');
-    expect(html).not.toContain('more');
-  });
-
-  it('renders the relative time and "+N more" together in the footer of a threaded group', () => {
-    const html = renderCard([
-      item({ id: 'a', eventType: 'comment' }),
-      item({ id: 'b', eventType: 'mention' }),
-    ]);
-    expect(html).toContain('data-activity-time="" class="text-sm tabular-nums text-fg-3"');
-    expect(html).toContain('+1 more');
-    // The toggle is an inset touch target, not the old full-width button.
-    expect(html).toMatch(
-      /<button[^>]*class="[^"]*h-11[^"]*rounded-lg[^"]*ml-auto"[^>]*aria-expanded/,
-    );
-    expect(html).not.toContain('min-h-[44px] w-full');
-  });
-
-  it('places the scope tag and snoozed chip in the footer, not the content column', () => {
-    // Snooze one hour past NOW so isSnoozed is true.
-    const html = renderCard([
-      item({
-        id: 'a',
-        eventType: 'comment',
-        scope: 'briefs',
-        snoozedUntil: '2026-06-14T02:00:00.000Z',
-      }),
-    ]);
-    // Both chips render, and they sit after the footer container marker in the markup.
-    const footerAt = html.indexOf('min-h-[44px] items-center gap-1.5 px-[14px]');
-    expect(footerAt).toBeGreaterThanOrEqual(0);
-    const tagAt = html.indexOf('Briefs');
-    const snoozeAt = html.indexOf('Snoozed');
-    expect(tagAt).toBeGreaterThan(footerAt);
-    expect(snoozeAt).toBeGreaterThan(footerAt);
-    // The old content-column meta row is gone.
-    expect(html).not.toContain('mt-2 flex items-center gap-1.5');
-  });
-
-  it('marks each expanded thread row interactive in the collapsed markup contract', () => {
-    // Regression guard: a thread row is a button (role + cursor) so it is its own
-    // deep-link target, not a dead list item.
-    hooks.forceExpand = true;
-    try {
-      const onOpenEntry = vi.fn();
-      const entry = item({ id: 'b', eventType: 'comment' });
-      const group = [item({ id: 'a', eventType: 'comment' }), entry];
-      const tree = ActivityCard({
-        group,
-        nowMs: NOW,
-        cache,
-        presignEnabled: false,
-        onOpenGroup: () => {},
-        onOpenEntry,
-        onSnooze: () => {},
-        onMarkRead: () => {},
-        selfName: null,
-      });
-      const rows: ReactElement[] = [];
-      collectByType(tree, 'li', rows);
-      // One thread row for the single rest entry, and it is keyboard/pointer ready.
-      expect(rows).toHaveLength(1);
-      const row = rows[0]?.props as {
-        role?: string;
-        tabIndex?: number;
-        onClick?: () => void;
-        className?: string;
-      };
-      expect(row.role).toBe('button');
-      expect(row.tabIndex).toBe(0);
-      expect(row.className).toContain('cursor-pointer');
-      // Clicking the thread row opens that exact entry once.
-      row.onClick?.();
-      expect(onOpenEntry).toHaveBeenCalledTimes(1);
-      expect(onOpenEntry).toHaveBeenCalledWith(entry);
-    } finally {
-      hooks.forceExpand = false;
-    }
-  });
-});
-
-describe('AvatarStack', () => {
-  it('renders nothing for an empty set', () => {
-    expect(renderToStaticMarkup(<AvatarStack names={[]} />)).toBe('');
-  });
-
-  it('overlaps up to three and shows a +N indicator beyond that', () => {
-    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
-    expect(html).toContain('+2');
-  });
-
-  it('draws its avatars at the inline role by default, the +N pill at the same height', () => {
-    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
-    expect(count(html, 'data-avatar-role="inline"')).toBe(3);
-    expect(html).toContain('height:20px');
-  });
-
-  it('fix 2: rings in ring-bg and overlaps by 4px, the +N pill too', () => {
-    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
-    expect(STACK_OVERLAP_PX).toBe(4);
-    expect(count(html, 'rounded-full ring-2 ring-bg')).toBe(3);
-    expect(html).not.toContain('ring-panel');
-    expect(count(html, 'margin-left:-4px')).toBe(2);
-    expect(html).not.toContain('-8px');
-    expect(html).toMatch(/class="ml-\[-4px\][^"]*ring-2 ring-bg"[^>]*>\+2</);
-  });
-
-  it('the ring takes the colour of the surface the stack sits on', () => {
-    const html = renderToStaticMarkup(
-      <AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} ring="ring-panel" />,
-    );
-    expect(count(html, 'rounded-full ring-2 ring-panel')).toBe(3);
-    expect(html).not.toContain('ring-bg');
-    expect(html).toMatch(/class="ml-\[-4px\][^"]*ring-2 ring-panel"[^>]*>\+2</);
-  });
-});
-
-describe('ActivityCard chat mention row', () => {
-  it('reads "<actor> mentioned you in <group>" over the message first line', () => {
-    const html = renderCard([
-      item({
-        eventType: 'mention',
-        entityType: 'chat_channel',
-        entityId: 'chan-1',
-        scope: 'groups',
-        channelType: 'group',
-        title: 'Launch crew',
-        actorName: 'Bob',
-        body: 'hey @Ana see this',
-        messageId: 'msg-1',
-      }),
-    ]);
-    expect(html).toContain('Bob mentioned you in Launch crew');
-    expect(html).toContain('hey @Ana see this');
-    expect(html).not.toContain('@[');
-    const classes = [...html.matchAll(/class="([^"]*)"/g)].map((m) => m[1]).join(' ');
-    expect(classes).not.toMatch(/dark:|#[0-9a-f]{6}/i);
-  });
-
-  it('a DM mention reads "<actor> mentioned you"', () => {
-    const html = renderCard([
-      item({
-        eventType: 'mention',
-        entityType: 'chat_channel',
-        entityId: 'chan-2',
-        scope: 'people',
-        channelType: 'dm',
-        actorName: 'Bob',
-        body: 'ping',
-      }),
-    ]);
-    expect(html).toContain('Bob mentioned you');
-    expect(html).not.toContain('mentioned you in');
-  });
-});
-
-describe('A3 @all in the Activity preview', () => {
-  it('A3 "@all" draws bold with the mention-of-me accent (tokens only)', () => {
-    const html = renderCard([
-      item({
-        eventType: 'mention',
-        entityType: 'chat_channel',
-        entityId: 'chan-1',
-        channelType: 'group',
-        title: 'Launch crew',
-        actorName: 'Bob',
-        // J7: the body as data.ts resolves it from the "@[all]" token.
-        body: chatMentionPreview('@[all] standup in 5', () => undefined),
-      }),
-    ]);
-    expect(html).toMatch(
-      /<span data-mention-all="" class="font-semibold text-accent">@all<\/span>/,
-    );
-    expect(html).not.toContain('@[');
-  });
-});
-
-describe('ActivityCard actor rows', () => {
-  it('stage_change: "<Name> approved" with the avatar, no brand suffix', () => {
-    const html = renderCard([
-      item({
-        id: 'a',
-        title: 'Diwali teaser',
-        eventType: 'stage_change',
-        toStage: 'approved',
-        number: 12,
-        actorName: 'Chitra',
-        actorRole: 'agency',
-      }),
-    ]);
-    expect(html).toContain('Chitra approved');
-    expect(html).not.toContain('on behalf of');
-    expect(html).not.toContain('Moved to');
-    expect(html).toContain('role="button"');
-  });
-
-  it('a client approver has no suffix; an old row without actor_role has none either', () => {
-    for (const actorRole of ['client', null]) {
-      const html = renderCard([
-        item({
-          eventType: 'stage_change',
-          toStage: 'rejected',
-          number: 3,
-          title: 'Promo',
-          actorName: 'Asha',
-          actorRole,
-        }),
-      ]);
-      expect(html).toContain('Asha rejected<');
-      expect(count(html, 'Promo')).toBe(1);
-      expect(html).not.toContain('on behalf of the approvers');
-    }
-  });
-
-  it('post_deleted is shown with the actor and is not tappable', () => {
-    const html = renderCard([
-      item({
-        eventType: 'post_deleted',
-        title: 'Old teaser',
-        number: 9,
-        actorName: 'Chitra',
-        actorRole: 'agency',
-      }),
-    ]);
-    // Header "<who> deleted", the title once, no body line, no KEY-N.
-    expect(html).toContain('Chitra deleted<');
-    expect(count(html, 'Old teaser')).toBe(1);
-    expect(html).not.toContain('Chitra deleted Old teaser');
-    expect(html).not.toMatch(/GBL-\d/);
-    expect(html).not.toContain('on behalf of the approvers');
-    expect(html).not.toContain('role="button"');
-    expect(html).not.toContain('cursor-pointer');
-  });
-
-  it('assets_deleted: "a file" for one, "N files" for more; missing actor is Someone', () => {
-    const one = renderCard([
-      item({
-        eventType: 'assets_deleted',
-        entityType: 'workspace',
-        entityId: 'w1',
-        scope: 'everything',
-        actorName: 'Asha',
-        actorRole: 'client',
-        assetCount: 1,
-        filenames: ['brief.pdf'],
-      }),
-    ]);
-    expect(one).toContain('Asha deleted a file');
-    // The filename is the card title.
-    expect(one).toMatch(/text-base font-medium[^"]*">brief\.pdf</);
-    expect(one).toContain('role="button"');
-    const many = renderCard([
-      item({
-        eventType: 'assets_deleted',
-        entityType: 'workspace',
-        entityId: 'w1',
-        scope: 'everything',
-        actorName: null,
-        actorRole: 'agency',
-        assetCount: 3,
-        filenames: ['a', 'b', 'c'],
-      }),
-    ]);
-    expect(many).toContain('Someone deleted 3 files');
-    expect(many).not.toContain('>Assets<');
-    expect(many).not.toContain('on behalf of the approvers');
-  });
-
-  it('a plan_comment card: item title as the header, the comment as the body, the plan icon tile', () => {
-    const html = renderCard([
-      item({
-        id: 'pc',
-        eventType: 'plan_comment',
-        entityType: 'plan_item',
-        entityId: 'i1',
-        title: 'Diwali reel',
-        actorName: 'Ana',
-        body: 'Love the hook',
-        planId: 'plan1',
-      }),
-    ]);
-    expect(count(html, 'Diwali reel')).toBe(1);
-    expect(html).toContain('Ana commented');
-    expect(html).toContain('Love the hook');
-    expect(html).toContain('data-activity-plan-icon');
-    // The neutral rail: approvals are not accented, and neither are plan events.
-    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
-    expect(html).not.toContain('undefined');
-  });
-
-  it('a plan_review card reads who did what, side-aware, with no hardcoded names', () => {
-    const client = renderCard([
-      item({
-        id: 'pr',
-        eventType: 'plan_review',
-        entityType: 'plan_item',
-        entityId: 'i1',
-        title: 'Diwali reel',
-        actorName: 'Cy',
-        reviewSide: 'client',
-        reviewStatus: 'approved',
-      }),
-    ]);
-    expect(client).toContain('Cy approved a plan item');
-    expect(client).not.toContain('team review');
-    const team = renderCard([
-      item({
-        id: 'pr',
-        eventType: 'plan_review',
-        entityType: 'plan_item',
-        entityId: 'i1',
-        title: null,
-        actorName: null,
-        reviewSide: 'team',
-        reviewStatus: 'changes',
-      }),
-    ]);
-    expect(team).toContain('Changes asked on a plan item (team review)');
-    expect(team).toContain('Someone');
-    expect(team).toContain('Plan item');
-  });
-});
-
-describe('ActivityCard: the system welcome row', () => {
-  const welcome = item({
-    eventType: 'system',
-    entityType: 'workspace',
-    entityId: 'w1',
-    welcome: { workspaceName: 'Kite', platform: 'instagram' },
-  });
-
-  it('reads "<Brand> - <Platform> is ready." with what lands here below it', () => {
-    const html = renderCard([welcome]);
-    expect(html).toContain('Kite - Instagram is ready.');
-    expect(html).toContain('Comments, approvals and briefs land here.');
-    expect(html).toContain('Welcome');
-  });
-
-  it('renders any other system kind as the generic row', () => {
-    const html = renderCard([item({ eventType: 'system', entityType: null, entityId: null })]);
-    expect(html).not.toContain('is ready.');
-  });
-});
-
-describe('ActivityCard names', () => {
-  it('the header uses the actor full name (never a username)', () => {
-    const html = renderCard([
-      item({ eventType: 'comment', title: 'Q3', actorName: 'Chitra Rao', actorId: 'u-c' }),
-    ]);
-    expect(html).toContain('Chitra Rao commented');
-  });
-
-  it('a grouped header names the newest entry actor, whatever the order', () => {
-    const older = item({
-      id: 'old',
-      title: 'Q3',
-      eventType: 'comment',
-      actorName: 'Asha',
-      createdAt: '2026-06-14T00:00:00.000Z',
-    });
-    const newer = item({
-      id: 'new',
-      title: 'Q3',
-      eventType: 'comment',
-      actorName: 'Bina',
-      createdAt: '2026-06-14T00:30:00.000Z',
-    });
-    expect(renderCard([older, newer])).toContain('Bina commented');
-    expect(renderCard([older, newer])).not.toContain('Asha commented');
-    expect(renderCard([newer, older])).toContain('Bina commented');
-  });
-
-  it('a newest entry with no actor never borrows an older row actor', () => {
-    const html = renderCard([
-      item({ id: 'n', title: 'Q3', eventType: 'comment', createdAt: '2026-06-14T00:30:00.000Z' }),
-      item({ id: 'o', title: 'Q3', eventType: 'comment', actorName: 'Asha' }),
-    ]);
-    expect(html).toContain('New comment');
-    expect(html).not.toContain('Asha commented');
-  });
-
-  it('every expanded row shows its own author photo and full name above the text', () => {
-    hooks.forceExpand = true;
-    try {
-      const html = renderCard([
-        item({
-          id: 'a',
-          title: 'Q3',
-          eventType: 'comment',
-          actorName: 'Asha',
-          createdAt: '2026-06-14T00:50:00.000Z',
-        }),
-        item({
-          id: 'b',
-          title: 'Q3',
-          eventType: 'comment_resolved',
-          actorName: 'Bina',
-          actorAvatarUrl: 'https://cdn/bina.png',
-        }),
-        item({
-          id: 'c',
-          title: 'Q3',
-          eventType: 'checkpoint_reopened',
-          actorName: 'Former member',
-        }),
-      ]);
-      // The useState shim also flips the photo's error flag, so faces render as initials here;
-      // the photo url path is covered by the header test below.
-      expect(count(html, 'data-activity-entry-author')).toBe(2);
-      expect(html).toMatch(/data-activity-entry-author=""[^>]*><div[^>]*>B<\/div>/);
-      expect(html).toMatch(/data-activity-entry-author[\s\S]*Bina[\s\S]*Thread resolved/);
-      expect(html).toMatch(/data-activity-entry-author[\s\S]*Former member[\s\S]*Point reopened/);
-    } finally {
-      hooks.forceExpand = false;
-    }
-  });
-
-  it('an expanded actor row shows the name once, in its author line', () => {
-    hooks.forceExpand = true;
-    try {
-      const html = renderCard([
-        item({ id: 'a', title: 'Q3', eventType: 'comment', createdAt: '2026-06-14T00:50:00.000Z' }),
-        item({
-          id: 'b',
-          title: 'Q3',
-          eventType: 'stage_change',
-          toStage: 'approved',
-          actorName: 'Bina Shah',
-        }),
-      ]);
-      expect(count(html, 'Bina Shah')).toBe(1);
-      expect(html).toContain('>approved<');
-      expect(count(html, 'Q3')).toBe(1);
-    } finally {
-      hooks.forceExpand = false;
-    }
-  });
-
-  it('checkpoint, resolved, ready, asset and brief rows carry their own actor in the header', () => {
-    const cases: Array<[Partial<ActivityItem>, string]> = [
-      [{ eventType: 'comment_resolved' }, 'Dev resolved a thread'],
-      [{ eventType: 'checkpoint_asked' }, 'Dev asked a question'],
-      [{ eventType: 'checkpoint_reopened' }, 'Dev reopened a point'],
-      [{ eventType: 'brief_created', entityType: 'brief' }, '>Dev<'],
-      [{ eventType: 'brief_closed', entityType: 'brief' }, '>Dev<'],
-      [{ eventType: 'brief_reopened', entityType: 'brief' }, '>Dev<'],
-      [{ eventType: 'brief_reopened', entityType: 'brief' }, 'Brief reopened'],
-      [{ eventType: 'asset_uploaded', entityType: null, entityId: null }, '>Dev<'],
+      item({ id: 'c', title: 'Q3', eventType: 'comment' }),
     ];
-    for (const [over, text] of cases) {
-      const html = renderCard([
-        item({ title: 'Q3', actorName: 'Dev', actorAvatarUrl: 'https://cdn/dev.png', ...over }),
-      ]);
-      expect(html).toContain(text);
-      expect(html).toContain('https://cdn/dev.png');
-    }
-    const ready = renderCard([item({ title: 'Q3', eventType: 'post_ready', actorName: 'Dev' })]);
-    expect(ready).toContain('Ready for review');
-    expect(ready).toMatch(/>D<\/div>/);
+    expect(activityPreviewText(group)).toBe('+2 more');
+    const html = renderCard(group);
+    expect(count(html, 'data-list-card=""')).toBe(1);
+    expect(html).toContain('+2 more');
   });
 
-  it('checkpoint rows never read "Activity" as their body', () => {
-    const html = renderCard([item({ title: 'Q3', eventType: 'checkpoint_reopened' })]);
-    expect(html).toContain('Point reopened');
-    expect(html).not.toContain('>Activity<');
+  it('the unread dot shows only when something in the group is unread', () => {
+    const unread = renderCard([item({ readAt: null })]);
+    expect(unread).toContain('data-list-card-unread');
+    const read = renderCard([item({ readAt: '2026-06-14T00:30:00.000Z' })]);
+    expect(read).not.toContain('data-list-card-unread');
+    // Unread is the dot, never a picked card.
+    expect(unread).not.toContain('lit-selected');
   });
 
-  it('an on-behalf approval reads "<actor> approved for <client>"', () => {
-    const html = renderCard([
-      item({
-        title: 'Q3',
-        eventType: 'stage_change',
-        toStage: 'approved',
-        actorName: 'Chitra',
-        actorRole: 'agency',
-        onBehalfOfId: 'u-k',
-        onBehalfOfName: 'Kiran Shah',
-      }),
-    ]);
-    expect(html).toContain('Chitra approved for Kiran Shah');
-    expect(html).not.toContain('on behalf of the approvers');
-  });
-});
-
-describe('ActivityCard: notifications fixes', () => {
-  it('fix 1: an imageless post tile clamps its body to 3 lines on the card', () => {
-    const html = renderCard([
-      item({ title: 'Q3', format: 'text', caption: 'A long caption for the launch post' }),
-    ]);
-    expect(html).toContain('mt-auto line-clamp-3 text-sm leading-snug text-fg-2');
-    expect(html).not.toContain('line-clamp-4');
+  it('the time is formatAgo on the list clock (mono meta), never a clock time', () => {
+    const html = renderCard([item({ createdAt: '2026-06-14T00:00:00.000Z' })]);
+    const time = /<span data-list-card-time="" data-activity-time="" class="([^"]*)">([^<]*)</.exec(
+      html,
+    );
+    expect(time?.[1]).toContain('font-mono');
+    expect(time?.[1]).toContain('tabular-nums');
+    expect(time?.[2]).toBe('1h');
+    expect(html).not.toContain('12:00 AM');
+    expect(html).not.toContain('Yesterday');
   });
 
-  it('fix 4: an actor row says who did what on the top line, with no body line', () => {
-    const parked = renderCard([
-      item({
-        title: 'Q3 Launch',
-        eventType: 'stage_change',
-        toStage: 'parked',
-        actorName: 'Chitra',
-      }),
-    ]);
-    expect(parked).toContain('>Chitra parked<');
-    expect(count(parked, 'Q3 Launch')).toBe(1);
-    expect(parked).not.toContain('mt-[3px]');
-    const deleted = renderCard([
-      item({ title: 'Old teaser', eventType: 'post_deleted', actorName: 'Chitra' }),
-    ]);
-    expect(deleted).toContain('>Chitra deleted<');
-    expect(deleted).not.toContain('mt-[3px]');
-    const files = renderCard([
-      item({
-        eventType: 'assets_deleted',
-        entityType: 'workspace',
-        entityId: 'w1',
-        scope: 'everything',
-        actorName: 'Chitra',
-        assetCount: 1,
-        filenames: ['deck.pdf'],
-      }),
-    ]);
-    expect(files).toContain('>Chitra deleted a file<');
-    expect(files).not.toContain('mt-[3px]');
+  it('the time ages with the clock it is handed (no timer of its own)', () => {
+    const at = (nowMs: number): string =>
+      /data-activity-time="" class="[^"]*">([^<]*)</.exec(
+        renderToStaticMarkup(
+          <ActivityCard
+            group={[item({ createdAt: '2026-06-14T00:00:00.000Z' })]}
+            nowMs={nowMs}
+            timeZone="UTC"
+            cache={cache}
+            presignEnabled={false}
+            onOpenGroup={() => {}}
+            onOpenEntry={() => {}}
+            onSnooze={() => {}}
+            onMarkRead={() => {}}
+            selfName={null}
+          />,
+        ),
+      )?.[1] ?? '';
+    const base = Date.parse('2026-06-14T00:00:00.000Z');
+    expect(at(base + 10_000)).toBe('just now');
+    expect(at(base + 5 * 60_000)).toBe('5m');
+    expect(at(base + 3 * 3_600_000)).toBe('3h');
+    // Civil days on the zone it is handed: Sun 14 Jun read on Tue 16 Jun.
+    expect(at(base + 86_400_000)).toBe('Yesterday');
+    expect(at(base + 2 * 86_400_000)).toBe('Sun');
+    expect(at(base + 7 * 86_400_000)).toBe('14 Jun');
   });
 
-  it('fix 6: a brief card shows the BRIEF text tile with the brief title', () => {
-    const html = renderCard([
-      item({
-        eventType: 'brief_created',
-        entityType: 'brief',
-        entityId: 'b1',
-        scope: 'briefs',
-        title: 'Spring launch brief',
-        actorName: 'Dev',
-      }),
-    ]);
-    expect(html).toMatch(/data-activity-text-tile="Brief"[\s\S]*>Brief<[\s\S]*Spring launch brief/);
-    expect(html).not.toContain('<img');
-  });
-
-  it('fix 7: the card time is tabular-nums and never font-mono', () => {
-    const html = renderCard([item({ eventType: 'comment' })]);
-    const time = /<span data-activity-time="" class="([^"]*)"/.exec(html)?.[1] ?? '';
-    expect(time.split(' ')).toContain('tabular-nums');
-    expect(time).not.toContain('font-mono');
-    expect(html).toMatch(/data-activity-time=""[^>]*>1 hour ago</);
-  });
-
-  it('fix 8: a posts row still shows its "Posts" scope tag', () => {
-    const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
-    expect(html).toMatch(/text-xs font-medium bg-panel-2 text-fg-2">Posts</);
-  });
-
-  it('fix 10: a body line wraps anywhere so a long token never overflows', () => {
-    const long = 'https://example.com/'.concat('a'.repeat(120));
-    const html = renderCard([item({ title: 'Q3', eventType: 'comment', body: long })]);
-    expect(html).toMatch(/<p class="mt-\[3px\][^"]*\[overflow-wrap:anywhere\]">https:\/\/example/);
-  });
-
-  it('fix 15: a live-added card renders at its final place (itemIn lays a Y rise over it), never a class fade or slide', () => {
-    const entering = renderCard([item({ id: 'new' })], { entering: true });
-    expect(entering).toContain('data-activity-entering=""');
-    expect(entering).toContain('data-activity-id="new"');
-    const root = /^<div[^>]*data-activity-entering=""[^>]*class="([^"]*)"/.exec(entering)?.[1];
-    expect(root).not.toMatch(/translate-|rotate|opacity|transition|duration-|motion-safe/);
-    const settled = renderCard([item({ id: 'old' })]);
-    expect(settled).not.toContain('data-activity-entering');
-    expect(settled).not.toMatch(/translate-y-2|motion-safe/);
-  });
-
-  describe('fix 30: deleted files', () => {
-    const deleted = (over: Partial<ActivityItem>): ActivityItem =>
-      item({
-        eventType: 'assets_deleted',
-        entityType: 'workspace',
-        entityId: 'w1',
-        scope: 'everything',
-        actorName: 'Asha',
-        ...over,
-      });
-
-    it('names the first file as the title, lists the others and badges the rest', () => {
-      const html = renderCard([
-        deleted({
-          assetCount: 5,
-          filenames: ['deck.pdf', 'hero.png', 'teaser.mov'],
-          deletedFiles: [
-            { assetVersionId: null, filename: 'deck.pdf', mimeType: 'application/pdf' },
-            { assetVersionId: 'v2', filename: 'hero.png', mimeType: 'image/png' },
-            { assetVersionId: 'v3', filename: 'teaser.mov', mimeType: 'video/quicktime' },
-          ],
-        }),
-      ]);
-      expect(html).toContain('>Asha deleted 5 files<');
-      expect(html).toMatch(/text-base font-medium[^"]*">deck\.pdf</);
-      expect(html).toContain('Also hero.png, teaser.mov and 2 more');
-      expect(html).toContain('data-activity-text-tile="PDF"');
-      expect(html).toMatch(/data-activity-files-badge=""[^>]*>\+4</);
-      expect(html).not.toContain('>Assets<');
-    });
-
-    it('one file: no body line and no badge', () => {
-      const html = renderCard([
-        deleted({
-          assetCount: 1,
-          filenames: ['clip.mp4'],
-          deletedFiles: [{ assetVersionId: null, filename: 'clip.mp4', mimeType: null }],
-        }),
-      ]);
-      expect(html).toContain('>Asha deleted a file<');
-      expect(html).not.toContain('Also ');
-      expect(html).not.toContain('data-activity-files-badge');
-      expect(html).toContain('data-activity-text-tile="VIDEO"');
-    });
-
-    it('an old row with filenames only reads its kind from the name', () => {
-      const html = renderCard([deleted({ assetCount: 2, filenames: ['photo.jpg', 'notes.txt'] })]);
-      expect(html).toContain('data-activity-text-tile="IMAGE"');
-      expect(html).toContain('Also notes.txt');
-      expect(html).toMatch(/data-activity-files-badge=""[^>]*>\+1</);
-    });
-  });
-
-  it('fix 31: a chat mention card shows the chat icon tile, not a blank square', () => {
-    const html = renderCard([
-      item({
-        eventType: 'mention',
-        entityType: 'chat_channel',
-        entityId: 'chan-1',
-        scope: 'people',
-        channelType: 'dm',
-        actorName: 'Bob',
-        body: 'ping',
-      }),
-    ]);
-    expect(html).toContain('data-activity-icon-tile="chat"');
-    expect(html).toMatch(/data-activity-icon-tile="chat"[^>]*><svg/);
-  });
-
-  it('fix 32: the welcome card shows the workspace colour tile with its initial', () => {
-    const html = renderCard([
-      item({
-        eventType: 'system',
-        entityType: 'workspace',
-        entityId: 'w1',
-        welcome: { workspaceName: 'Kite', platform: 'instagram' },
-      }),
-    ]);
-    const tile = /<div data-activity-welcome-tile=""[^>]*class="([^"]*)"[^>]*>([^<]*)</.exec(html);
-    expect(tile?.[1]).toContain(avatarFillFor('Kite'));
-    expect(tile?.[1]).toMatch(/bg-avatar-\d/);
-    expect(tile?.[1]).toContain('text-accent-fg');
-    expect(tile?.[1]).not.toMatch(/\btext-white\b/);
-    expect(tile?.[2]).toBe('K');
-  });
-});
-
-describe('ActivityCard: merged plan edit time', () => {
-  it('an edited plan_updated card reads the last edit, not the first', () => {
+  it('an edited plan_updated card reads the last edit time, not the first', () => {
     const html = renderCard([
       item({
         id: 'pe',
         eventType: 'plan_updated',
         entityType: 'plan',
-        createdAt: '2026-06-14T00:58:00.000Z',
+        createdAt: '2026-06-13T00:58:00.000Z',
         alert: {
           kind: 'plan',
           channelId: null,
@@ -935,13 +209,138 @@ describe('ActivityCard: merged plan edit time', () => {
         },
       }),
     ]);
-    expect(html).toContain('just now');
-    expect(html).not.toContain('2 min ago');
+    expect(html).toMatch(/data-activity-time=""[^>]*>just now</);
+    expect(html).not.toContain('Yesterday');
+  });
+
+  it('one grey tag naming the kind: Mention, Post, Brief, Plan, Reminder', () => {
+    expect(activityKind(item({ entityType: 'post', scope: 'posts' }))).toBe('Post');
+    expect(activityKind(item({ entityType: 'brief', scope: 'briefs' }))).toBe('Brief');
+    expect(activityKind(item({ entityType: 'plan_item', scope: 'posts', planId: 'p' }))).toBe(
+      'Plan',
+    );
+    expect(
+      activityKind(item({ eventType: 'mention', entityType: 'chat_channel', scope: 'groups' })),
+    ).toBe('Mention');
+    expect(activityKind(item({ eventType: 'mention', entityType: 'post', scope: 'posts' }))).toBe(
+      'Mention',
+    );
+    expect(
+      activityKind(item({ eventType: 'task_due', entityType: 'chat_channel', scope: 'people' })),
+    ).toBe('Reminder');
+    expect(activityKind(item({ eventType: 'invite', entityType: null, scope: 'people' }))).toBe(
+      undefined,
+    );
+    const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
+    expect(html).toMatch(/data-activity-scope-tag=""[^>]*>[^]*?bg-panel-2 text-fg-2[^"]*">Post</);
+    expect(count(html, 'data-list-card-tag')).toBe(1);
+  });
+
+  it('a group of several entries counts them in its one tag ("3 updates")', () => {
+    const group = [
+      item({ id: 'a', title: 'Q3', eventType: 'stage_change', toStage: 'approved' }),
+      item({ id: 'b', title: 'Q3', eventType: 'mention' }),
+      item({ id: 'c', title: 'Q3', eventType: 'comment' }),
+    ];
+    expect(activityCardTag(group)).toBe('3 updates');
+    expect(activityCardTag(group.slice(0, 1))).toBe('Post');
+    const html = renderCard(group);
+    expect(html).toMatch(/data-activity-updates-tag=""[^>]*>[^]*?">3 updates</);
+    expect(count(html, 'data-list-card-tag')).toBe(1);
+    expect(html).not.toContain('data-activity-scope-tag');
+  });
+
+  it('the ⋯ sits on line 3 through ActionMenuTrigger (the trailing rule)', () => {
+    const html = renderCard([item({})]);
+    expect(html).toMatch(/data-list-card-more=""[^]*data-activity-menu=""/);
+    expect(html).toMatch(/aria-label="Activity options"[^>]*-mr-3/);
+  });
+
+  it('a live-added card renders at its final place, never a class fade or slide', () => {
+    const entering = renderCard([item({ id: 'new' })], { entering: true });
+    expect(entering).toContain('data-activity-entering=""');
+    const root = /^<div[^>]*data-activity-entering=""[^>]*class="([^"]*)"/.exec(entering)?.[1];
+    expect(root).not.toMatch(/translate-|rotate|opacity|transition|duration-|motion-safe/);
+    expect(renderCard([item({ id: 'old' })])).not.toContain('data-activity-entering');
   });
 });
 
-describe('ActivityCard previews hide formatting markers', () => {
-  it('a chat mention preview reads the words without markers', () => {
+describe('ActivityCard pictures', () => {
+  it('a post with no picture shows the PostPlaceholder ("Aa", the play glyph for video)', () => {
+    const text = renderCard([item({ title: 'Q3', format: 'text' })]);
+    expect(text).toContain('data-list-card-picture="placeholder"');
+    expect(text).toContain('data-post-placeholder="text"');
+    const video = renderCard([item({ title: 'Q3', format: 'video' })]);
+    expect(video).toContain('data-post-placeholder="video"');
+  });
+
+  it('a mention is that person: the actor photo circle at 72', () => {
+    const html = renderCard([
+      item({
+        eventType: 'mention',
+        entityType: 'chat_channel',
+        scope: 'people',
+        channelType: 'dm',
+        actorName: 'Bob',
+        actorAvatarUrl: 'https://cdn/bob.png',
+        body: 'ping',
+      }),
+    ]);
+    expect(html).toContain('data-list-card-picture="person"');
+    expect(html).toContain('https://cdn/bob.png');
+    expect(html).toContain('data-avatar-role="profile"');
+    // No separate small actor avatar.
+    expect(html).not.toContain('data-avatar-role="inline"');
+  });
+
+  it('a brief is the brief icon box; a plan item the plan icon box', () => {
+    const brief = renderCard([
+      item({ eventType: 'brief_created', entityType: 'brief', scope: 'briefs', actorName: 'Dev' }),
+    ]);
+    expect(brief).toContain('data-list-card-picture="icon"');
+    const plan = renderCard([
+      item({ eventType: 'plan_comment', entityType: 'plan_item', planId: 'p', body: 'hi' }),
+    ]);
+    expect(plan).toContain('data-list-card-picture="icon"');
+  });
+
+  it('the welcome row shows the workspace mark with its initial', () => {
+    const html = renderCard([
+      item({
+        eventType: 'system',
+        entityType: 'workspace',
+        entityId: 'w1',
+        welcome: { workspaceName: 'Kite', platform: 'instagram' },
+      }),
+    ]);
+    expect(html).toContain('data-list-card-picture="image"');
+    expect(html).toContain('>K<');
+  });
+});
+
+describe('ActivityCard titles and previews', () => {
+  it('chat mention: "<actor> mentioned you in <group>" over the message', () => {
+    const html = renderCard([
+      item({
+        eventType: 'mention',
+        entityType: 'chat_channel',
+        entityId: 'chan-1',
+        scope: 'groups',
+        channelType: 'group',
+        title: 'Launch crew',
+        actorName: 'Bob',
+        body: 'hey @Ana see this',
+        messageId: 'msg-1',
+      }),
+    ]);
+    expect(html).toContain('Bob mentioned you in Launch crew');
+    expect(html).toContain('hey @Ana see this');
+    expect(html).not.toContain('@[');
+    const classes = [...html.matchAll(/class="([^"]*)"/g)].map((m) => m[1]).join(' ');
+    expect(classes).not.toMatch(/dark:|#[0-9a-f]{6}/i);
+  });
+
+  it('"@all" draws bold with the mention-of-me accent (tokens only)', () => {
     const html = renderCard([
       item({
         eventType: 'mention',
@@ -950,20 +349,59 @@ describe('ActivityCard previews hide formatting markers', () => {
         channelType: 'group',
         title: 'Launch crew',
         actorName: 'Bob',
-        body: '*ship* _today_',
+        body: chatMentionPreview('@[all] standup in 5', () => undefined),
       }),
     ]);
-    expect(html).toContain('ship today');
-    expect(html).not.toContain('*ship*');
+    expect(html).toMatch(
+      /<span data-mention-all="" class="font-semibold text-accent">@all<\/span>/,
+    );
   });
 
-  it('a comment body reads the words without markers; mid-word markers stay', () => {
+  it('actor rows: "<Name> approved <Title>", the name first, the title once', () => {
+    const group = [
+      item({
+        title: 'Watch launch',
+        eventType: 'stage_change',
+        toStage: 'approved',
+        actorName: 'Maya',
+      }),
+    ];
+    expect(activityCardTitle(group)).toBe('Maya approved Watch launch');
+    const html = renderCard(group);
+    expect(count(html, 'Watch launch')).toBe(1);
+  });
+
+  it('the title names the newest entry actor, never an older row actor', () => {
+    const older = item({
+      id: 'old',
+      title: 'Q3',
+      eventType: 'comment',
+      actorName: 'Asha',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+    const newer = item({
+      id: 'new',
+      title: 'Q3',
+      eventType: 'comment',
+      actorName: 'Bina',
+      createdAt: '2026-06-14T00:30:00.000Z',
+    });
+    expect(activityCardTitle([older, newer])).toBe('Bina commented on Q3');
+    expect(activityCardTitle([newer, older])).toBe('Bina commented on Q3');
+    const anon = item({
+      id: 'n',
+      title: 'Q3',
+      eventType: 'comment',
+      createdAt: '2026-06-14T00:30:00.000Z',
+    });
+    expect(activityCardTitle([anon, older])).toBe('New comment on Q3');
+  });
+
+  it('a comment previews its words without formatting markers', () => {
     const html = renderCard([
       item({
-        id: 'pc',
         eventType: 'plan_comment',
         entityType: 'plan_item',
-        entityId: 'i1',
         title: 'Diwali reel',
         actorName: 'Ana',
         body: '*ship* _today_ snake_case_name',
@@ -972,5 +410,82 @@ describe('ActivityCard previews hide formatting markers', () => {
     ]);
     expect(html).toContain('ship today snake_case_name');
     expect(html).not.toContain('_today_');
+  });
+
+  it('deleted files: the who-did-what title, the other files as the preview', () => {
+    const group = [
+      item({
+        eventType: 'assets_deleted',
+        entityType: 'workspace',
+        scope: 'everything',
+        actorName: 'Asha',
+        assetCount: 3,
+        filenames: ['deck.pdf', 'hero.png', 'teaser.mov'],
+      }),
+    ];
+    expect(activityCardTitle(group)).toBe('Asha deleted 3 files');
+    expect(activityPreviewText(group)).toBe('deck.pdf · Also hero.png and teaser.mov');
+  });
+
+  it('post_deleted opens nothing: no card button', () => {
+    const html = renderCard([item({ eventType: 'post_deleted', title: 'Old', actorName: 'C' })]);
+    expect(html).not.toContain('data-list-card-press');
+    expect(html).not.toContain('data-activity-lead');
+  });
+
+  it('a tappable card is one button named by its title, unread dot and preview', () => {
+    const html = renderCard([item({ title: 'Q3', actorName: 'Dev', readAt: null })]);
+    const button = /<button[^>]*data-activity-lead=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(button).not.toContain('aria-label=');
+    const ids = /aria-labelledby="([^"]+)"/.exec(button)?.[1]?.split(' ') ?? [];
+    expect(ids).toHaveLength(3);
+    expect(html).toContain(`id="${ids[0]}" data-list-card-title=""`);
+    expect(html).toMatch(new RegExp(`<span[^>]*id="${ids[0]}"[^>]*>Dev commented on Q3<`));
+    expect(html).toContain(`id="${ids[1]}" data-list-card-unread=""`);
+    expect(html).toContain(`id="${ids[2]}" data-list-card-preview=""`);
+  });
+});
+
+describe('a failed scheduled send: Edit and Retry move into the ⋯', () => {
+  const failed = item({
+    eventType: 'scheduled_failed',
+    entityType: 'chat_channel',
+    alert: {
+      kind: 'failed',
+      channelId: 'c1',
+      chatName: 'Launch',
+      chatType: 'group',
+      scheduledId: 's1',
+      reason: null,
+      stale: false,
+      preview: null,
+      planTitle: null,
+      itemTitle: null,
+    },
+  });
+
+  it('the menu rows call Edit and Retry; the card keeps its one height (no buttons on it)', () => {
+    const calls: string[] = [];
+    const rows = failedSendItems(
+      failed,
+      () => calls.push('edit'),
+      () => calls.push('retry'),
+    );
+    expect(rows.map((r) => r.id)).toEqual(['edit', 'retry']);
+    for (const r of rows) r.onSelect();
+    expect(calls).toEqual(['edit', 'retry']);
+    const html = renderCard([failed], { onEdit: () => {}, onRetry: () => {} });
+    expect(html).not.toContain('data-activity-action');
+    expect(html).toContain('data-activity-only-you');
+  });
+
+  it('other cards add no rows', () => {
+    expect(
+      failedSendItems(
+        item({}),
+        () => {},
+        () => {},
+      ),
+    ).toEqual([]);
   });
 });

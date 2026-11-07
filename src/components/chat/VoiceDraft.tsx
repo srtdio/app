@@ -61,7 +61,7 @@ export function voiceDraftView(props: {
         shape="round"
         data-voice-draft-send=""
         aria-label="Send voice note"
-        disabled={props.busy}
+        busy={props.busy}
         onClick={props.onSend}
         className="shrink-0"
       >
@@ -149,7 +149,7 @@ export function StopRecordingDialog(props: {
   return createPortal(
     <div
       data-stop-recording=""
-      className="fixed inset-0 z-50 flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
+      className="fixed inset-0 z-sheet flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
     >
       {/* A tap outside the panel keeps recording, like Escape. */}
       <Backdrop aria-label={STOP_RECORDING_KEEP} onClick={props.onKeep} position="absolute" />

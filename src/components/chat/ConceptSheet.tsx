@@ -82,7 +82,7 @@ export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} 
 export const CONCEPT_FILES_READ_FAILED = errorText('load files', null);
 
 /** The Save label while it waits for uploads. */
-export const CONCEPT_SAVE_UPLOADING = 'Uploading...';
+export const CONCEPT_SAVE_UPLOADING = 'Uploading…';
 
 /** The files section: known, being read, or the read failed (edit only). */
 export type ConceptFilesState = 'ready' | ConceptFilesReadState;
@@ -391,7 +391,7 @@ export function ConceptSheet(props: {
                   const description = e.target.value;
                   onChange((f) => ({ ...f, description }));
                 }}
-                className={cn(FIELD, 'leading-[1.45]')}
+                className={FIELD}
                 style={{ minHeight: '104px' }}
               />
             </label>
@@ -415,12 +415,12 @@ export function ConceptSheet(props: {
           ) : null}
           {filesState === 'loading' ? (
             <div data-plan-concept-files-loading="" aria-label="Loading files">
-              <Bone lit="lit-card" as="div" className="h-[72px] rounded-xl" />
+              <Bone lit="lit-card" as="div" className="h-18 rounded-xl" />
             </div>
           ) : filesState === 'failed' ? (
             <div
               data-plan-concept-files-failed=""
-              className="flex min-h-[72px] items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
+              className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-4 lit-card"
             >
               <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>

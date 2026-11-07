@@ -17,7 +17,7 @@ import {
 
 // Concept files: a fresh upload beside the library picker, and the Edit
 // concept sheet's files read. Create: one uploaded file (library origin, held
-// in flight so Save reads "Uploading..." and waits) and one library file land
+// in flight so Save reads "Uploading…" and waits) and one library file land
 // in plan_create_with_items' concept. Edit: a slow files read shows the skeleton row with no
 // Add or Upload, then the list; a failed read shows "Couldn't load files."
 // with Retry, and Save sends files as null so the links stay. Runs in both
@@ -147,10 +147,10 @@ test('create a concept with one uploaded file and one library file', async ({ pa
   await expect(concept.locator('[data-plan-concept-upload="uploading"]')).toHaveCount(1);
   await expect(concept.getByText('Uploading', { exact: true })).toBeVisible();
 
-  // Save waits: "Uploading..." and a second tap does nothing.
+  // Save waits: "Uploading…" and a second tap does nothing.
   const save = concept.locator('[data-plan-concept-save]');
   await save.click();
-  await expect(save).toHaveText('Uploading...');
+  await expect(save).toHaveText('Uploading…');
   await save.click();
   await expect(concept).toBeVisible();
   held.release();

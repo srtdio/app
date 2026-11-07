@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { TRAILING_PULL } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 
@@ -15,7 +16,7 @@ interface SidePanelProps {
 }
 
 /** The laptop side panel's one width. */
-export const SIDE_PANEL_WIDTH_CLASS = 'w-[380px]';
+export const SIDE_PANEL_WIDTH_CLASS = 'w-side-panel';
 const SIDE_PANEL_WIDTH_PX = '380px';
 
 /**
@@ -73,16 +74,17 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
         // Fixed, so it never scrolls with the page in page mode on a touch
         // tablet; there the top bar also covers the status bar strip, so its
         // top is --shell-sticky-top (unset everywhere else: 3.5rem, the old top-14).
-        'lit-overlay fixed bottom-0 right-0 top-[var(--shell-sticky-top,3.5rem)] z-20 overflow-hidden border-l bg-panel focus:outline-none',
+        'lit-overlay fixed bottom-0 right-0 top-[var(--shell-sticky-top,3.5rem)] z-sticky overflow-hidden border-l bg-panel focus:outline-none',
         SIDE_PANEL_WIDTH_CLASS,
       )}
     >
       <div className="flex h-full flex-col">
-        <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-1.5">
+        {/* Header 56 on the 16 edge; the X is pulled out by 12 (the trailing rule). */}
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
           <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>
           {headerExtra}
           <span className="ml-auto flex items-center">
-            <IconButton label="Close" onClick={onClose}>
+            <IconButton label="Close" onClick={onClose} className={TRAILING_PULL}>
               <IconX size={ICON_SIZE.control} />
             </IconButton>
           </span>

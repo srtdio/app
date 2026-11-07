@@ -3,6 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { ErrorNote } from '@/components/ui/ErrorNote';
+import { Text } from '@/components/ui/Text';
 import { cn } from '@/lib/cn';
 import { countText } from '@/lib/cockpit/format';
 import type { DotLevel } from '@/lib/cockpit/types';
@@ -14,19 +15,21 @@ export const DOT_FILL: Record<DotLevel, string> = {
   grey: 'bg-fg-3',
 };
 
-/** A 10px status dot (8px with small). */
+/** A 12px status dot (8px with small). */
 export function StatusDot({ level, small = false }: { level: DotLevel; small?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={cn('shrink-0 rounded-full', small ? 'h-2 w-2' : 'h-2.5 w-2.5', DOT_FILL[level])}
+      className={cn('shrink-0 rounded-full', small ? 'h-2 w-2' : 'h-3 w-3', DOT_FILL[level])}
     />
   );
 }
 
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{children}</h3>
+    <Text as="h3" role="section">
+      {children}
+    </Text>
   );
 }
 
@@ -59,7 +62,7 @@ export function Stats({
       {items.map((item) => (
         <div
           key={item.label}
-          className="flex min-w-0 flex-col gap-1 rounded-xl border bg-panel lit-card px-3 py-2.5"
+          className="flex min-w-0 flex-col gap-1 rounded-xl border bg-panel lit-card p-3"
         >
           <dt className="truncate text-sm text-fg-2">{item.label}</dt>
           <dd className="font-mono text-2xl font-semibold tabular-nums text-fg">

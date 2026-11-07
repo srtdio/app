@@ -63,6 +63,7 @@ import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatDueDate } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
@@ -81,10 +82,10 @@ export type SheetGallery = { status: 'loading' } | { status: 'ready'; items: Gal
  * sheet body's padding; auto width then spans them), for a format with no
  * platform frame. The skeleton is the same box.
  */
-export const STRIP_BOX = 'relative -mx-[18px] -mt-4 aspect-[4/5] overflow-hidden bg-panel-3';
+export const STRIP_BOX = 'relative -mx-4 -mt-4 aspect-[4/5] overflow-hidden bg-panel-3';
 
 /** The bled rail a platform frame sits centred in. */
-const STRIP_RAIL = 'relative -mx-[18px] -mt-4 flex justify-center bg-panel-3';
+const STRIP_RAIL = 'relative -mx-4 -mt-4 flex justify-center bg-panel-3';
 
 /**
  * The strip's platform frame: the post's platform + format and its first slide
@@ -351,7 +352,7 @@ export function PostSheetMedia(props: {
  */
 export function PostSheetDetails(props: {
   view: PostView;
-  /** For tests: the zone moments render in. The app passes none (the viewer's device zone). */
+  /** Unused: moments read relative (formatAgo on the shared minute clock). */
   timeZone?: string | undefined;
   /** The workspace's zone: the target (due) date reads its calendar day on it. */
   workspaceZone: string | null | undefined;
@@ -364,10 +365,11 @@ export function PostSheetDetails(props: {
 }): ReactElement {
   const { post, approverName, approverRole } = props.view;
   const stage = props.stage ?? post.stage;
+  const nowMs = useMinuteClock();
   const rows = detailRows(
     post,
     approverName,
-    props.timeZone,
+    new Date(nowMs),
     props.workspaceZone,
     approverRole ?? null,
     props.brand,
@@ -375,7 +377,7 @@ export function PostSheetDetails(props: {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start gap-3">
-        <h3 data-sheet-title="" className="min-w-0 flex-1 py-2.5 text-lg font-semibold text-fg">
+        <h3 data-sheet-title="" className="min-w-0 flex-1 py-3 text-lg font-semibold text-fg">
           {post.title}
         </h3>
         {props.aside !== undefined ? (
@@ -385,7 +387,7 @@ export function PostSheetDetails(props: {
         ) : null}
       </div>
       <dl className="flex flex-col text-base">
-        <div className="flex min-h-[36px] items-center justify-between gap-3 border-b border-border">
+        <div className="flex min-h-9 items-center justify-between gap-3 border-b border-border">
           <dt className="text-fg-3">Stage</dt>
           <dd>
             <Tag label={stageTagLabel(stage)} {...(isTagDot(stage) ? { dot: stage } : {})} />
@@ -395,7 +397,7 @@ export function PostSheetDetails(props: {
           <div
             key={row.key}
             data-sheet-row={row.key}
-            className="flex min-h-[36px] items-center justify-between gap-3 border-b border-border last:border-b-0"
+            className="flex min-h-9 items-center justify-between gap-3 border-b border-border last:border-b-0"
           >
             <dt className="shrink-0 text-fg-3">{row.label}</dt>
             <dd className="min-w-0 truncate text-right text-fg">{row.value}</dd>
@@ -415,7 +417,7 @@ export interface PostSheetExtrasProps {
   onComment?: (() => void) | undefined;
   /** Bring the post into the chat's conversation; absent hides the button. */
   onTalkAbout?: (() => void) | undefined;
-  /** A quiet meta line (the agency's "Waiting on approvers since ..."), or null. */
+  /** A quiet meta line (the agency's "Waiting on approvers · 3h"), or null. */
   hint: string | null;
 }
 
@@ -550,6 +552,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
   const newTrace = useNewTrace();
   const toast = useToast();
   const isLaptop = useIsLaptop();
+  const nowMs = useMinuteClock();
   const { workspaces, workspaceId, workspaceName, workspaceKey } = useWorkspace();
   const brand = workspaceName ?? null;
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
@@ -741,7 +744,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
                       }
                     : undefined
                 }
-                hint={agencyWaitingHint(side, post, timeZone)}
+                hint={agencyWaitingHint(side, post, new Date(nowMs))}
               />
             </>
           )}
@@ -752,7 +755,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         ? createPortal(
             <div
               data-post-sheet-viewer=""
-              className="fixed inset-0 z-[60] flex flex-col items-center overflow-y-auto bg-overlay pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
+              className="fixed inset-0 z-dialog flex flex-col items-center overflow-y-auto bg-overlay pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
             >
               {/* Centred when it fits; a very tall slide scrolls rather than crops.
                   The width cap keeps a 4:5 slide plus its bar inside a wide screen. */}

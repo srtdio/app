@@ -764,21 +764,19 @@ const STOP_POINTER = {
  * when nothing (a reply quote, a forwarded label, a mark) sits above the note.
  */
 const BUBBLE_INSET: ChatSize = {
-  touch:
-    'w-[264px] -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
-  laptop:
-    'w-[264px] -ml-[9px] -mr-[7px] -mb-[8px] [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-[6px]',
+  touch: 'w-64 -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
+  laptop: 'w-64 -mx-2 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
 };
 
-/** Row 2 and the error row start under the wave: 44px play + 2px gap. */
-const UNDER_WAVE = 'pl-[46px]';
+/** Row 2 and the error row start under the wave: 44px play + 4px gap. */
+const UNDER_WAVE = 'pl-12';
 
 /**
  * A 44px tall text control on a 16px row, without growing the row: the
  * PressableRow is 44 tall (its min-h) and -14px margins top and bottom give
  * back the 28px, with the text centred.
  */
-const TALL_HIT = 'flex -my-3.5 items-center';
+const TALL_HIT = 'flex -my-4 items-center';
 
 /** Per side colours. Sent avoids the class names the own bubble restyles. */
 function sideTone(mine: boolean): {
@@ -911,7 +909,7 @@ function TranscriptDrop(props: {
 }
 
 /** The voice ring's place: absolutely centred inside the (relative, 44px) play slot. */
-const VOICE_RING_POSITION = 'absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2';
+const VOICE_RING_POSITION = 'absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2';
 
 /** An own note's upload: the ring (active) or, once done, play in its place. */
 interface VoiceUpload {
@@ -1349,7 +1347,7 @@ export function VoiceNote({
       aria-label={active ? 'Pause voice note' : 'Play voice note'}
       {...(uploading ? { 'aria-hidden': true, tabIndex: -1 } : {})}
       className={cn(
-        'flex h-11 min-w-[44px] shrink-0 items-center justify-center disabled:cursor-default',
+        'flex h-11 min-w-11 shrink-0 items-center justify-center disabled:cursor-default',
         controlFocus,
         tone.glyph,
         upload === undefined
@@ -1401,11 +1399,11 @@ export function VoiceNote({
           data-voice-speed=""
           onClick={cycleSpeed}
           aria-label={`Playback speed ${speedLabel(rate)}`}
-          className={cn('flex h-11 min-w-[44px] items-center justify-center', controlFocus)}
+          className={cn('flex h-11 min-w-11 items-center justify-center', controlFocus)}
         >
           <span
             className={cn(
-              'flex h-6 items-center rounded-full px-2 text-sm font-semibold leading-4 tabular-nums lit-pill',
+              'flex h-6 items-center rounded-full px-2 text-sm font-semibold tabular-nums lit-pill',
               tone.pill,
             )}
           >
@@ -1426,7 +1424,7 @@ export function VoiceNote({
             aria-hidden="true"
             data-voice-mic={mine ? 'own' : played ? 'played' : 'unplayed'}
             className={cn(
-              'absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2',
+              'absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2',
               tone.ring,
               mine
                 ? 'bg-on-bubble text-bubble-own'
@@ -1435,7 +1433,7 @@ export function VoiceNote({
                   : 'bg-accent text-accent-fg',
             )}
           >
-            <IconMic size={12} />
+            <IconMic size={ICON_SIZE.text} />
           </span>
         </span>
       ) : null}
@@ -1454,7 +1452,7 @@ export function VoiceNote({
       )}
     >
       <audio ref={audioRef} preload="metadata" className="hidden" />
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-1">
         {playButton}
         <div
           ref={waveRef}
@@ -1482,7 +1480,7 @@ export function VoiceNote({
           >
             {bars.map((height, index) => (
               <span
-                key={index}
+                key={`bar-${index}`}
                 data-played={barPlayed(index, progress, bars.length) ? '' : undefined}
                 className={cn(
                   'w-0.5 shrink-0 rounded-full',
@@ -1508,7 +1506,7 @@ export function VoiceNote({
             aria-hidden="true"
             data-voice-dot=""
             className={cn(
-              'pointer-events-none absolute top-1/2 -ml-[5px] -mt-[5px] h-2.5 w-2.5 rounded-full',
+              'pointer-events-none absolute top-1/2 -ml-1 -mt-1 h-2 w-2 rounded-full',
               tone.played,
               uploading && 'opacity-0',
             )}
@@ -1521,7 +1519,7 @@ export function VoiceNote({
       <div
         data-voice-foot=""
         className={cn(
-          'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm leading-4',
+          'flex min-h-4 shrink-0 items-center gap-1 whitespace-nowrap text-sm',
           UNDER_WAVE,
           tone.ink,
         )}
@@ -1542,7 +1540,7 @@ export function VoiceNote({
           data-voice-error=""
           role="alert"
           className={cn(
-            'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm leading-4',
+            'flex min-h-4 shrink-0 items-center gap-1 whitespace-nowrap text-sm',
             UNDER_WAVE,
             tone.ink,
           )}
@@ -1573,7 +1571,7 @@ export function VoiceNote({
         />
       ) : null}
       {spacer !== undefined ? (
-        <p className="h-3 text-sm leading-3" aria-hidden="true">
+        <p className="h-3 overflow-hidden text-sm" aria-hidden="true">
           {spacer}
         </p>
       ) : null}

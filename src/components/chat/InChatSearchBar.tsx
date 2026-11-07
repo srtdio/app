@@ -243,7 +243,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
       <span
         data-search-counter=""
         aria-live="polite"
-        className="min-w-[44px] shrink-0 text-center font-mono text-sm tabular-nums text-fg-2"
+        className="min-w-11 shrink-0 text-center font-mono text-sm tabular-nums text-fg-2"
       >
         {counter ?? ''}
       </span>
@@ -252,10 +252,10 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         disabled={!ready || (index >= total - 1 && !state.hasMore)}
         onClick={() => void older()}
       >
-        <IconChevronDown size={ICON_SIZE.control} className="-scale-y-100" />
+        <IconChevronDown size={ICON_SIZE.nav} className="-scale-y-100" />
       </IconButton>
       <IconButton label="Newer match" disabled={!ready || index <= 0} onClick={newer}>
-        <IconChevronDown size={ICON_SIZE.control} />
+        <IconChevronDown size={ICON_SIZE.nav} />
       </IconButton>
       {failed ? (
         <PressableRow
@@ -263,14 +263,14 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
           data-search-retry=""
           onClick={() => runner?.retry()}
           flat
-          className="absolute left-0 right-0 top-full z-10 mt-px flex items-center justify-center border-b bg-panel lit-overlay px-3 text-base text-fg-2"
+          className="absolute left-0 right-0 top-full z-raised mt-px flex items-center justify-center border-b bg-panel lit-overlay px-3 text-base text-fg-2"
         >
           {SEARCH_FAILED_COPY}
         </PressableRow>
       ) : none ? (
         <div
           data-search-none=""
-          className="absolute left-0 right-0 top-full z-10 mt-px border-b bg-panel lit-overlay"
+          className="absolute left-0 right-0 top-full z-raised mt-px border-b bg-panel lit-overlay"
         >
           <NoResults query={query} filtersActive={false} onClear={() => setQuery('')} />
         </div>

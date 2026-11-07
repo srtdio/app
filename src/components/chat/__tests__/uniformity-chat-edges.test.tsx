@@ -16,7 +16,7 @@ vi.mock('@/lib/logger', () => ({
 import {
   CHAT_HOME_EDGE,
   CHAT_HOME_STACK,
-  PEOPLE_TILE_GRID,
+  CHAT_ROW_LIST,
   sectionLabelClass,
 } from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
@@ -125,7 +125,7 @@ describe('11d laptop Chat with a Plan open', () => {
 
   it('plan closed: the list returns (no step-aside classes at any width)', () => {
     const closed = chatListPaneClass(false);
-    expect(closed).toBe('h-full w-full border-border md:w-72 md:border-r xl:w-[352px]');
+    expect(closed).toBe('h-full w-full border-border md:w-72 md:border-r xl:w-chat-list');
     expect(closed).not.toContain('invisible');
   });
 
@@ -133,7 +133,7 @@ describe('11d laptop Chat with a Plan open', () => {
     const src = read('../ChatConnected.tsx');
     expect(src).toContain('className={chatListPaneClass(planPanelOpen, listPageScroll)}>');
     // The thread narrows beside the panel from 1180px, as before.
-    expect(src).toContain("planPanelOpen && 'min-[1180px]:mr-[440px]'");
+    expect(src).toContain("planPanelOpen && 'min-[1180px]:mr-plan-panel'");
     // The thread's key is the chat only: opening or closing the plan never remounts it.
     expect(src).toContain('key={selected.channelId}');
     expect(src).not.toMatch(/key=\{[^}]*planPanelOpen/);
@@ -156,12 +156,12 @@ describe('11f "1 selected" on the 16px edge', () => {
 });
 
 describe('11g phone chat list edges', () => {
-  it('rows, tiles and section labels start on the same 16px edge as search and chips', () => {
-    // Rows (ui/Row) draw their own px-4; the stack itself has no side padding.
+  it('cards and section labels sit on the 16px edge with search and chips', () => {
+    // The stack has no side padding; the card lists and the labels carry the 16 edge.
     expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
     expect(CHAT_HOME_EDGE).toBe('px-4');
-    expect(read('../../ui/Row.tsx')).toContain('rounded-none px-4');
-    expect(classes(PEOPLE_TILE_GRID)).toContain('px-4');
+    expect(classes(CHAT_ROW_LIST)).toContain('px-4');
+    expect(read('../ChannelList.tsx')).toContain('<ListCard');
     for (const first of [true, false]) {
       const label = classes(sectionLabelClass(first));
       expect(label).toContain('px-4');
@@ -174,17 +174,16 @@ describe('11g phone chat list edges', () => {
 });
 
 describe('11i the ⋯ never covers the time (B1b: parts own the slots)', () => {
-  it('a group row: the ⋯ is the Row trailing slot, after the text column, never over it', () => {
-    const row = read('../../ui/Row.tsx');
-    expect(row.indexOf('data-row-more')).toBeGreaterThan(row.indexOf("textRole('meta'"));
-    expect(row).not.toMatch(/data-row-more=""[^\n]*absolute/);
+  it('a chat card: the ⋯ is line 3 trailing, after the time, never over it', () => {
+    const card = read('../../ui/ListCard.tsx');
+    expect(card.indexOf('data-list-card-more')).toBeGreaterThan(
+      card.indexOf('data-list-card-time'),
+    );
+    expect(card).not.toMatch(/data-list-card-more=""[^\n]*absolute/);
   });
 
-  it('a person tile: the time is the meta line, the ⋯ sits on the title line', () => {
-    const tile = read('../../ui/Tile.tsx');
-    // The ⋯ overlay mirrors the caption: title line (the ⋯), then the meta line.
-    expect(tile.lastIndexOf('data-tile-more')).toBeLessThan(tile.lastIndexOf("textRole('meta'"));
-    expect(read('../ChannelList.tsx')).toContain('meta: <span data-tile-time="">');
+  it('a person is the same Row: no Tile in the chat list', () => {
+    expect(read('../ChannelList.tsx')).not.toContain('<Tile');
   });
 });
 

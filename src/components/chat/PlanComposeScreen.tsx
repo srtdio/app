@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ICON_SIZE, IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import {
   ConceptSheet,
@@ -92,6 +92,7 @@ import { logger } from '@/lib/logger';
 import { civilDaysBetween, civilToday, formatCivilDayHeader } from '@/lib/plan-week';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 export { DATE_FIELD, DATE_FIT } from '@/components/chat/PlanDayPickerSheet';
 
@@ -125,9 +126,6 @@ export function composeHasContent(input: {
     d.files.length > 0
   );
 }
-
-/** Create's button while the one call is in flight. */
-export const CREATING_LABEL = 'Creating…';
 
 /**
  * A concept form's date standing for "needs a day": before any plan day, so
@@ -444,11 +442,11 @@ export function PlanComposeScreen(props: {
         <div
           role="alert"
           data-plan-share-error=""
-          className="rounded-xl bg-bad-soft px-3 py-2.5 text-md leading-[1.45] text-bad lit-tint"
+          className="rounded-xl bg-bad-soft px-3 py-3 text-md text-bad lit-tint"
         >
           <p className="font-semibold">{error.heading}</p>
           {error.list === true ? (
-            <ul className="mt-1 list-disc pl-[18px]">
+            <ul className="mt-1 list-disc pl-4">
               {error.lines.map((line, at) => (
                 <li key={at}>{line}</li>
               ))}
@@ -462,11 +460,10 @@ export function PlanComposeScreen(props: {
         variant="primary"
         data-plan-create=""
         className="w-full md:w-auto"
-        aria-busy={busy}
-        disabled={busy}
+        busy={busy}
         onClick={() => void create()}
       >
-        {busy ? CREATING_LABEL : CREATE_PLAN_LABEL}
+        {CREATE_PLAN_LABEL}
       </Button>
       <p data-plan-compose-summary="" className="text-center text-sm text-fg-3">
         {composeSummary(items)}
@@ -489,7 +486,7 @@ export function PlanComposeScreen(props: {
         closeLabel="Close"
         footer={footer}
       >
-        <div className="flex flex-col gap-3.5 p-3">
+        <div className="flex flex-col gap-3 p-3">
           <div className="flex flex-col gap-1.5">
             <Input
               id="plan-title"
@@ -510,7 +507,7 @@ export function PlanComposeScreen(props: {
 
           <div
             data-plan-dates-row=""
-            className="flex min-h-[48px] items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1 lit-card-muted"
+            className="flex min-h-12 items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1 lit-card-muted"
           >
             <div className="flex min-w-0 flex-col">
               <span className="text-base text-fg">
@@ -532,11 +529,11 @@ export function PlanComposeScreen(props: {
           </div>
 
           <section className="flex flex-col gap-2" aria-label="Items">
-            <h3 className="mx-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+            <h3 className={`mx-1 ${TEXT_ROLE.section}`}>
               Items · <span className="font-mono tabular-nums">{items.length}</span>
             </h3>
             {items.length === 0 ? (
-              <p className="px-0.5 text-sm leading-[1.4] text-fg-3">{COMPOSE_NO_ITEMS}</p>
+              <p className="px-0.5 text-sm text-fg-3">{COMPOSE_NO_ITEMS}</p>
             ) : null}
             {items.map((item) => (
               <ComposeItemRow
@@ -665,7 +662,7 @@ export function PlanComposeScreen(props: {
   );
 }
 
-/** A row's type line: "Concept", "Draft", or "Post · In review". Pure. */
+/** A row's type line: "Concept", "Draft", or "Post · Review". Pure. */
 export function composeKindLabel(item: ComposeItem): string {
   if (item.kind === 'concept') return 'Concept';
   if (item.kind === 'draft') return 'Draft';
@@ -694,7 +691,7 @@ export function ComposeItemRow(props: {
         aria-hidden="true"
         className={cn(
           'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-base font-semibold',
-          item.kind === 'concept' && 'border-[1.5px] border-dashed border-border-strong text-fg-3',
+          item.kind === 'concept' && 'border border-dashed border-border-strong text-fg-3',
           item.kind === 'post' && 'bg-accent-soft text-accent lit-pill',
           item.kind === 'draft' && 'bg-panel-2 text-fg-3 lit-pill',
         )}
@@ -715,11 +712,11 @@ export function ComposeItemRow(props: {
       data-plan-compose-item={item.kind}
       data-plan-compose-flag={need ? 'need' : 'ok'}
       className={cn(
-        'flex flex-col gap-2 rounded-xl border p-2.5 lit-card-muted',
+        'flex flex-col gap-2 rounded-xl border p-3 lit-card-muted',
         need ? 'border-warn bg-warn-soft' : 'bg-panel',
       )}
     >
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-3">
         {item.kind === 'concept' ? (
           <PressableRow
             type="button"
@@ -727,12 +724,12 @@ export function ComposeItemRow(props: {
             aria-label={`Edit ${item.title}`}
             onClick={props.onEdit}
             onContextMenu={(event) => event.preventDefault()}
-            className={cn('-m-1 flex min-w-0 flex-1 items-center gap-2.5 p-1', NO_TOUCH_SELECT)}
+            className={cn('-m-1 flex min-w-0 flex-1 items-center gap-3 p-1', NO_TOUCH_SELECT)}
           >
             {head}
           </PressableRow>
         ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">{head}</div>
+          <div className="flex min-w-0 flex-1 items-center gap-3">{head}</div>
         )}
         <IconButton
           type="button"
@@ -745,7 +742,7 @@ export function ComposeItemRow(props: {
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (
-        <p className="line-clamp-2 px-0.5 text-md leading-[1.45] text-fg-3">{item.description}</p>
+        <p className="line-clamp-2 px-0.5 text-md text-fg-3">{item.description}</p>
       ) : null}
       <Button
         type="button"
@@ -762,13 +759,14 @@ export function ComposeItemRow(props: {
             </>
           ) : (
             <>
+              {/* The day reads alone: no calendar glyph repeated on every row. */}
               {item.day === 'none' ? (
                 <span className="font-medium text-fg-3">{NO_DATE_LABEL}</span>
               ) : (
                 <span>{formatCivilDayHeader(item.day as string)}</span>
               )}
-              <span className="text-fg-3">
-                <IconCalendar size={ICON_SIZE.inline} />
+              <span aria-hidden="true" className="text-fg-3">
+                <IconChevronRight size={ICON_SIZE.inline} />
               </span>
             </>
           )}
@@ -777,10 +775,7 @@ export function ComposeItemRow(props: {
       {note !== null ? (
         <p
           data-plan-compose-note={note.warn ? 'warn' : 'info'}
-          className={cn(
-            'px-0.5 text-sm leading-[1.4]',
-            note.warn ? 'font-medium text-warn' : 'text-fg-3',
-          )}
+          className={cn('px-0.5 text-sm', note.warn ? 'font-medium text-warn' : 'text-fg-3')}
         >
           {note.text}
         </p>
@@ -851,12 +846,12 @@ export function PlanSharedNotice(props: {
       aria-live="polite"
       data-plan-shared-notice={shown ? 'shown' : 'hidden'}
       style={{ bottom: bottom ?? 96 }}
-      className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
+      className="pointer-events-none absolute inset-x-0 z-nav flex justify-center px-3"
     >
       {strip.rendered ? (
         <span
           ref={strip.ref}
-          className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg lit-float"
+          className="rounded-lg border border-border-strong bg-panel px-4 py-3 text-base font-medium text-fg lit-float"
         >
           {props.text}
         </span>

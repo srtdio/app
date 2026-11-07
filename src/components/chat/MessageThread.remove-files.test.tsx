@@ -99,12 +99,12 @@ describe('the removed line in the bubble', () => {
     expect(own).toContain(LINE);
     expect(own).toContain('1 photo removed');
     expect(own).toContain('italic');
-    expect(own).toContain('--bubble-meta-own');
+    expect(own).toContain('text-bubble-meta-own');
     const peer = renderToStaticMarkup(
       <FilesRemovedLine counts={{ photo: 0, video: 0, file: 1 }} mine={false} layout="laptop" />,
     );
     expect(peer).toContain('File removed');
-    expect(peer).toContain('--bubble-meta)');
+    expect(peer).toMatch(/\btext-bubble-meta\b(?!-own)/);
   });
 
   it('nothing removed: no line', () => {

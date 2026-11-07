@@ -315,7 +315,7 @@ describe('Plan tab: boxes only when nothing is held', () => {
     render('/plan', <PlanTabPage />);
     expect(planBoxes()).not.toBeNull();
     expect(document.querySelectorAll('[data-plan-tab-box]').length).toBeGreaterThan(0);
-    expect(document.body.innerHTML).not.toContain('min-h-[320px]');
+    expect(document.body.innerHTML).not.toContain('min-h-80');
   });
 
   it('a return to the tab paints the kept read at once: no box', async () => {

@@ -140,7 +140,7 @@ export function ScheduledListSheet(
                       <p
                         data-scheduled-preview=""
                         className={cn(
-                          'max-w-[85%] whitespace-pre-wrap break-words bg-bubble-own px-3 py-2 text-lg leading-snug text-accent-fg lit-bubble-own',
+                          'max-w-[85%] whitespace-pre-wrap break-words bg-bubble-own px-3 py-2 text-lg text-accent-fg lit-bubble-own',
                           BUBBLE_SHAPE.touch,
                           BUBBLE_TAIL.mine,
                         )}
@@ -248,7 +248,7 @@ function CardAction(props: {
       disabled={props.disabled}
       onClick={props.onClick}
       className={cn(
-        'inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap px-1 text-md font-medium mv-tint',
+        'inline-flex h-11 min-w-0 items-center justify-center truncate whitespace-nowrap px-1 text-md font-medium mv-tint',
         CARD_ACTION_TONE[props.tone ?? 'plain'],
       )}
     >

@@ -84,10 +84,10 @@ describe('Topbar mobile workspace switcher', () => {
     expect((button.props as { 'aria-haspopup'?: string })['aria-haspopup']).toBe('dialog');
     expect(className(button)).toContain('md:hidden');
     // Touch target invariant: the tap area is at least 44px tall.
-    expect(className(button)).toContain('min-h-[44px]');
+    expect(className(button)).toContain('min-h-11');
     expect(texts(button)).toContain('Acme');
     // The name is bounded so search / avatar stay on a 375px screen.
-    expect(className(button)).toMatch(/max-w-\[\d+px\]/);
+    expect(className(button)).toMatch(/\bmax-w-48\b/);
   });
 
   it('dispatches the sorted:switch-workspace window event when clicked', () => {
@@ -174,7 +174,7 @@ describe('Topbar scroll modes', () => {
       expect.arrayContaining([
         'sticky',
         'top-0',
-        'z-30',
+        'z-nav',
         'border-b',
         'bg-panel',
         'lit-header',

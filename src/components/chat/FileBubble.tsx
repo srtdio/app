@@ -245,7 +245,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           ) : null}
         </span>
       ) : null}
-      <span className="flex min-h-[56px] w-full items-center gap-2.5 px-3 py-2.5">
+      <span className="flex min-h-14 w-full items-center gap-3 px-3 py-3">
         {ratio === null ? (
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
             <KindIcon kind={kind} size={ICON_SIZE.control} />
@@ -255,13 +255,13 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           <span
             data-file-name=""
             title={props.name}
-            className="text-base font-medium leading-5 text-fg [overflow-wrap:anywhere]"
+            className="text-base font-medium text-fg [overflow-wrap:anywhere]"
           >
             {middleTruncate(props.name, BUBBLE_NAME_BUDGET)}
           </span>
           <span className="text-sm text-fg-3">
             {props.meta.map((part, i) => (
-              <span key={i}>
+              <span key={`part-${i}`}>
                 {i > 0 ? ' · ' : null}
                 <span className={part.mono ? 'font-mono' : undefined}>{part.text}</span>
               </span>
@@ -278,7 +278,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
         <span
           data-file-progress=""
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
+          className="absolute inset-x-0 bottom-0 h-1 bg-panel-3 lit-well"
         >
           <span
             className="block h-full origin-left bg-accent lit-fill mv-fill"

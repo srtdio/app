@@ -84,8 +84,9 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
 
   it('the phone bar is the pcs PostDecisionBar, only off read-only, with room reserved under the page', () => {
     expect(PAGE).toContain('phoneLayout && !readOnly ? (');
-    expect(PAGE).toContain(
-      '<PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />',
+    // The running move's stage rides along (its button shows busy at its own width).
+    expect(PAGE).toMatch(
+      /<PostDecisionBar\s+model=\{decisionModel\}\s+busy=\{decisionBusy\}\s+pending=\{decisionPending\}\s+error=\{actionError\}\s+\/>/,
     );
     expect(PAGE).toContain('data-decision-bar-space=""');
     expect(PAGE).toContain(
@@ -208,7 +209,7 @@ describe('8 / 9 / 10. reason sheet dirty, Back, delete', () => {
 
 describe('11. FN7 / FN9 / FN11 copy', () => {
   it('version history uses the app formatter, title edit shows Save / Cancel on touch, settings path copy', () => {
-    expect(VERSION_HISTORY).toContain("import { formatDate } from '@/lib/time';");
+    expect(VERSION_HISTORY).toContain("import { formatAgo } from '@/lib/time';");
     expect(VERSION_HISTORY).not.toContain('toLocaleString()');
     expect(PAGE).toContain('{isTouchDevice() ? (');
     expect(PAGE).toContain('onPointerDown={(event) => event.preventDefault()}');
@@ -241,7 +242,10 @@ describe('13 / 14. skeleton and load error', () => {
 
 describe('15. FB8 date reads', () => {
   it('the details row and the sheet input both read the workspace zone', () => {
-    expect(PAGE).toContain('formatDue(post.target_date, approveTimeZone)');
+    expect(PAGE).toContain('formatDue(post.target_date, approveTimeZone, new Date(nowMs))');
+    expect(PAGE).toContain(
+      'formatOverdue(post.target_date, approveTimeZone, new Date(nowMs)).text',
+    );
     expect(PAGE).toContain('approveTargetDate(detail.post.target_date, approveTimeZone)');
     expect(PAGE).not.toContain('toLocaleDateString');
     expect(PAGE).toContain('timeZone={approveTimeZone}');

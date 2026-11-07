@@ -51,7 +51,7 @@ export function Tag({ label, tone = 'neutral', dot, icon: Icon, className }: Tag
     <span
       className={cn(
         tagClass(tone),
-        dot !== undefined && 'gap-1.5',
+        dot !== undefined && 'gap-2',
         Icon !== undefined && dot === undefined && 'gap-1',
         className,
       )}

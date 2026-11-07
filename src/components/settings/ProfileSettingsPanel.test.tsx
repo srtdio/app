@@ -351,7 +351,8 @@ describe('Use photo', () => {
     );
     expect(idle).toContain('Use photo');
     expect(idle).toContain('Cancel');
-    expect(idle.match(/h-11/g)).toHaveLength(2);
+    // The standalone h-11 (not the min-h-11 floor every Button also carries).
+    expect(idle.match(/(?<![\w-])h-11\b/g)).toHaveLength(2);
     expect(idle).not.toContain('disabled=""');
     const busy = renderToStaticMarkup(
       <PhotoPickActions busy onUse={() => {}} onCancel={() => {}} />,
@@ -575,8 +576,8 @@ describe('Catch-up emails tick', () => {
     expect(on).toContain('type="checkbox"');
     expect(on).toContain('checked=""');
     expect(on).toContain('min-h-11');
-    // ui/Checkbox: 18px field box, accent fill when ticked.
-    expect(on).toContain('h-[18px] w-[18px]');
+    // ui/Checkbox: 20px field box, accent fill when ticked.
+    expect(on).toContain('h-5 w-5');
     expect(on).toContain('border-field');
     expect(on).toContain('checked:bg-accent');
     expect(on).not.toContain('accent-accent');

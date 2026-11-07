@@ -33,8 +33,14 @@ export interface TileProps {
   more?: ReactNode;
   /** Overlays, corners only: top-left / top-right / bottom-left / bottom-right. */
   corners?: Partial<Record<'tl' | 'tr' | 'bl' | 'br', ReactNode>>;
-  /** The thumbnail's aspect (square default). */
-  aspect?: 'square' | 'portrait' | 'video';
+  /**
+   * Tap controls over the thumbnail's top corners (a select box), laid over the
+   * tile outside its tap surface (buttons never nest). Each is placed by the
+   * part; the control keeps its own 44 box.
+   */
+  cornerActions?: Partial<Record<'tl' | 'tr', ReactNode>>;
+  /** The thumbnail's aspect (square default; landscape 4:3 for the Assets grid). */
+  aspect?: 'square' | 'portrait' | 'video' | 'landscape';
   /** The tile opens something: the whole tile is one tap surface. */
   press?: TilePress;
   className?: string;
@@ -44,6 +50,7 @@ const ASPECT = {
   square: 'aspect-square',
   portrait: 'aspect-[4/5]',
   video: 'aspect-video',
+  landscape: 'aspect-[4/3]',
 } as const;
 const CORNER = {
   tl: 'left-0 top-0',
@@ -51,6 +58,12 @@ const CORNER = {
   bl: 'bottom-0 left-0',
   br: 'bottom-0 right-0',
 } as const;
+
+/**
+ * The tile grid: two columns on phone, auto-fill 158 columns that fill the
+ * laptop width (tailwind gridTemplateColumns.tiles). Gap 12.
+ */
+export const TILE_GRID = 'grid grid-cols-2 gap-3 md:grid-cols-tiles';
 
 /** The empty meta line keeps its height (a no-break space). */
 const META_HOLD = ' ';
@@ -67,11 +80,22 @@ export function Tile({
   meta,
   more,
   corners,
+  cornerActions,
   aspect = 'square',
   press,
   className,
 }: TileProps) {
   const hasMore = more !== undefined && more !== null;
+  const actionNodes =
+    cornerActions !== undefined
+      ? (Object.keys(cornerActions) as Array<'tl' | 'tr'>).map((at) =>
+          cornerActions[at] !== undefined && cornerActions[at] !== null ? (
+            <span key={at} data-tile-action={at} className={cn('absolute flex', CORNER[at])}>
+              {cornerActions[at]}
+            </span>
+          ) : null,
+        )
+      : null;
   // Spans throughout: with `press` the thumbnail and caption sit inside a button.
   const thumb = (
     <span className={cn('relative block overflow-hidden rounded-lg', ASPECT[aspect])}>
@@ -98,7 +122,14 @@ export function Tile({
   );
   if (press === undefined) {
     return (
-      <div data-tile="" className={cn('flex h-full min-w-0 flex-col gap-2', className)}>
+      <div
+        data-tile=""
+        className={cn(
+          'flex h-full min-w-0 flex-col gap-2',
+          cornerActions !== undefined && 'relative',
+          className,
+        )}
+      >
         {thumb}
         {caption(
           hasMore ? (
@@ -107,6 +138,7 @@ export function Tile({
             </span>
           ) : null,
         )}
+        {actionNodes}
       </div>
     );
   }
@@ -138,6 +170,7 @@ export function Tile({
           </span>
         </span>
       ) : null}
+      {actionNodes}
     </div>
   );
 }

@@ -17,7 +17,7 @@ import type {
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { formatCivilDayHeader } from '@/lib/plan-week';
-import { civilDay, formatDayRange, formatTime } from '@/lib/time';
+import { civilDay, formatDayRange, formatAgo } from '@/lib/time';
 import { errorText } from '@/lib/error-copy';
 
 /** Card and screen copy. */
@@ -283,7 +283,7 @@ export const TEAM_STATUS_LABELS: Record<ReviewStatus, string> = {
 
 const STAGE_LABELS: Record<string, string> = {
   draft: 'Draft',
-  review: 'In review',
+  review: 'Review',
   approved: 'Approved',
   parked: 'Parked',
   rejected: 'Rejected',
@@ -1139,18 +1139,11 @@ export function approverIds(bundle: PlanBundle): string[] {
 }
 
 /**
- * When a slot was approved, on the viewer's clock: "today, 6:45 PM",
- * "yesterday, 6:45 PM", else "12 Oct, 6:45 PM". `timeZone` is for tests.
- * Pure (given the clock).
+ * When a slot was approved, in the app's one past-time format
+ * (formatAgo): "just now", "5m", "Yesterday", "Mon". Pure (given the clock).
  */
-export function approvedWhen(iso: string, now: Date, timeZone?: string): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return '';
-  const day = civilDay(at, timeZone);
-  const today = civilDay(now, timeZone);
-  const yesterday = addDays(today, -1);
-  const lead = day === today ? 'today' : day === yesterday ? 'yesterday' : shortDay(day);
-  return `${lead}, ${formatTime(at, timeZone)}`;
+export function approvedWhen(iso: string, now: Date): string {
+  return formatAgo(iso, now);
 }
 
 /** "Approved by {name} · {when}". Pure. */

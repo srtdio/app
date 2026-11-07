@@ -3,6 +3,7 @@ import { cn } from '@/lib/cn';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { textRole } from '@/components/ui/Text';
 import { ICON_SIZE, IconChevronRight } from '@/components/ui/icons';
+import { CHAT_GUTTER } from '@/components/ui/layout';
 
 /**
  * The tap surface's own attributes (pointer, key and context-menu handlers,
@@ -42,6 +43,17 @@ export interface RowProps extends RowSurfaceProps {
   selected?: boolean;
   /** Ref to the tap surface's <button> (a menu anchors to it). */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
+  /**
+   * Drop the row's own 16 inset (the row sits inside a padded surface, such as
+   * a sheet body, whose padding is already the content edge). Default false.
+   */
+  flush?: boolean;
+  /**
+   * The row's side inset. 'page' (default): the 16 page edge. 'chat': the 12
+   * chat edge (CHAT_GUTTER), the chat list's notes, group and people rows; the
+   * text then starts at 56 and the divider is inset 56. Ignored when flush.
+   */
+  gutter?: 'page' | 'chat';
   className?: string;
 }
 
@@ -63,9 +75,14 @@ export function Row({
   disabled,
   selected = false,
   buttonRef,
+  flush = false,
+  gutter = 'page',
   className,
   ...surface
 }: RowProps) {
+  const chat = !flush && gutter === 'chat';
+  const inset = flush ? 'px-0' : chat ? CHAT_GUTTER : 'px-4';
+  const trailingInset = flush ? 'pr-0' : chat ? 'pr-3' : 'pr-4';
   const badgeNode =
     badge !== undefined && badge !== null ? (
       <span data-row-badge="" className="flex shrink-0">
@@ -109,7 +126,8 @@ export function Row({
           onClick={onPress}
           disabled={disabled}
           className={cn(
-            'flex min-w-0 flex-1 items-center gap-3 rounded-none px-4',
+            'flex min-w-0 flex-1 items-center gap-3 rounded-none',
+            inset,
             height,
             selected && 'lit-selected',
           )}
@@ -117,16 +135,16 @@ export function Row({
           {body}
         </PressableRow>
       ) : (
-        <div className={cn('flex min-w-0 flex-1 items-center gap-3 px-4', height)}>{body}</div>
+        <div className={cn('flex min-w-0 flex-1 items-center gap-3', inset, height)}>{body}</div>
       )}
       {trailing?.kind === 'more' ? (
-        <span data-row-more="" className="flex shrink-0 pr-4">
+        <span data-row-more="" className={cn('flex shrink-0', trailingInset)}>
           {trailing.menu}
         </span>
       ) : null}
       {trailing?.kind === 'node' ? (
         // The trailing rule for a caller's IconButton (a 44 box, pulled out by 12).
-        <span data-row-trailing="" className="flex shrink-0 pr-4 [&>button]:-mr-3">
+        <span data-row-trailing="" className={cn('flex shrink-0 [&>button]:-mr-3', trailingInset)}>
           {trailing.node}
         </span>
       ) : null}
@@ -134,7 +152,10 @@ export function Row({
         <span
           aria-hidden="true"
           data-row-divider=""
-          className="pointer-events-none absolute bottom-0 left-15 right-0 h-px bg-border"
+          className={cn(
+            'pointer-events-none absolute bottom-0 right-0 h-px bg-border',
+            flush ? 'left-11' : chat ? 'left-14' : 'left-15',
+          )}
         />
       ) : null}
     </div>

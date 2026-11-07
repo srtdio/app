@@ -5,6 +5,8 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { ReactElement, ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
+import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
@@ -13,8 +15,6 @@ import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconCalendar, IconPipeline, IconPlus } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
-import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
-import { BoardColumns } from '@/components/pages/pipeline/board-columns';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
@@ -32,7 +32,6 @@ import {
   type CardViewer,
 } from '@/components/pages/pipeline/card-status';
 import { useWorkspacePeople } from '@/components/pages/pipeline/use-workspace-people';
-import type { ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 import { postStageReason } from '@/components/pages/pipeline/stage-reason';
 import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { isClient } from '@/components/pages/pcs/roles';
@@ -62,7 +61,6 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 import { useInductionPostPreset } from '@/components/induction/InductionProvider';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
 import { dispatchPostChanged } from '@/components/chat/post-sheet';
@@ -76,11 +74,7 @@ import {
 } from '@/lib/pipeline-posts';
 import { useServerSearch } from '@/lib/search/server-search';
 import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
-import {
-  ROLE_READ_ERROR,
-  readMemberRole,
-  type RoleStatus,
-} from '@/components/pages/pipeline/member-role';
+import { readMemberRole, type RoleStatus } from '@/components/pages/pipeline/member-role';
 import { canRoleMove } from '@/components/pages/pcs/stage-actions';
 import {
   DATE_WINDOW_DEFAULT,
@@ -92,10 +86,9 @@ import {
   type DateWindow,
   type PostSort,
 } from '@/lib/list-sort';
-import { groupByStage, stageColumns } from '@/lib/post-board';
-import { frameFor } from '@/lib/platform-specs';
+import { groupByStage } from '@/lib/post-board';
 import { cn } from '@/lib/cn';
-import { Bone, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Stage } from '@srtdio/posts';
 import { errorCopy, errorText, type ErrorCopy } from '@/lib/error-copy';
@@ -152,7 +145,7 @@ export function stageChipItems(
 }
 
 /** The New post button's classes: one row on every screen, never wraps or shrinks. */
-const NEW_POST_CLASS = 'shrink-0 gap-1.5 whitespace-nowrap pl-3 pr-3.5';
+const NEW_POST_CLASS = 'shrink-0 whitespace-nowrap';
 
 /**
  * The Pipeline header chrome: the shared SectionHeader with, on ONE row at
@@ -344,7 +337,7 @@ export function viewFiltered(query: PipelineQuery): boolean {
 /** The board's load failure: the shared plain line and a Retry that re-reads. */
 export function postsLoadError(onRetry: () => void, retrying: boolean): ReactElement {
   return (
-    <div data-posts-load-error="" className="mt-4 px-4 md:px-6">
+    <div data-posts-load-error="" className={cn('mt-4', GUTTER)}>
       <LoadError title="posts" onRetry={onRetry} retrying={retrying} />
     </div>
   );
@@ -376,123 +369,30 @@ export function listedCovers(
   return out;
 }
 
-/** Skeleton cards: one board page's worth. */
+/** Loading boxes: one list page's worth. */
 const SKELETON_CARDS = BOARD_CAP;
-/** Kanban skeleton: one column per stage, two cards each. */
-const SKELETON_COLUMNS = STAGES.length;
-const SKELETON_COLUMN_CARDS = 2;
-
-/** What the loading skeleton mirrors: the real view and the card's picture frame. */
-export interface SkeletonView {
-  /** The laptop All view: the kanban columns, not a grid. */
-  kanban?: boolean;
-  /** The picture frame ratio (w / h) from the workspace platform; null: square. */
-  ratio?: number | null;
-  /** Kanban columns to draw (a client has no Draft column). Default: every stage. */
-  columns?: number;
-}
-
-/** The skeleton picture frame: the workspace platform's single-image frame. Pure. */
-export function skeletonRatio(platform: string | null | undefined): number | null {
-  if (platform === null || platform === undefined) return null;
-  return frameFor(platform, 'single_image', null)?.ratio ?? null;
-}
-
-/** One skeleton card in the real card's shape: picture, two title lines, the meta row. */
-function skeletonCard(index: number, ratio: number | null): ReactElement {
-  // The card frame stays put; its parts are the shared Bone (a top-lit sweep,
-  // never a pulse), each the size of the part that lands there.
-  return (
-    <div
-      key={index}
-      aria-hidden="true"
-      data-skeleton-card=""
-      className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-panel lit-card"
-    >
-      <Bone
-        lit="flat"
-        as="div"
-        className={cn(ratio === null && 'aspect-square')}
-        {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
-      />
-      <div className="flex flex-col gap-1.5 p-3">
-        <div className="flex min-h-[2.75em] flex-col justify-center gap-1.5 text-base leading-snug">
-          <Bone lit="flat" as="div" className="h-3.5 w-3/4 rounded" />
-          <Bone lit="flat" as="div" className="h-3.5 w-1/2 rounded" />
-        </div>
-        <div className="flex h-5 items-center">
-          <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
- * Card-shaped placeholders while the first read is in flight, in the real
- * view's layout: the kanban columns on the laptop All view, the full-width
- * column stacks on a laptop stage view, the 2-column grid on a phone. Each card takes the
- * workspace platform's frame, so nothing reshapes when the posts land.
+ * ui/ListCardBox placeholders while the first read is in flight, in the real
+ * list's container and grid (LIST_CARD_GRID, phone and laptop alike), so
+ * nothing moves when the cards land.
  */
-export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): ReactElement {
+export function postsSkeleton(): ReactElement {
   mark('pipeline:skeleton');
-  const ratio = view.ratio ?? null;
-  const columns = view.columns ?? SKELETON_COLUMNS;
-  if (isDesktop && view.kanban === true) {
-    return (
-      <div
-        data-guide-wait=""
-        data-posts-skeleton="kanban"
-        role="status"
-        aria-busy="true"
-        className="flex min-h-0 gap-3 overflow-x-hidden px-4 py-4 md:px-6"
-      >
-        <span className="sr-only">Loading posts</span>
-        {Array.from({ length: columns }, (_unused, column) => (
-          <div
-            key={column}
-            aria-hidden="true"
-            className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
-          >
-            <div className="flex h-11 items-center gap-2 border-b px-3 lit-header">
-              <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
-            </div>
-            <div className="flex flex-col gap-2 p-2">
-              {Array.from({ length: SKELETON_COLUMN_CARDS }, (_card, index) =>
-                skeletonCard(index, ratio),
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (isDesktop) {
-    // The laptop stage view's column stacks, measured from the board width on
-    // mount, so the first paint matches the cards that land.
-    return (
-      <BoardColumns
-        data-guide-wait=""
-        data-posts-skeleton=""
-        role="status"
-        aria-busy="true"
-        className="px-4 py-4 md:px-6"
-        before={<span className="sr-only">Loading posts</span>}
-      >
-        {Array.from({ length: SKELETON_CARDS }, (_unused, index) => skeletonCard(index, ratio))}
-      </BoardColumns>
-    );
-  }
   return (
     <div
       data-guide-wait=""
       data-posts-skeleton=""
       role="status"
       aria-busy="true"
-      className="grid grid-cols-2 gap-2 px-4 py-4"
+      className={cn('py-4', GUTTER)}
     >
       <span className="sr-only">Loading posts</span>
-      {Array.from({ length: SKELETON_CARDS }, (_unused, index) => skeletonCard(index, ratio))}
+      <div aria-hidden="true" className={LIST_CARD_GRID}>
+        {Array.from({ length: SKELETON_CARDS }, (_unused, index) => (
+          <ListCardBox key={`skeleton-${index}`} data-skeleton-card="" />
+        ))}
+      </div>
     </div>
   );
 }
@@ -504,7 +404,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
  */
 export function emptyPipeline(): ReactElement {
   return (
-    <div data-pipeline-empty="" className="px-4 md:px-6">
+    <div data-pipeline-empty="" className={GUTTER}>
       <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="Posts show up here." />
     </div>
   );
@@ -515,43 +415,25 @@ export function postSearchFields(post: PipelinePost): (string | null)[] {
   return [post.title, post.caption];
 }
 
-/** Everything {@link pipelineSurface} needs to pick and wire the active surface. */
+/** Everything {@link pipelineSurface} needs to wire the list. */
 export interface PipelineSurfaceProps {
   /** The active chip: ALL_KEY or a Stage. */
   stage: string;
-  isDesktop: boolean;
-  /** Search + window + sort; the board and feed list. */
+  /** Search + window + sort: the list. */
   sorted: PipelinePost[];
-  grouped: Record<Stage, PipelinePost[]>;
   cache: PresignCache;
   presignEnabled: boolean;
   /** The active workspace key, threaded into every card for its pretty /p link. */
   workspaceKey: string | null;
-  onViewAll: (stage: Stage) => void;
-  onMovePost: (postId: string, toStage: Stage, options?: MoveOptions) => void;
   onLongPressPost: (post: PipelinePost, to?: Stage) => void;
-  /** The viewer's workspace role: filters the board's drop targets. */
-  role: string | null;
-  /** The role read has landed: only then are board cards draggable. Default true. */
-  roleReady?: boolean;
-  /** A desktop drop onto a column the post cannot move to: toast the reason. */
-  onBlockedMove: (reason: string) => void;
   /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
   shownKey: string;
   /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
   timeZone?: string;
-  /** The viewer's role and approvers: each card's status line and its ⋯. */
+  /** The viewer's role and approvers: each card's status line and its ⋮. */
   viewer?: CardViewer;
-  /** Each post's first photo or video, so its card takes the platform frame. */
+  /** Each post's first photo or video (a video with no poster shows the play placeholder). */
   covers?: CoverLookup;
-  /** The page's one shared approvers read, for the board's on-behalf sheet. */
-  approvers?: readonly ApproverOption[];
-}
-
-/** Clients never see Draft: no Draft chip, and no Draft column on the board. Pure. */
-export function boardStages(stage: string, role: string | null): Stage[] {
-  const columns = stageColumns(STAGES, stage);
-  return isClient(role) ? columns.filter((s) => s !== 'draft') : columns;
 }
 
 /** The chip a client lands on when the URL names Draft (which they never see). Pure. */
@@ -560,33 +442,13 @@ export function visibleStage(stage: string, role: string | null): string {
 }
 
 /**
- * Pick the body surface for the active chip: the desktop kanban or the mobile
- * feed. Pure (no hooks; the components it returns own their own state) so the
- * branch is unit-tested by walking the element.
+ * The body surface: the one list (PipelineFeed, ui/ListCard in
+ * LIST_CARD_GRID) on phone and laptop, driven by the stage chips. Pure (no
+ * hooks; the feed owns its own state) so the wiring is unit-tested by walking
+ * the element.
  */
 export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
   mark('pipeline:cards');
-  if (props.isDesktop) {
-    return (
-      <PipelineBoard
-        stages={boardStages(props.stage, props.role)}
-        grouped={props.grouped}
-        cap={props.stage === ALL_KEY ? BOARD_CAP : null}
-        cache={props.cache}
-        presignEnabled={props.presignEnabled}
-        workspaceKey={props.workspaceKey}
-        onViewAll={props.onViewAll}
-        onMovePost={props.onMovePost}
-        role={props.role}
-        onOpenMove={props.onLongPressPost}
-        onBlockedMove={props.onBlockedMove}
-        roleReady={props.roleReady !== false}
-        {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
-        {...(props.covers !== undefined ? { covers: props.covers } : {})}
-        {...(props.approvers !== undefined ? { approvers: props.approvers } : {})}
-      />
-    );
-  }
   return (
     <PipelineFeed
       posts={props.sorted}
@@ -615,7 +477,7 @@ export function filteredEmpty(
   onClear: () => void,
 ): ReactElement {
   return (
-    <div data-filtered-empty="" className="px-4 md:px-6">
+    <div data-filtered-empty="" className={GUTTER}>
       <NoResults query={search} filtersActive={dateActive} onClear={onClear} />
     </div>
   );
@@ -680,8 +542,8 @@ export interface UndoableMoveDeps extends MovePostDeps {
 }
 
 /**
- * The single move handler, for every move (the move sheet, the long-press and
- * the board drop): flip the post locally at once, close the sheet, and hand the
+ * The single move handler, for every move (the move sheet and the card's ⋮
+ * rows, also reached by long-press): flip the post locally at once, close the sheet, and hand the
  * proc call to the "Moved to {Stage}" Undo toast. Undo puts the post back and
  * nothing is sent; the window running out (or the toast closing) sends
  * stage_transition once, with the on-behalf approver for an agency approve. A
@@ -771,7 +633,7 @@ export interface MovePostDeps {
   /** In-flight post ids; the double-fire guard. Shared across calls (a ref's .current). */
   inFlight: Set<string>;
   setPosts: (updater: (prev: PipelinePost[]) => PipelinePost[]) => void;
-  /** Close the move sheet (no-op on the desktop drag path). */
+  /** Close the move sheet. */
   onClose: () => void;
   /** Toast a line; `failure` marks it a failure (error tone, optional Retry). */
   toast: (message: string, failure?: MoveToastFailure) => void;
@@ -803,8 +665,6 @@ export function shownPipelineQuery(
 
 export function PipelinePage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
-  // Kanban on laptop (useIsLaptop), the stacked tab feed on phone.
-  const isDesktop = useIsLaptop();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const viewKey = useCallback(
@@ -924,7 +784,7 @@ export function PipelinePage() {
   // A post step of the induction opens the sheet with its preset.
   const postPreset = useInductionPostPreset();
   // The viewer's role, loaded once from the membership exactly as PCS does: it
-  // filters the board's drop targets and the move sheet.
+  // filters the cards' ⋮ moves and the move sheet.
   const [role, setRole] = useState<string | null>(null);
   // Where the role read stands: the move sheet waits while 'loading' and
   // offers Retry on 'error' instead of blaming the role.
@@ -934,7 +794,7 @@ export function PipelinePage() {
   // Clients never see Draft: a ?stage=draft link opens Review for them.
   const stage = visibleStage(queryStage, role);
   // Per-post in-flight guard for the move handler (a ref so a re-render never
-  // resets it mid-flight); shared by the desktop drop and mobile sheet paths.
+  // resets it mid-flight); shared by every move path.
   const inFlight = useRef<Set<string>>(new Set());
 
   // One presign cache for the whole board: it bounds concurrency and caches
@@ -1070,16 +930,6 @@ export function PipelinePage() {
     };
   }, [workspaceId, userId, roleAttempt]);
 
-  // A blocked desktop drop names its reason only once the role is known; a
-  // failed role read says so instead of blaming the role.
-  const onBlockedMove = useCallback(
-    (reason: string): void => {
-      if (roleStatus === 'ready') push(reason);
-      else if (roleStatus === 'error') push(ROLE_READ_ERROR, {});
-    },
-    [push, roleStatus],
-  );
-
   // The Create (+) button and command palette dispatch this event; the sheet
   // lives here so the board can re-fetch on success.
   const navigate = useNavigate();
@@ -1194,8 +1044,7 @@ export function PipelinePage() {
     [role, people.approverFirstNames, rolePending],
   );
 
-  // Single source for the move: the desktop drop and the mobile sheet both call
-  // this. Every move flips at once and sends after the "Moved to {Stage}" Undo
+  // Single source for the move: the move sheet and the ⋮ rows call this. Every move flips at once and sends after the "Moved to {Stage}" Undo
   // window (see runUndoableMove, the authority for firing the proc once).
   const movePost = useCallback(
     (
@@ -1245,13 +1094,6 @@ export function PipelinePage() {
       movePost(postId, toStage, null, options);
     },
     [shownPosts, movePost, role],
-  );
-  // A board drop moves at once with no confirm; only a drop on Approved asks,
-  // through the board's own approve (or on-behalf) sheet, before it lands here.
-  const requestBoardMove = useCallback(
-    (postId: string, toStage: Stage, options?: MoveOptions): void =>
-      movePost(postId, toStage, null, options),
-    [movePost],
   );
   // Move on a card this viewer cannot move does nothing.
   // A ⋯ move row passes its target: Approve opens the move sheet straight on
@@ -1316,7 +1158,7 @@ export function PipelinePage() {
           view: the honest "{shown} of {total} posts", and the undated posts the
           date filter hides with "Show them". */}
       {narrowed && !boardLoading && !postsFailed ? (
-        <div className="flex flex-col gap-1 px-4 pt-3 md:px-6">
+        <div className={cn('flex flex-col gap-1 pt-3', GUTTER)}>
           <span data-posts-count="" className="text-base text-fg-3">
             {countLabel}
           </span>
@@ -1330,11 +1172,7 @@ export function PipelinePage() {
       ) : live && postsFailed ? (
         postsLoadError(() => void loadPosts(), postsLoading)
       ) : boardLoading ? (
-        postsSkeleton(isDesktop, {
-          kanban: stage === ALL_KEY,
-          ratio: skeletonRatio(activeWorkspace?.platform),
-          columns: boardStages(stage, role).length,
-        })
+        postsSkeleton()
       ) : pipelineEmpty ? (
         emptyPipeline()
       ) : showFilteredEmpty ? (
@@ -1343,23 +1181,15 @@ export function PipelinePage() {
         <div ref={landRef} className="contents">
           {pipelineSurface({
             stage,
-            isDesktop,
             sorted,
-            grouped,
             cache,
             presignEnabled,
             workspaceKey,
-            onViewAll: setStage,
-            onMovePost: requestBoardMove,
             onLongPressPost: openMove,
-            role,
-            roleReady: roleStatus === 'ready',
-            onBlockedMove,
             shownKey,
             timeZone,
             viewer,
             covers,
-            approvers: people.approvers,
           })}
         </div>
       )}

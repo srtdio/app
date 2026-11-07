@@ -24,13 +24,7 @@ vi.mock('@/components/pages/pipeline/PipelineDateRangeCalendar', () => ({
   PipelineDateRangeCalendar: () => null,
 }));
 
-import {
-  PostCard,
-  cardCoverKind,
-  cardMenuItems,
-  cardRatio,
-  dueLabel,
-} from '@/components/pages/PostCard';
+import { PostCard, cardCoverKind, cardDue, cardMenuItems } from '@/components/pages/PostCard';
 import type { PostCardProps } from '@/components/pages/PostCard';
 import {
   hasAllowedMove,
@@ -49,7 +43,6 @@ import {
   stageConfirmCopy,
   type ConfirmTarget,
 } from '@/components/pages/pipeline/StageMoveConfirm';
-import { BoardApproveConfirm } from '@/components/pages/pipeline/PipelineBoard';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
@@ -81,6 +74,7 @@ import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { filterByFields, filterByWindow, isUndated, sortPosts } from '@/lib/list-sort';
 import type { UndoableAction } from '@/lib/use-undoable-action';
+import { formatAgo } from '@/lib/time';
 import type { PresignCache } from '@/lib/asset-presign';
 import { stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Result, Stage } from '@srtdio/posts';
@@ -134,14 +128,12 @@ function text(node: ReactNode): string {
 
 const T0 = '2026-01-01T00:00:00Z';
 const TWO_HOURS_LATER = new Date('2026-01-01T02:00:00Z');
+// The status time is formatAgo: "2h".
+const WHEN = formatAgo(T0, TWO_HOURS_LATER);
 
 describe('post flow C: Pipeline card', () => {
-  it('fix 1: one fixed cover box per workspace platform (4:5 on Instagram), none for a text-only post', () => {
-    expect(cardRatio({ platform: 'instagram' })).toBeCloseTo(0.8);
-    expect(cardRatio({ platform: 'tiktok' })).toBeCloseTo(9 / 16);
-    expect(cardRatio({ platform: 'not-a-platform' })).toBeNull();
+  it('fix 1: the picture is the post cover, the play placeholder or "Aa" (a text post)', () => {
     const square: Cover = { assetVersionId: 'av1', kind: 'image', width: 1000, height: 1000 };
-    const wide: Cover = { assetVersionId: 'av1', kind: 'image', width: 3000, height: 1000 };
     const video: Cover = { assetVersionId: 'av2', kind: 'video', width: null, height: null };
     expect(cardCoverKind(x5Post({ thumbnailAssetVersionId: 'av1' }), square)).toBe('image');
     expect(cardCoverKind(x5Post({ format: 'reel' }), undefined)).toBe('video');
@@ -149,16 +141,14 @@ describe('post flow C: Pipeline card', () => {
     expect(cardCoverKind(x5Post({ format: 'text' }), null)).toBe('none');
     expect(cardCoverKind(x5Post({ format: 'single_image' }), null)).toBe('none');
 
-    // The media's own size never changes the box: the same inline ratio for all.
+    // The picture is ListCard's 72 square, whatever the media's own size.
     const media = x5Post({ format: 'single_image', thumbnailAssetVersionId: 'av1' });
-    for (const cover of [undefined, square, wide]) {
-      const out = card({ post: media, cover });
-      expect(out).toContain('aspect-ratio:0.8');
-      expect(out).not.toContain('aspect-square');
-    }
+    const out = card({ post: media, cover: square });
+    expect(out).toContain('data-list-card-picture="image"');
+    expect(out).not.toContain('aspect-ratio:');
     const textCard = card({ post: x5Post({ format: 'text', caption: 'Hello' }) });
     expect(textCard).not.toContain('data-post-card-thumb');
-    expect(textCard).not.toContain('aspect-ratio');
+    expect(textCard).toContain('data-post-placeholder="text"');
   });
 
   it('fix 2: the review status line is "Waiting on you" for an approver, "With {first} · {time}" for a creator', () => {
@@ -168,73 +158,59 @@ describe('post flow C: Pipeline card', () => {
     });
     expect(reviewStatus('review', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toEqual({
       tone: 'with',
-      text: 'With Meera · 2 hours ago',
-      ago: '2 hours ago',
+      text: 'With Meera · 2h',
     });
     for (const role of ['owner', 'admin', 'agency']) {
       expect(reviewStatus('review', T0, viewer(role, ['Meera', 'Arjun']), TWO_HOURS_LATER)).toEqual(
-        { tone: 'with', text: 'With approvers · 2 hours ago', ago: '2 hours ago' },
+        { tone: 'with', text: `With approvers · ${WHEN}` },
       );
     }
     expect(reviewStatus('review', T0, viewer('owner'), TWO_HOURS_LATER)?.text).toBe(
-      'With approvers · 2 hours ago',
+      `With approvers · ${WHEN}`,
     );
+    expect(WHEN).toBe('2h');
     // Only Review has a status line; an unknown role gets none.
     expect(reviewStatus('approved', T0, viewer('client'), TWO_HOURS_LATER)).toBeNull();
     expect(reviewStatus('draft', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toBeNull();
     expect(reviewStatus('review', T0, viewer(null), TWO_HOURS_LATER)).toBeNull();
 
-    // On the card: the approver's line is marked "you"; with a status line the
-    // All view leaves the stage label out; without one it keeps it.
+    // On the card: the status line leads line 2; the stage tag always shows.
     const mine = card({
       post: x5Post({ stage: 'review', stage_entered_at: T0 }),
       viewer: viewer('client'),
       now: TWO_HOURS_LATER,
-      showStage: true,
     });
-    expect(mine).toContain('data-post-card-status="you"');
-    expect(mine).toContain('Waiting on you');
-    expect(mine).not.toContain('data-post-card-stage');
+    expect(mine).toMatch(/data-post-card-status="you"[^>]*>Waiting on you</);
+    expect(mine).toContain('data-post-card-stage="review"');
     const theirs = card({
       post: x5Post({ stage: 'review', stage_entered_at: T0 }),
       viewer: viewer('agency', ['Meera']),
       now: TWO_HOURS_LATER,
     });
-    expect(theirs).toContain('data-post-card-status="with"');
-    // The line shows the time only; the full phrase is its title and aria-label.
-    expect(theirs).toContain('aria-label="With Meera · 2 hours ago"');
-    expect(theirs).toContain('title="With Meera · 2 hours ago"');
-    expect(theirs).toContain('>2 hours ago</span>');
-    const draft = card({
-      post: x5Post({ stage: 'draft' }),
-      viewer: viewer('agency'),
-      showStage: true,
-    });
+    expect(theirs).toMatch(/data-post-card-status="with"[^>]*>With Meera · 2h</);
+    const draft = card({ post: x5Post({ stage: 'draft' }), viewer: viewer('agency') });
     expect(draft).not.toContain('data-post-card-status');
-    expect(draft).toContain('data-post-card-stage');
+    expect(draft).toContain('data-post-card-stage="draft"');
     // No viewer: no status line at all.
     expect(card({ post: x5Post({ stage: 'review' }) })).not.toContain('data-post-card-status');
   });
 
-  it('fix 3: the ⋯ ends the due row, off the picture; Move hides when the viewer has no move', () => {
+  it('fix 3: the ⋯ ends the title line, off the picture; Move hides when the viewer has no move', () => {
     const out = card({ post: x5Post({ stage: 'review' }), onMove: () => {} });
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(button).toContain('aria-label="More actions for Post title"');
-    expect(/<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '').toContain('ml-auto');
+    expect(button).toContain('aria-label="Actions for Post title"');
     expect(button).not.toContain('absolute');
-    const metaAt = out.indexOf('data-post-card-meta');
-    expect(metaAt).toBeGreaterThan(out.indexOf('data-post-card-body'));
-    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(metaAt);
+    // The ⋮ ends line 3 (ListCard's trailing slot).
+    const line3At = out.indexOf('data-list-card-line="3"');
+    expect(line3At).toBeGreaterThan(-1);
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(line3At);
     // Nothing of the move control sits on the picture.
-    const thumb = out.slice(
-      out.indexOf('data-post-card-thumb'),
-      out.indexOf('data-post-card-body'),
-    );
-    expect(thumb).not.toContain('data-post-card-move');
-    expect(thumb).not.toContain('bg-overlay-badge-hover');
-    // The title takes the full width and clamps at two lines.
-    const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(title).toContain('line-clamp-2');
+    const picture = out.slice(out.indexOf('data-list-card-picture'), line3At);
+    expect(picture).not.toContain('data-post-card-move');
+    expect(picture).not.toContain('bg-overlay-badge-hover');
+    // The title is one line (ListCard line 1).
+    const title = /<span[^>]*data-list-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(title).toContain('truncate');
 
     // An approver can do nothing with a Draft, Parked or Rejected post: the ⋯
     // keeps Open and Copy link, and its Move row is hidden (never disabled).
@@ -263,20 +239,23 @@ describe('post flow C: Pipeline card', () => {
     expect(shown).toContain('data-post-card-move');
   });
 
-  it('fix 4: date reads Due d MMM, the year only outside now', () => {
-    const now = new Date('2026-06-01T00:00:00Z');
-    expect(dueLabel('2026-03-15T02:00:00Z', 'Asia/Kolkata', now)).toBe('Due 15 Mar');
-    expect(dueLabel('2026-03-15T02:00:00Z', 'America/New_York', now)).toBe('Due 14 Mar');
-    expect(dueLabel('2026-12-01T00:00:00Z', 'UTC', now)).toBe('Due 1 Dec');
-    expect(dueLabel('2027-01-04T00:00:00Z', 'UTC', now)).toBe('Due 4 Jan 2027');
-    expect(dueLabel('2026-03-15T02:00:00Z', 'Not/AZone', now)).toBe(
-      dueLabel('2026-03-15T02:00:00Z', undefined, now),
-    );
-    expect(dueLabel('soon', 'UTC')).toBe('Due soon');
+  it('fix 4: the due time is short (formatDue) on the workspace day; overdue reads late', () => {
+    const now = new Date('2026-03-01T12:00:00Z');
+    const due = (value: string, zone: string | null | undefined): string =>
+      cardDue(value, 'review', zone, now).text;
+    expect(due('2026-03-15T02:00:00Z', 'Asia/Kolkata')).toBe('Due 15 Mar');
+    expect(due('2026-03-15T02:00:00Z', 'America/New_York')).toBe('Due 14 Mar');
+    expect(due('2026-03-01T12:00:00Z', 'UTC')).toBe('Due today');
+    expect(due('2026-03-02T12:00:00Z', 'UTC')).toBe('Due tomorrow');
+    expect(due('2026-12-01T00:00:00Z', 'UTC')).toBe('Due 1 Dec');
+    expect(due('2027-01-04T00:00:00Z', 'UTC')).toBe('Due 4 Jan 2027');
+    expect(due('2026-02-27T12:00:00Z', 'UTC')).toBe('Overdue 2d');
+    expect(due('2026-03-15T02:00:00Z', 'Not/AZone')).toBe(due('2026-03-15T02:00:00Z', undefined));
+    expect(due('soon', 'UTC')).toBe('');
     const out = card({
       post: x5Post({ target_date: '2026-03-15T02:00:00Z' }),
       timeZone: 'UTC',
-      now: new Date('2026-03-01T00:00:00Z'),
+      now,
     });
     expect(out).toMatch(/<span[^>]*data-post-card-due=""[^>]*>Due 15 Mar<\/span>/);
     expect(out).not.toContain('2026');
@@ -286,7 +265,7 @@ describe('post flow C: Pipeline card', () => {
   it('fix 5: no platform mark, no "Caption:" prefix, search reads title and caption only', () => {
     const out = card({ post: x5Post({ format: 'text', caption: 'Diwali offer copy' }) });
     expect(out).not.toContain('aria-label="instagram"');
-    const caption = /<p[^>]*data-post-card-caption=""[^>]*>(.*?)<\/p>/.exec(out)?.[1] ?? '';
+    const caption = /<span[^>]*data-post-card-caption=""[^>]*>(.*?)<\/span>/.exec(out)?.[1] ?? '';
     expect(caption).toBe('Diwali offer copy');
     const post = x5Post({ title: 'Launch teaser', caption: 'New drop', platform: 'instagram' });
     expect(postSearchFields(post)).toEqual(['Launch teaser', 'New drop']);
@@ -595,26 +574,6 @@ describe('post flow C: move sheet and confirms', () => {
     expect(all(park.tree).map(text)).not.toContain(REASON_LABEL);
     (park.button('Park').props as { onClick: () => void }).onClick();
     expect(park.onConfirm).toHaveBeenCalledWith('p1', 'parked', null);
-
-    // A client's board drag into Approved names the post in the header and asks once.
-    let state = GATE_IDLE;
-    const gate = createApproveGate({
-      move: () => {},
-      read: () => state,
-      write: (next) => {
-        state = next;
-      },
-    });
-    gate.request('p1', 'approved');
-    const board = BoardApproveConfirm({
-      post: x5Post({ stage: 'review' }),
-      gate,
-      gateState: state,
-      timeZone: 'UTC',
-    })!;
-    expect((board.props as { title: string }).title).toBe('Post title');
-    const body = (board.props as { children: ReactNode }).children;
-    expect(renderToStaticMarkup(<>{body}</>)).toContain('Approve this post?');
   });
 });
 

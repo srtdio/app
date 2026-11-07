@@ -230,8 +230,8 @@ describe('checkpoint checkbox', () => {
     expect(box).toBeDefined();
     expect(box?.getAttribute('role')).toBe('checkbox');
     expect(box?.getAttribute('aria-checked')).toBe('false');
-    expect(box?.className).toContain('min-h-[44px]');
-    expect(box?.className).toContain('min-w-[44px]');
+    expect(box?.className).toContain('min-h-11');
+    expect(box?.className).toContain('min-w-11');
     expect(box?.querySelector('[data-tick]')?.getAttribute('data-tick')).toBe('open');
 
     act(() => box?.click());
@@ -313,7 +313,7 @@ describe('replies inside a checkpoint', () => {
 
     const replyToReply = rowEl('r-1')?.querySelector<HTMLButtonElement>('[data-reply-to-reply]');
     expect(replyToReply).toBeTruthy();
-    expect(replyToReply?.className).toContain('min-h-[44px]');
+    expect(replyToReply?.className).toContain('min-h-11');
     act(() => replyToReply?.click());
     await settle();
 
@@ -347,7 +347,7 @@ describe('replies inside a checkpoint', () => {
 
     const replyToReply = rowEl('r-1')?.querySelector<HTMLButtonElement>('[data-reply-to-reply]');
     expect(replyToReply).toBeTruthy();
-    expect(replyToReply?.className).toContain('min-h-[44px]');
+    expect(replyToReply?.className).toContain('min-h-11');
     act(() => replyToReply?.click());
     await settle();
 
@@ -419,8 +419,8 @@ describe('one row template for checkpoints and comments', () => {
       for (const control of Array.from(el?.querySelectorAll('[data-comment-actions] > *') ?? [])) {
         if (control.tagName !== 'BUTTON' && !control.hasAttribute('data-checkpoint-box')) continue;
         expect(control.className).toContain('h-11');
-        expect(control.className).toContain('min-h-[44px]');
-        expect(control.className).toContain('min-w-[44px]');
+        expect(control.className).toContain('min-h-11');
+        expect(control.className).toContain('min-w-11');
       }
     }
     // The checkpoint number sits in the header as "#2", in fg-3.

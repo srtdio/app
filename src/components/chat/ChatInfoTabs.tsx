@@ -39,7 +39,11 @@ import { FileViewer, remoteFileSource } from '@/components/ui/FileViewer';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { MarksList, type MarksListProps } from '@/components/chat/MarksSheet';
 import { StarredList } from '@/components/chat/StarredList';
-import { RemoveSelectionBarView, SelectionHeader } from '@/components/chat/SelectionBar';
+import {
+  RemoveSelectionBarView,
+  SelectionHeader,
+  selectionHeaderSlots,
+} from '@/components/chat/SelectionBar';
 import { useChatLayout } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
@@ -58,7 +62,8 @@ import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Result } from '@srtdio/rpc';
 import type { MessageCursor } from '@/lib/chat/thread';
-import { formatDate, formatTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { classifyFileKind } from '@/lib/chat/attachments';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { APP_ENTITY_ROUTES, currentOrigin, displayUrl } from '@/lib/chat/message-links';
@@ -247,6 +252,12 @@ export interface InfoSelectChrome {
   selecting: boolean;
   /** Select (top right) or the selection header; null when neither shows. */
   header: ReactElement | null;
+  /**
+   * While selecting: the same header as ui/HeaderBar slots (the "n selected"
+   * title and Cancel), so a host on HeaderBar keeps one bar in both modes.
+   * Null outside select mode.
+   */
+  selectHeader: { title: ReactElement; cancel: ReactElement } | null;
   /** The Remove bar under the page while selecting, else null. */
   bar: ReactElement | null;
 }
@@ -430,14 +441,13 @@ function MediaTile(props: {
   );
 }
 
-const ROW =
-  'flex min-h-[64px] w-full items-center gap-3 border-b border-border py-2 last:border-b-0';
+const ROW = 'flex min-h-16 w-full items-center gap-3 border-b border-border py-2 last:border-b-0';
 const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3 lit-media';
 
-/** "size · date" under a file name. Pure. */
-function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
-  return `${humanizeSize(item.size)} · ${formatDate(item.createdAt, undefined, timeZone)}`;
+/** "size · when" under a file name ("2 MB · Mon", formatAgo). Pure. */
+function fileMetaLine(item: ChannelAttachmentItem, now: Date): string {
+  return `${humanizeSize(item.size)} · ${formatAgo(item.createdAt, now)}`;
 }
 
 /**
@@ -449,8 +459,8 @@ function FileRow(props: {
   item: ChannelAttachmentItem;
   cache: PresignCache;
   presignEnabled: boolean;
-  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
-  timeZone?: string | undefined;
+  /** The shared minute clock's instant (the view's useMinuteClock): the time reads relative to it. */
+  now: Date;
   /** Select mode: a tap ticks (own files) or does nothing (the rest). */
   selecting: boolean;
   tick: Tick | null;
@@ -480,7 +490,7 @@ function FileRow(props: {
           <span title={name} className="truncate text-base font-medium text-fg">
             {middleTruncate(name, VIEWER_NAME_BUDGET)}
           </span>
-          <span className="truncate text-sm text-fg-2">{fileMetaLine(item, props.timeZone)}</span>
+          <span className="truncate text-sm text-fg-2">{fileMetaLine(item, props.now)}</span>
         </span>
       </PressableRow>
       {open && source !== null ? (
@@ -512,11 +522,11 @@ export function LinkRow(props: {
           reasons={verdict.reasons}
           className={cn(ROW, 'w-full rounded-lg text-left lit-hover')}
         >
-          <span className={cn(ROW_ICON, 'text-[color:var(--warn-ink)]')}>
+          <span className={cn(ROW_ICON, 'text-warn-ink')}>
             <IconAlertTriangle size={ICON_SIZE.control} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="truncate text-base font-medium text-[color:var(--warn-ink)]">
+            <span className="truncate text-base font-medium text-warn-ink">
               {displayUrl(props.item.url)}
             </span>
             <span className="truncate text-sm text-fg-2">{`${props.sender} · ${props.date}`}</span>
@@ -655,6 +665,8 @@ export interface ChatInfoTabsViewProps {
   onSeeAll?: (tab: ContactTab) => void;
   /** Media and Files select mode; absent or null outside it. */
   selection?: InfoSelection | null | undefined;
+  /** The shared minute clock (the stateful parent's useMinuteClock); now when absent. */
+  nowMs?: number | undefined;
 }
 
 const NONE_EXPANDED: ReadonlySet<ContactTab> = new Set();
@@ -662,6 +674,7 @@ const NO_SEE_ALL = (): void => undefined;
 
 /** The chips and the selected tab's body. Hook-free so tests walk it directly. */
 export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
+  const now = new Date(props.nowMs ?? Date.now());
   const expanded = props.expanded ?? NONE_EXPANDED;
   const onSeeAll = props.onSeeAll ?? NO_SEE_ALL;
   const limit = previewLimit(props.mode, props.tab, expanded);
@@ -693,7 +706,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
         }
         {...feedProps('attachments', view.seeAll)}
       >
-        <div data-media-grid="" className="grid grid-cols-3 gap-[2px]">
+        <div data-media-grid="" className="grid grid-cols-3 gap-0.5">
           {view.shown.map((item, index) => (
             <MediaTile
               key={`${item.messageId}-${item.versionId}`}
@@ -724,7 +737,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               item={item}
               cache={props.cache}
               presignEnabled={props.presignEnabled}
-              timeZone={props.timeZone}
+              now={now}
               selecting={selecting}
               tick={tickOf(item)}
             />
@@ -748,7 +761,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               key={`${item.messageId}-${index}`}
               item={item}
               sender={props.senderName(item.senderUserId)}
-              date={formatDate(item.createdAt, undefined, props.timeZone)}
+              date={formatAgo(item.createdAt, now, props.timeZone)}
             />
           ))}
         </ul>
@@ -879,6 +892,7 @@ export function starredTab(input: {
  * channel.
  */
 export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
+  const nowMs = useMinuteClock();
   const open = props.open ?? true;
   const frame = props.frame ?? NO_FRAME;
   const [tab, setTab] = useState<ContactTab>('media');
@@ -1058,6 +1072,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
 
   const tabs = (
     <ChatInfoTabsView
+      nowMs={nowMs}
       tab={tab}
       starred={starred}
       onTab={onTab}
@@ -1097,6 +1112,9 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
         {SELECT_LABEL}
       </Button>
     ) : null,
+    selectHeader: selecting
+      ? selectionHeaderSlots({ count: selectedFiles.length, onCancel: leaveSelect })
+      : null,
     bar: selecting ? (
       <RemoveSelectionBarView
         count={selectedFiles.length}
@@ -1126,7 +1144,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
           presignEnabled={props.presignEnabled}
           details={{
             sender: senderName(current.senderUserId),
-            time: formatTime(current.createdAt, props.timeZone),
+            time: formatAgo(current.createdAt, new Date(nowMs), props.timeZone),
           }}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}

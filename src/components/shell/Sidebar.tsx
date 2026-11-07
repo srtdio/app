@@ -13,6 +13,7 @@ import {
 } from '@/lib/inbox/unread-entities';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
+import { textRole } from '@/components/ui/Text';
 import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { Bone, useNudgeOnRise } from '@/lib/motion';
@@ -35,13 +36,13 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
     // surface (--shell-safe-top, 0 everywhere else). In the locked 100svh
     // shell (laptop, Chat) this is the same box as before: the full shell
     // height, nothing scrolls past it, padding 0.
-    <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-[100svh] md:self-start pt-[var(--shell-safe-top,0px)] w-[244px] shrink-0 border-r bg-panel lit-side">
-      <div className="p-2.5">
+    <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-[100svh] md:self-start pt-[var(--shell-safe-top,0px)] w-60 shrink-0 border-r bg-panel lit-side">
+      <div className="p-3">
         <PressableRow
           type="button"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="flex items-center gap-2.5 px-2 mv-tint"
+          className="flex items-center gap-3 px-3 mv-tint"
         >
           {workspaceName !== null ? (
             <Avatar name={clientName ?? workspaceName} role="header" kind="group" />
@@ -52,14 +53,14 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             <Bone lit="flat" className="flex-1 h-4 rounded" />
           ) : (
             // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
-            <span className="flex-1 min-w-0 font-semibold text-base leading-tight line-clamp-3 break-words">
+            <span className={textRole('title', 'min-w-0 flex-1 line-clamp-3 break-words')}>
               {workspaceName}
             </span>
           )}
           <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3 shrink-0" />
         </PressableRow>
       </div>
-      <nav aria-label="Primary" className="flex flex-col gap-0.5 px-2.5">
+      <nav aria-label="Primary" className="flex flex-col gap-1 px-3">
         {PRIMARY_NAV.map((item) => (
           <SideNavItem key={item.to} item={item} chatUnread={total} planUnread={planUnread} />
         ))}
@@ -92,7 +93,7 @@ function SideNavItem(props: {
       {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
       className={() =>
         cn(
-          'flex items-center gap-3 min-h-[44px] px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
+          'flex items-center gap-3 min-h-11 px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
           active
             ? 'border-transparent bg-accent text-accent-fg lit-pill'
             : 'border-transparent text-fg-2 lit-hover hover:text-fg',
@@ -106,13 +107,13 @@ function SideNavItem(props: {
         {item.showChatBadge === true && chatUnread > 0 ? (
           <CountBadge
             count={chatUnread}
-            className="absolute -right-2 -top-1.5 border-2 border-panel"
+            className="absolute -right-2 -top-2 border-2 border-panel"
           />
         ) : null}
         {item.showPlanBadge === true && planUnread > 0 ? (
           <CountBadge
             count={planUnread}
-            className="absolute -right-2 -top-1.5 border-2 border-panel"
+            className="absolute -right-2 -top-2 border-2 border-panel"
           />
         ) : null}
       </span>

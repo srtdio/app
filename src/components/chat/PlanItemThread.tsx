@@ -2,7 +2,7 @@
 // the left under their avatar, the viewer's own on the right in bubble-own.
 // Consecutive comments from one author within PLAN_RUN_GAP_MS are one run: the
 // name and role sit over its first bubble, the time under its last. A day line
-// ("Today", "Yesterday", "3 Nov", chat's dayPillLabel) goes between days.
+// ("Today", "Yesterday", "Tue 3 Nov", chat's dayPillLabel) goes between days.
 // Creators-only comments are warn-soft with the warn line and a lock label.
 // Mention tokens render as pills (names from the shared registry, never a raw
 // token). Also the @ helpers the comment box uses: who can be tagged (never me;
@@ -316,7 +316,7 @@ function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): 
 function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null): ReactNode[] {
   return splitMentions(text).map((segment, i) => {
     if (segment.kind === 'text') {
-      return <Fragment key={i}>{renderBodyLinks(segment.text, ownTone)}</Fragment>;
+      return <Fragment key={`part-${i}`}>{renderBodyLinks(segment.text, ownTone)}</Fragment>;
     }
     const label = personMentionLabel(workspaceId, segment.userId);
     if (label === null) return null;
@@ -324,7 +324,7 @@ function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null
       <span
         data-plan-mention={segment.userId}
         className={cn(
-          'whitespace-nowrap rounded-full px-1.5 font-medium lit-tint',
+          'shrink-0 whitespace-nowrap rounded-full px-1.5 font-medium lit-tint',
           ownTone ? 'bg-accent-fg/[0.22] text-accent-fg' : 'bg-accent-soft text-accent',
         )}
       >
@@ -332,10 +332,11 @@ function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null
       </span>
     );
     // "@all" names no one; every person's pill opens the person card.
-    if (segment.userId.toLowerCase() === ALL_MENTION) return <Fragment key={i}>{pill}</Fragment>;
+    if (segment.userId.toLowerCase() === ALL_MENTION)
+      return <Fragment key={`part-${i}`}>{pill}</Fragment>;
     return (
       <PersonTrigger
-        key={i}
+        key={`part-${i}`}
         userId={segment.userId}
         {...(isFormerMember(workspaceId, segment.userId) ? { former: true } : {})}
       >
@@ -359,7 +360,7 @@ function PlanDayLine(props: { label: string }): ReactElement {
     <li role="separator" aria-label={props.label} data-plan-day="" className="flex justify-center">
       <span
         className={cn(
-          'mb-1.5 mt-2 self-center rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-fg-3 lit-pill',
+          'mb-1.5 mt-2 self-center rounded-full border border-border bg-panel-2 px-3 py-0.5 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >

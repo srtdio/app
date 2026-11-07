@@ -616,8 +616,8 @@ export function focusFirstMenuItem(root: MenuRoot | null): boolean {
   return true;
 }
 
-/** A row's box: full-bleed, at least 44px, 16px side padding, 14px to the label. */
-export const MENU_ROW = 'flex min-h-[44px] w-full items-center gap-[14px] px-4';
+/** A row's box: full-bleed, at least 44px, 16px side padding, 12px to the label. */
+export const MENU_ROW = 'flex min-h-11 w-full items-center gap-3 px-4';
 
 /**
  * One row, ActionMenu's row look: base text, the icon (or dot) left in the
@@ -636,7 +636,7 @@ export function MenuRow(props: {
         data-menu-note={item.key}
         className={cn(MENU_ROW, 'text-base text-fg-3')}
       >
-        <span className="flex w-[22px] shrink-0 justify-center">{item.icon}</span>
+        <span className="flex w-6 shrink-0 justify-center">{item.icon}</span>
         <span className="min-w-0">{item.label}</span>
       </div>
     );
@@ -645,7 +645,7 @@ export function MenuRow(props: {
     item.dot !== undefined ? (
       <span
         aria-hidden="true"
-        className={cn('h-2.5 w-2.5 rounded-full', DOT_CLASS[MARK_TONE[item.dot]])}
+        className={cn('h-2 w-2 rounded-full', DOT_CLASS[MARK_TONE[item.dot]])}
       />
     ) : (
       item.icon
@@ -663,7 +663,7 @@ export function MenuRow(props: {
         item.danger === true ? 'text-bad' : 'text-fg',
       )}
     >
-      <span data-menu-icon="" className="flex w-[22px] shrink-0 items-center justify-center">
+      <span data-menu-icon="" className="flex w-6 shrink-0 items-center justify-center">
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate">
@@ -727,9 +727,9 @@ export function ReactionsRow(props: {
   return (
     <div
       data-menu-reactions=""
-      // 8px 10px around six 44x44 cells; one hairline under it (the menu's only divider).
+      // 8px around six 44x44 cells; one hairline under it (the menu's only divider).
       className={cn(
-        'flex items-center justify-between px-[10px] py-2',
+        'flex items-center justify-between px-2 py-2',
         !reactionsOnly && 'border-b border-border',
       )}
     >
@@ -938,7 +938,7 @@ export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElem
       className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center"
     >
       <p className="text-base text-fg-3">{EMOJI_LOAD_FAILED}</p>
-      <Button type="button" data-emoji-retry="" className="min-w-[44px]" onClick={props.onRetry}>
+      <Button type="button" data-emoji-retry="" className="min-w-11" onClick={props.onRetry}>
         Retry
       </Button>
     </div>
@@ -1097,11 +1097,11 @@ export function EmojiPickerShell(props: {
     const position = props.anchor !== null ? popoverPosition(props.anchor, viewportSize()) : null;
     return createPortal(
       <>
-        <div data-emoji-dismiss="" className="fixed inset-0 z-[60]" onClick={onClose} />
+        <div data-emoji-dismiss="" className="fixed inset-0 z-dialog" onClick={onClose} />
         <div
           {...dialogProps}
           data-emoji-picker="laptop"
-          className="fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
+          className="fixed z-dialog flex h-emoji w-emoji max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
           style={{ top: position?.top ?? 8, left: position?.left ?? 8 }}
         >
           {body}
@@ -1111,7 +1111,7 @@ export function EmojiPickerShell(props: {
     );
   }
   return createPortal(
-    <div data-emoji-dismiss="" className="fixed inset-0 z-[60]">
+    <div data-emoji-dismiss="" className="fixed inset-0 z-dialog">
       <Backdrop
         ref={dimRef}
         aria-label="Close emoji picker"
@@ -1368,7 +1368,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     <>
       <span
         data-menu-anchor=""
-        className="fixed z-50"
+        className="fixed z-sheet"
         style={{ top: anchor.bottom - lift, left: mine ? anchor.right : anchor.left }}
       >
         <span className="relative block">

@@ -58,7 +58,7 @@ export function selectOptionRows(
         aria-selected={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
+          'flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
           selected ? 'lit-selected text-fg' : 'lit-hover text-fg-2',
         )}
       >
@@ -132,7 +132,7 @@ export function SelectMenu({
 }: SelectMenuProps): ReactElement {
   return (
     <>
-      <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} />
+      <div className="fixed inset-0 z-dock" aria-hidden="true" onClick={onClose} />
       <div
         ref={listRef}
         role="listbox"
@@ -144,8 +144,8 @@ export function SelectMenu({
           onListboxKeyDown(event);
         }}
         className={cn(
-          'absolute left-0 z-50 max-h-60 w-full min-w-0 overflow-y-auto rounded-xl border bg-panel p-1.5 lit-overlay',
-          placement === 'up' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
+          'absolute left-0 z-sheet max-h-60 w-full min-w-0 overflow-y-auto rounded-xl border bg-panel p-1 lit-overlay',
+          placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
         )}
       >
         {selectOptionRows(options, value, (next) => {

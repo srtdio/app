@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Type roles on the Briefs list (design rules, 24 Oct 2026): the time-group
-// heading is the section label (sm/600 uppercase tracking-[0.06em] fg-2), a
-// card title is base/500, the objective is base fg-2 secondary copy, and the
+// heading is the section label (sm/600 uppercase tracking-label fg-2), a
+// card title is the ui/ListCard heading role (15/600), the objective is the secondary role (13/18 fg-2), and the
 // due line is sm fg-3 meta. Mocks mirror BriefsPage.w5-list.test.tsx.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -152,21 +152,20 @@ describe('Briefs list type roles', () => {
     await mount();
     const label = byText('This week');
     expect(label.tagName).toBe('H3');
-    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']);
+    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']);
   });
 
-  it('the card title is base/500 and the objective is base fg-2', async () => {
+  it('the card title is the ui/ListCard heading role and the objective is secondary fg-2', async () => {
     await mount();
-    expectRole(byText('Launch reel'), ['text-base', 'font-medium', 'text-fg']);
-    expectRole(byText('Build hype for the drop'), ['text-base', 'text-fg-2']);
+    const title = byText('Launch reel');
+    expectRole(title.parentElement as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
+    expectRole(byText('Build hype for the drop'), ['text-md', 'text-fg-2', 'line-clamp-2']);
   });
 
   it('the due line is sm fg-3 meta', async () => {
     await mount();
     const due = byText(briefDueLabel(TARGET_DATE, 'UTC'));
-    const meta = due.parentElement;
-    expect(meta).not.toBeNull();
-    expectRole(meta as HTMLElement, ['text-sm', 'text-fg-3']);
+    expectRole(due, ['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']);
   });
 
   it('no arbitrary pixel sizes or bold weights in the rendered list', async () => {

@@ -114,7 +114,7 @@ describe('PersonMessageInput', () => {
     for (const b of reactions()) {
       expect(b.className).toContain('h-11');
       expect(b.className).toContain('w-11');
-      expect(b.className).toContain('min-h-[44px]');
+      expect(b.className).toContain('min-h-11');
     }
   });
 

@@ -249,7 +249,7 @@ export function CheckpointStrip({
     <div
       data-checkpoint-strip=""
       className={cn(
-        'sticky top-[var(--shell-sticky-top,0px)] z-10 flex border-b py-2 lit-header',
+        'sticky top-[var(--shell-sticky-top,0px)] z-raised flex border-b py-2 lit-header',
         STRIP_SURFACE_CLASS,
       )}
     >

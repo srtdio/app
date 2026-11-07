@@ -77,7 +77,15 @@ import {
   type BriefFilter,
   type BriefPickerRow,
 } from '@/lib/chat/briefs';
-import { civilDay, formatDate, formatDueDate } from '@/lib/time';
+import {
+  civilDay,
+  daysFromToday,
+  formatDue,
+  formatDueDate,
+  formatOverdue,
+  formatAgo,
+} from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { formatCivilDayHeader } from '@/lib/plan-week';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
@@ -102,6 +110,7 @@ import {
 } from '@/components/chat/post-picker';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { errorText } from '@/lib/error-copy';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 /** Search debounce, in milliseconds. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -389,7 +398,7 @@ interface SearchState {
  * the width, 44px minimum, left alignment and press; card gives the 12px corners.
  * Picked: lit-selected replaces lit-card.
  */
-const ROW_BASE = 'flex gap-3 border bg-panel p-2.5 mv-tint';
+const ROW_BASE = 'flex gap-3 border bg-panel p-3 mv-tint';
 
 function rowClass(active: boolean): string {
   return cn(ROW_BASE, 'items-start', active ? 'lit-selected' : 'lit-card');
@@ -917,7 +926,7 @@ export interface PostRowContext {
 }
 
 const LIST_CLASS =
-  '-mx-[18px] flex max-h-[50dvh] flex-col gap-2 overflow-y-auto bg-bg px-[18px] py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
+  '-mx-4 flex max-h-[50dvh] flex-col gap-2 overflow-y-auto bg-bg px-4 py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
 
 /** Loading state: three static placeholder rows (no motion). */
 export function PickerSkeleton(): ReactElement {
@@ -925,13 +934,13 @@ export function PickerSkeleton(): ReactElement {
     <ul aria-busy="true" aria-label="Loading posts" className={LIST_CLASS}>
       {[0, 1, 2].map((i) => (
         <li
-          key={i}
+          key={`bone-${i}`}
           data-skeleton-row=""
-          className="flex min-h-[44px] items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
+          className="flex min-h-11 items-center gap-3 rounded-xl border bg-panel p-3 lit-card"
         >
           <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
           <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span className="h-3.5 w-2/3 rounded bg-panel-3" />
+            <span className="h-3 w-2/3 rounded bg-panel-3" />
             <span className="h-3 w-1/3 rounded bg-panel-2" />
           </span>
         </li>
@@ -955,7 +964,7 @@ function SectionHeading({ label, mono }: { label: string; mono?: boolean }): Rea
   return (
     <li
       className={cn(
-        'px-1 pt-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2',
+        `px-1 pt-2 ${TEXT_ROLE.section}`,
         // A date heading (link mode's day section): font-mono like every date.
         mono === true && 'font-mono tabular-nums',
       )}
@@ -1103,6 +1112,27 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
   );
 }
 
+/**
+ * A brief row's due text: "Due today", "Due Fri", "Due 12 Dec"
+ * (formatDue), or "Overdue 2d" (`bad`, the bad token) once an open brief's
+ * day has passed on the workspace zone; a closed brief is never overdue. Null
+ * without a due date. Pure.
+ */
+export function briefPickerDue(
+  targetDate: string | null,
+  status: string,
+  workspaceZone: string | null | undefined,
+  now: Date,
+): { text: string; bad: boolean } | null {
+  if (targetDate === null) return null;
+  const days = daysFromToday(targetDate, workspaceZone, now);
+  if (days === undefined) return null;
+  if (days < 0 && status !== 'closed') {
+    return { text: formatOverdue(targetDate, workspaceZone, now).text, bad: true };
+  }
+  return { text: formatDue(targetDate, workspaceZone, now), bad: false };
+}
+
 export function BriefPickerList(props: {
   briefs: BriefPickerRow[];
   loading: boolean;
@@ -1118,6 +1148,7 @@ export function BriefPickerList(props: {
   filtersActive?: boolean;
   onClear?: () => void;
 }): ReactElement {
+  const now = new Date(useMinuteClock());
   if (props.loading) {
     return listSkeleton('Loading briefs');
   }
@@ -1148,8 +1179,7 @@ export function BriefPickerList(props: {
     <ul className={LIST_CLASS}>
       {props.briefs.map((brief) => {
         const active = isBriefSelected(props.selected, brief.id);
-        const target =
-          brief.targetDate !== null ? formatDueDate(brief.targetDate, props.workspaceZone) : '';
+        const due = briefPickerDue(brief.targetDate, brief.status, props.workspaceZone, now);
         return (
           <li key={brief.id}>
             <PressableRow
@@ -1178,12 +1208,19 @@ export function BriefPickerList(props: {
                   {brief.formatRequested !== null && brief.formatRequested !== '' ? (
                     <Tag label={formatLabel(brief.formatRequested)} />
                   ) : null}
-                  {target !== '' ? (
-                    <span className="text-sm text-fg-2">{`Target ${target}`}</span>
+                  {due !== null ? (
+                    <span
+                      className={cn(
+                        'font-mono text-sm tabular-nums',
+                        due.bad ? 'text-bad' : 'text-fg-2',
+                      )}
+                    >
+                      {due.text}
+                    </span>
                   ) : null}
                   <span className="flex-1" />
                   <span className="text-sm text-fg-2">
-                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatDate(brief.createdAt, undefined, props.timeZone)}`}
+                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatAgo(brief.createdAt, now)}`}
                   </span>
                 </span>
               </span>

@@ -25,10 +25,14 @@ describe('PostCover', () => {
     }
   });
   it('paints nothing while unknown, so a glyph never swaps for a picture', () => {
-    expect(renderToStaticMarkup(<PostCover cover={undefined} />)).not.toContain('<svg');
+    const html = renderToStaticMarkup(<PostCover cover={undefined} />);
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('data-post-placeholder');
   });
-  it('shows the glyph for a post with no photo or video', () => {
-    expect(renderToStaticMarkup(<PostCover cover={null} />)).toContain('<svg');
+  it('shows the post placeholder ("Aa") for a post with no photo or video', () => {
+    expect(renderToStaticMarkup(<PostCover cover={null} />)).toContain(
+      'data-post-placeholder="text"',
+    );
   });
   it('marks a video with the play badge and a photo without one', () => {
     expect(renderToStaticMarkup(<PostCover cover={VIDEO} />)).toContain('data-post-cover-play');

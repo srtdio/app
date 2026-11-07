@@ -77,7 +77,7 @@ describe('AssetLightbox buttons', () => {
     'aria-label="Download"',
     'aria-label="Previous file"',
     'aria-label="Next file"',
-    'aria-label="Rename file"',
+    'data-rename-file=""',
   ])('%s is a 44px, 8px-radius control', (marker) => {
     const cls = buttonClassOf(html, marker);
     expect(cls).toContain('h-11');

@@ -12,6 +12,8 @@ export interface ToolbarProps {
   /** Drop the page gutter (the toolbar sits inside a padded surface). */
   flush?: boolean;
   className?: string;
+  /** data-* hooks (tests, the tour). Behaviour only. */
+  [hook: `data-${string}`]: string | undefined;
 }
 
 /**
@@ -19,10 +21,18 @@ export interface ToolbarProps {
  * primary. Visible gaps: bare to bare 24 (the 44 boxes touch: gap 0), bare to
  * filled 12 (box gap 0, the glyph's own 12 inset), filled to filled 8.
  */
-export function Toolbar({ context, icons, primary, flush = false, className }: ToolbarProps) {
+export function Toolbar({
+  context,
+  icons,
+  primary,
+  flush = false,
+  className,
+  ...hooks
+}: ToolbarProps) {
   const iconCount = Children.count(icons);
   return (
     <div
+      {...hooks}
       data-toolbar=""
       className={cn('flex h-14 min-w-0 items-center gap-2', !flush && GUTTER, className)}
     >

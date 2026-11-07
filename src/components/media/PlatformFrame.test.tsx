@@ -113,7 +113,7 @@ describe('frame paint', () => {
         onPick={() => {}}
       />,
     );
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('min-h-11');
     expect(html).toContain('h-11 w-11');
     expect(html.match(/<button/g)).toHaveLength(1);
   });

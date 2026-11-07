@@ -278,9 +278,9 @@ describe('menu style', () => {
     expect(MENU_WIDTH_PX).toBeGreaterThanOrEqual(6 * 44 + 20 + 2);
   });
 
-  it('rows: full-bleed, >= 44px, 16px sides, 14px gap, base fg text', () => {
+  it('rows: full-bleed, >= 44px, 16px sides, 12px gap, base fg text', () => {
     const cls = MENU_ROW.split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['min-h-[44px]', 'px-4', 'gap-[14px]']));
+    expect(cls).toEqual(expect.arrayContaining(['min-h-11', 'px-4', 'gap-3']));
     const html = renderToStaticMarkup(
       <>
         {items.map((item) => (
@@ -296,7 +296,7 @@ describe('menu style', () => {
     expect(html).not.toContain(HASH);
   });
 
-  it('icons: 22px, stroke 1.85, inherit the row ink; Delete in bad', () => {
+  it('icons: 22px, stroke 1.6 (strokeFor 22), inherit the row ink; Delete in bad', () => {
     for (const item of items) {
       let sizes: unknown[] = [];
       walk(item.icon, (el) => {
@@ -308,7 +308,7 @@ describe('menu style', () => {
     const html = renderToStaticMarkup(
       <MenuRow item={items.find((i) => i.key === 'copy') as MessageMenuItem} onRun={() => {}} />,
     );
-    expect(html).toContain('stroke-width="1.85"');
+    expect(html).toContain('stroke-width="1.6"');
     expect(html).toContain('width="22"');
     expect(html).toMatch(/class="[^"]*text-fg[ "]/);
     const del = renderToStaticMarkup(
@@ -337,8 +337,8 @@ describe('menu style', () => {
         onMore={() => {}}
       />,
     );
-    expect(html.match(/h-11 w-11 min-h-\[44px\] min-w-\[44px\][^"]*shrink-0/g)?.length).toBe(6);
-    expect(html).toContain('px-[10px] py-2');
+    expect(html.match(/h-11 w-11 min-h-11 min-w-11[^"]*shrink-0/g)?.length).toBe(6);
+    expect(html).toContain('px-2 py-2');
     expect(html).toContain('border-b border-border');
   });
 });

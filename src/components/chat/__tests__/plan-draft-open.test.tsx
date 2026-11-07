@@ -160,7 +160,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(both).toMatch(/<button(?=[^>]*data-plan-menu-delete="")(?=[^>]*class="[^"]*text-bad)/);
     expect(both).toContain('Change dates');
     expect(both).toContain('Delete plan');
-    expect(both.match(/min-h-\[44px\]/g)).toHaveLength(3);
+    expect(both.match(/min-h-11/g)).toHaveLength(3);
     // The menu grows from its trigger (growFromTrigger, a JS move): no CSS
     // transition, translate or rotate on the markup.
     expect(both).not.toMatch(/translate-x|rotate|transition/);
@@ -288,7 +288,7 @@ describe('item 4: footer', () => {
     );
     expect(open).toContain('Open for approvers');
     expect(open).toContain('data-plan-primary="open"');
-    expect(open.match(/min-h-\[44px\]/g)?.length).toBe(1);
+    expect(open.match(/min-h-11/g)?.length).toBe(1);
     expect(open.match(/<button/g)?.length).toBe(1);
     const toApprovers = renderToStaticMarkup(
       <PlanFooter
@@ -424,16 +424,13 @@ describe('item 6: Approved by', () => {
     expect(approverIds(bundle('team'))).toEqual([]);
   });
 
-  it('"today, 6:45 PM" / "yesterday, 6:45 PM" / "12 Oct, 6:45 PM" in the given zone', () => {
+  it('"just now" / "1h" / "Yesterday" / "2 Oct" (formatAgo)', () => {
     const now = new Date('2026-10-12T15:00:00Z');
-    expect(approvedWhen('2026-10-12T13:15:00Z', now, 'Asia/Kolkata')).toBe('today, 6:45 PM');
-    expect(approvedWhen('2026-10-11T13:15:00Z', now, 'Asia/Kolkata')).toBe('yesterday, 6:45 PM');
-    expect(approvedWhen('2026-10-02T13:15:00Z', now, 'Asia/Kolkata')).toBe('2 Oct, 6:45 PM');
-    // 23:30 UTC on 11 Oct is 12 Oct in Kolkata: today there.
-    expect(approvedWhen('2026-10-11T23:30:00Z', now, 'Asia/Kolkata')).toBe('today, 5:00 AM');
-    expect(approvedByLine('Riya Shah', 'today, 6:45 PM')).toBe(
-      'Approved by Riya Shah · today, 6:45 PM',
-    );
+    expect(approvedWhen('2026-10-12T15:00:00Z', now)).toBe('just now');
+    expect(approvedWhen('2026-10-12T13:15:00Z', now)).toBe('1h');
+    expect(approvedWhen('2026-10-11T13:15:00Z', now)).toBe('Yesterday');
+    expect(approvedWhen('2026-10-02T13:15:00Z', now)).toBe('2 Oct');
+    expect(approvedByLine('Riya Shah', '1h')).toBe('Approved by Riya Shah · 1h');
   });
 
   it('the row shows no Approved by line any more: the PLAN line reads OK', () => {
@@ -611,7 +608,7 @@ describe('item 10: Remove from plan', () => {
     );
     expect(html).toContain('Remove from plan');
     expect(html).toContain('data-plan-remove=""');
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('min-h-11');
     const sheet = read('PlanMoveSheet.tsx');
     const concept = sheet.slice(
       sheet.indexOf('export function planConceptMenuItems'),

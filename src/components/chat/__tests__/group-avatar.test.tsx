@@ -9,11 +9,8 @@ vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 import type { Database } from '@srtdio/schemas';
 import { shapeChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
-import {
-  channelRowParts,
-  GROUP_TILE_PHOTO,
-  PERSON_TILE_PHOTO,
-} from '@/components/chat/ChannelList';
+import { channelRowParts } from '@/components/chat/ChannelList';
+import { ListCard } from '@/components/ui/ListCard';
 import { GroupHero, groupInfoSections, groupInfoSubtitle } from '@/components/chat/GroupInfoSheet';
 import { centerSquare, GROUP_AVATAR_EXPORT_PX } from '@/lib/chat/group-avatar';
 
@@ -61,15 +58,16 @@ const [withPhoto, withoutPhoto, dm] = shapeChannelSummaries(
 ) as [ChannelSummary, ChannelSummary, ChannelSummary];
 
 function rowHtml(summary: ChannelSummary): string {
+  const parts = channelRowParts({
+    channel: summary,
+    summary: undefined,
+    nowMs: Date.parse('2026-09-29T10:00:00Z'),
+    timeZone: 'UTC',
+    selecting: false,
+    checked: false,
+  });
   return renderToStaticMarkup(
-    channelRowParts({
-      channel: summary,
-      summary: undefined,
-      nowMs: Date.parse('2026-09-29T10:00:00Z'),
-      timeZone: 'UTC',
-      selecting: false,
-      checked: false,
-    }).photo,
+    <ListCard picture={parts.picture} pictureHooks={parts.pictureHooks} title={parts.name} />,
   );
 }
 
@@ -81,10 +79,9 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(html).toContain(`src="${PHOTO}"`);
     // First paint is the photo: no initials fallback rendered alongside it.
     expect(html).not.toContain('>LA<');
-    // A group is a Row: a 32px rounded-square photo (header role, group kind).
-    expect(html).toContain(
-      `data-group-photo="" class="${GROUP_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
-    );
+    // A group is a ListCard: its photo in the 72 radius 8 picture box (profile role, group kind).
+    expect(html).toMatch(/data-list-card-picture="image" data-group-photo=""/);
+    expect(html).toContain('data-avatar-role="profile"');
   });
 
   it('a group without avatar_url falls back to the shared initials avatar', () => {
@@ -92,9 +89,7 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     const html = rowHtml(withoutPhoto);
     expect(html).not.toContain('<img');
     expect(html).toContain('>O<');
-    expect(html).toContain(
-      `data-group-photo="" class="${GROUP_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
-    );
+    expect(html).toMatch(/data-list-card-picture="image" data-group-photo=""/);
   });
 
   it("a DM channel still resolves the peer's users.avatar_url", () => {
@@ -102,10 +97,8 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(dm.avatarUrl).toBe(PEER_PHOTO);
     const html = rowHtml(dm);
     expect(html).toContain(`src="${PEER_PHOTO}"`);
-    // A DM is a Tile: a 72px circular photo on the tile square.
-    expect(html).toContain(
-      `data-person-photo="" class="${PERSON_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
-    );
+    // A DM is a ListCard: a 72 circular photo (profile role, person kind).
+    expect(html).toMatch(/data-list-card-picture="person" data-person-photo=""/);
     expect(html).toContain('rounded-full');
     expect(html).toContain('data-avatar-role="profile"');
   });
@@ -136,7 +129,7 @@ describe('group info page pure helpers', () => {
     // The badge cut-out (a border, so the lit button shadow stays and outlines
     // stay the focus family's) matches the page background it sits on; lit by
     // its accent fill.
-    expect(editor).toContain('border-4 border-bg');
+    expect(editor).toContain('border-cutout-lg border-bg');
     expect(editor).not.toContain('outline-bg');
     expect(editor).toContain('lit-btn-primary');
     expect(editor).not.toContain('ring-bg');

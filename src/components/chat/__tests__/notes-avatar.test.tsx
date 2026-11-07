@@ -44,8 +44,8 @@ describe('notes avatar', () => {
       /data-notes-badge=""[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-notes-badge/,
     );
     expect(html).toContain(`aria-label="${NOTES_AVATAR_LABEL}"`);
-    // Tile badge: 30px, -5px out, 3px ring in the surface token.
-    expect(html).toContain('h-[30px] w-[30px] -bottom-[5px] -right-[5px] border-[3px]');
+    // Tile badge: 32px, -4px out, 3px ring in the surface token.
+    expect(html).toContain('h-8 w-8 -bottom-1 -right-1 border-cutout');
     expect(html).toContain('border-panel');
     expect(html).toContain('bg-accent text-accent-fg');
   });
@@ -84,11 +84,11 @@ describe('notes avatar', () => {
     expect(html).toContain('opacity-0');
     expect(html).toContain('absolute inset-0');
     expect(html).not.toContain('data-notes-badge');
-    expect(html.match(/h-\[72px\] w-\[72px\]/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html.match(/h-18 w-18/g)?.length).toBeGreaterThanOrEqual(2);
   });
 });
 
-describe('the same notes avatar in all four places, no reads', () => {
+describe('the same notes avatar in the header, picker and search; the list card shows the notes icon', () => {
   const notes = notesSummary(WS, ME, PHOTO);
 
   it('tile, header, forward picker and search rows render it from the summary', () => {
@@ -141,14 +141,16 @@ describe('the same notes avatar in all four places, no reads', () => {
         onRetry: () => {},
       }),
     );
-    for (const html of [tile, header, picker, search]) {
+    for (const html of [header, picker, search]) {
       expect(html).toContain('data-notes-avatar');
       expect(html).toContain(`src="${PHOTO}"`);
     }
-    // The shared avatar roles, note kind: header 32 (the notes Row's 32
-    // leading column and the thread header), row 40 (picker, search).
-    expect(tile).toContain('h-8 w-8 rounded-lg');
-    expect(tile).toContain('data-row-leading');
+    // The chat list's Personal notes card is ui/ListCard: the notes icon on
+    // the panel-2 box at 72 (the 'icon' picture), never a photo.
+    expect(tile).toContain('data-list-card-picture="icon"');
+    expect(tile).toContain('data-notes-picture=""');
+    expect(tile).not.toContain(`src="${PHOTO}"`);
+    // The shared avatar roles, note kind: header 32 (the thread header), row 40 (picker, search).
     expect(header).toContain('h-8 w-8 rounded-lg');
     expect(picker).toContain('h-10 w-10 rounded-lg');
     expect(search).toContain('h-10 w-10 rounded-lg');

@@ -6,7 +6,7 @@
 // every value is derived from the PR 2 card row.
 
 import type { PostCardRow } from '../../../packages/posts/src/reads';
-import { formatDate, formatDateTime, formatDueDate } from '@/lib/time';
+import { formatDueDate, formatAgo } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { errorText } from '@/lib/error-copy';
@@ -17,19 +17,19 @@ import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 type ConfirmKind = 'approve' | 'reject' | 'send_review';
 
 /**
- * The agency's quiet line on a post in review: "Waiting on approvers since 20
- * Sep" ("Waiting on approvers" without a date); null for anyone else or any
- * other stage. Informational only, never an action.
+ * The agency's quiet line on a post in review: "Waiting on approvers · 3h"
+ * (formatAgo, since it entered review; "Waiting on approvers" without
+ * a date); null for anyone else or any other stage. Informational only, never
+ * an action. `now` comes from the shared minute clock.
  */
 export function agencyWaitingHint(
   side: ViewerSide,
   post: Pick<PostCardRow, 'stage' | 'stage_entered_at'>,
-  /** For tests; the app passes none (the viewer's device zone). */
-  timeZone?: string,
+  now: Date = new Date(),
 ): string | null {
   if (side !== 'agency' || post.stage !== 'review') return null;
-  const since = formatDate(post.stage_entered_at, undefined, timeZone);
-  return since === '' ? 'Waiting on approvers' : `Waiting on approvers since ${since}`;
+  const since = formatAgo(post.stage_entered_at, now);
+  return since === '' ? 'Waiting on approvers' : `Waiting on approvers · ${since}`;
 }
 
 /** "1 slide" / "N slides"; empty for no media. */
@@ -166,11 +166,10 @@ interface DetailRow {
 
 /**
  * The rows after Stage: target date, format (with "· N slides" past one item),
- * and the approval. With an approver on record the value is "Name · 2 Oct, 2:05 PM"
+ * and the approval. With an approver on record the value is "Name · Mon"
  * ("Name on behalf of client · ..." for an agency-side approver); an approved
- * post with no approver reads the date it entered approved. The target date is
- * a due date: its calendar day on the workspace zone; the approval reads the
- * viewer's device zone.
+ * post with no approver reads when it entered approved (formatAgo). The
+ * target date is a due date: its calendar day on the workspace zone.
  */
 export function detailRows(
   post: Pick<
@@ -184,8 +183,8 @@ export function detailRows(
     | 'stage_entered_at'
   >,
   approverName: string | null,
-  /** For tests; the app passes undefined (the viewer's device zone). */
-  timeZone: string | undefined,
+  /** The shared minute clock's instant: the approval reads relative to it. */
+  now: Date,
   /** The workspace's zone, the target (due) day reads on it. */
   workspaceZone: string | null | undefined,
   approverRole: string | null = null,
@@ -201,14 +200,13 @@ export function detailRows(
     value: post.mediaCount > 1 ? `${format} · ${post.mediaCount} slides` : format,
   });
   if (post.approved_by !== null) {
-    const at =
-      post.approved_at !== null ? formatDateTime(post.approved_at, undefined, timeZone) : '';
+    const at = post.approved_at !== null ? formatAgo(post.approved_at, now) : '';
     const who =
       approverName !== null ? `${approverName}${onBehalfSuffix(approverRole, brand)}` : '';
     const value = [who, at].filter((part) => part !== '').join(' · ');
     if (value !== '') rows.push({ key: 'approved', label: 'Approved', value });
   } else if (post.stage === 'approved') {
-    const on = formatDate(post.stage_entered_at, undefined, timeZone);
+    const on = formatAgo(post.stage_entered_at, now);
     if (on !== '') rows.push({ key: 'approved', label: 'Approved', value: on });
   }
   return rows;

@@ -18,8 +18,12 @@ import {
   IconPlan,
 } from '@/components/ui/icons';
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
+import { LIST_CARD_GRID } from '@/components/ui/ListCard';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
-import { AvatarStack } from '@/components/pages/activity/AvatarStack';
+import { cn } from '@/lib/cn';
+import { Text, textRole } from '@/components/ui/Text';
+import { GUTTER } from '@/components/ui/layout';
 import { REMINDER_CANCELLED_COPY, createReminderActions } from '@/components/chat/ReminderContext';
 import { CANCEL_REMINDER_LABEL, ReminderSheet } from '@/components/chat/ReminderSheet';
 import {
@@ -52,8 +56,6 @@ import {
   upcomingKey,
   type LoadResult,
   appendUnique,
-  bucketActorNames,
-  bucketActors,
   cursorAfter,
   createUpcomingScheduledWrites,
   fetchActivityEntries,
@@ -143,9 +145,6 @@ function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
       return null;
   }
 }
-
-/** How often relative times ("5m") re-render while the page is visible. */
-const TIME_TICK_MS = 60_000;
 
 /**
  * How a feed load lands: 'reset' clears the list first (a chip, sort or
@@ -299,7 +298,12 @@ export function NotificationsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  // The list's one clock: the shared minute clock (useMinuteClock, one interval
+  // app-wide, no timer per card) ages every card's "5m"; a load stamps
+  // the instant it landed so a fresh page never reads an older minute.
+  const clockMs = useMinuteClock();
+  const [loadedMs, setNowMs] = useState(() => Date.now());
+  const nowMs = Math.max(clockMs, loadedMs);
   const [mentionCount, setMentionCount] = useState(
     () =>
       (userId !== null && workspaceId !== null
@@ -644,31 +648,14 @@ export function NotificationsPage() {
     return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
   }, [state, loadActivity, loadMentionCount]);
 
-  // Relative times keep moving: a tick every minute while the page is visible,
-  // stopped while hidden and refreshed on the return.
+  // Relative times keep moving on the shared minute clock (clockMs above); the
+  // return to a hidden tab re-stamps at once so nothing reads a stale minute.
   useEffect(() => {
-    let timer: number | null = null;
-    const start = (): void => {
-      if (timer === null) timer = window.setInterval(() => setNowMs(Date.now()), TIME_TICK_MS);
-    };
-    const stop = (): void => {
-      if (timer !== null) window.clearInterval(timer);
-      timer = null;
-    };
     const onVisibility = (): void => {
-      if (document.hidden) {
-        stop();
-        return;
-      }
-      setNowMs(Date.now());
-      start();
+      if (!document.hidden) setNowMs(Date.now());
     };
-    if (!document.hidden) start();
     document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   // Today and Yesterday roll over at midnight in the workspace timezone.
@@ -1142,16 +1129,6 @@ export function NotificationsPage() {
         />
       )}
 
-      {/* The toolbar keeps one IconButton (Sort): Mark all read sits right-aligned above the
-          list. The Unread chip already shows the count. */}
-      {chipUnread > 0 ? (
-        <div data-activity-mark-all="" className="mt-2 flex justify-end px-4 md:px-6">
-          <Button variant="link" onClick={handleMarkAll}>
-            Mark all read
-          </Button>
-        </div>
-      ) : null}
-
       {state === 'upcoming' && !searching ? (
         upcomingError ? (
           <LoadFailed onRetry={() => void loadUpcoming()} />
@@ -1160,7 +1137,7 @@ export function NotificationsPage() {
         ) : visibleUpcoming.length === 0 ? (
           <EmptyState icon={<IconCalendarClock size={ICON_SIZE.status} />} title={UPCOMING_EMPTY} />
         ) : (
-          <div data-upcoming-list="" className="mt-4 flex flex-col gap-2 px-4 pb-6 md:px-6">
+          <div data-upcoming-list="" className={cn('mt-4 pb-6', LIST_CARD_GRID, GUTTER)}>
             {visibleUpcoming.map((item) => (
               <UpcomingCard
                 key={item.id}
@@ -1206,23 +1183,44 @@ export function NotificationsPage() {
           {buckets.map((bucket, bucketIndex) => {
             const entries = bucket.groups.flat();
             return (
-              <section key={bucket.key} className="mt-4">
-                <div className="flex items-center gap-2.5 px-4 md:px-6">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+              <section key={bucket.key} className="mt-2">
+                {/* One 44 line on the page edge: "YESTERDAY · 1 update" left and, on the
+                    first day only, Mark all read right (the toolbar keeps one IconButton,
+                    Sort; the Unread chip already shows the count). The line is 44 with or
+                    without the link, so the list never shifts when it goes. */}
+                <div
+                  data-activity-bucket-head=""
+                  className={cn('flex h-11 min-w-0 items-center gap-2', GUTTER)}
+                >
+                  <Text as="h2" role="section" className="shrink-0">
                     {bucket.label}
-                  </h2>
-                  <AvatarStack names={bucketActorNames(entries)} people={bucketActors(entries)} />
-                  <span data-bucket-count="" className="ml-auto text-sm tabular-nums text-fg-3">
+                  </Text>
+                  <span aria-hidden="true" className={textRole('meta', 'shrink-0')}>
+                    ·
+                  </span>
+                  <span data-bucket-count="" className={textRole('meta', 'min-w-0 truncate')}>
                     {updatesLabel(entries.length)}
                   </span>
+                  {bucketIndex === 0 && chipUnread > 0 ? (
+                    // L6: the link's own 8 inset is pulled out so its text ends on the edge.
+                    <div
+                      data-activity-mark-all=""
+                      className="-mr-2 ml-auto flex shrink-0 justify-end"
+                    >
+                      <Button variant="link" onClick={handleMarkAll}>
+                        Mark all read
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="mt-2 flex flex-col gap-2 px-4 md:px-6">
+                <div data-activity-list="" className={cn(LIST_CARD_GRID, GUTTER)}>
                   {bucket.groups.map((group, groupIndex) => {
                     const card = (
                       <ActivityCard
                         key={group[0]?.id ?? bucket.key}
                         group={group}
                         nowMs={nowMs}
+                        timeZone={tz}
                         cache={cache}
                         presignEnabled={presignEnabled}
                         onOpenGroup={handleOpenGroup}
@@ -1256,8 +1254,8 @@ export function NotificationsPage() {
 
           {hasMore ? (
             <div className="mt-4 flex justify-center px-4 md:px-6">
-              <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore}>
-                {loadingMore ? 'Loading' : 'Load more'}
+              <Button variant="ghost" onClick={() => void loadMore()} busy={loadingMore}>
+                Load more
               </Button>
             </div>
           ) : null}

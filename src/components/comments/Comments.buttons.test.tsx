@@ -30,14 +30,7 @@ const BAD = ['h-8', 'h-9', 'h-10', 'h-12', 'rounded-md', 'rounded-xl', 'font-sem
 describe('Comments row actions', () => {
   it('a ghost row action renders 44 tall, 8px radius, 14 / 500, 44 wide minimum', () => {
     const t = tokens(buttonClass('ghost', 'default', ROW_ACTION_CLASS));
-    for (const want of [
-      'h-11',
-      'min-h-[44px]',
-      'min-w-[44px]',
-      'rounded-lg',
-      'text-base',
-      'font-medium',
-    ]) {
+    for (const want of ['h-11', 'min-h-11', 'min-w-11', 'rounded-lg', 'text-base', 'font-medium']) {
       expect(t).toContain(want);
     }
     for (const bad of BAD) expect(t).not.toContain(bad);
@@ -50,7 +43,7 @@ describe('Comments row actions', () => {
 
   it('the passive checkbox matches the button box', () => {
     const t = tokens(ROW_ACTION_STATIC_CLASS);
-    for (const want of ['h-11', 'min-h-[44px]', 'px-3', 'text-base', 'font-medium']) {
+    for (const want of ['h-11', 'min-h-11', 'px-3', 'text-base', 'font-medium']) {
       expect(t).toContain(want);
     }
   });

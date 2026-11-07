@@ -1,41 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanBundle, PlanItemRow, PlanRow } from '@/lib/chat/plans';
 import {
-  PLAN_TONE_CLASSES,
-  addOnLabel,
   calendarEntries,
   canCreatePlans,
-  canDragEntries,
-  canDropOn,
-  canOpenDayMenu,
-  capEntries,
-  monthCellCap,
-  monthGrid,
   monthLabel,
-  moreLabel,
   onboardingFinished,
   planCardMeta,
-  planPill,
+  planCardPreview,
   planSectionOf,
   planSections,
   parsePlanWeekChip,
+  plansInToneOrder,
   visiblePlanChips,
   planWeekChipLabel,
   planWeekChipRange,
   PLAN_WEEK_CHIPS,
   PLAN_WEEK_CHIP_DEFAULT,
-  planTones,
-  plansCovering,
   postStageLine,
-  rangeLabel,
-  shiftAnchor,
   visibleBundles,
-  visibleRange,
-  weekDays,
-  weekRangeLabel,
   weekRangeOf,
   zeroStateCopy,
-  type CalendarEntry,
   type LoosePost,
 } from '@/lib/plan-tab';
 import { civilDayOf } from '@/lib/plan-week';
@@ -78,108 +62,19 @@ function bundle(
   return { plan: row, items, reviews: [], postStages: {}, postInfo: {}, ...over };
 }
 
-describe('plan colours', () => {
-  it('cycles accent, good, warn, parked by start date (ties by id), then repeats', () => {
-    const tones = planTones([
+describe('weeks and labels', () => {
+  it('orders plans by start date, ties by id', () => {
+    const order = plansInToneOrder([
       plan('e', '2026-10-20', '2026-10-25'),
       plan('b', '2026-10-01', '2026-10-07'),
       plan('a', '2026-10-01', '2026-10-07'),
-      plan('d', '2026-10-15', '2026-10-21'),
-      plan('c', '2026-10-08', '2026-10-14'),
     ]);
-    expect([...'abcde'].map((id) => tones.get(id))).toEqual([
-      'accent',
-      'good',
-      'warn',
-      'parked',
-      'accent',
-    ]);
+    expect(order.map((p) => p.id)).toEqual(['a', 'b', 'e']);
   });
 
-  it('uses the soft tokens, and color-mix for parked (no new hex)', () => {
-    expect(PLAN_TONE_CLASSES.accent).toEqual({ soft: 'bg-accent-soft', dot: 'bg-accent' });
-    expect(PLAN_TONE_CLASSES.good.soft).toBe('bg-good-soft');
-    expect(PLAN_TONE_CLASSES.warn.soft).toBe('bg-warn-soft');
-    expect(PLAN_TONE_CLASSES.parked.soft).toBe(
-      'bg-[color-mix(in_srgb,var(--stage-parked)_14%,transparent)]',
-    );
-    expect(JSON.stringify(PLAN_TONE_CLASSES)).not.toMatch(/#[0-9a-f]{3,6}/i);
-  });
-});
-
-describe('month grid', () => {
-  it('runs Monday first in whole weeks, out-of-month days marked', () => {
-    const weeks = monthGrid('2026-10-22');
-    expect(weeks).toHaveLength(5);
-    expect(weeks[0]?.[0]).toEqual({ day: '2026-09-28', inMonth: false });
-    expect(weeks[0]?.[3]).toEqual({ day: '2026-10-01', inMonth: true });
-    expect(weeks[4]?.[6]).toEqual({ day: '2026-11-01', inMonth: false });
-    for (const week of weeks) expect(week).toHaveLength(7);
-    expect(weeks.flat().filter((c) => c.inMonth)).toHaveLength(31);
-  });
-
-  it('a month starting on a Monday starts on its 1st', () => {
-    expect(monthGrid('2026-06-10')[0]?.[0]).toEqual({ day: '2026-06-01', inMonth: true });
-  });
-
-  it('shows three entries a cell, then "+N more"', () => {
-    expect(capEntries(['a', 'b'])).toEqual({ shown: ['a', 'b'], more: 0 });
-    expect(capEntries(['a', 'b', 'c', 'd', 'e'])).toEqual({ shown: ['a', 'b', 'c'], more: 2 });
-    expect(moreLabel(2)).toBe('+2 more');
-  });
-
-  it('caps a laptop month cell by its measured row height', () => {
-    // 140px row: 100px under the number row, 24px a line.
-    expect(monthCellCap({ rowHeight: 140, count: 3 })).toBe(3);
-    expect(monthCellCap({ rowHeight: 140, count: 4 })).toBe(4);
-    // Five do not fit: three lines, then "+2 more".
-    expect(monthCellCap({ rowHeight: 140, count: 5 })).toBe(3);
-    expect(
-      capEntries(['a', 'b', 'c', 'd', 'e'], monthCellCap({ rowHeight: 140, count: 5 })),
-    ).toEqual({ shown: ['a', 'b', 'c'], more: 2 });
-    expect(monthCellCap({ rowHeight: 140, count: 0 })).toBe(0);
-  });
-
-  it('a tiny month row shows no lines, only "+N more"', () => {
-    expect(monthCellCap({ rowHeight: 50, count: 2 })).toBe(0);
-    expect(monthCellCap({ rowHeight: 20, count: 1 })).toBe(0);
-    expect(capEntries(['a', 'b'], 0)).toEqual({ shown: [], more: 2 });
-  });
-
-  it('reads the whole weeks as the visible range', () => {
-    expect(visibleRange('month', '2026-10-22')).toEqual({ start: '2026-09-28', end: '2026-11-01' });
-    expect(visibleRange('week', '2026-10-22')).toEqual({ start: '2026-10-19', end: '2026-10-25' });
-  });
-});
-
-describe('labels and steps', () => {
-  it('labels the month, and the week through the one range formatter', () => {
-    const now = new Date('2026-11-06T12:00:00Z');
+  it('labels the month and reads the Mon to Sun week', () => {
     expect(monthLabel('2026-10-22')).toBe('October 2026');
-    expect(weekRangeLabel('2026-10-22', now)).toBe('19\u201325 Oct');
-    expect(weekRangeLabel('2026-10-01', now)).toBe('28 Sep \u2013 4 Oct');
-    expect(weekRangeLabel('2026-12-31', now)).toBe('28 Dec 2026 \u2013 3 Jan 2027');
-    expect(weekRangeLabel('2025-10-22', now)).toBe('20\u201326 Oct 2025');
-    expect(rangeLabel('month', '2026-10-01')).toBe('October 2026');
-    for (const label of [weekRangeLabel('2026-10-01', now), weekRangeLabel('2026-12-31', now)]) {
-      expect(label).not.toMatch(/ - | to |\u2014/);
-    }
-  });
-
-  it('steps a month to its 1st and a week by seven days', () => {
-    expect(shiftAnchor('month', '2026-10-22', 1)).toBe('2026-11-01');
-    expect(shiftAnchor('month', '2026-01-15', -1)).toBe('2025-12-01');
-    expect(shiftAnchor('week', '2026-10-22', 1)).toBe('2026-10-26');
-    expect(shiftAnchor('week', '2026-10-22', -1)).toBe('2026-10-12');
-    expect(weekDays('2026-10-22')).toEqual([
-      '2026-10-19',
-      '2026-10-20',
-      '2026-10-21',
-      '2026-10-22',
-      '2026-10-23',
-      '2026-10-24',
-      '2026-10-25',
-    ]);
+    expect(weekRangeOf('2026-10-22')).toEqual({ startsOn: '2026-10-19', endsOn: '2026-10-25' });
     expect(weekRangeOf('2026-10-25')).toEqual({ startsOn: '2026-10-19', endsOn: '2026-10-25' });
   });
 });
@@ -204,7 +99,10 @@ describe('calendar entries', () => {
     calendarEntries({
       bundles: [a, b],
       posts: loose,
-      tones: planTones([a.plan, b.plan]),
+      tones: new Map([
+        [b.plan.id, 'accent' as const],
+        [a.plan.id, 'good' as const],
+      ]),
       timeZone: 'UTC',
       filter,
       titleOf: (_b, i) => i.title ?? '',
@@ -236,78 +134,39 @@ describe('calendar entries', () => {
     expect(days.get('2026-10-21')).toBeUndefined();
     expect(days.get('2026-10-24')?.map((e) => e.key)).toEqual(['post:x']);
   });
-
-  it('drops a plan item only inside its plan, a loose post on any other day', () => {
-    const days = run(null);
-    const a1 = days.get('2026-10-20')?.find((e) => e.key === 'item:a1') as CalendarEntry;
-    const x = days.get('2026-10-21')?.[0] as CalendarEntry;
-    expect(canDropOn(a1, '2026-10-21')).toBe(true);
-    expect(canDropOn(a1, '2026-10-20')).toBe(false);
-    expect(canDropOn(a1, '2026-10-26')).toBe(false);
-    expect(canDropOn(x, '2026-11-02')).toBe(true);
-  });
-});
-
-describe('the empty-day menu', () => {
-  it('lists only the plans whose dates hold the day', () => {
-    const bundles = [
-      bundle(plan('late', '2026-10-22', '2026-10-30')),
-      bundle(plan('before', '2026-10-01', '2026-10-21')),
-      bundle(plan('early', '2026-10-15', '2026-10-22')),
-    ];
-    expect(plansCovering(bundles, '2026-10-22').map((b) => b.plan.id)).toEqual(['early', 'late']);
-    expect(plansCovering(bundles, '2026-10-31')).toEqual([]);
-    expect(addOnLabel('2026-10-22')).toBe('Add on Thu 22 Oct to');
-  });
 });
 
 describe('who sees what', () => {
   const draft = bundle(plan('d', '2026-10-19', '2026-10-25', 'team'));
   const shared = bundle(plan('s', '2026-10-19', '2026-10-25', 'client'));
 
-  it('approvers never see drafts, Create, drag or the day menu', () => {
+  it('approvers never see drafts or Create', () => {
     for (const side of ['client', 'unknown'] as const) {
       expect(visibleBundles([draft, shared], side).map((b) => b.plan.id)).toEqual(['s']);
       expect(canCreatePlans(side)).toBe(false);
-      expect(canDragEntries(side)).toBe(false);
-      expect(canOpenDayMenu(side)).toBe(false);
     }
   });
 
-  it('creators see every plan and get Create, drag and the day menu', () => {
+  it('creators see every plan and get Create', () => {
     expect(visibleBundles([draft, shared], 'agency')).toHaveLength(2);
     expect(canCreatePlans('agency')).toBe(true);
-    expect(canDragEntries('agency')).toBe(true);
-    expect(canOpenDayMenu('agency')).toBe(true);
   });
 });
 
-describe('the week card', () => {
+describe('the post line', () => {
   const p = plan('p', '2026-10-19', '2026-10-25');
   const c = item({ id: 'c', plan_id: 'p' });
   const post = item({ id: 'po', plan_id: 'p', kind: 'post', post_id: 'p9' });
 
-  it('reads the shown side: OK, Not OK, else not decided', () => {
-    const b = bundle(p, [c, post], {
-      reviews: [
-        { item_id: 'c', side: 'client', status: 'approved' },
-        { item_id: 'po', side: 'client', status: 'changes' },
-      ],
-    });
-    expect(planPill(b, c)).toEqual({ label: 'Plan OK', tone: 'good' });
-    expect(planPill(b, post)).toEqual({ label: 'Plan Not OK', tone: 'bad' });
-    expect(planPill(bundle(p, [c]), c)).toEqual({ label: 'Plan: not decided', tone: 'neutral' });
-  });
-
   it('shows the post stage as stored, or No post yet', () => {
     const b = bundle(p, [c, post], { postStages: { p9: 'review' } });
-    expect(postStageLine(b, post)).toBe('Post: In review');
+    expect(postStageLine(b, post)).toBe('Post: Review');
     expect(postStageLine(b, c)).toBe('No post yet');
     expect(postStageLine(b, item({ id: 'dr', kind: 'post', draft_row: true }))).toBe('Post: Draft');
   });
 });
 
-describe('the phone list', () => {
+describe('the list (phone and laptop)', () => {
   const today = '2026-10-22';
 
   it('buckets by this week, next week, later and earlier', () => {
@@ -338,13 +197,14 @@ describe('the phone list', () => {
     ]);
   });
 
-  it('a shared card counts OKs; a draft says only the team sees it', () => {
+  it('a shared card tags its OKs; a draft is tagged Draft and says only the team sees it', () => {
     const shared = bundle(plan('s', today, today), [item({ id: 'i1' }), item({ id: 'i2' })], {
       reviews: [{ item_id: 'i1', side: 'client', status: 'approved' }],
     });
     expect(planCardMeta(shared)).toEqual({
       kind: 'shared',
-      label: '1 of 2 OK',
+      tag: '1 of 2 OK',
+      count: '2 posts',
       ok: 1,
       total: 2,
       percent: 50,
@@ -352,16 +212,25 @@ describe('the phone list', () => {
     const draft = bundle(plan('d', today, today, 'team'), [item({ id: 'i3' }), item({ id: 'i4' })]);
     expect(planCardMeta(draft)).toEqual({
       kind: 'draft',
-      label: '2 items · only your team sees this',
+      tag: 'Draft',
+      count: '2 posts · only your team sees this',
+      total: 2,
     });
   });
 
-  it('a draft with one item says "1 item"', () => {
+  it('one item says "1 post"', () => {
     const draft = bundle(plan('d1', today, today, 'team'), [item({ id: 'i5' })]);
-    expect(planCardMeta(draft)).toEqual({
-      kind: 'draft',
-      label: '1 item · only your team sees this',
-    });
+    expect(planCardMeta(draft).count).toBe('1 post · only your team sees this');
+  });
+
+  it('line 2 is the date range then the count, on one line that wraps', () => {
+    const now = new Date('2026-10-22T12:00:00Z');
+    const shared = bundle(plan('s', '2026-10-19', '2026-10-25'), [item({ id: 'i1' })]);
+    expect(planCardPreview(shared, 'UTC', now)).toBe('19\u201325 Oct · 1 post');
+    const draft = bundle(plan('d', '2026-10-26', '2026-11-01', 'team'), []);
+    expect(planCardPreview(draft, 'UTC', now)).toBe(
+      '26 Oct \u2013 1 Nov · 0 posts · only your team sees this',
+    );
   });
 });
 

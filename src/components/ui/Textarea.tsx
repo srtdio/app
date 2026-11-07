@@ -14,7 +14,7 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   autoGrow?: boolean;
   /**
    * Opt-in single-line composer mode: 44px tall at rest, grows with the content
-   * up to 120px, then scrolls. Implies autoGrow without its 96px floor.
+   * up to 128px, then scrolls. Implies autoGrow without its 96px floor.
    */
   compact?: boolean;
   /**
@@ -90,15 +90,19 @@ export function mirrorClass(run: FormatRun): string {
 
 /** The mirror's children for a value. Pure. */
 export function mirrorNodes(value: string): ReactNode[] {
-  const nodes: ReactNode[] = parseFormatRuns(value).map((run, i) =>
-    run.kind === 'text' && run.styles.length === 0 ? (
+  // Each run is keyed by its character offset in the value (stable per value).
+  let at = 0;
+  const nodes: ReactNode[] = parseFormatRuns(value).map((run) => {
+    const start = at;
+    at += run.text.length;
+    return run.kind === 'text' && run.styles.length === 0 ? (
       run.text
     ) : (
-      <span key={i} className={mirrorClass(run)}>
+      <span key={start} className={mirrorClass(run)}>
         {run.text}
       </span>
-    ),
-  );
+    );
+  });
   // A trailing newline needs a glyph after it to take its line.
   nodes.push('\u200b');
   return nodes;
@@ -228,8 +232,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       value={value}
       className={cn(
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        'lit-well w-full px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3 py-2.5 h-auto',
-        compact ? 'min-h-[44px] max-h-[120px]' : 'min-h-[74px]',
+        'lit-well w-full px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3 py-field-y h-auto',
+        compact ? 'min-h-11 max-h-32' : 'min-h-18',
         split !== null ? split.box : className,
         // Live styling: the mirror draws the glyphs; the box keeps the caret
         // (fg), the selection and the placeholder.

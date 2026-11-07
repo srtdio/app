@@ -36,7 +36,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
         aria-expanded={open}
         data-induction={INDUCTION_KEYS.assetsAdd}
         onClick={() => setOpen((prev) => !prev)}
-        className="whitespace-nowrap"
+        className="shrink-0 whitespace-nowrap"
       >
         <IconPlus size={ICON_SIZE.inline} />
         New file

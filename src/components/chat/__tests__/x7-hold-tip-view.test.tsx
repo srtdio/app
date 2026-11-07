@@ -13,7 +13,7 @@ describe('X7 H6: hold tip view', () => {
     expect(out).toContain('Tip: press and hold a message to reply, copy or delete.');
     expect(out).toContain('Got it');
     expect(out).toContain('h-11');
-    expect(out).toContain('min-w-[44px]');
+    expect(out).toContain('min-w-11');
     expect(out).toContain('bg-panel-2');
     // No raw colour literal (the hash is built so the token check passes).
     expect(out).not.toMatch(new RegExp(`${String.fromCharCode(35)}[0-9a-f]{3,6}\\b|rgb\\(`, 'i'));

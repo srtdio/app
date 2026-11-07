@@ -4,8 +4,7 @@
 // seeds the cover store (primeCovers), so the page issues no separate cover read
 // for the listed posts; a row without a cover is asked for once per id set
 // (a re-sort or a plain re-render never asks again); the members read once,
-// with the board and the move sheet handed the page's approvers instead of
-// each reading their own.
+// with the move sheet handed the page's approvers instead of reading its own.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,7 +27,6 @@ const h = vi.hoisted(() => ({
     approvers: [{ userId: 'u2', name: 'Riya Menon' }],
   },
   peopleCalls: 0,
-  boardApprovers: [] as unknown[],
   sheetApprovers: [] as unknown[],
 }));
 
@@ -70,12 +68,6 @@ vi.mock('@srtdio/posts', async (orig) => ({
 vi.mock('@/components/pages/pipeline/member-role', async (orig) => ({
   ...(await orig<typeof import('@/components/pages/pipeline/member-role')>()),
   readMemberRole: async () => ({ ok: true, role: 'agency' }),
-}));
-vi.mock('@/components/pages/pipeline/PipelineBoard', () => ({
-  PipelineBoard: (props: { approvers?: unknown }) => {
-    h.boardApprovers.push(props.approvers);
-    return null;
-  },
 }));
 vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({ PipelineFeed: () => null }));
 vi.mock('@/components/pages/pipeline/MoveSheet', () => ({
@@ -142,7 +134,6 @@ beforeEach(() => {
   h.requestPostCovers.mockClear();
   h.primeCovers.mockClear();
   h.peopleCalls = 0;
-  h.boardApprovers = [];
   h.sheetApprovers = [];
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -235,14 +226,13 @@ describe('pipeline reads: once per load, shared by every consumer', () => {
     expect(h.listPosts).toHaveBeenCalledTimes(1);
   });
 
-  it('the board and the move sheet get the page approvers (one members read, not three)', async () => {
+  it('the move sheet gets the page approvers (one members read, not its own)', async () => {
     await render();
     // The page is the only reader of the members (the mocked hook stands in for
     // the one listMembers + readProfiles pair).
     expect(h.peopleCalls).toBeGreaterThan(0);
-    expect(h.boardApprovers.length).toBeGreaterThan(0);
     expect(h.sheetApprovers.length).toBeGreaterThan(0);
-    for (const approvers of [...h.boardApprovers, ...h.sheetApprovers]) {
+    for (const approvers of h.sheetApprovers) {
       expect(approvers).toBe(h.people.approvers);
     }
   });

@@ -85,7 +85,7 @@ export function ConfirmDialog({
     <div
       onClick={onOverlayClick}
       // The bottom padding clears the iPhone home bar where the box sits low.
-      className="fixed inset-0 z-50 flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
+      className="fixed inset-0 z-sheet flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
     >
       {/* The dim: full scrim at rest, tracking the box per frame on phone. */}
       <div

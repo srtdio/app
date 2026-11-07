@@ -75,7 +75,7 @@ describe('Alerts on this device', () => {
     const el = mount();
     expect(el.textContent).toContain('Alerts on this device');
     expect(el.querySelector('h3')?.className).toContain(
-      'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2',
+      'text-sm font-semibold uppercase tracking-label text-fg-2',
     );
     expect(el.querySelectorAll('[role="switch"]')).toHaveLength(2);
     switchFor(el, 'Sound');
@@ -84,7 +84,7 @@ describe('Alerts on this device', () => {
     const all = chips(el);
     expect(all.map((c) => c.textContent)).toEqual(LABELS);
     for (const chip of all) {
-      expect(chip.className).toContain('min-h-[44px]');
+      expect(chip.className).toContain('min-h-11');
       expect(chip.className).toContain('w-full');
       expect(chip.getAttribute('aria-pressed')).toBe('false');
     }

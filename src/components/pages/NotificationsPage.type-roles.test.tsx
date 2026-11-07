@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Type roles on Notifications (design rules, 24 Oct 2026): the page has no visible
 // title (sr-only h1), a day bucket heading is the section label (sm/600
-// uppercase tracking-[0.06em] fg-2), a card title is base/500 and the card time
+// uppercase tracking-label fg-2), a card title is base/500 and the card time
 // and bucket count are sm fg-3 meta. Rendered for real in jsdom with the reads
 // mocked; the item fixture mirrors activity/ActivityCard.test.tsx.
 import { act } from 'react';
@@ -175,16 +175,16 @@ describe('Notifications type roles', () => {
     await mount();
     const label = byText('Today');
     expect(label.tagName).toBe('H2');
-    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']);
+    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']);
     expect(label.className).not.toContain('tracking-wide');
   });
 
-  it('the card title is base/500', async () => {
+  it('the card title is the ListCard heading role', async () => {
     await mount();
-    const title = byText('Q3 Launch');
-    expectRole(title, ['text-base', 'font-medium', 'text-fg']);
-    expect(title.className).not.toContain('font-semibold');
-    expect(title.className).not.toMatch(/leading-\[/);
+    const title = document.querySelector('[data-list-card-title]');
+    expect(title?.textContent).toContain('Q3 Launch');
+    expectRole(title as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
+    expect(title?.className).not.toMatch(/leading-\[/);
   });
 
   it('the card time and bucket count are sm fg-3 meta', async () => {

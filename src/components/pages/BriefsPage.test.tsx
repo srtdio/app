@@ -256,6 +256,18 @@ describe('briefCardList presign wiring', () => {
     });
     expect((cards[0]!.props as { timeZone?: string }).timeZone).toBe('Asia/Kolkata');
   });
+
+  it('threads the list ONE clock into every card (no clock per card)', () => {
+    const now = new Date('2026-11-07T09:00:00Z');
+    const cards = briefCardList({
+      briefs: [makeBrief('a'), makeBrief('b')],
+      cache,
+      presignEnabled: true,
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
+      now,
+    });
+    for (const card of cards) expect((card.props as { now?: Date }).now).toBe(now);
+  });
 });
 
 // The workspace calendar the page reads its sections on: Mumbai, Monday weeks.
@@ -386,13 +398,13 @@ describe('briefSections', () => {
       {
         label: 'This week',
         days: [
-          { label: '7 Jul', className: DAY_HEADING_CLASS, cards: 1 },
-          { label: '6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: 'Yesterday', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: 'Mon 6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
         ],
       },
       {
         label: 'June',
-        days: [{ label: '10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
+        days: [{ label: 'Wed 10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
       },
     ]);
     const firstCard = (
@@ -412,7 +424,7 @@ describe('briefSections', () => {
     ]);
     expect(sections).toHaveLength(1);
     const { days } = readSection(sections[0]!);
-    expect(days.map((d) => d.label)).toEqual(['8 Jul', '6 Jul']);
+    expect(days.map((d) => d.label)).toEqual(['Today', 'Mon 6 Jul']);
     expect(days.map((d) => d.cards)).toEqual([2, 1]);
   });
 
@@ -422,7 +434,7 @@ describe('briefSections', () => {
       makeBrief('b', { created_at: created('2026-07-07', '06:00') }),
     ]);
     const { days } = readSection(sections[0]!);
-    expect(days).toEqual([{ label: '7 Jul', className: DAY_HEADING_CLASS, cards: 2 }]);
+    expect(days).toEqual([{ label: 'Yesterday', className: DAY_HEADING_CLASS, cards: 2 }]);
   });
 
   it('reads the day heading in the workspace zone, not the browser zone', () => {
@@ -437,10 +449,10 @@ describe('briefSections', () => {
     };
     expect(
       readSection(briefSections({ ...shared, timeZone: 'Asia/Kolkata' })[0]!).days[0]!.label,
-    ).toBe('8 Jul');
+    ).toBe('Today');
     expect(
       readSection(briefSections({ ...shared, timeZone: 'Europe/London' })[0]!).days[0]!.label,
-    ).toBe('7 Jul');
+    ).toBe('Yesterday');
   });
 });
 

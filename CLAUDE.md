@@ -92,91 +92,26 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Speed ratchet: no PR may make a paint or tap path slower. Do not add an await, hold, gate or network read on a paint or tap path without Shubham's approval. The PR body lists the paths touched, their before/after ?paintlog marks, and what this PR made faster.
 - Activity and chat arrive live by push; polling is only a safety net. No PR may make either wait for a poll.
 
-## Design rules (locked 24 Oct 2026)
+## Design and layout (locked 6 Nov 2026; guards in `src/__tests__`, eslint designRules, `scripts/design-ratchet.ts`)
 
-- Type: Tailwind fontSize scale only (xs 11, sm 12, md 13, base 14, lg 15, xl 17, 2xl 20, 3xl 28). No text-[Npx]. Inputs render 16px on phone (iOS zoom). Weights 400/500/600 only.
-- Roles: page title 3xl/600; screen header lg/600; section label sm/600 uppercase tracking-[0.06em] fg-2; card title base/500; body base fg; meta sm fg-3, meta only, never copy or controls.
-- Buttons: only Button / IconButton / Chip from src/components/ui. 44 tall. Variants primary secondary ghost link success danger; shape round for the composer.
-- Icons: only src/components/ui/icons.tsx, stroke 1.85, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
-- Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots. No text-white or bg-white; on solid fills use text-accent-fg.
-- Colour: black, white and greys only (Linear neutrals), light and dark in the app, light-only homepage. Amber = Review, green = Approved/read/unread, red = errors and Reject only. No violet or blue anywhere (guard: palette-rules.test.ts).
-- Contrast: text 4.5:1; control edges, field lines, focus lines, selected lines, dots and tracks 3:1, light and dark (guard: contrast-rules.test.ts).
-- Fields: the ink line (border-field) marks a field the person must fill: forms, code boxes, add-task row, composer; switch, checkbox and radio take it too. A search field is a tool: at rest a filled well (bg-panel-2, lit-well), no line, icon fg-3. Focused it becomes the centre: ink line plus lit-focus, surface lifts to lit-card (bg-panel), icon full ink, and on a phone it grows to the full row while the toolbar's other controls glide aside and a Cancel appears; on laptop it widens to its max. Chips rest on a quiet grey fill (bg-panel-3, lit-well-soft, no edge); the pick is the solid ink fill (bg-accent text-accent-fg lit-pill).
-- Edges: border-strong is the 3:1 edge for chips, secondary buttons, dots, read bars. border-border is for dividers inside a surface only, never the boundary of a control.
-- Radius roles: badges (ui/Tag) 6, checkbox (ui/Checkbox, rounded-sm) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for badges, checkboxes, highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
-- Focus: Button, IconButton and Chip carry the one focus line (focus-visible:lit-focus, an outline, never a box-shadow). Never add a second one on a call site; overlay controls on media (lightbox, file viewer, photo viewer) keep their own white ring.
-- Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. ui/Input, Textarea, Select, DatePicker, Checkbox and the code boxes draw border-field (ink light, white dark) at rest, lit-well; focus adds lit-focus. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts). Search = Input tone search. The format strip is ui/FormatStrip only (Textarea / MentionInput `formatting`).
-- Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.
-- Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
-- Lighting: one light, straight above. Every surface takes exactly one lit-\* class from src/index.css; never box-shadow, shadow-\*, drop-shadow or backdrop-blur on a call site (guard: lighting-rules.test.ts).
-  - Heights: flat (list rows, page), card (lit-card / lit-card-muted), raised (nav, chat circle, auth/onboarding cards), float (toasts, strip, unread/latest pills, drags), overlay (menus, popovers, sheets, dialogs, side panels). Headers lit-header, bottom bars lit-dock, sidebar lit-side.
-  - Controls: buttons via Button variants; chips at rest bg-panel-3 lit-well-soft, picks (chips, segment options, nav tabs) bg-accent text-accent-fg lit-pill; inputs and tracks lit-well; small parts lit-pill / lit-badge / lit-avatar / lit-media; tinted banners lit-tint.
-  - Dark mode: higher is lighter; never rely on a shadow alone; raised surfaces add a faint bottom rim dimmer than the top edge.
-  - At most one soft (blurred) shadow per token; use a 1px ring for edge definition (speed).
-  - New surface: pick a height from this list, in light and dark, and add it to docs/lighting.md.
-- Lighting covers every screen, sheet, picker, loading box and email: anything with a fill plus border or radius takes a lit-\* height (guard: lit-coverage.test.ts). Pages are grey (bg-bg) with lit cards; never a white page of flat bands. A drawer or sheet over a page is grey (bg-bg) with lit cards, never a white sheet of flat rows.
-- Loading shells: Bone and BoxSkeleton take the lit class of what they replace (required lit prop; guard: shell-rules.test.ts).
-- States: hover and press are --hover-fill / --press-fill overlays (lit-hover) on top of the lit gradient, never a flat bg-panel-2/3 swap and never opacity. A pick in a single-choice row (chip rows, segment options, in-page tabs, radio tiles, sheet and reaction tabs, nav) = the ink fill, switched instantly (no slide); other selected, open, active, current = lit-selected. Disabled = fg-3 ink and no light, never opacity.
-- Outlines: only lit-selected (picked/active), lit-focus (focus), lit-bad (error), lit-drop (drop), lit-today (today). White line in dark, ink line in light, no tint or glow; they live in @layer utilities so they always win on an element (guard: outline-rules.test.ts). Inside the own bubble every line and fill uses on-bubble/\*.
-- Emails: one look, lit edges drawn with borders, no shadows (guard: email-look.test.ts).
-- Every page, sheet and picker has screenshots in the visual suite (guard: visual-coverage.test.ts).
-  - Labels and icons on raised controls use full ink (text-fg); icon stroke 1.85.
-- A panel beside the page is ui/SidePanel only (laptop via useIsLaptop, 380px, translateX, nothing dims, Esc closes); phone shows the same content in a Sheet (guard: cockpit/side-panel-rule.test.ts).
-- Phone nav: floating pill (Pipeline, Briefs, Assets, Plan, Activity) plus separate Chat circle, 12px from sides and bottom; only the active tab shows its label.
-- Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
-- Shared parts own every slot (B1): ui/Text roles, ui/Card, ui/Row, ui/ChatCard (the card is the bubble), ui/Sheet (+ SheetActions), ui/Toolbar, ui/Composer, ui/Tile, ui/HeaderBar, ui/StatusDot, ActionMenuTrigger (the trailing rule). Use the part; never hand-build its frame.
-- Icon sizes come from ICON_SIZE in ui/icons.tsx.
-- Words: Activity (never Notifications), file (the tab is Assets), Due date, stages Draft/Review/Approved/Parked/Rejected, Retry (never Try again as a button), Alerts (the device switch). Format, chat and workspace names come from their src/lib functions only.
-- Zero results use ui/NoResults only. Zero states are one positive line, "{Things} show up here." Never "Nothing", "No matches" or "empty" in a zero state.
-- Errors: "Couldn't {action}. {reason}". Never mention connection state.
-- Dates and times come from src/lib/time.ts only. No toLocale\*, Intl.DateTimeFormat or date libraries in components.
-- Dates and times render font-mono tabular-nums everywhere (voice-note times excepted).
-- Sort labels: Newest first, Oldest first, Due date, Name, Size, Type.
-- Due dates are calendar days on the workspace zone; moments (message, comment, activity times) are on the device zone.
-- Motion: only src/lib/motion moves. Nine moves: push, growFromCard, rise, growFromTrigger, press, itemIn/itemOut, glide, edgeStrip, sweepBoxes. Never fade (opacity never animates; sheet dim tracks the sheet). Small touches (docs/motion.md) include the count badge widening and the nav icon nudge; a pick switches instantly, never a sliding fill. Every move declares its axis, uses motion tokens, is interruptible, and is instant under Reduce Motion or ?motion=0. Anything that opens uses a move from the module; never hand-build one. Boxes only when the device holds nothing.
-- If no shared component or function fits, stop and ask. Never hand-build a new variant.
-- Post and brief decisions render only through PostDecisionBar: phone bottom bar, laptop header right. Every surface that shows a post offers the same actions for the same role.
-- ⋯ menus use ui/ActionMenu only: sheet on phone, popover on laptop. Order: Open, Copy link, others, Delete last.
-- Sheets: title left, X right. Cancel only in footers, ghost, left of the primary.
-- Contact, Group info, Starred and Thread are modal pages (chat/ModalPanel): Back left, title, ⋯ right; never an X. Chat Tasks is a sheet at the height of what it holds (Back, Tasks, Save, ⋯), never a full page by default.
-- New buttons: primary with IconPlus. Empty states have no create button.
-- Hide what a person can't do; never disable for permission.
-- Delete = UndoStrip for UNDO_MS (src/lib/undo.ts). ConfirmDialog only when the action cannot be undone.
-- Toasts come from ui/toast only. Phone vs laptop comes from useIsLaptop only.
-- List toolbars: search, at most one IconButton, then the New button. No text buttons or dropdown chevrons in the toolbar.
-- Avatars: ui/Avatar roles only (inline 20, header 32, row 40, profile 72). People circle, groups and notes rounded square.
-- People: any person photo, name or @mention renders through PersonTrigger and opens PersonCard; never a per-screen card.
-- Counts and unread badges: ui/CountBadge only (tone section for a section count on a grey drawer). Filter chip counts are plain text.
-- Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; chat tray opener = plus; attach a file = paper clip. Photos = gallery grid; Assets = picture; Copy link = link. Decision bar buttons have no icons. Copy = clipboard (IconCopy), icon-only outside ⋯/long-press menus; comment rows have no Reply privately button (a tap on the author opens it).
-- Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
-- Exception: laptop Plan month item lines use PressableRow dense (22px); mouse-only surface, decided 28 Oct 2026. dense is allowed nowhere else.
-- Every UI change updates the visual baselines in the same PR and lists the changed screens. Never update baselines to hide an unplanned change.
-- Onboarding follows the app: it uses only shared pieces, the tour finds controls by data-induction. Any UI change that moves, renames or removes a data-induction control updates the tour step, its copy (src/lib/induction-copy.ts) and its visual baselines in the same PR. Never delete a data-induction attribute without updating the tour.
-- Viewport: svh/dvh only, never vh; html/body/#root use 100svh. Fixed and sticky bars take the safe-area inset for every edge they touch (guard: viewport-rules.test.ts).
-- Theme: meta theme-color follows --bg; a theme switch runs with transitions off for two frames.
-- Tab return paints the kept view with no skeleton or fade; never drop a session read on page leave; own writes update kept values (src/lib/session-read.ts, src/lib/kept-view.ts).
-- Speed: screens paint on the first frame from what the device or session already holds. No network read before first paint for data the device can keep (recents, titles, drafts, settings). Background refresh runs after paint, batched (one read per table, never per item), at most once per session per screen, and never repaints rows already on screen. Any unavoidable wait states its ceiling in ms and its reason in the PR body.
-- Recent lists (search) offer Clear all with UndoStrip and a per-row remove X; never a confirm dialog.
-- Auth sign-in uses a 6-digit email code on one input with autocomplete=one-time-code; never add a sign-in link.
-
-## Layout rules (locked 6 Nov 2026)
-
-- Guard: scripts/design-ratchet.ts counts drift; CI fails if a count rises. Never raise the baseline; fix the code. The Claude Code hook (.claude/settings.json) runs the same checks on every edit; exit 2 means fix it in this task.
-- L1 Spacing 4px scale only: 1,2,3,4,6,8,12 (4-48px); 0.5 (2px) only inside badges/pills. No `*-1.5/2.5/3.5`, no `[Npx]`.
-- L2 One edge: 16 phone (px-4), 24 laptop (md:px-6). Headers, search, chips, cards, sheets, section labels start on it.
-- L3 Inside <= outside: card padding <= gap between cards <= gap between sections.
-- L4 Pairs: icon to its text gap-2 (16px icons) or gap-3 (20+), centred. Arrow right after its label. Count 8px after its word.
-- L5 Rows with icons keep a fixed icon column so labels share one left edge.
-- L6 Text buttons may have a big tap area; the visible text sits on the edge.
-- L7 Tiles in a row: same height, title 1 line or 2 reserved, meta on one line.
-- L8 No orphans: hints and titles never wrap or cut.
-- L9 One page-title size; max 3 text roles per screen; no `leading-*` / `tracking-*` overrides.
-- L10 Optical nudges (1-3px) only inside ui/ parts.
-- B1 Every tap control is Button / IconButton / Chip / PressableRow at 44 (touch targets at least 44x44); nothing hand-built smaller. Read-only tags may be smaller.
-- B2 Two-button footers: phone = equal halves; laptop = right-aligned, main button on the right. Full-width buttons on phone only (md: back to normal width), except the sign-in card.
-- B3 Sibling buttons share one treatment (all circles, or all bare).
-- Exit: one exit per panel. X only for remove / clear / dismiss / cancel upload. (The back-vs-X rule is set in the next PR.)
-- Stacking: use the named scale (added next PR); never z-[N].
+- Use a part or add a slot to it; never hand-build its frame or fork it. If no part fits, stop and ask.
+- Parts (src/components/ui): Text, layout.ts, Card, Row, Tile, ChatCard, Composer, HeaderBar, Toolbar, StatusDot, Sheet + SheetActions, ActionMenu + ActionMenuTrigger, Button / IconButton / Chip / PressableRow (44 tall), Tag, CountBadge, Avatar, PersonTrigger, NoResults, ErrorNote, SidePanel, PostPlaceholder.
+- Type roles (ui/Text only): display (post title only), title (bar titles), heading, body, secondary, label, meta (mono, tabular), section. Max 3 roles per part. leading-_, tracking-_, text-[..] live only in ui/Text (lint error).
+- Values: tailwind.config.ts holds only the allowed scale (type xs..3xl + input; 4px spacing grid plus 0.5 and 1.5; radius roles; border 1/2 + named cut-out/rail; named z layers base..top; named panel widths). New exception = named token + one-line comment. No [Npx], no z-[N].
+- Edges (L2): page 16 phone / 24 laptop (GUTTER), chat 12 (CHAT_GUTTER), sheets 16. Inside <= outside spacing.
+- Trailing rule: a trailing ⋮, chevron or X is a 44 box pulled out 12 (TRAILING_PULL) so its glyph sits on the content edge; leading back/close mirrors it (LEADING_PULL). Parts apply it, never call sites.
+- Lanes (ui/layout LANE\_\*): unread pill top centre, jump-to-latest bottom trailing above the composer, tip strip in flow above the composer; they never cover a title, a time or each other.
+- Exit: "<" for anything opening over the app; X only for remove / clear / dismiss / cancel upload. One exit per panel.
+- States keep their footprint: Button busy keeps width; Sheet busy is on its button; Composer, upload, pending, Not sent and select mode keep row height and slots.
+- Lighting: one lit-_ height per surface (no shadow-_, drop-shadow, backdrop-blur, dark:); outlines lit-selected/lit-focus/lit-bad/lit-drop/lit-today only.
+- Colour: token classes only; greys + amber Review, green Approved, red errors/Reject; no violet/blue, no hex, no text-white. Contrast 4.5:1 text, 3:1 edges.
+- Motion: src/lib/motion only; never fade; instant under Reduce Motion.
+- Icons: ui/icons.tsx only; ICON_SIZE; stroke follows size (strokeFor). One icon per concept.
+- Words: Activity, file/Assets, Due (never Target), Review, Retry, Alerts. Zero states "{Things} show up here." Errors "Couldn't {action}. {reason}". No em-dashes. Dates via src/lib/time.ts, font-mono tabular-nums.
+- Text: fields are ui/Input or ui/Textarea; the format strip is ui/FormatStrip only. Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.
+- Behaviour: hide what a person can't do; Delete = UndoStrip; ⋯ menus = ActionMenu (Open, Copy link, others, Delete last); decisions only via PostDecisionBar; phone vs laptop via useIsLaptop; svh/dvh only.
+- Speed: first paint from what the device holds; no new await, hold, gate or read on a paint or tap path; parts are pure render.
+- Every UI change: light + dark parity, visual baselines + layout checks (e2e/visual/layout-checks.ts) updated in the same PR; data-induction targets keep the tour working.
 
 ## Canonical living docs
 

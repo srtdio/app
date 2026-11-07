@@ -29,6 +29,8 @@ import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 // The proc enforces a body length of 1..10000; mirror it client-side so submit
 // disables and a friendly message shows before the request runs.
 const MAX_BODY = 10000;
+/** "10,000": a number format, never a date one (dates live in src/lib/time.ts). */
+const MAX_BODY_TEXT = new Intl.NumberFormat('en-US').format(MAX_BODY);
 
 interface CommentSubmitOptions {
   /** Asset VERSION ids of the completed uploads, passed to createComment. */
@@ -304,7 +306,7 @@ export function CommentComposer({
 
       {tooLong ? (
         <p role="alert" className="text-sm text-bad">
-          Comments must be at most {MAX_BODY.toLocaleString('en-US')} characters.
+          Comments must be at most {MAX_BODY_TEXT} characters.
         </p>
       ) : null}
 
@@ -364,7 +366,7 @@ export function PendingChip({
           <IconFile size={ICON_SIZE.inline} />
         )}
       </span>
-      <span className="flex min-w-0 max-w-[180px] flex-col">
+      <span className="flex min-w-0 max-w-44 flex-col">
         <span className="truncate text-sm font-medium text-fg" title={item.file.name}>
           {item.file.name}
         </span>
@@ -380,7 +382,7 @@ export function PendingChip({
         <Button
           type="button"
           variant="link"
-          className="min-w-[44px] shrink-0"
+          className="min-w-11 shrink-0"
           aria-label={`Retry ${item.file.name}`}
           onClick={onRetry}
         >

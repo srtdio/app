@@ -19,7 +19,7 @@ export function RemoveButton({
       label={label}
       onClick={onRemove}
       data-remove-button=""
-      className="absolute right-0 top-0 z-10"
+      className="absolute right-0 top-0 z-raised"
     >
       {/* Pinned to the tap area's top-right corner (IconButton centres its content). */}
       <span

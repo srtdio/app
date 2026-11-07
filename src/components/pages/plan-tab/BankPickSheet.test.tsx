@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // From bank (PR C): the branches a picked idea takes (one / none / several /
-// shared warning / past), the header "+" day, the read on open only, the
-// laptop month's trace lines, and the Plan screen's Open and send sheet path.
+// shared warning / past), the header "+" day, the read on open only, and the
+// Plan screen's Open and send sheet path.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,6 @@ vi.mock('agora-chat', () => ({ default: {} }));
 
 import type { PlanRow } from '@/lib/chat/plans';
 import { fromBankDay, fromBankQuery, fromBankStep } from './BankPickSheet';
-import { capWithTraces, traceDays } from './PlanCalendar';
 
 /** A source file next to this test (read as text). */
 function here(rel: string): string {
@@ -95,60 +94,6 @@ describe('From bank branches', () => {
   it('From bank is the third Add entry after New concept and Pick a post', () => {
     const add = readFileSync(here('../../chat/PlanAddSheet.tsx'), 'utf8');
     expect(add).toMatch(/New concept[\s\S]*Pick a post[\s\S]*From bank/);
-    const tab = readFileSync(here('./PlanTabAdd.tsx'), 'utf8');
-    expect(tab).toContain("onFromBank={() => setStage('bank')}");
-    const menu = readFileSync(here('./PlanDayMenu.tsx'), 'utf8');
-    expect(menu).toContain('data-plan-tab-menu-bank');
-  });
-});
-
-describe('laptop month trace lines', () => {
-  const trace = (itemId: string, planId: string, day: string) => ({
-    itemId,
-    planId,
-    title: itemId,
-    day,
-    movedAt: '2026-11-03T10:00:00Z',
-  });
-
-  it('entries first, traces in the room left, the rest counted in +N more', () => {
-    expect(capWithTraces(['a'], ['t1', 't2'], 3)).toEqual({
-      shown: ['a'],
-      traces: ['t1', 't2'],
-      more: 0,
-    });
-    expect(capWithTraces(['a', 'b'], ['t1', 't2'], 2)).toEqual({
-      shown: ['a', 'b'],
-      traces: [],
-      more: 2,
-    });
-    expect(capWithTraces(['a', 'b', 'c'], ['t1'], 2)).toEqual({
-      shown: ['a', 'b'],
-      traces: [],
-      more: 2,
-    });
-  });
-
-  it('drops traces of items back in their plan and other plans under a chip', () => {
-    const bundles = [
-      { plan: draft, items: [{ id: 'back' }] },
-      { plan: later, items: [] },
-    ] as unknown as Parameters<typeof traceDays>[1];
-    const traces = new Map([
-      ['draft', [trace('back', 'draft', '2026-11-04'), trace('gone', 'draft', '2026-11-04')]],
-      ['later', [trace('x', 'later', '2026-11-10')]],
-    ]);
-    const all = traceDays(traces, bundles, null);
-    expect(all.get('2026-11-04')?.map((t) => t.itemId)).toEqual(['gone']);
-    expect(all.get('2026-11-10')?.map((t) => t.itemId)).toEqual(['x']);
-    expect(traceDays(traces, bundles, 'later').get('2026-11-04')).toBeUndefined();
-  });
-
-  it('the line is quiet: fg-3, dashed, the bank icon, never a button; agency month only', () => {
-    const src = readFileSync(here('./PlanCalendar.tsx'), 'utf8');
-    expect(src).toMatch(/function MonthTrace[\s\S]*?<span\s+data-plan-tab-trace/);
-    expect(src).toMatch(/data-plan-tab-trace[\s\S]*?border-dashed[\s\S]*?text-fg-3/);
-    expect(src).toContain("enabled: side === 'agency' && props.data !== null && view === 'month'");
   });
 });
 

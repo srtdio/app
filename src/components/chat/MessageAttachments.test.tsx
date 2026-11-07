@@ -313,7 +313,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toMatch(/data-voice-bars="peaks" class="[^"]*invisible opacity-0/);
     // No visible upload bar; the ring's progress is announced by an sr-only progressbar.
     expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
-    expect(html).not.toContain('h-[3px]');
+    expect(html).not.toContain('h-1 bg-panel-3');
     expect(html).not.toContain('WEBM');
     expect(html).not.toContain('Open');
 
@@ -403,7 +403,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toContain('brightness-75');
     expect(html).toContain('aria-label="Cancel upload"');
     expect(html).toContain('data-upload-progress="40"');
-    expect(html).toContain('absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2');
+    expect(html).toContain('absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2');
     expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
     // The local preview never presigns.
     expect(fetcher).not.toHaveBeenCalled();
@@ -487,7 +487,7 @@ describe('album grid', () => {
 
   it('maps the image count to the tile layout', () => {
     expect(albumGridClass(1)).toBe('grid grid-cols-1');
-    expect(albumTiles(1)).toEqual([{ index: 0, className: 'aspect-[4/3] max-h-[320px]', more: 0 }]);
+    expect(albumTiles(1)).toEqual([{ index: 0, className: 'aspect-[4/3] max-h-80', more: 0 }]);
     expect(albumGridClass(2)).toBe('grid grid-cols-2');
     expect(albumTiles(2).map((t) => t.className)).toEqual(['aspect-square', 'aspect-square']);
     expect(albumTiles(3).map((t) => t.className)).toEqual([
@@ -529,9 +529,9 @@ describe('album grid', () => {
     expect(html).toContain('+2');
     expect(html).toContain('bg-overlay-badge');
     expect(html).toContain('text-2xl font-semibold text-overlay-fg');
-    expect(html).toContain('gap-[2px]');
+    expect(html).toContain('gap-0.5');
     // No corners passed: the touch bubble's 18px.
-    expect(html).toContain('gap-[2px] overflow-hidden rounded-[18px]');
+    expect(html).toContain('gap-0.5 overflow-hidden rounded-[18px]');
     expect(html.match(/<button/g)).toHaveLength(4);
     const { tiles, onOpen } = grid(6);
     (tiles[3]?.props as { onClick: () => void }).onClick();
@@ -637,7 +637,7 @@ describe('album grid', () => {
     expect(mixed.match(/data-upload-ring=/g)).toHaveLength(1);
     // Uploading tiles are dimmed; the grid holds the ring.
     expect((html.match(/brightness-75/g) ?? []).length).toBe(2);
-    expect(html).toContain('relative w-[320px]');
+    expect(html).toContain('relative w-80');
     expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
   });
 });

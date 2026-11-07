@@ -27,9 +27,9 @@ describe('lint: design rules', () => {
     expect(result.errorCount).toBe(2);
   });
 
-  it('passes token classes and text-legacy-*', { timeout: 60_000 }, async () => {
+  it('passes token classes', { timeout: 60_000 }, async () => {
     const result = await lint(
-      'export function Good() {\n  return <span className="text-legacy-sm text-fg-3 bg-bad/10">Go</span>;\n}\n',
+      'export function Good() {\n  return <span className="text-base text-fg-3 bg-bad/10">Go</span>;\n}\n',
     );
     expect(result.messages).toEqual([]);
     expect(result.errorCount).toBe(0);

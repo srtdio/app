@@ -1,38 +1,45 @@
-// The Plan tab's Bank (the idea bank: concepts outside any plan). One
-// surface in three layouts sharing one data hook (use-bank-data.ts):
-// - phone: the Bank chip's list under the page's toolbar (rows in lit-card
-//   cards, 56px thumbnail);
-// - panel: the laptop ui/SidePanel beside the calendar (44px thumbnail,
-//   rows draggable onto a month day, "Drag a card onto a day to plan it.");
-// - table: Expand's full-width table in place of the calendar.
-// A row taps open its idea (/plan/bank?item=); its ⋯ menu (ui/ActionMenu,
+// The Plan tab's Bank (the idea bank: concepts outside any plan), on phone and
+// laptop alike: the Bank chip's list under the page's toolbar, one ui/ListCard
+// per idea in LIST_CARD_GRID (the laptop side panel, its Expand table and the
+// drag onto the retired calendar are gone, 7 Nov 2026). One data hook
+// (use-bank-data.ts). A card: the idea's picture in bankThumbOf's order (its
+// first picture, else its first link's picture asked once the card is in view
+// through previewClient, else the file glyph, else the idea icon), its title,
+// its text (stripFormat) as the preview, then when it was added (formatAdded:
+// "10:27 AM" today, else "2 Nov") and its first bucket as the one tag.
+// A card taps open its idea (/plan/bank?item=); its ⋯ menu (ui/ActionMenu,
 // right-click on laptop) holds Open, Select, Plan it, Send to chat (the chat
 // picker, then chat_plan_item_share; IdeaShareFlow), Show to client or Hide
 // from client, Star or Unstar, Archive or Unarchive, Delete last. Plan it is
 // usePlanIt (shared with a bank idea's item screen). Long-press
-// enters select mode (ui/Checkbox per row, the picked rows lit-selected; the
-// select bar sits above the rows). Writes are optimistic over the kept page;
-// Delete, Archive, Hide and every bulk write sit behind the Undo strip first.
-// A client reads only, with no menu, select mode or Add idea. Tokens only;
-// lit heights per docs/lighting.md (cards lit-card, sheets lit-overlay, the
-// filter pills lit-badge, thumbnails lit-media). The Untouched for 90 days
-// filter (the Filter and sort sheet) lists live ideas last active over 90
-// days ago and ends with "Archive all {n}" (n = the rows loaded; bulk
-// bank_idea_set behind the Undo strip). Nothing in the Bank is ever counted.
+// enters select mode (a Checkbox where the ⋯ sits, the picked cards
+// lit-selected; the select bar sits above the cards). Writes are optimistic
+// over the kept page; Delete, Archive, Hide and every bulk write sit behind
+// the Undo strip first. A client reads only, with no menu, select mode or Add
+// idea. Tokens only. The Untouched for 90 days filter (the Filter and sort
+// sheet) lists live ideas last active over 90 days ago and ends with "Archive
+// all {n}" (n = the rows loaded; bulk bank_idea_set behind the Undo strip).
+// Nothing in the Bank is ever counted.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DragEvent as ReactDragEvent, ReactElement, ReactNode } from 'react';
+import type { MouseEvent, ReactElement, ReactNode } from 'react';
+import { stripFormat } from '@srtdio/comments';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
-import { SidePanel } from '@/components/ui/SidePanel';
-import { useIsLaptop } from '@/lib/use-is-laptop';
+import {
+  LIST_CARD_GRID,
+  ListCard,
+  ListCardBox,
+  type ListCardPicture,
+} from '@/components/ui/ListCard';
 import { useInView } from '@/lib/use-in-view';
 import { PREVIEW_ROOT_MARGIN, previewClient, type LinkPreview } from '@/lib/links/preview';
 import { NoResults } from '@/components/ui/NoResults';
@@ -45,9 +52,7 @@ import {
   IconBank,
   IconCalendar,
   IconCheckCircle,
-  IconChevronLeft,
   IconEye,
-  IconExpand,
   IconEyeOff,
   IconFile,
   IconForward,
@@ -64,23 +69,17 @@ import type { BucketOption } from '@/lib/buckets';
 import type { BankIdea, PlanRow } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { errorText } from '@/lib/error-copy';
-import { formatRelative } from '@/lib/time';
+import { formatAdded } from '@/lib/time';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { supabase } from '@/lib/supabase';
 import { PlanTabLoadMore } from './PlanTabList';
 import {
-  BANK_DRAG_TYPE,
-  CLIENT_CAN_SEE,
-  TEAM_ONLY,
   approverNames,
   archiveAllLabel,
   bankZeroCopy,
-  cameFromLabel,
   filterPills,
-  ideaFilesLine,
-  ideaFormatLine,
-  ideaMetaLine,
+  ideaBucketTag,
   moreFilesLabel,
   noPlanTitle,
   planAudienceLabel,
@@ -106,15 +105,17 @@ import {
   type BankData,
 } from './use-bank-data';
 
-export type BankLayout = 'phone' | 'panel' | 'table';
-
 // ---------------------------------------------------------------------------
 // Small parts
 // ---------------------------------------------------------------------------
 
-/** The idea's tile: first picture, else its first link's picture, else a file glyph, else a dashed box. */
-export function BankThumb(props: { idea: BankIdea; size: 56 | 44 }): ReactElement {
-  const box = props.size === 56 ? 'h-14 w-14' : 'h-11 w-11';
+/**
+ * From bank's small tile (BankPickSheet, 44): first picture, else its first
+ * link's picture, else a file glyph, else a dashed box. The Bank's own cards
+ * take ListCard's 72 picture (bankCardPicture).
+ */
+export function BankThumb(props: { idea: BankIdea; size: 44 }): ReactElement {
+  const box = 'h-11 w-11';
   const thumb = props.idea.thumb;
   if (thumb === null) return <EmptyThumb box={box} />;
   if (thumb.kind === 'link') {
@@ -232,24 +233,89 @@ function LinkThumb(props: { url: string; box: string; fileCount: number }): Reac
   );
 }
 
-/** The bucket Tags and the Client can see Tag of one idea. */
-function IdeaTags(props: {
-  idea: BankIdea;
-  buckets: readonly BucketOption[];
-}): ReactElement | null {
-  const names = (props.idea.bucket_ids ?? []).flatMap((id) => {
-    const b = props.buckets.find((x) => x.id === id);
-    return b !== undefined ? [b] : [];
-  });
-  if (names.length === 0 && props.idea.show_to_client !== true) return null;
+/** ListCard's icon box drawn inside an image slot (a link with no picture). */
+function PictureIcon(props: { icon: typeof IconBank }): ReactElement {
   return (
-    <span className="flex min-w-0 flex-wrap items-center gap-1">
-      {names.map((b) => (
-        <Tag key={b.id} label={b.name} />
-      ))}
-      {props.idea.show_to_client === true ? <Tag label={CLIENT_CAN_SEE} tone="good" /> : null}
+    <span
+      aria-hidden="true"
+      className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2"
+    >
+      <props.icon size={ICON_SIZE.picture} />
     </span>
   );
+}
+
+/**
+ * A card's link picture: asked once the card is in view (the chat cards'
+ * preview client and Worker cache, never before first paint), the cached
+ * og:image through /image. No picture, or one that fails: the file glyph when
+ * the idea holds files, else the idea icon. Never a per-card read for ideas
+ * off screen.
+ */
+function BankLinkPicture(props: { url: string; fileCount: number }): ReactElement {
+  const client = previewClient();
+  const { ref, inView } = useInView<HTMLSpanElement>(PREVIEW_ROOT_MARGIN);
+  const [preview, setPreview] = useState<LinkPreview | null>(() => client.peek(props.url));
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (preview !== null || !inView) return;
+    const controller = new AbortController();
+    client.request(props.url, controller.signal).then(setPreview, () => undefined);
+    return () => controller.abort();
+  }, [client, inView, preview, props.url]);
+  const src = preview?.type === 'full' && !failed ? client.imageUrl(props.url) : null;
+  const settled = preview !== null && (preview.type !== 'full' || failed);
+  return (
+    <span ref={ref} data-bank-thumb-link="" className="relative flex h-full w-full">
+      {src !== null ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          draggable={false}
+          onError={() => setFailed(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : settled ? (
+        <PictureIcon icon={props.fileCount > 0 ? IconFile : IconBank} />
+      ) : (
+        <Bone lit="lit-media" as="span" className="absolute inset-0" />
+      )}
+    </span>
+  );
+}
+
+/**
+ * An idea card's picture in bankThumbOf's order: its first picture, else its
+ * first link's picture (BankLinkPicture), else the file glyph, else the idea
+ * icon. Render only; the link read waits for the card to be in view.
+ */
+export function bankCardPicture(idea: BankIdea): ListCardPicture {
+  const thumb = idea.thumb;
+  if (thumb === null) return { kind: 'icon', icon: IconBank };
+  if (thumb.kind === 'file') return { kind: 'icon', icon: IconFile };
+  if (thumb.kind === 'link') {
+    return {
+      kind: 'image',
+      node: <BankLinkPicture url={thumb.url} fileCount={idea.file_count} />,
+    };
+  }
+  return {
+    kind: 'image',
+    node: (
+      <Thumbnail
+        assetVersionId={thumb.versionId}
+        cache={sharedCardPresignCache()}
+        presignEnabled={PRESIGN_ENABLED}
+        aspect="square"
+        fallback={{ kind: 'glyph' }}
+        fallbackTile={<PictureIcon icon={IconBank} />}
+        alt=""
+      />
+    ),
+  };
 }
 
 /** The applied filter line: small removable pills, then Clear. Nothing when nothing is applied. */
@@ -264,7 +330,7 @@ export function BankFilterLine(props: {
   return (
     <div
       data-bank-filter-line=""
-      className="flex min-w-0 flex-wrap items-center gap-2 px-4 pb-1 pt-1 md:px-0"
+      className={cn('flex min-w-0 flex-wrap items-center gap-2 pb-1 pt-1', GUTTER)}
     >
       <span className="text-sm text-fg-3">Showing</span>
       <span aria-hidden="true" className="text-sm text-fg-3">
@@ -279,7 +345,7 @@ export function BankFilterLine(props: {
           <span className="pl-1">{pill.label}</span>
           <IconButton
             label={`Remove ${pill.label}`}
-            className="-my-3"
+            className={CONTROL_IN_LINE}
             onClick={() => props.onFilter(withoutPill(props.filter, pill.key))}
           >
             <IconX size={ICON_SIZE.inline} />
@@ -294,12 +360,11 @@ export function BankFilterLine(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Rows
+// Cards
 // ---------------------------------------------------------------------------
 
-interface RowProps {
+interface CardProps {
   idea: BankIdea;
-  layout: BankLayout;
   buckets: readonly BucketOption[];
   now: Date;
   canWrite: boolean;
@@ -311,86 +376,74 @@ interface RowProps {
   onHold: () => void;
 }
 
-/** One idea card: thumbnail, title (star first when starred), format, tags, meta, then ⋯. */
-function BankRow(props: RowProps): ReactElement {
+/**
+ * One idea on ui/ListCard: picture, title, its text as the preview, then last
+ * active and its first bucket; the ⋯ (creators), or the Checkbox in select
+ * mode. Tap opens (or toggles in select mode); long-press enters select mode;
+ * right-click opens the menu (creators).
+ */
+function BankCard(props: CardProps): ReactElement {
   const { idea } = props;
   const [menuOpen, setMenuOpen] = useState(false);
   const hold = useLongPress(() => props.onHold(), { ignoreMouse: true });
-  const thumb = props.layout === 'phone' ? 56 : 44;
-  const onDragStart = (event: ReactDragEvent<HTMLElement>): void => {
-    event.dataTransfer.setData(BANK_DRAG_TYPE, idea.id);
-    event.dataTransfer.effectAllowed = 'move';
-  };
+  const thumb = idea.thumb;
   return (
-    <div
-      data-bank-row={idea.id}
-      data-selected={props.selected ? 'true' : undefined}
-      draggable={props.layout === 'panel' && props.canWrite && !props.selecting}
-      onDragStart={props.layout === 'panel' ? onDragStart : undefined}
-      onContextMenu={
-        props.canWrite
-          ? (event) => {
-              event.preventDefault();
-              hold.cancel();
-              setMenuOpen(true);
+    <ListCard
+      surface={{
+        'data-bank-row': idea.id,
+        'data-selected': props.selected ? 'true' : undefined,
+        ...(props.canWrite
+          ? {
+              onContextMenu: (event: MouseEvent<HTMLElement>) => {
+                event.preventDefault();
+                hold.cancel();
+                setMenuOpen(true);
+              },
             }
-          : undefined
-      }
-      className={cn(
-        'lit-card flex items-start gap-1 rounded-xl border bg-panel',
-        props.selected && 'lit-selected',
-      )}
-    >
-      {props.selecting ? (
-        <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center">
-          <Checkbox
-            checked={props.selected}
-            onChange={props.onToggle}
-            aria-label={`Select ${idea.title ?? 'idea'}`}
-          />
-        </label>
-      ) : null}
-      <PressableRow
-        type="button"
-        flat
-        data-bank-open={idea.id}
-        {...(props.canWrite ? hold.handlers : {})}
-        onClick={() => {
-          if (hold.consumeClickSuppression()) return;
-          if (props.selecting) props.onToggle();
-          else props.onOpen();
-        }}
-        className={cn(
-          'flex min-w-0 flex-1 items-start gap-3 py-3',
-          props.selecting ? 'pl-0' : 'pl-4',
-        )}
-      >
-        <BankThumb idea={idea} size={thumb} />
-        <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
-          <span className="flex min-w-0 items-center gap-2">
-            {idea.starred_at != null ? (
-              <span className="shrink-0 text-warn" aria-label="Starred">
-                <IconStarFilled size={ICON_SIZE.inline} />
-              </span>
-            ) : null}
-            <span className="truncate text-base font-medium text-fg">{idea.title ?? ''}</span>
-          </span>
-          <span className="truncate text-sm text-fg-2">{ideaFormatLine(idea)}</span>
-          <IdeaTags idea={idea} buckets={props.buckets} />
-          <span className="truncate text-sm text-fg-3">{ideaMetaLine(idea, props.now)}</span>
-        </span>
-      </PressableRow>
-      {props.canWrite && !props.selecting ? (
-        <span className="shrink-0 pr-3 pt-2">
-          <ActionMenu
-            title={idea.title ?? 'Idea'}
-            items={props.menuItems}
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-          />
-        </span>
-      ) : null}
-    </div>
+          : {}),
+      }}
+      selected={props.selected}
+      onPress={() => {
+        if (hold.consumeClickSuppression()) return;
+        if (props.selecting) props.onToggle();
+        else props.onOpen();
+      }}
+      press={{
+        'data-bank-open': idea.id,
+        ...(props.selecting ? { 'aria-pressed': props.selected } : {}),
+        ...(props.canWrite ? hold.handlers : {}),
+      }}
+      picture={bankCardPicture(idea)}
+      pictureHooks={{ 'data-bank-thumb': thumb === null ? 'none' : thumb.kind }}
+      title={idea.title ?? ''}
+      preview={stripFormat(idea.description ?? '')}
+      time={formatAdded(idea.created_at, props.now)}
+      timeHooks={{ 'data-bank-added': '' }}
+      tag={ideaBucketTag(idea, props.buckets)}
+      tagHooks={{ 'data-bank-bucket-tag': '' }}
+      {...(props.selecting && props.canWrite
+        ? {
+            check: (
+              <Checkbox
+                checked={props.selected}
+                onChange={props.onToggle}
+                aria-label={`Select ${idea.title ?? 'idea'}`}
+              />
+            ),
+          }
+        : props.canWrite
+          ? {
+              menu: (
+                <ActionMenu
+                  title={idea.title ?? 'Idea'}
+                  items={props.menuItems}
+                  open={menuOpen}
+                  onOpenChange={setMenuOpen}
+                />
+              ),
+            }
+          : {})}
+    />
   );
 }
 
@@ -398,15 +451,7 @@ function BankRow(props: RowProps): ReactElement {
 // The surface
 // ---------------------------------------------------------------------------
 
-/** A drop from the calendar (laptop): plan this idea on this day. */
-export interface BankDropRequest {
-  ideaId: string;
-  day: string;
-  nonce: number;
-}
-
 export interface BankSurfaceProps {
-  layout: BankLayout;
   data: BankData;
   filter: BankFilter;
   onFilter: (next: BankFilter) => void;
@@ -414,6 +459,8 @@ export interface BankSurfaceProps {
   canWrite: boolean;
   workspaceId: string;
   today: string;
+  /** The page's one list clock (useMinuteClock): the cards' added day (formatAdded). */
+  now: Date;
   /** The open plans for Plan it: one read on the tap. */
   getPlans: () => Promise<
     { ok: true; data: PlanRow[] } | { ok: false; error: { message: string } }
@@ -421,11 +468,6 @@ export interface BankSurfaceProps {
   onOpenIdea: (id: string) => void;
   /** Bumped by the page on a chip change: select mode ends. */
   epoch: string;
-  /** Above the rows (the panel's and the table's own toolbar). */
-  toolbar?: ReactNode;
-  /** The table's Calendar button. */
-  onCollapse?: () => void;
-  drop?: BankDropRequest | null;
 }
 
 /** What Plan it is showing. */
@@ -436,8 +478,7 @@ export type PlanItStep =
   | { kind: 'shared'; idea: BankIdea; day: string; plan: PlanRow };
 
 export function BankSurface(props: BankSurfaceProps): ReactElement {
-  const { data, filter, layout, canWrite } = props;
-  const now = new Date();
+  const { data, filter, canWrite, now } = props;
   const showToast = useToast().show;
   const undoable = useUndoableAction();
   const [selecting, setSelecting] = useState(false);
@@ -532,17 +573,6 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     onPlaced: (idea) => dropIdeas(new Set([idea.id])),
     onUnplaced: (idea) => data.patch((cur) => [idea, ...cur]),
   });
-  const runPlanIt = planIt.runFor;
-
-  // A drop from the calendar runs Plan it for that day.
-  const lastDrop = useRef<number | null>(null);
-  useEffect(() => {
-    const drop = props.drop;
-    if (drop === null || drop === undefined || lastDrop.current === drop.nonce) return;
-    lastDrop.current = drop.nonce;
-    const idea = ideas?.find((i) => i.id === drop.ideaId);
-    if (idea !== undefined) void runPlanIt(idea, drop.day);
-  }, [props.drop, ideas, runPlanIt]);
 
   const menuFor = (idea: BankIdea): ActionMenuItem[] => [
     {
@@ -622,7 +652,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   // Untouched for 90 days: Archive all {n} after the rows (n = the rows loaded).
   const archiveAll =
     canWrite && filter.review && !searching && ideas !== null && ideas.length > 0 ? (
-      <div className="pt-2">
+      <div>
         <Button type="button" data-bank-archive-all="" onClick={() => archiveMany(ideas, true)}>
           {archiveAllLabel(ideas.length)}
         </Button>
@@ -633,13 +663,13 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   if (ideas === null) {
     body =
       data.load.status === 'failed' || data.search.status === 'error' ? (
-        <div className="px-4 py-6 md:px-0">
+        <div className="py-6">
           <Button type="button" onClick={searching ? data.search.refresh : data.retry}>
             Retry
           </Button>
         </div>
       ) : (
-        <BankBoxes layout={layout} />
+        <BankBoxes />
       );
   } else if (ideas.length === 0) {
     const copy = bankZeroCopy(filter, searching);
@@ -658,32 +688,13 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
           <EmptyState icon={<IconBank size={ICON_SIZE.tray} />} title={copy} />
         </div>
       );
-  } else if (layout === 'table') {
-    body = (
-      <BankTable
-        ideas={ideas}
-        buckets={props.buckets}
-        now={now}
-        canWrite={canWrite}
-        picked={picked}
-        onToggle={(id) => {
-          setSelecting(true);
-          toggle(id);
-        }}
-        onOpen={props.onOpenIdea}
-        onPlanIt={(idea) => planIt.start(idea)}
-        menuFor={menuFor}
-        onStar={(idea) => star(idea, idea.starred_at == null)}
-      />
-    );
   } else {
     body = (
-      <div data-bank-list={layout} className="flex flex-col gap-2">
+      <div data-bank-list="" className={LIST_CARD_GRID}>
         {ideas.map((idea) => (
-          <BankRow
+          <BankCard
             key={idea.id}
             idea={idea}
-            layout={layout}
             buckets={props.buckets}
             now={now}
             canWrite={canWrite}
@@ -703,44 +714,13 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   }
 
   return (
-    <div
-      data-bank={layout}
-      className={cn(
-        'flex flex-col gap-2',
-        layout === 'phone' ? 'pb-8 pt-2' : layout === 'panel' ? 'h-full' : 'px-6 pb-8 pt-2',
-      )}
-    >
-      {layout === 'table' && props.onCollapse !== undefined ? (
-        <div className="flex items-center gap-2">
-          <Button type="button" data-bank-calendar="" onClick={props.onCollapse}>
-            <IconChevronLeft size={ICON_SIZE.inline} />
-            Calendar
-          </Button>
-          <div className="min-w-0 flex-1">{props.toolbar}</div>
-        </div>
-      ) : (
-        props.toolbar
-      )}
+    <div data-bank="list" className="flex flex-col gap-2 pb-8 pt-2">
       {head}
-      <div
-        className={cn(
-          layout === 'phone' && 'px-4',
-          layout === 'panel' && 'min-h-0 flex-1 overflow-y-auto px-4 pb-2',
-        )}
-      >
+      <div className={cn('flex flex-col gap-3', GUTTER)}>
         {body}
-        {data.more !== null ? (
-          <div className="pt-2">
-            <PlanTabLoadMore more={data.more} />
-          </div>
-        ) : null}
+        {data.more !== null ? <PlanTabLoadMore more={data.more} /> : null}
         {archiveAll}
       </div>
-      {layout === 'panel' && canWrite ? (
-        <p data-bank-drag-hint="" className="border-t border-border px-4 py-2 text-sm text-fg-3">
-          Drag a card onto a day to plan it.
-        </p>
-      ) : null}
       {canWrite ? (
         <>
           {planIt.sheets}
@@ -770,212 +750,14 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   );
 }
 
-/**
- * The laptop Bank: ui/SidePanel on the right (380px, nothing dims, Esc
- * closes), header "Bank", Expand, X (no count). Laptop only
- * (useIsLaptop); the phone shows the same rows under the Bank chip, and its
- * Plan it, Filter and Add flows are Sheets.
- */
-export function BankPanel(props: {
-  open: boolean;
-  onClose: () => void;
-  onExpand: () => void;
-  surface: Omit<BankSurfaceProps, 'layout' | 'toolbar'>;
-  toolbar: ReactNode;
-}): ReactElement | null {
-  const laptop = useIsLaptop();
-  if (!laptop) return null;
+/** Loading boxes: ListCard's own box in the grid (only while nothing is held). */
+function BankBoxes(): ReactElement {
   return (
-    <SidePanel
-      open={props.open}
-      onClose={props.onClose}
-      title="Bank"
-      headerExtra={
-        <>
-          <IconButton
-            label="Expand"
-            data-bank-expand=""
-            className="ml-auto"
-            onClick={props.onExpand}
-          >
-            <IconExpand size={ICON_SIZE.control} />
-          </IconButton>
-        </>
-      }
-    >
-      <BankSurface layout="panel" {...props.surface} toolbar={props.toolbar} />
-    </SidePanel>
-  );
-}
-
-/** Loading boxes in the rows' own shape (only while nothing is held). */
-function BankBoxes(props: { layout: BankLayout }): ReactElement {
-  const size = props.layout === 'phone' ? 'h-14 w-14' : 'h-11 w-11';
-  return (
-    <BoxSkeleton
-      lit="flat"
-      label="Loading ideas"
-      data-bank-loading=""
-      className="flex flex-col gap-2"
-    >
+    <BoxSkeleton lit="flat" label="Loading ideas" data-bank-loading="" className={LIST_CARD_GRID}>
       {[0, 1, 2].map((k) => (
-        <div
-          key={k}
-          className="lit-card flex items-center gap-3 rounded-xl border bg-panel px-4 py-3"
-        >
-          <Bone lit="lit-media" className={cn(size, 'shrink-0 rounded-lg')} />
-          <span className="flex flex-1 flex-col gap-2">
-            <Bone lit="flat" className="h-4 w-2/3 rounded" />
-            <Bone lit="flat" className="h-3 w-1/3 rounded" />
-          </span>
-        </div>
+        <ListCardBox key={k} />
       ))}
     </BoxSkeleton>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// The table (laptop Expand)
-// ---------------------------------------------------------------------------
-
-function BankTable(props: {
-  ideas: readonly BankIdea[];
-  buckets: readonly BucketOption[];
-  now: Date;
-  canWrite: boolean;
-  picked: ReadonlySet<string>;
-  onToggle: (id: string) => void;
-  onOpen: (id: string) => void;
-  onPlanIt: (idea: BankIdea) => void;
-  onStar: (idea: BankIdea) => void;
-  menuFor: (idea: BankIdea) => ActionMenuItem[];
-}): ReactElement {
-  const th = 'px-3 py-2 text-left text-sm font-medium text-fg-2';
-  return (
-    <div data-bank-table="" className="lit-card overflow-x-auto rounded-xl border bg-panel">
-      <table className="w-full border-collapse text-base">
-        <thead className="lit-header border-b bg-panel-2">
-          <tr>
-            {props.canWrite ? (
-              <th className={th}>
-                <span className="sr-only">Select</span>
-              </th>
-            ) : null}
-            <th className={th}>
-              <span className="sr-only">Star</span>
-            </th>
-            <th className={th}>Idea</th>
-            <th className={th}>Buckets</th>
-            <th className={th}>Came from</th>
-            <th className={th}>Who sees it</th>
-            <th className={th}>Comments</th>
-            <th className={th}>Last active</th>
-            <th className={th}>
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {props.ideas.map((idea) => {
-            const on = props.picked.has(idea.id);
-            return (
-              <tr
-                key={idea.id}
-                data-bank-table-row={idea.id}
-                data-selected={on ? 'true' : undefined}
-                className={cn(
-                  'border-b last:border-b-0',
-                  on ? 'border-transparent lit-selected' : 'border-border',
-                )}
-              >
-                {props.canWrite ? (
-                  <td className="px-1">
-                    <label className="flex h-11 w-11 cursor-pointer items-center justify-center">
-                      <Checkbox
-                        checked={on}
-                        onChange={() => props.onToggle(idea.id)}
-                        aria-label={`Select ${idea.title ?? 'idea'}`}
-                      />
-                    </label>
-                  </td>
-                ) : null}
-                <td className="px-1">
-                  {props.canWrite ? (
-                    <IconButton
-                      label={idea.starred_at != null ? 'Unstar' : 'Star'}
-                      className={
-                        idea.starred_at != null ? 'text-warn hover:text-warn' : 'text-fg-3'
-                      }
-                      onClick={() => props.onStar(idea)}
-                    >
-                      {idea.starred_at != null ? (
-                        <IconStarFilled size={ICON_SIZE.inline} />
-                      ) : (
-                        <IconStar size={ICON_SIZE.inline} />
-                      )}
-                    </IconButton>
-                  ) : idea.starred_at != null ? (
-                    <span className="flex justify-center text-warn">
-                      <IconStarFilled size={ICON_SIZE.inline} />
-                    </span>
-                  ) : null}
-                </td>
-                <td className="max-w-xs px-3 py-2">
-                  <PressableRow
-                    type="button"
-                    flat
-                    inline
-                    data-bank-open={idea.id}
-                    onClick={() => props.onOpen(idea.id)}
-                    className="flex min-w-0 items-center gap-3 text-left"
-                  >
-                    <BankThumb idea={idea} size={44} />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate font-medium text-fg">{idea.title ?? ''}</span>
-                      <span className="truncate text-sm text-fg-3">{ideaFilesLine(idea)}</span>
-                    </span>
-                  </PressableRow>
-                </td>
-                <td className="px-3 py-2">
-                  <span className="flex flex-wrap gap-1">
-                    {(idea.bucket_ids ?? []).flatMap((id) => {
-                      const b = props.buckets.find((x) => x.id === id);
-                      return b !== undefined ? [<Tag key={b.id} label={b.name} />] : [];
-                    })}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-fg-2">{cameFromLabel(idea)}</td>
-                <td className="px-3 py-2">
-                  {idea.show_to_client === true ? (
-                    <Tag label={CLIENT_CAN_SEE} tone="good" />
-                  ) : (
-                    <Tag label={TEAM_ONLY} />
-                  )}
-                </td>
-                <td className="px-3 py-2 font-mono tabular-nums text-fg-2">{idea.comment_count}</td>
-                <td className="shrink-0 whitespace-nowrap px-3 py-2 font-mono text-sm tabular-nums text-fg-3">
-                  {formatRelative(idea.last_active_at ?? idea.created_at, props.now)}
-                </td>
-                <td className="py-1 pl-2 pr-3">
-                  {props.canWrite ? (
-                    <span className="flex items-center justify-end gap-1">
-                      <Button
-                        type="button"
-                        data-bank-plan-it={idea.id}
-                        onClick={() => props.onPlanIt(idea)}
-                      >
-                        Plan it
-                      </Button>
-                      <ActionMenu title={idea.title ?? 'Idea'} items={props.menuFor(idea)} />
-                    </span>
-                  ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
   );
 }
 
@@ -983,12 +765,11 @@ function BankTable(props: {
 // Sheets
 // ---------------------------------------------------------------------------
 
-/** Plan it's sheets: the date, No plan covers, the plan picker, the shared warning. */
-/** Plan it as a flow: open it for an idea, or run it for a dropped day; its sheets. */
+/** Plan it as a flow: open it for an idea, or run it for a picked day; its sheets. */
 export interface PlanItFlow {
   /** Open the day sheet for this idea. */
   start: (idea: BankIdea) => void;
-  /** Run Plan it for a known day (a calendar drop): one plan, none, several, shared. */
+  /** Run Plan it for a known day (the day sheet's pick): one plan, none, several, shared. */
   runFor: (idea: BankIdea, day: string) => Promise<void>;
   /** The PR 816 sheets (date, no plan, pick a plan, shared warning); render once. */
   sheets: ReactElement;

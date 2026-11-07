@@ -88,8 +88,22 @@ export const ICON_SIZE = {
   nav: 18,
   control: 20,
   tray: 22,
+  // The list card's icon picture (ui/ListCard): a 24 glyph on its 72 box.
+  picture: 24,
   status: 28,
 } as const;
+
+/**
+ * The stroke for a glyph drawn at `size` px (24 grid): heavier when small so
+ * a 16 glyph keeps its weight beside text, lighter when large so a 22-28 tray
+ * or status glyph does not read bold. 2.0 at 12-16, 1.85 at 18-20, 1.6 at
+ * 22-28. Computed inside the icon base (Svg, Hero); call sites never set it.
+ */
+export function strokeFor(size: number): number {
+  if (size <= 16) return 2;
+  if (size <= 20) return 1.85;
+  return 1.6;
+}
 
 export interface IconProps {
   className?: string;
@@ -121,7 +135,8 @@ function Svg({ className, size = ICON_SIZE.nav, inline = false, box, children }:
       viewBox={box !== undefined ? `0 0 ${box.width} ${box.height}` : '0 0 24 24'}
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.85}
+      // A fixed-box glyph (the message ticks) is drawn 1:1, so it keeps the 18-20 weight.
+      strokeWidth={box !== undefined ? strokeFor(ICON_SIZE.control) : strokeFor(size)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -135,8 +150,8 @@ type HeroIcon = typeof ViewColumnsIcon;
 
 /**
  * A Heroicons glyph on the same contract as Svg: size (default 18), decorative,
- * and the same inline layout. 24/outline gets stroke 1.85 over Heroicons' own
- * 1.5; `solid` (24/solid, filled states only) has no stroke.
+ * and the same inline layout. 24/outline takes strokeFor(size) over Heroicons'
+ * own 1.5; `solid` (24/solid, filled states only) has no stroke.
  */
 function Hero({
   icon: C,
@@ -153,7 +168,7 @@ function Hero({
       width={size}
       height={size}
       style={style}
-      strokeWidth={solid ? undefined : 1.85}
+      strokeWidth={solid ? undefined : strokeFor(size)}
       className={className}
       aria-hidden="true"
     />
@@ -679,7 +694,7 @@ export function RailCurveGlyph(props: { turn: keyof typeof RAIL_CURVE_PATH; clas
       viewBox="0 0 13 13"
       fill="none"
       className={cn(
-        'absolute h-[13px] w-[13px] overflow-visible text-border-strong',
+        'absolute h-rail-glyph w-rail-glyph overflow-visible text-border-strong',
         props.className,
       )}
     >

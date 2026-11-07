@@ -68,14 +68,7 @@ describe('R12: the conversation picker is never connection-gated', () => {
       conversationPickerBody({ status: 'loading' }, null, vi.fn()),
     );
     const rows = renderToStaticMarkup(conversationPickerBody(READY, null, vi.fn()));
-    for (const cls of [
-      'min-h-[44px]',
-      'px-3',
-      'py-2',
-      'gap-3',
-      'text-base font-medium leading-snug',
-      'text-sm leading-snug',
-    ]) {
+    for (const cls of ['min-h-11', 'px-3', 'py-2', 'gap-3', 'text-base font-medium', 'text-sm']) {
       expect(skeleton).toContain(cls);
       expect(rows).toContain(cls);
     }
@@ -100,10 +93,11 @@ describe('R12: the conversation picker is never connection-gated', () => {
       conversationPickerBody({ status: 'error' }, null, vi.fn()),
     ];
     const boxes = states.map((el) => (el.props as { className: string }).className);
-    for (const box of boxes) expect(box).toBe(`h-[${CONVERSATION_BODY_PX}px] overflow-y-auto`);
-    // 51.75px rows with a 4px gap cover the whole body.
+    expect(CONVERSATION_BODY_PX).toBe(288);
+    for (const box of boxes) expect(box).toBe('h-72 overflow-y-auto');
+    // 52px rows with a 4px gap cover the whole body.
     expect(
-      CONVERSATION_SKELETON_ROWS * 51.75 + (CONVERSATION_SKELETON_ROWS - 1) * 4,
+      CONVERSATION_SKELETON_ROWS * 52 + (CONVERSATION_SKELETON_ROWS - 1) * 4,
     ).toBeGreaterThanOrEqual(CONVERSATION_BODY_PX);
     const loading = renderToStaticMarkup(
       conversationPickerBody({ status: 'loading' }, null, vi.fn()),

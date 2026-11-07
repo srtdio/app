@@ -134,7 +134,7 @@ export function ThreadViewFrame(props: {
       onKeyDown={onKeyDown}
       {...edgeBack}
       // The incoming edge: the card height's lit edge, no ring.
-      className="absolute inset-0 z-30 flex flex-col bg-bg lit-card"
+      className="absolute inset-0 z-nav flex flex-col bg-bg lit-card"
     >
       {/* The header carries the rows' long-press guard (no callout on touch). */}
       <div

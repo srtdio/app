@@ -204,7 +204,7 @@ export function SignInPage() {
       <span>New to Sorted?</span>
       <Link
         to="/signup"
-        className="inline-flex min-h-[44px] items-center justify-center font-medium text-accent hover:underline focus-visible:lit-focus"
+        className="inline-flex min-h-11 items-center justify-center font-medium text-accent hover:underline focus-visible:lit-focus"
       >
         Sign up free
       </Link>
@@ -259,7 +259,7 @@ export function SignInPage() {
             onBlur={() => setEmailError(emailFieldError(email))}
           />
           {emailError !== null ? (
-            <p id="signin-email-error" role="alert" className="mt-1.5 text-base text-bad">
+            <p id="signin-email-error" role="alert" className="mt-2 text-base text-bad">
               {emailError}
             </p>
           ) : null}
@@ -286,7 +286,7 @@ export function SignInPage() {
           </p>
         ) : null}
 
-        <Button variant="primary" type="submit" className="w-full" busy={busy}>
+        <Button variant="primary" type="submit" className="w-full md:w-full" busy={busy}>
           {CHECK_EMAIL_COPY.sendCode}
         </Button>
       </form>

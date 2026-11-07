@@ -30,6 +30,7 @@ import {
   testInviteePath,
 } from '@/lib/test-site';
 import { errorText } from '@/lib/error-copy';
+import { Text } from '@/components/ui/Text';
 
 export type InviteRole = 'admin' | 'agency' | 'client';
 
@@ -394,7 +395,7 @@ export function RolePicker({
   return (
     <label
       className={cn(
-        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base mv-tint focus-within:lit-focus',
+        'relative flex min-h-11 items-center gap-1 rounded-lg border bg-panel lit-well px-3 py-1 text-base mv-tint focus-within:lit-focus',
         invalid ? 'border-bad lit-bad bg-bad-soft' : 'border-field',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',
@@ -402,7 +403,7 @@ export function RolePicker({
         disabled && 'text-fg-3',
       )}
     >
-      <span aria-hidden="true" className="min-w-0 leading-tight">
+      <span aria-hidden="true" className="min-w-0">
         {current ?? ROLE_PLACEHOLDER}
       </span>
       <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
@@ -666,14 +667,11 @@ export function MembersInviteForm({
   }
 
   return (
-    <section aria-labelledby="invite-people-title" className="flex max-w-[520px] flex-col gap-4">
+    <section aria-labelledby="invite-people-title" className="flex flex-col gap-4">
       <div>
-        <h3
-          id="invite-people-title"
-          className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
-        >
+        <Text as="h3" role="section" id="invite-people-title">
           Invite people
-        </h3>
+        </Text>
         <p className="mt-0.5 text-base text-fg-2">
           Add one email or many. Press Enter, or paste a list.
         </p>
@@ -697,7 +695,7 @@ export function MembersInviteForm({
             disabled={submitting}
           />
           {duplicate ? (
-            <p id="invite-email-duplicate" role="alert" className="mt-1.5 text-sm text-bad">
+            <p id="invite-email-duplicate" role="alert" className="mt-2 text-sm text-bad">
               {INVITE_DUPLICATE_MESSAGE}
             </p>
           ) : null}
@@ -807,9 +805,10 @@ export function MembersInviteForm({
             variant="primary"
             type="submit"
             data-induction={INDUCTION_KEYS.membersInvite}
-            disabled={submitting || sendCount === 0}
+            busy={submitting}
+            disabled={sendCount === 0}
           >
-            {submitting ? 'Sending' : sendCount > 1 ? `Send ${sendCount} invites` : 'Send invite'}
+            {sendCount > 1 ? `Send ${sendCount} invites` : 'Send invite'}
           </Button>
         </div>
         {showRoleMissing ? (

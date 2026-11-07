@@ -225,7 +225,7 @@ function useFrameSampler(): void {
   }, []);
 }
 
-const BUTTON = 'min-w-[44px] shrink-0';
+const BUTTON = 'min-w-11 shrink-0';
 
 function PaintLogPanel(): ReactElement {
   const entries = useSyncExternalStore(store.subscribe, store.entries, store.entries);
@@ -265,7 +265,7 @@ function PaintLogPanel(): ReactElement {
     <div
       data-paint-log=""
       style={{ bottom: inset + 8 }}
-      className="fixed inset-x-2 z-[70] flex flex-col overflow-hidden rounded-xl border bg-panel text-fg lit-overlay"
+      className="fixed inset-x-2 z-toast flex flex-col overflow-hidden rounded-xl border bg-panel text-fg lit-overlay"
     >
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2">
         <span className="flex-1 truncate text-sm font-semibold text-fg-2">
@@ -292,12 +292,12 @@ function PaintLogPanel(): ReactElement {
           readOnly
           value={text()}
           onFocus={(e) => e.currentTarget.select()}
-          className="h-[30svh] w-full resize-none bg-panel-2 p-2 font-mono text-xs leading-4 text-fg"
+          className="h-[30svh] w-full resize-none bg-panel-2 p-2 font-mono text-xs text-fg"
         />
       ) : open ? (
-        <ol ref={listRef} className="max-h-[30svh] overflow-y-auto p-2 font-mono text-xs leading-4">
+        <ol ref={listRef} className="max-h-[30svh] overflow-y-auto p-2 font-mono text-xs">
           {entries.map((e, i) => (
-            <li key={i} className="whitespace-pre-wrap break-all">
+            <li key={`log-${i}`} className="whitespace-pre-wrap break-all">
               <span className="text-fg-3">{e.at.toFixed(1)}</span> {e.what}
             </li>
           ))}
@@ -319,9 +319,9 @@ function PaintLogPanel(): ReactElement {
               Copy
             </Button>
           </div>
-          <ol className="max-h-[20svh] overflow-y-auto px-2 pb-2 font-mono text-xs leading-4 tabular-nums">
+          <ol className="max-h-[20svh] overflow-y-auto px-2 pb-2 font-mono text-xs tabular-nums">
             {marks.map((m, i) => (
-              <li key={i} className="flex gap-2">
+              <li key={`log-${i}`} className="flex gap-2">
                 <span className="min-w-0 flex-1 break-all">{m.name}</span>
                 <span className="shrink-0 text-fg-3">{m.ms.toFixed(1)}</span>
               </li>

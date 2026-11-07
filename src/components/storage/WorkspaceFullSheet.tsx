@@ -50,7 +50,7 @@ export function WorkspaceFullSheet() {
         }
       >
         <div className="flex flex-col gap-3">
-          <p className="text-base leading-relaxed text-fg-2">{workspaceFullCopy(shownBytes)}</p>
+          <p className="text-base text-fg-2">{workspaceFullCopy(shownBytes)}</p>
           <div className="-mx-3 flex flex-col">
             <ActionRow
               icon={<IconTrash size={ICON_SIZE.tray} />}

@@ -103,13 +103,13 @@ function DetailRow({
         <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
         <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
         <span className="ml-auto shrink-0 text-fg-3">
-          <IconChevronRight size={ICON_SIZE.nav} />
+          <IconChevronRight />
         </span>
       </PressableRow>
     );
   }
   return (
-    <div className="flex w-full min-h-[44px] items-center gap-3 px-2 py-2">
+    <div className="flex w-full min-h-11 items-center gap-3 px-2 py-2">
       <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
       <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
       {locked ? (
@@ -126,7 +126,7 @@ function BucketDot({ colorHex }: { colorHex: string }) {
   return (
     <span
       aria-hidden
-      className="h-2.5 w-2.5 shrink-0 rounded-full"
+      className="h-2 w-2 shrink-0 rounded-full"
       style={{ backgroundColor: colorHex }}
     />
   );
@@ -310,7 +310,7 @@ export function PostDetailsSheet({
           />
 
           {isAgencySide ? (
-            <div className="flex w-full min-h-[44px] items-center gap-3 px-2 py-2">
+            <div className="flex w-full min-h-11 items-center gap-3 px-2 py-2">
               <span className="w-24 shrink-0 text-sm text-fg-3">Due date</span>
               <div data-details-date="" className="min-w-0 flex-1">
                 <DatePicker label="Due date" value={dateDraft} onChange={setDateDraft} />

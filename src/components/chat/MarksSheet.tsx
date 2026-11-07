@@ -11,6 +11,7 @@
 // The Open tab lists the posts waiting in review above the marks, each with
 // Jump (a card is in this chat) or Share here.
 
+import { PostPlaceholder } from '@/components/ui/PostPlaceholder';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -18,13 +19,7 @@ import { Chip } from '@/components/ui/Chip';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
-import {
-  ICON_SIZE,
-  IconBookmark,
-  IconCheck,
-  IconPipeline,
-  IconRotateCcw,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconBookmark, IconCheck, IconRotateCcw } from '@/components/ui/icons';
 import { Tag } from '@/components/ui/Tag';
 import { useToast } from '@/components/ui/toast';
 import { MARK_TONE } from '@/components/chat/MarkBits';
@@ -37,7 +32,8 @@ import { readPostsByIds } from '@srtdio/posts';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { readBriefsByIds } from '@/lib/chat/briefs';
 import { readPlanTitles } from '@/lib/chat/plans';
-import { formatChatTime, formatDueDate } from '@/lib/time';
+import { formatDueDate, formatAgo } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { WriteResult } from '@/lib/chat/record';
 import type { ThreadMessage } from '@/lib/chat/thread';
@@ -60,6 +56,7 @@ import {
 } from '@/lib/chat/marks';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 /** The marks section body when posts are listed but no mark is open. */
 export const NO_OPEN_MARKS = 'Open marks show up here.';
@@ -87,7 +84,7 @@ function OpenPostThumb(props: { assetVersionId: string | null }) {
           className="h-full w-full object-cover"
         />
       ) : (
-        <IconPipeline size={ICON_SIZE.inline} />
+        <PostPlaceholder kind="text" size={ICON_SIZE.inline} />
       )}
     </span>
   );
@@ -164,9 +161,7 @@ export function OpenPostsList(props: OpenPostsSection): ReactElement | null {
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">
-      <h3 className="px-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-        {props.heading}
-      </h3>
+      <h3 className={`px-2 ${TEXT_ROLE.section}`}>{props.heading}</h3>
       <ul className="flex max-h-[40dvh] flex-col overflow-y-auto">
         {props.posts.map((post) => (
           <OpenPostSheetRow
@@ -261,7 +256,7 @@ export async function confirmMarkTransition(params: {
 }
 
 /** 44x44 minimum, right-aligned row action (stamp or Reopen): a default lg Button. */
-const ROW_ACTION = 'min-w-[44px] shrink-0';
+const ROW_ACTION = 'min-w-11 shrink-0';
 
 /**
  * One pin board row. Hook-free so the stamp word, confirm copy and History
@@ -369,7 +364,7 @@ export interface MarksListProps {
   messageFor: (messageId: string) => ThreadMessage | undefined;
   profiles: Map<string, ChatProfile>;
   currentUserId: string;
-  /** For tests: the zone mark times render in. The app passes none (the viewer's device zone). */
+  /** Unused by mark times (relative, formatAgo); kept for callers. */
   timeZone?: string | undefined;
   onJump: (messageId: string) => void;
   onResolve: (messageId: string) => Promise<WriteResult>;
@@ -406,6 +401,7 @@ export function MarksList(props: MarksListProps): ReactElement {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const now = new Date(useMinuteClock());
   const { messageFor, profiles } = props;
 
   // A closed sheet or a tab switch drops any half-asked confirm.
@@ -483,8 +479,8 @@ export function MarksList(props: MarksListProps): ReactElement {
                       : undefined) ?? 'Member');
             const when =
               message !== undefined && message.createdAt !== ''
-                ? formatChatTime(message.createdAt, undefined, props.timeZone)
-                : formatChatTime(mark.markedAt, undefined, props.timeZone);
+                ? formatAgo(message.createdAt, now)
+                : formatAgo(mark.markedAt, now);
             return (
               <MarkSheetRow
                 key={mark.messageId}
@@ -496,10 +492,7 @@ export function MarksList(props: MarksListProps): ReactElement {
                   ? {
                       resolver: {
                         name: resolverName(mark, props.currentUserId, displayNameOf),
-                        when:
-                          mark.resolvedAt !== null
-                            ? formatChatTime(mark.resolvedAt, undefined, props.timeZone)
-                            : '',
+                        when: mark.resolvedAt !== null ? formatAgo(mark.resolvedAt, now) : '',
                       },
                     }
                   : {})}

@@ -23,9 +23,10 @@ import { CountBadge } from '@/components/ui/CountBadge';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
-import { civilDay, formatTime } from '@/lib/time';
+import { LANE_BOTTOM, LANE_TOP } from '@/components/ui/layout';
+import { civilDay, formatAgo, formatTime } from '@/lib/time';
 import { dayPillLabel } from '@/components/chat/day-separators';
-import { BUBBLE_META_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { BUBBLE_META_TYPE, EMOJI_PICK_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RailThrough } from '@/components/chat/ThreadRail';
 import { FORMER_MEMBER, type MentionMember } from '@/lib/chat/mentions';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -40,6 +41,7 @@ import {
 } from '@/lib/chat/reactors';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 /** A sheet read that failed or timed out. */
 const SHEET_LOAD_FAILED = "Couldn't load";
@@ -92,10 +94,10 @@ export function UnreadPill(props: {
   return (
     // Shown or hidden at once on the wrapper; the pill pops as it appears.
     <div
-      className={cn(
-        'pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center',
-        props.visible ? 'opacity-100' : 'opacity-0',
-      )}
+      // Its own lane (ui/layout LANE_TOP): top centre, clear of the latest
+      // button's and the tip strip's lanes.
+      data-lane="top"
+      className={cn(LANE_TOP, props.visible ? 'opacity-100' : 'opacity-0')}
     >
       <span ref={popRef} className="flex">
         <Button
@@ -130,10 +132,9 @@ export function LatestButton(props: {
     // Position and visibility sit on the wrapper (shown at once); it pops as it appears.
     <span
       ref={popRef}
-      className={cn(
-        'absolute bottom-3 right-3 z-10 flex',
-        props.visible ? 'opacity-100' : 'pointer-events-none opacity-0',
-      )}
+      // Its own lane (ui/layout LANE_BOTTOM): trailing edge, above the composer.
+      data-lane="bottom"
+      className={cn(LANE_BOTTOM, props.visible ? 'opacity-100' : 'pointer-events-none opacity-0')}
     >
       <IconButton
         type="button"
@@ -145,7 +146,7 @@ export function LatestButton(props: {
         onContextMenu={(e) => e.preventDefault()}
         className={cn('lit-float', FLOAT_SURFACE_CLASS, NO_TOUCH_SELECT)}
       >
-        <IconChevronDown size={ICON_SIZE.control} />
+        <IconChevronDown size={ICON_SIZE.nav} />
         <CountBadge count={props.count} className="absolute -right-1 -top-1" />
       </IconButton>
     </span>
@@ -224,7 +225,7 @@ function readByWithMono(label: string): ReactElement {
     <span>
       {parts.map((part, i) =>
         /^\d+$/.test(part) ? (
-          <span key={i} className="font-mono">
+          <span key={`part-${i}`} className="font-mono">
             {part}
           </span>
         ) : (
@@ -281,12 +282,12 @@ export function MessageInfoSheet(props: {
         <p className="pb-3 text-base text-fg-2">
           {sentLine(props.createdAt, props.timeZone, props.nowMs)}
         </p>
-        <h3 className="py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <h3 className={`py-2 ${TEXT_ROLE.section}`}>
           Read by <span className="font-mono">{props.read.length}</span>
         </h3>
         <ul>
           {props.read.map((pos) => (
-            <li key={pos.userId} className="flex min-h-[52px] items-center gap-3 py-1">
+            <li key={pos.userId} className="flex min-h-14 items-center gap-3 py-1">
               <PersonTrigger
                 userId={pos.userId}
                 name={nameOf(pos.userId)}
@@ -309,19 +310,19 @@ export function MessageInfoSheet(props: {
               </span>
               {pos.readAt !== null ? (
                 <span className="font-mono text-sm tabular-nums text-fg-3">
-                  {formatTime(pos.readAt, props.timeZone)}
+                  {formatAgo(pos.readAt, new Date(props.nowMs), props.timeZone)}
                 </span>
               ) : null}
             </li>
           ))}
         </ul>
         <div className="my-2 h-px bg-border" aria-hidden="true" />
-        <h3 className="py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <h3 className={`py-2 ${TEXT_ROLE.section}`}>
           Not read yet <span className="font-mono">{props.unread.length}</span>
         </h3>
         <ul>
           {props.unread.map((id) => (
-            <li key={id} className="flex min-h-[52px] items-center gap-3 py-1">
+            <li key={id} className="flex min-h-14 items-center gap-3 py-1">
               <PersonTrigger
                 userId={id}
                 name={nameOf(id)}
@@ -421,7 +422,7 @@ export function WhoReactedSheet(props: {
         {state.kind === 'failed' ? (
           <div className="flex flex-col items-center gap-3 py-6">
             <p className="text-base text-fg-2">{SHEET_LOAD_FAILED}</p>
-            <Button variant="primary" className="min-w-[44px]" onClick={retry}>
+            <Button variant="primary" className="min-w-11" onClick={retry}>
               Retry
             </Button>
           </div>
@@ -477,7 +478,7 @@ export function WhoReactedSheet(props: {
                       </span>
                       {row.mine ? <span className="text-sm text-fg-3">Tap to remove</span> : null}
                     </span>
-                    <span aria-hidden="true" className="text-2xl leading-none">
+                    <span aria-hidden="true" className={EMOJI_PICK_TYPE}>
                       {row.emoji}
                     </span>
                   </>
@@ -493,12 +494,12 @@ export function WhoReactedSheet(props: {
                           props.onRemove(messageId, row.emoji);
                           props.onClose();
                         }}
-                        className="flex h-[52px] items-center gap-3 py-1"
+                        className="flex h-14 items-center gap-3 py-1"
                       >
                         {body}
                       </PressableRow>
                     ) : (
-                      <div className="flex min-h-[52px] items-center gap-3 py-1">{body}</div>
+                      <div className="flex min-h-14 items-center gap-3 py-1">{body}</div>
                     )}
                   </li>
                 );

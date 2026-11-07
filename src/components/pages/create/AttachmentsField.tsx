@@ -179,7 +179,7 @@ export function attachmentItemList(
     return (
       <li
         key={`${item.versionId}-${index}`}
-        className="flex min-h-[44px] w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
+        className="flex min-h-11 w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
       >
         <span className="shrink-0 text-fg-3">
           {item.kind === 'link' ? (
@@ -252,7 +252,7 @@ function FramedMediaTile({
           playsInline
           preload="metadata"
           aria-label={item.name}
-          className={cn('relative', frameMediaClass(frame))}
+          className={cn('relative h-full w-full', frameMediaClass(frame))}
           onLoadedMetadata={(event) =>
             onMeasure(
               item.versionId,
@@ -265,7 +265,7 @@ function FramedMediaTile({
         <img
           src={src}
           alt={item.name}
-          className={cn('relative', frameMediaClass(frame))}
+          className={cn('relative h-full w-full', frameMediaClass(frame))}
           onLoad={(event) =>
             onMeasure(
               item.versionId,
@@ -473,13 +473,13 @@ export function ComposerMediaFrame({
             <span
               data-frame-dots=""
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5"
+              className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-2"
             >
               {media.map(({ item, index }, slide) => (
                 <span
                   key={`${item.versionId}-${index}`}
                   className={cn(
-                    'h-1.5 w-1.5 rounded-full mv-tint',
+                    'h-2 w-2 rounded-full mv-tint',
                     slide === navIndex ? 'bg-overlay-fg' : 'bg-overlay-fg/50',
                   )}
                 />
@@ -988,7 +988,7 @@ export function AttachmentsField({
           <Input
             type="url"
             inputMode="url"
-            placeholder="https://..."
+            placeholder="https://…"
             aria-label="Link URL"
             value={linkUrl}
             disabled={linkBusy}
@@ -1005,10 +1005,11 @@ export function AttachmentsField({
             <Button
               type="button"
               variant="primary"
-              disabled={!linkValid || linkBusy}
+              busy={linkBusy}
+              disabled={!linkValid}
               onClick={() => void submitLink()}
             >
-              {linkBusy ? 'Adding' : 'Add link'}
+              Add link
             </Button>
             <Button type="button" variant="ghost" onClick={() => setLinkOpen(false)}>
               Cancel
@@ -1139,6 +1140,6 @@ export function firstMedia(
 
 function cnPending(error: string | null): string {
   return error !== null
-    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-xl border border-bad lit-bad bg-panel-2 px-3 py-2 lit-card-muted'
-    : 'flex min-h-[44px] w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted';
+    ? 'flex min-h-11 w-full items-center gap-2 rounded-xl border border-bad lit-bad bg-panel-2 px-3 py-2 lit-card-muted'
+    : 'flex min-h-11 w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted';
 }

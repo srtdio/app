@@ -55,8 +55,8 @@ describe('Sidebar and SidePanel positioning (no look change)', () => {
     expect(sidebar).toContain(
       'md:sticky md:top-0 md:h-[100svh] md:self-start pt-[var(--shell-safe-top,0px)]',
     );
-    // Same surface classes as before.
-    expect(sidebar).toContain('w-[244px] shrink-0 border-r bg-panel lit-side');
+    // Same surface classes as before; the width sits on the scale (w-60, 240px).
+    expect(sidebar).toContain('w-60 shrink-0 border-r bg-panel lit-side');
   });
 
   it('SidePanel stays fixed under the top bar (3.5rem when the var is unset)', () => {

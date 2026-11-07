@@ -52,7 +52,7 @@ export function ShareBars({ rows }: { rows: { key: string; name: string; value: 
   const total = rows.reduce((a, r) => a + r.value, 0);
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
-    <ul className="flex flex-col gap-2.5">
+    <ul className="flex flex-col gap-3">
       {rows.map((r) => (
         <li key={r.key} className="flex flex-col gap-1">
           <div className="flex items-baseline gap-2">
@@ -62,7 +62,7 @@ export function ShareBars({ rows }: { rows: { key: string; name: string; value: 
               {shareText(r.value, total)}
             </span>
           </div>
-          <div className="h-1.5 w-full bg-panel-2 lit-well">
+          <div className="h-2 w-full bg-panel-2 lit-well">
             <div
               className="h-full bg-accent lit-fill"
               style={{ width: `${((r.value / max) * 100).toString()}%` }}

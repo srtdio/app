@@ -8,15 +8,15 @@ import { MOVE_CLASS } from '@/lib/motion';
  * any bubble width). About 20px tall, so it hangs 17px below the bubble.
  */
 export const REACTION_BADGE_CLASS =
-  'absolute left-2 top-[calc(100%-3px)] inline-flex items-center gap-0.5 rounded-full border border-border bg-panel px-1.5 py-0.5 lit-pill';
+  'absolute left-2 top-[calc(100%-3px)] inline-flex items-center gap-0.5 rounded-full border border-border bg-panel px-2 py-0.5 lit-pill';
 
 /**
- * The tap target: a ::before grown 14px above and below and 8px each side, so
+ * The tap target: a ::before grown 12px above and below and 8px each side, so
  * the ~20px badge keeps its drawn size and hang while the touch area is at
- * least 44x44 (48 tall; a one-emoji badge is ~30 wide, so 46 wide).
+ * least 44x44 (44 tall; a one-emoji badge is ~32 wide, so 48 wide).
  */
 export const REACTION_BADGE_HIT =
-  "before:absolute before:-inset-x-2 before:-inset-y-3.5 before:content-['']";
+  "before:absolute before:-inset-x-2 before:-inset-y-3 before:content-['']";
 
 interface ReactionBadgeProps {
   /** The spoken summary, e.g. "2 reactions: 👍 🎉". */

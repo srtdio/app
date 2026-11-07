@@ -6,7 +6,7 @@
 // footer wording, media pills and refetch triggers are decided here too.
 
 import type { PostCardRow } from '../../../packages/posts/src/reads';
-import { formatDate, formatDateTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 import { entityUrlPath } from '@/lib/entityRef';
@@ -136,21 +136,21 @@ export function cardFooter(
   post: Pick<PostCardRow, 'stage' | 'approved_at' | 'stage_entered_at'>,
   approverName: string | null,
   side: ViewerSide,
-  /** For tests; the app passes none (the viewer's device zone). */
-  timeZone?: string,
+  /** The shared minute clock's instant; the approval time reads relative to it. */
+  now: Date = new Date(),
 ): CardFooter {
   const plain = { action: 'Open', accent: false, check: false } as const;
   switch (post.stage) {
     case 'approved': {
       if (approverName !== null && post.approved_at !== null) {
-        const at = formatDateTime(post.approved_at, undefined, timeZone);
+        const at = formatAgo(post.approved_at, now);
         return {
           ...plain,
           check: true,
           state: at === '' ? `Approved by ${approverName}` : `Approved by ${approverName} · ${at}`,
         };
       }
-      const on = formatDate(post.stage_entered_at, undefined, timeZone);
+      const on = formatAgo(post.stage_entered_at, now);
       return { ...plain, check: true, state: on === '' ? 'Approved' : `Approved · ${on}` };
     }
     case 'review':

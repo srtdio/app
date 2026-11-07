@@ -13,7 +13,7 @@ import {
   type FileViewerProps,
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
-import { formatDateTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 
 vi.mock('@/lib/files/office/run', () => ({ runOffice: vi.fn() }));
 
@@ -45,12 +45,13 @@ describe('fileViewerDetails', () => {
     expect(fileViewerDetails(undefined, undefined)).toBeNull();
   });
 
-  it('formats sentAt through src/lib/time.ts (date and time)', () => {
+  it('formats sentAt through src/lib/time.ts formatAgo (short past time)', () => {
     const now = new Date('2026-11-04T10:00:00.000Z');
     expect(fileViewerDetails('Maya', AT, now)).toEqual({
       sender: 'Maya',
-      time: formatDateTime(AT, now),
+      time: formatAgo(AT, now),
     });
+    expect(fileViewerDetails('Maya', AT, now)?.time).toBe('23 Oct');
   });
 
   it('either line alone still shows', () => {
@@ -71,7 +72,8 @@ describe('FileViewer chat extras', () => {
     const out = html({ sender: 'Maya', sentAt: AT });
     expect(out).toContain('data-lightbox-details');
     expect(out).toContain('Maya');
-    expect(out).toContain(formatDateTime(AT));
+    // formatAgo: more than 6 days back reads as the day ("23 Oct", year when off-year).
+    expect(out).toMatch(/23 Oct/);
     expect(out).toMatch(/font-mono[^"]*tabular-nums/);
     expect(out).not.toContain('data-show-in-chat');
   });

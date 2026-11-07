@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom';
 import { buttonClass } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconAlertTriangle, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { TRAILING_PULL } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { dimFor, riseIn, riseOut, usePresence } from '@/lib/motion';
@@ -103,7 +104,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
   return createPortal(
     <div
       data-unsafe-sheet=""
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-sheet flex items-end justify-center"
       onClick={(event) => {
         // React events from a portal still bubble through the card's parents
         // (a chat bubble's long-press, a clickable brief card): stop them here.
@@ -129,14 +130,14 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         aria-labelledby="unsafe-link-title"
         // Follows the finger while dragged (and holds there until the exit takes over).
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
-        className="relative flex max-h-[90svh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg lit-overlay will-change-transform"
+        className="relative flex max-h-[90svh] w-full max-w-lg touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 font-sans text-fg lit-overlay will-change-transform"
       >
         {/* The swipe-down handle: grabber, then the title left and the close X
             right (every sheet header). The rest of the sheet scrolls normally
             when it is taller than the screen. */}
         <div
           data-sheet-drag=""
-          className="flex touch-none flex-col gap-3"
+          className="flex touch-none flex-col gap-3 pt-3"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerEnd}
@@ -151,31 +152,31 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
               <IconAlertTriangle size={ICON_SIZE.tray} />
               Check before opening
             </h2>
-            <IconButton label="Close" onClick={onClose} className="-mr-2 shrink-0">
+            <IconButton label="Close" onClick={onClose} className={cn(TRAILING_PULL, 'shrink-0')}>
               <IconX size={ICON_SIZE.control} />
             </IconButton>
           </div>
         </div>
         <p
           data-unsafe-url=""
-          className="break-all rounded-lg border border-border bg-panel-2 lit-well-soft px-2.5 py-2 font-mono text-sm text-fg"
+          className="break-all rounded-lg border border-border bg-panel-2 lit-well-soft px-3 py-2 font-mono text-sm text-fg"
         >
           {url}
         </p>
         {reasons.length > 0 ? (
-          <ul className="flex flex-col gap-1.5 text-base">
+          <ul className="flex flex-col gap-2 text-base">
             {reasons.map((reason) => (
               <li key={reason} className="flex gap-2">
-                <span
-                  aria-hidden="true"
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warn-ink"
-                />
+                <span aria-hidden="true" className="flex h-5 shrink-0 items-center">
+                  <span className="h-2 w-2 rounded-full bg-warn-ink" />
+                </span>
                 {reason}
               </li>
             ))}
           </ul>
         ) : null}
-        <div className="mt-0.5 flex flex-col gap-2">
+        {/* The sheet's bottom inset (16 + the home bar) rides on its last block. */}
+        <div className="mt-0.5 flex flex-col gap-2 pb-[calc(16px+env(safe-area-inset-bottom))]">
           <button
             ref={primaryRef}
             type="button"
@@ -270,7 +271,7 @@ export function UnsafeLinkButton(props: {
       url={props.url}
       reasons={props.reasons}
       className={cn(
-        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-warn-line bg-warn-soft lit-tint px-4 text-base font-medium text-warn-ink focus-visible:lit-focus',
+        'inline-flex h-11 min-h-11 max-w-full items-center gap-2 rounded-lg border border-warn-line bg-warn-soft lit-tint px-4 text-base font-medium text-warn-ink focus-visible:lit-focus',
         props.className,
       )}
     >

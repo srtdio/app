@@ -118,7 +118,7 @@ describe('T8 tray and emoji button by pointer', () => {
     );
     expect(html).toContain('grid-cols-4');
     expect(html.match(/data-tray-tile=/g)).toHaveLength(8);
-    expect(html.match(/h-\[72px\] min-w-\[44px\]/g)).toHaveLength(8);
+    expect(html.match(/h-18 min-w-11/g)).toHaveLength(8);
     const plan = /<button[^>]*data-tray-tile="plan"[^>]*>/.exec(html)?.[0] ?? '';
     expect(plan).toContain('disabled=""');
     expect(plan).toContain('aria-disabled="true"');
@@ -219,9 +219,9 @@ describe('reading layer elements', () => {
     expect(none).not.toContain('data-count-badge');
   });
 
-  it('Seen line is 11/15 muted with a sans tabular time', () => {
+  it('Seen line is 11/14 muted with a sans tabular time', () => {
     const html = renderToStaticMarkup(<SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" />);
-    expect(html).toContain('text-[11px] leading-[15px]');
+    expect(html).toContain('text-xs');
     expect(html).toContain('Seen');
     expect(html).toContain('font-sans tabular-nums');
     expect(html).not.toContain('font-mono');
@@ -264,7 +264,9 @@ describe('reading layer elements', () => {
         ]}
       />,
     );
-    expect(html).toContain(formatTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
+    // The reader's time is short (formatAgo): 06:00Z read, 12:00Z now.
+    expect(html).toContain('>6h<');
+    expect(html).not.toContain(formatTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
     expect(html.match(/font-mono text-sm tabular-nums/g)?.length).toBe(1);
   });
 

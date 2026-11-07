@@ -4,6 +4,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { ChatLayout } from '@/components/chat/chat-type';
 import { Button } from '@/components/ui/Button';
+import { LANE_STRIP } from '@/components/ui/layout';
+import { cn } from '@/lib/cn';
 import {
   HOLD_TIP_DISMISS,
   HOLD_TIP_TEXT,
@@ -19,10 +21,14 @@ export function holdTipView(onDismiss: () => void, layout: ChatLayout = 'touch')
     <div
       data-hold-tip=""
       role="note"
-      className="mx-3 mb-2 flex items-center gap-3 rounded-xl border bg-panel-2 py-1 pl-3 pr-1 text-base text-fg-2 lit-card-muted"
+      data-lane="strip"
+      className={cn(
+        LANE_STRIP,
+        'flex items-center gap-3 rounded-xl border bg-panel-2 py-1 pl-3 pr-1 text-base text-fg-2 lit-card-muted',
+      )}
     >
       <p className="min-w-0 flex-1">{layout === 'laptop' ? HOLD_TIP_TEXT_LAPTOP : HOLD_TIP_TEXT}</p>
-      <Button type="button" variant="link" onClick={onDismiss} className="min-w-[44px] shrink-0">
+      <Button type="button" variant="link" onClick={onDismiss} className="min-w-11 shrink-0">
         {HOLD_TIP_DISMISS}
       </Button>
     </div>

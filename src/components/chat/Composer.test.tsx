@@ -346,7 +346,7 @@ describe('About bar', () => {
 
   it('renders the reply bar grammar: accent rule, 32px thumb, "About" over the title', () => {
     const html = renderToStaticMarkup(<AboutBar post={post} onCancel={() => {}} />);
-    expect(html).toContain('w-[3px]');
+    expect(html).toContain('w-1 shrink-0 self-stretch rounded-full');
     expect(html).toContain('bg-accent');
     expect(html).toContain('h-8 w-8');
     expect(html).toMatch(/text-accent[^>]*>About</);
@@ -403,7 +403,7 @@ describe('About bar while its post loads (F14)', () => {
 describe('editing mode', () => {
   it('the editing bar: warn rule, "Editing your message" over the old text, a 44px X that cancels', () => {
     const html = renderToStaticMarkup(<EditingBar text="old words" onCancel={() => {}} />);
-    expect(html).toContain('w-[3px]');
+    expect(html).toContain('w-1 shrink-0 self-stretch rounded-full');
     expect(html).toContain('bg-warn');
     expect(html).not.toContain('bg-accent');
     expect(html).toMatch(new RegExp(`text-warn[^>]*>${EDITING_BAR_TITLE}<`));

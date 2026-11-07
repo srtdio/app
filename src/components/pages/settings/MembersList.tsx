@@ -12,6 +12,9 @@ import { Button } from '@/components/ui/Button';
 import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { Tag } from '@/components/ui/Tag';
+import { Row, type RowProps } from '@/components/ui/Row';
+import { cardSurface } from '@/components/ui/Card';
+import { cn } from '@/lib/cn';
 import {
   ICON_SIZE,
   IconLock,
@@ -32,6 +35,9 @@ import type { InviteRole, RoleChoice } from './MembersInviteForm';
 import { canChangeMemberRole } from './MemberActionSheet';
 import { formatJoined, isUndelivered, memberEmailTag, roleLabel } from './members-data';
 import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './members-data';
+import { Input } from '@/components/ui/Input';
+import { Text } from '@/components/ui/Text';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
 
@@ -43,19 +49,30 @@ function SelfChip() {
   return <Tag label="You" tone="accent" />;
 }
 
-/** Catch-up emails, read-only: owner and admin viewers only (UI rule). */
-function EmailTag({ member, canManage }: { member: MemberEntry; canManage: boolean }) {
+/** The email mark's name, read by a screen reader and shown on hover. */
+export const EMAIL_ON_LABEL = 'Catch-up emails on';
+export const EMAIL_OFF_LABEL = 'Catch-up emails off';
+
+/**
+ * Catch-up emails, read-only: owner and admin viewers only (UI rule). A small
+ * grey mail glyph after the name (struck through when off), never a tag: the
+ * row's one tag is the role.
+ */
+function EmailMark({ member, canManage }: { member: MemberEntry; canManage: boolean }) {
   const tag = memberEmailTag(member, canManage);
   if (tag === null) return null;
-  return tag === 'on' ? (
-    <Tag label="On" tone="neutral" icon={IconMail} className="shrink-0 whitespace-nowrap" />
-  ) : (
-    <Tag
-      label="Emails off"
-      tone="neutral"
-      icon={IconMailOff}
-      className="shrink-0 whitespace-nowrap"
-    />
+  const label = tag === 'on' ? EMAIL_ON_LABEL : EMAIL_OFF_LABEL;
+  const Icon = tag === 'on' ? IconMail : IconMailOff;
+  return (
+    <span
+      data-member-email-mark={tag}
+      role="img"
+      aria-label={label}
+      title={label}
+      className="inline-flex shrink-0 text-fg-3"
+    >
+      <Icon size={ICON_SIZE.inline} />
+    </span>
   );
 }
 
@@ -94,72 +111,100 @@ export function memberActionItems(
   ];
 }
 
-interface RowProps extends MemberActions {
+interface MemberRowProps extends MemberActions {
   member: MemberEntry;
   canManage: boolean;
+  /** Divider under the row (every row but the group's last). */
+  divider: boolean;
+  /** The shared minute clock's instant (the list's useMinuteClock): joined reads as a record (formatAdded) against it. */
+  now: Date;
 }
 
-function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) {
-  const joined = formatJoined(member.acceptedAt);
+/**
+ * One member on ui/Row: photo, name (with You and the email mark), joined date,
+ * email under it with the role tag at its end, then the ⋯ (the trigger owns the
+ * trailing rule, so its glyph ends on the content edge) or the owner's lock.
+ */
+function MemberRowItem({
+  member,
+  canManage,
+  divider,
+  now,
+  onChangeRole,
+  onRemove,
+}: MemberRowProps) {
+  const joined = formatJoined(member.acceptedAt, now);
   const hasMenu = canManage && !member.isOwner;
   // Long-press on touch and right-click on laptop open the row's ⋯ menu.
   const [menuOpen, setMenuOpen] = useState(false);
   const gesture = useMenuGesture(() => setMenuOpen(true));
-  return (
-    <div
-      data-member-row={member.userId}
-      {...(hasMenu ? gesture.handlers : {})}
-      className="flex items-center gap-3 px-4 py-3"
-    >
-      <PersonTrigger
-        userId={member.userId}
-        name={member.displayName}
-        avatarUrl={member.avatarUrl}
-        display="block"
-      >
-        <Avatar
-          name={member.displayName}
-          {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-          role="row"
-        />
-      </PersonTrigger>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-base font-medium text-fg">
-            <PersonTrigger
-              userId={member.userId}
-              name={member.displayName}
-              avatarUrl={member.avatarUrl}
-            >
-              {member.displayName}
-            </PersonTrigger>
+  const trailing: RowProps['trailing'] = member.isOwner
+    ? {
+        kind: 'node',
+        node: (
+          // A read-only mark, not a control: its glyph sits on the content edge.
+          <span
+            role="img"
+            className="flex text-fg-3"
+            title={OWNER_LOCK_TITLE}
+            aria-label={OWNER_LOCK_TITLE}
+          >
+            <IconLock size={ICON_SIZE.control} />
           </span>
-          {member.isSelf ? <SelfChip /> : null}
-          <EmailTag member={member} canManage={canManage} />
-        </div>
-        {member.email !== null ? (
-          <div className="truncate text-sm text-fg-3">{member.email}</div>
-        ) : null}
-      </div>
-      <RoleBadge role={member.role} />
-      {joined !== null ? <span className="hidden text-sm text-fg-3 sm:block">{joined}</span> : null}
-      {member.isOwner ? (
-        <span
-          className="inline-flex h-11 w-11 items-center justify-center text-fg-3"
-          title={OWNER_LOCK_TITLE}
-          aria-label={OWNER_LOCK_TITLE}
-        >
-          <IconLock size={ICON_SIZE.control} />
-        </span>
-      ) : canManage ? (
-        <ActionMenu
-          title={member.displayName}
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          items={memberActionItems(member, canManage, { onChangeRole, onRemove })}
-          trigger={<ActionMenuTrigger label={`Actions for ${member.displayName}`} />}
-        />
-      ) : null}
+        ),
+      }
+    : canManage
+      ? {
+          kind: 'more',
+          menu: (
+            <ActionMenu
+              title={member.displayName}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              items={memberActionItems(member, canManage, { onChangeRole, onRemove })}
+              trigger={<ActionMenuTrigger label={`Actions for ${member.displayName}`} />}
+            />
+          ),
+        }
+      : undefined;
+  return (
+    <div data-member-row={member.userId} {...(hasMenu ? gesture.handlers : {})}>
+      <Row
+        leading={
+          <PersonTrigger
+            userId={member.userId}
+            name={member.displayName}
+            avatarUrl={member.avatarUrl}
+            display="block"
+          >
+            <Avatar
+              name={member.displayName}
+              {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
+              role="header"
+            />
+          </PersonTrigger>
+        }
+        title={
+          <span className="inline-flex min-w-0 max-w-full items-center gap-2 align-bottom">
+            <span data-member-name="" className="min-w-0 truncate">
+              <PersonTrigger
+                userId={member.userId}
+                name={member.displayName}
+                avatarUrl={member.avatarUrl}
+              >
+                {member.displayName}
+              </PersonTrigger>
+            </span>
+            {member.isSelf ? <SelfChip /> : null}
+            <EmailMark member={member} canManage={canManage} />
+          </span>
+        }
+        {...(joined !== null ? { time: <span className="hidden sm:inline">{joined}</span> } : {})}
+        {...(member.email !== null ? { secondary: member.email } : {})}
+        badge={<RoleBadge role={member.role} />}
+        {...(trailing !== undefined ? { trailing } : {})}
+        divider={divider}
+      />
     </div>
   );
 }
@@ -179,10 +224,12 @@ function PendingRowItem({
   canManage,
   cancelling,
   roleOptions,
+  divider,
   onCancelInvite,
   onEditInvite,
 }: {
   member: MemberEntry;
+  divider: boolean;
   info: PendingInfo;
   canManage: boolean;
   cancelling: boolean;
@@ -192,10 +239,10 @@ function PendingRowItem({
 }) {
   const [editing, setEditing] = useState(false);
 
-  return (
-    <div className="flex items-start gap-3 px-4 py-3">
-      <Avatar name={info.email} role="row" />
-      {editing ? (
+  if (editing) {
+    return (
+      <div className="flex items-start gap-3 px-4 py-3">
+        <Avatar name={info.email} role="header" />
         <PendingEditFields
           member={member}
           info={info}
@@ -203,29 +250,40 @@ function PendingRowItem({
           onEditInvite={onEditInvite}
           onClose={() => setEditing(false)}
         />
-      ) : (
-        <>
-          <div className="min-w-0 flex-1 self-center">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="min-w-0 truncate text-base font-medium text-fg">{info.email}</span>
-              <Tag label="Invited" tone="neutral" />
-              {info.undelivered ? <Tag label="Not delivered" tone="bad" /> : null}
-            </div>
-            <div className="truncate text-sm text-fg-3">{inviteRoleLabel(member.role)}</div>
-          </div>
-          {canManage ? (
-            <div className="flex shrink-0 items-center gap-1 self-center">
-              <Button variant="ghost" disabled={cancelling} onClick={() => setEditing(true)}>
-                Edit
-              </Button>
-              <Button disabled={cancelling} onClick={() => onCancelInvite(member)}>
-                {cancelling ? 'Cancelling' : 'Cancel'}
-              </Button>
-            </div>
-          ) : null}
-        </>
-      )}
-    </div>
+      </div>
+    );
+  }
+  return (
+    <Row
+      leading={<Avatar name={info.email} role="header" />}
+      title={
+        <span className="inline-flex min-w-0 max-w-full items-center gap-2 align-bottom">
+          <span className="min-w-0 truncate">{info.email}</span>
+          <Tag label="Invited" tone="neutral" />
+          {info.undelivered ? <Tag label="Not delivered" tone="bad" /> : null}
+        </span>
+      }
+      secondary={inviteRoleLabel(member.role)}
+      {...(canManage
+        ? {
+            trailing: {
+              kind: 'node' as const,
+              // Text buttons (a group, so the trailing pull for a bare 44 icon never applies).
+              node: (
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" disabled={cancelling} onClick={() => setEditing(true)}>
+                    Edit
+                  </Button>
+                  <Button disabled={cancelling} onClick={() => onCancelInvite(member)}>
+                    {cancelling ? 'Cancelling' : 'Cancel'}
+                  </Button>
+                </div>
+              ),
+            },
+          }
+        : {})}
+      divider={divider}
+    />
   );
 }
 
@@ -296,7 +354,7 @@ function PendingEditFields({
       }}
     >
       <div className="flex items-center gap-2">
-        <input
+        <Input
           ref={inputRef}
           type="text"
           inputMode="email"
@@ -312,7 +370,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-lg border border-field bg-panel-2 lit-well px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:lit-focus md:text-base"
+          className="min-w-0 flex-1"
         />
         <RolePicker
           label={`Role for ${trimmed}`}
@@ -361,18 +419,22 @@ function Group({
   emptyText: string;
   children: ReactNode;
 }) {
+  // One lit card per group; its label is the card's header (lit-header, as on
+  // main), the rows under it.
   return (
-    <section aria-label={title} className="overflow-hidden rounded-xl border bg-panel lit-card">
-      <header className="border-b lit-header px-4 py-3">
+    <section aria-label={title} className={cn('overflow-hidden', cardSurface())}>
+      <header className="border-b px-4 py-3 lit-header">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{title}</h3>
+          <Text as="h3" role="section">
+            {title}
+          </Text>
           <span className="text-sm text-fg-3">{count}</span>
         </div>
         {subtitle !== undefined && subtitle !== '' ? (
           <p className="mt-0.5 truncate text-sm text-fg-3">{subtitle}</p>
         ) : null}
       </header>
-      <div className="divide-y divide-border">
+      <div data-members-group="">
         {count === 0 ? <p className="px-4 py-3 text-base text-fg-2">{emptyText}</p> : children}
       </div>
     </section>
@@ -417,19 +479,22 @@ export function MembersList({
   onEditInvite,
 }: MembersListProps) {
   const { agency, client, pending } = derived;
+  const now = new Date(useMinuteClock());
 
-  const renderActive = (member: MemberEntry) => (
+  const renderActive = (member: MemberEntry, index: number, all: readonly MemberEntry[]) => (
     <MemberRowItem
       key={member.id}
       member={member}
       canManage={canManage}
+      divider={index < all.length - 1}
+      now={now}
       onChangeRole={onChangeRole}
       onRemove={onRemove}
     />
   );
 
   return (
-    <div className="flex max-w-[720px] flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <Group
         title="Approvers"
         {...(clientName !== null ? { subtitle: clientName } : {})}
@@ -444,7 +509,7 @@ export function MembersList({
       </Group>
 
       <Group title="Invited" count={pending.length} emptyText="People you invite show up here.">
-        {pending.map((member) => {
+        {pending.map((member, index) => {
           const known = pendingEmails.get(member.id);
           return (
             <PendingRowItem
@@ -458,6 +523,7 @@ export function MembersList({
               canManage={canManage}
               cancelling={cancellingId === member.id}
               roleOptions={roleOptions}
+              divider={index < pending.length - 1}
               onCancelInvite={onCancelInvite}
               onEditInvite={onEditInvite}
             />

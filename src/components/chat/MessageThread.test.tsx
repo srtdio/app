@@ -129,7 +129,7 @@ import {
   sized,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { formatTime } from '@/lib/time';
+import { formatAgo, formatTime } from '@/lib/time';
 import { Link } from 'react-router-dom';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { UploadRing } from '@/components/chat/UploadRing';
@@ -465,10 +465,10 @@ describe('bubble shell', () => {
     expect(touchHead.filter((c) => c.startsWith('rounded-'))).toEqual(['rounded-[18px]']);
   });
 
-  it('caps rows at 76% and spaces rows 2px in a run, 10px between runs', () => {
+  it('caps rows at 76% and spaces rows 2px in a run, 12px between runs', () => {
     const headRow = renderBubble(makeMessage({}), { head: true });
     const tucked = renderBubble(makeMessage({}), { head: false });
-    expect(rootClass(headRow)).toContain('pt-2.5');
+    expect(rootClass(headRow)).toContain('pt-3');
     expect(rootClass(tucked)).toContain('pt-0.5');
     expect(rootClass(headRow)).not.toContain('py-2');
     let column = '';
@@ -497,11 +497,9 @@ describe('in-bubble meta and ticks', () => {
     const delivered = renderStrip(renderBubble(own({ status: 'sent' }), { showTicks: true }));
     expect(delivered).toContain('data-tick="delivered"');
     expect(delivered).toContain('aria-label="Delivered"');
-    expect(delivered).toContain('text-[color:var(--bubble-meta-own)]');
+    expect(delivered).toContain('text-bubble-meta-own');
     const read = renderStrip(renderBubble(own({ status: 'read' }), { showTicks: true }));
-    expect(read).toMatch(
-      /data-tick="read"[^>]*text-\[color:var\(--tick-read\)\]|text-\[color:var\(--tick-read\)\][^>]*data-tick="read"/,
-    );
+    expect(read).toMatch(/data-tick="read"[^>]*text-tick-read|text-tick-read[^>]*data-tick="read"/);
     // The tick box is 20x12, the shared double tick's box.
     expect(read).toMatch(/viewBox="0 0 20 12"/);
     expect(read).toContain('h-3 w-5');
@@ -509,7 +507,7 @@ describe('in-bubble meta and ticks', () => {
 
   it('peer meta takes the peer meta token; no tick', () => {
     const html = renderStrip(renderBubble(makeMessage({}), { showTicks: true }));
-    expect(html).toContain('text-[color:var(--bubble-meta)]');
+    expect(html).toContain('text-bubble-meta');
     expect(html).not.toContain('data-tick');
   });
 
@@ -518,7 +516,7 @@ describe('in-bubble meta and ticks', () => {
     expect(metaOf(root)?.meta.status).toBe('sending');
     const html = renderStrip(root);
     expect(html).toContain('data-tick="sending"');
-    expect(html).toContain('text-[color:var(--bubble-meta-own)]');
+    expect(html).toContain('text-bubble-meta-own');
     let bubble = '';
     walk(root, (el) => {
       const props = el.props as Record<string, unknown>;
@@ -551,7 +549,7 @@ describe('in-bubble meta and ticks', () => {
         'top-1/2',
         '-translate-y-1/2',
         'h-11',
-        'min-w-[44px]',
+        'min-w-11',
         'text-bad',
       ]),
     );
@@ -671,7 +669,7 @@ describe('in-bubble meta and ticks', () => {
       }),
     );
     expect(pill).toContain('bg-[color:var(--media-meta-bg)]');
-    expect(pill).toContain('text-[color:var(--media-meta-fg)]');
+    expect(pill).toContain('text-media-meta');
     // Media with a caption, or with cards or other files, takes the row.
     expect(metaPlacement({ ...image, body: 'look', sharedPostIds: ['p'] })).toBe('row');
     expect(
@@ -959,7 +957,7 @@ describe('MessageBubble keyboard and hover actions', () => {
     const cls = String(button?.props.className);
     expect(button?.props['aria-label']).toBe('Message options');
     // A PressableRow (inline): 44 tall with a 44px width floor.
-    expect(cls).toContain('h-11 min-w-[44px]');
+    expect(cls).toContain('h-11 min-w-11');
     expect(cls).toContain('absolute right-0 top-0');
     expect(cls).toContain('group-hover/bubble:opacity-100');
     expect(cls).toContain('focus-visible:opacity-100');
@@ -1032,7 +1030,7 @@ describe('voice-only bubble', () => {
       if (props['data-bubble'] !== undefined) cls = props.className ?? '';
     });
     expect(cls).toContain('rounded-[18px]');
-    expect(cls).toContain('min-w-[220px]');
+    expect(cls).toContain('min-w-56');
     expect(metaOf(root)).toMatchObject({ placement: 'row', meta: { time: T_UTC } });
   });
 
@@ -1214,9 +1212,9 @@ describe('label spacing', () => {
   it('a head directly under a day pill gets no top padding', () => {
     const flush = rootClass(renderBubble(makeMessage({}), { head: true, afterLabel: true }));
     expect(flush).toContain('pt-0');
-    expect(flush).not.toContain('pt-2.5');
-    // Between runs with no label the gap stays 10px.
-    expect(rootClass(renderBubble(makeMessage({}), { head: true }))).toContain('pt-2.5');
+    expect(flush).not.toContain('pt-3');
+    // Between runs with no label the gap stays 12px.
+    expect(rootClass(renderBubble(makeMessage({}), { head: true }))).toContain('pt-3');
   });
 
   it('the day pill carries the 6px gap below it', () => {
@@ -1308,7 +1306,7 @@ describe('own-bubble inner content', () => {
       expect(badge.split(' ')).toContain('top-[calc(100%-3px)]');
       expect(badge).not.toMatch(/(^| )-?bottom-/);
       // The meta starts 3px or more above the bubble's bottom (or sits in flow above it).
-      expect(meta).toMatch(/bottom-\[3px\]|bottom-2|mt-1 flex justify-end/);
+      expect(meta).toMatch(/bottom-1\b|bottom-2|mt-1 flex justify-end/);
       expect(rootClass(root).split(' ')).toContain(REACTION_ROW_SPACE);
     }
     // 20px of room below: the ~17px overhang never touches the next bubble.
@@ -1401,8 +1399,8 @@ describe('image album and viewer', () => {
       voiceOnly: false,
       album: true,
     });
-    expect(cls).toContain('p-[3px]');
-    expect(cls).toContain('min-w-[240px]');
+    expect(cls).toContain('p-1');
+    expect(cls).toContain('min-w-60');
     expect(cls).not.toContain('px-3');
   });
 
@@ -1429,8 +1427,9 @@ describe('image album and viewer', () => {
     expect(onOpenImage).toHaveBeenCalledWith(2);
   });
 
-  it('the viewer gets the image list only, with sender and the clock time', () => {
-    const { images, details } = threadLightbox(albumMessage, PROFILES, 'Asia/Kolkata');
+  it('the viewer gets the image list only, with sender and when it was sent (formatAgo)', () => {
+    const now = new Date('2026-11-06T12:00:00Z');
+    const { images, details } = threadLightbox(albumMessage, PROFILES, now);
     expect(images).toEqual([
       { assetId: 'v-1', name: 'p1.png' },
       { assetId: 'v-2', name: 'p2.png' },
@@ -1438,7 +1437,7 @@ describe('image album and viewer', () => {
     ]);
     expect(details).toEqual({
       sender: 'Alice',
-      time: formatTime(albumMessage.createdAt, 'Asia/Kolkata'),
+      time: formatAgo(albumMessage.createdAt, now),
     });
   });
 
@@ -1455,7 +1454,7 @@ describe('image album and viewer', () => {
         },
       ],
     });
-    const { images, details } = threadLightbox(message, PROFILES, 'UTC');
+    const { images, details } = threadLightbox(message, PROFILES);
     expect(images).toEqual([{ assetId: '', name: 'p.png', src: 'blob:p' }]);
     expect(details.sender).toBe('You');
   });
@@ -1583,11 +1582,11 @@ describe('swipe to reply', () => {
 });
 
 describe('bubble text sizes', () => {
-  it('body text comes from chat-type: 17/22 touch, 14/19 laptop', () => {
+  it('body text comes from chat-type: 17/22 touch, 14/20 laptop', () => {
     expect(bodyText('touch')).toContain(BUBBLE_BODY_TYPE.touch);
     expect(bodyText('laptop')).toContain(BUBBLE_BODY_TYPE.laptop);
-    expect(BUBBLE_BODY_TYPE.touch).toContain('text-[17px] leading-[22px]');
-    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-[14px] leading-[19px]');
+    expect(BUBBLE_BODY_TYPE.touch).toContain('text-xl');
+    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-base');
   });
 
   it('the in-bubble quote uses the chat-type quote sizes; the composer bar keeps its own', () => {
@@ -1600,14 +1599,14 @@ describe('bubble text sizes', () => {
     expect(bar).not.toContain(QUOTE_TEXT_TYPE.touch);
   });
 
-  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 6/7/8/9, 65%', () => {
+  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 8, 65%', () => {
     const shape = { mine: false, head: false, tail: false, failed: false, voiceOnly: false };
     const touch = bubbleClass({ ...shape, layout: 'touch' });
     expect(touch).toContain('px-3 py-2');
     expect(touch).toContain('rounded-[18px]');
     const laptop = bubbleClass({ ...shape, layout: 'laptop' });
     expect(laptop).toContain('rounded-xl');
-    expect(laptop).toContain('pb-[8px] pl-[9px] pr-[7px] pt-[6px]');
+    expect(laptop).toContain('p-2');
     for (const cls of [touch, laptop]) expect(cls).not.toContain('md:');
     const columnOf = (layout: ChatLayout): string => {
       let column = '';
@@ -1624,7 +1623,7 @@ describe('bubble text sizes', () => {
 
   it('meta, day pill and typing row sizes come from chat-type', () => {
     expect(renderStrip(renderBubble(makeMessage({})))).toContain(BUBBLE_META_TYPE);
-    expect(BUBBLE_META_TYPE).toContain('text-[11px] leading-[15px]');
+    expect(BUBBLE_META_TYPE).toContain('text-xs');
     let pill = '';
     walk(DayPill({ label: 'Today', layout: 'touch' }), (el) => {
       const c = (el.props as { className?: string }).className ?? '';
@@ -1646,7 +1645,7 @@ describe('header online dot', () => {
     expect(headerAvatarPresence(undefined)).toBeUndefined();
   });
 
-  it('the dot is a 10px good circle with a 2px panel outline at the bottom-right, lit', () => {
+  it('the dot is a 12px good circle with a 2px panel outline at the bottom-right, lit', () => {
     const dots: string[] = [];
     walk(Avatar({ name: 'Alice', role: 'header', presence: 'online' }), (el) => {
       const props = el.props as Record<string, unknown>;
@@ -1654,8 +1653,8 @@ describe('header online dot', () => {
     });
     expect(dots).toHaveLength(1);
     for (const token of [
-      'h-2.5',
-      'w-2.5',
+      'h-3',
+      'w-3',
       'rounded-full',
       'bg-good',
       'outline-2',
@@ -3334,7 +3333,7 @@ describe('@mentions in bubbles', () => {
     const me = els.find((el) => el.props['data-mention'] === ME);
     const gone = els.find((el) => el.props['data-mention'] === GONE);
     expect(ben?.type).toBe(PressableRow);
-    expect(String(ben?.props.className)).toContain('before:h-[44px]');
+    expect(String(ben?.props.className)).toContain('before:h-11');
     const target = {} as HTMLElement;
     const event = { stopPropagation: vi.fn(), currentTarget: target };
     (ben?.props.onClick as (e: typeof event) => void)(event);
@@ -3567,7 +3566,7 @@ describe('A3 "@all" renders bold, as a mention of me for recipients, and inert',
     expect(group).toContain('data-mention-option="all"');
     expect(group).toContain('@all');
     expect(group).toContain('Everyone in this group');
-    expect(group.match(/min-h-\[44px\]/g)).toHaveLength(2);
+    expect(group.match(/min-h-11/g)).toHaveLength(2);
     const dm = renderStrip(
       <MentionPicker
         members={mentionPickerRows(members, '', null, false)}

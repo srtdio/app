@@ -31,7 +31,7 @@ import { Bone } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
 import { knownMentionName, resolveMentionText, withFormer, type NameOf } from '@/lib/chat/mentions';
-import { formatChatTime } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import { stripFormat } from '@srtdio/comments';
 import type { Result } from '@srtdio/rpc';
@@ -338,7 +338,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
           <span
             data-starred-bubble={props.mine ? 'own' : 'peer'}
             className={cn(
-              'max-w-[92%] self-start whitespace-pre-wrap px-3 py-2 text-lg leading-5',
+              'max-w-[92%] self-start whitespace-pre-wrap px-3 py-2 text-lg',
               BUBBLE_SHAPE.touch,
               props.fullText === true
                 ? 'min-w-0 [overflow-wrap:anywhere]'
@@ -513,7 +513,7 @@ export function StarredList(props: StarredListProps): ReactElement {
               null)
             : null,
         mine: row.senderUserId !== null && row.senderUserId === currentUserId,
-        date: formatChatTime(row.createdAt, new Date(nowMs), props.timeZone),
+        date: formatAgo(row.createdAt, new Date(nowMs)),
         text: starredRowText(row, nameOf),
         // The all-chats list (chat home's Starred chip) shows every line.
         fullText: props.channelId === null,
@@ -614,12 +614,15 @@ export function starredListView(props: StarredListViewProps): ReactElement {
     body = <StarredEmpty />;
   } else if (feed.status === 'loading' && feed.rows.length === 0) {
     body = (
-      <ul data-starred-loading="" className="flex flex-col gap-2.5">
+      <ul data-starred-loading="" className="flex flex-col gap-3">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li key={i} className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card">
+          <li
+            key={`bone-${i}`}
+            className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card"
+          >
             <div className="flex items-center gap-2">
               <Bone as="div" lit="lit-avatar" className="h-5 w-5 shrink-0 rounded-full" />
-              <Bone as="div" lit="flat" className="h-3.5 w-1/3 rounded" />
+              <Bone as="div" lit="flat" className="h-3 w-1/3 rounded" />
             </div>
             <Bone as="div" lit="lit-bubble-other" className={cn('h-8 w-2/3', BUBBLE_SHAPE.touch)} />
           </li>
@@ -641,7 +644,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
       );
   } else {
     body = (
-      <ul data-starred-rows="" className="flex flex-col gap-2.5">
+      <ul data-starred-rows="" className="flex flex-col gap-3">
         {shown.map((row) => (
           <StarredRowView
             key={row.id}
@@ -687,7 +690,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
             variant="link"
             data-starred-edit={editing ? 'done' : 'edit'}
             onClick={() => onEditingChange(!editing)}
-            className="min-w-[44px]"
+            className="min-w-11"
           >
             {editing ? 'Done' : 'Edit'}
           </Button>
@@ -762,7 +765,7 @@ export function StarredSheet(props: {
             variant="link"
             data-starred-edit={editing ? 'done' : 'edit'}
             onClick={() => setEditing((on) => !on)}
-            className="min-w-[44px] shrink-0"
+            className="min-w-11 shrink-0"
           >
             {editing ? 'Done' : 'Edit'}
           </Button>

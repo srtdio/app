@@ -74,11 +74,11 @@ describe('New plan rows', () => {
     expect(html).toContain('data-plan-compose-flag="need"');
     expect(html).toContain('border-warn bg-warn-soft');
     expect(html).toMatch(
-      /class="[^"]*h-11 min-h-\[44px\][^"]*rounded-lg[^"]*"[^>]*data-plan-day-button="need"/,
+      /class="[^"]*h-11 min-h-11[^"]*rounded-lg[^"]*"[^>]*data-plan-day-button="need"/,
     );
     expect(html).toContain('Pick a day');
     expect(html).toContain('Dated Mon 2 Nov, outside this plan. Pick a day.');
-    expect(html).toContain('Post · In review');
+    expect(html).toContain('Post · Review');
     const x = html.slice(html.lastIndexOf('<button', html.indexOf('data-plan-compose-remove')));
     expect(x).toContain('h-11 w-11');
     expect(x).toContain('aria-label="Remove Festive teaser carousel"');
@@ -129,7 +129,8 @@ describe('New plan create: one call, never half built', () => {
     expect(src.match(/planCreateWithItems\(/g)).toHaveLength(1);
     expect(src).not.toMatch(/planCreate\(|planConceptAdd|planPostsAdd|runPlanShare/);
     expect(src).not.toMatch(/'Retry'|locked=|const locked/);
-    expect(src).toContain("CREATING_LABEL = 'Creating…'");
+    // In flight is Button busy on Create plan (label kept), never a swap.
+    expect(src).toMatch(/data-plan-create=""[^>]*?busy=\{busy\}/s);
     expect(src).toContain('if (inFlight.current) return;');
   });
 

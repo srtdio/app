@@ -67,9 +67,9 @@ afterEach(() => {
 describe('Pipeline polish: empty stage', () => {
   it('EmptyState drops its 320px min-height only when compact', () => {
     const tall = renderToStaticMarkup(<EmptyState icon={null} title="x" />);
-    expect(tall).toContain('min-h-[320px]');
+    expect(tall).toContain('min-h-80');
     const compact = renderToStaticMarkup(<EmptyState icon={null} title="x" compact />);
-    expect(compact).not.toContain('min-h-[320px]');
+    expect(compact).not.toContain('min-h-80');
   });
 
   it('an empty stage keeps the icon and its one line, with no New post button', () => {
@@ -78,7 +78,7 @@ describe('Pipeline polish: empty stage', () => {
     expect(out).toContain('<svg');
     expect(out).not.toContain('>New post<');
     expect(out).not.toContain('<button');
-    expect(out).not.toContain('min-h-[320px]');
+    expect(out).not.toContain('min-h-80');
   });
 
   it('the phone feed empty stage is the compact one, with no New post', () => {
@@ -92,7 +92,7 @@ describe('Pipeline polish: empty stage', () => {
       />,
     );
     expect(out).toContain('data-stage-empty="parked"');
-    expect(out).not.toContain('min-h-[320px]');
+    expect(out).not.toContain('min-h-80');
     expect(out).not.toContain('>New post<');
   });
 });

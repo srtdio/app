@@ -80,7 +80,11 @@ describe('CommentComposer on ui/Composer', () => {
     const field = row.querySelector('[data-composer-field]');
     expect(field?.querySelector('[contenteditable="true"]')).not.toBeNull();
 
-    const order = Array.from(row.children).map((el) =>
+    // The side slot (data-composer-side) is a wrapper; its buttons keep their place in the row.
+    const cells = Array.from(row.children).flatMap((el) =>
+      el.hasAttribute('data-composer-side') ? Array.from(el.children) : [el],
+    );
+    const order = cells.map((el) =>
       el.hasAttribute('data-composer-field')
         ? 'field'
         : (el.querySelector('button')?.getAttribute('aria-label') ??

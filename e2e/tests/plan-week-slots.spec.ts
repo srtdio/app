@@ -58,8 +58,8 @@ function viewAsClient(network: HarnessNetwork): void {
 
 /**
  * A1: the row is date tile | title block | thumbnail, then the PLAN and POST
- * lines. The thumbnail (56px) sits 29px from the viewport's right edge (the
- * day card's 16px gutter, 1px edge and 12px padding); the
+ * lines. The thumbnail (56px) sits 33px from the viewport's right edge (the
+ * day card's 16px gutter, 1px edge and 16px padding, ui/Card); the
  * day's one date tile (56x56) sits left of the rows, its top level with the
  * day's first thumbnail.
  */
@@ -73,7 +73,7 @@ async function expectRowLayout(page: Page, itemId: string): Promise<void> {
   expect(row !== null && thumb !== null && viewport !== null).toBe(true);
   if (row === null || thumb === null || viewport === null) return;
   expect(Math.round(thumb.width)).toBe(56);
-  expect(Math.round(viewport.width - (thumb.x + thumb.width))).toBe(16 + 1 + 12);
+  expect(Math.round(viewport.width - (thumb.x + thumb.width))).toBe(16 + 1 + 16);
   const day = page.locator('[data-plan-day]').filter({ has: wrap });
   await expect(day.locator('[data-plan-day-col]')).toHaveCount(1);
   const col = await day.locator('[data-plan-day-col]').boundingBox();
@@ -444,7 +444,7 @@ async function boxOf(locator: ReturnType<Page['locator']>) {
   return box;
 }
 
-test('header: agency sees the 28px title, then boxed Add on line 2 (no Edit); a client sees no buttons', async ({
+test('header: agency sees the HeaderBar title (title role), then Add on the 16px edge (no Edit); a client sees no buttons', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -455,16 +455,16 @@ test('header: agency sees the 28px title, then boxed Add on line 2 (no Edit); a 
   const viewport = page.viewportSize();
   if (viewport === null) throw new Error('viewport');
 
-  // Line 1: back then the title button (28px, chevron); nothing else.
-  const line1 = plan.locator('[data-plan-header-line="1"]');
-  const line2 = plan.locator('[data-plan-header-line="2"]');
-  const title = line1.locator('[data-plan-title-menu] h2');
-  await expect(title).toHaveCSS('font-size', '28px');
+  // The one bar: back, the title button (title role, chevron) over its subline, then Add.
+  const bar = plan.locator('[data-header-bar]');
+  const title = bar.locator('[data-plan-title-menu] [data-plan-title-text]');
+  await expect(title).toHaveCSS('font-size', '15px');
   await expect(title).toHaveCSS('font-weight', '600');
-  await expect(line1.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
-  // The plan screen slides in: wait until line 2 holds still across one
-  // animation frame (max 5s), then read both lines in the same frame.
-  await line2.evaluate(
+  await expect(bar.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
+  await expect(bar.locator('[data-plan-edit]')).toHaveCount(0);
+  // The plan screen slides in: wait until the bar holds still across one
+  // animation frame (max 5s).
+  await bar.evaluate(
     (el) =>
       new Promise<void>((resolve, reject) => {
         const key = (): string => {
@@ -483,30 +483,12 @@ test('header: agency sees the 28px title, then boxed Add on line 2 (no Edit); a 
         requestAnimationFrame(tick);
       }),
   );
-  const lines = await plan.evaluate((el) => {
-    const rect = (sel: string) => {
-      const node = el.querySelector(sel);
-      if (node === null) return null;
-      const r = node.getBoundingClientRect();
-      return { x: r.x, y: r.y, width: r.width, height: r.height };
-    };
-    return {
-      l1: rect('[data-plan-header-line="1"]'),
-      l2: rect('[data-plan-header-line="2"]'),
-    };
-  });
-  const { l1, l2 } = lines;
-  if (l1 === null || l2 === null) throw new Error('no header lines');
-  expect(Math.round(l2.y - (l1.y + l1.height))).toBe(2);
-  expect(Math.round(l2.height)).toBe(44);
-  expect(Math.round(l2.x)).toBe(16);
+  expect(Math.round((await boxOf(bar)).height)).toBe(56);
 
-  // Line 2: the subline, then Add on the 16px edge; no Edit (every change saves itself).
-  await expect(line2.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
-  const add = line2.locator('[data-plan-add-header]');
+  // Add on the 16px edge; no Edit (every change saves itself).
+  const add = bar.locator('[data-plan-add-header]');
   await expect(add).toHaveAccessibleName('Add to plan');
   await expect(add).toHaveText('Add');
-  await expect(line2.locator('[data-plan-edit]')).toHaveCount(0);
   // B1: Add is the shared 44 Button; its outer edge sits on the 16px line
   // (within the 1px border).
   const addBox = await boxOf(add);
@@ -537,12 +519,12 @@ test('header: a client sees the title and subline with no Add or Edit', async ({
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, PLAN_ID);
 
-  const title = plan.locator('[data-plan-header-line="1"] h2');
+  const bar = plan.locator('[data-header-bar]');
+  const title = bar.locator('h1');
   await expect(title).toHaveText(PLAN_TITLE);
-  await expect(title).toHaveCSS('font-size', '28px');
-  const line2 = plan.locator('[data-plan-header-line="2"]');
-  await expect(line2.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
+  await expect(title).toHaveCSS('font-size', '15px');
+  await expect(bar.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   await expect(plan.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
-  expect(Math.round((await boxOf(line2)).height)).toBe(44);
+  expect(Math.round((await boxOf(bar)).height)).toBe(56);
   expectClean(network);
 });

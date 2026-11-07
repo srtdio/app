@@ -124,7 +124,7 @@ describe('expired link recovery', () => {
     expect(html).toContain(RECOVERY_COPY.expired);
     expect(html).toContain(`>${RECOVERY_COPY.signIn}</a>`);
     expect(html).toContain('href="/signin?next=%2Finvite%2Faccept%2Fabc"');
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('min-h-11');
     expect(html).not.toContain('This link has expired.');
   });
 

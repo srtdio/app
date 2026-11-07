@@ -33,14 +33,14 @@ describe('chat visual pass', () => {
     );
     expect(DATE_PILL_TYPE.touch).toContain('font-mono');
     expect(DATE_PILL_TYPE.laptop).toContain('font-mono');
-    // The list time is the Row / Tile meta role.
+    // The list time is the Row meta role.
     expect(TEXT_ROLE.meta).toContain('font-mono');
     expect(TEXT_ROLE.meta).not.toContain('font-sans');
   });
 
   it('a mention never breaks across lines, and the own-name tint has room', () => {
     expect(mentionClass(false, true)).toContain('whitespace-nowrap');
-    expect(mentionClass(false, true)).toContain('px-[3px]');
+    expect(mentionClass(false, true)).toContain('px-1');
     expect(mentionClass(true, false)).toContain('whitespace-nowrap');
   });
 
@@ -51,10 +51,10 @@ describe('chat visual pass', () => {
     expect(read('../../ui/Backdrop.tsx')).toContain('bg-scrim');
   });
 
-  it('the list column is 352px from 1280px (288px below, so the plan panel never covers it) and a tile time stays clear of the ⋯', () => {
-    expect(read('../ChatConnected.tsx')).toContain('md:w-72 md:border-r xl:w-[352px]');
-    // The tile time is the Tile's meta line; the ⋯ sits on the title line above it.
-    expect(read('../ChannelList.tsx')).toContain('meta: <span data-tile-time="">');
+  it('the list column is 352px from 1280px (288px below, so the plan panel never covers it) and no chat is a tile', () => {
+    expect(read('../ChatConnected.tsx')).toContain('md:w-72 md:border-r xl:w-chat-list');
+    // Every chat is a Row: its time is the title line's meta, the ⋯ the Row trailing slot.
+    expect(read('../ChannelList.tsx')).not.toContain('<Tile');
   });
 
   it('filter chips fade at the trailing edge so a clipped chip reads as more', () => {

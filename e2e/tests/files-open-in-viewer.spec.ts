@@ -148,6 +148,20 @@ async function expectPdfTile(page: Page): Promise<void> {
   await expect(tile.locator('[data-file-meta]')).toContainText('PDF');
 }
 
+/** An Assets ListCard for the PDF: its stored thumbnail as the picture, the name on line 1, its kind on line 2. */
+async function expectPdfAssetCard(page: Page): Promise<void> {
+  const assetCard = page.locator('[data-asset-card]').filter({ hasText: PDF_NAME }).first();
+  await expect(assetCard).toBeVisible({ timeout: 15_000 });
+  const thumb = assetCard.locator(
+    '[data-list-card-picture] [data-file-tile="pdf"] [data-file-tile-thumb]',
+  );
+  await expect(thumb).toBeVisible();
+  await expect(thumb).toHaveJSProperty('complete', true);
+  expect(await thumb.evaluate((img) => (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect(assetCard.locator('[data-asset-name]')).toHaveAttribute('title', PDF_NAME);
+  await expect(assetCard.locator('[data-asset-meta]')).toContainText('PDF');
+}
+
 /** The app's theme follows the emulated colour scheme in each project. */
 async function expectTheme(page: Page, dark: boolean): Promise<void> {
   await expect
@@ -209,7 +223,7 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   const card = page.getByRole('button', { name: `View ${PDF_NAME}` }).first();
   await card.waitFor({ state: 'visible', timeout: 15_000 });
   await expectTheme(page, dark);
-  await expectPdfTile(page);
+  await expectPdfAssetCard(page);
   await card.click();
   await expectPdfOpen(page);
   await closeViewer(page);

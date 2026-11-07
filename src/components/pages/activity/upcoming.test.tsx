@@ -16,11 +16,12 @@ vi.mock('@/lib/logger', () => ({
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   CHANGE_TIME_LABEL,
   UpcomingCard,
+  upcomingMenuItems,
   upcomingEditLabel,
 } from '@/components/pages/activity/ActivityCard';
 import {
@@ -171,42 +172,41 @@ describe('the row: tag, link and the bell words', () => {
   });
 });
 
-/** Every element in a rendered tree (function components are not expanded). */
-function elements(node: ReactNode): ReactElement<Record<string, unknown>>[] {
-  if (Array.isArray(node)) return node.flatMap(elements);
-  if (!isValidElement<Record<string, unknown>>(node)) return [];
-  return [node, ...elements(node.props.children as ReactNode)];
-}
-
-describe('UpcomingCard: the Notifications card, with Edit and Cancel', () => {
+describe('UpcomingCard: a ui/ListCard, Edit and Cancel in its ⋯', () => {
   const [scheduled, reminder] = buildUpcoming([reminderRow()], [scheduledRow()], sources);
 
   function wired(item: UpcomingItem) {
     const calls: string[] = [];
+    const onEdit = (i: UpcomingItem): void => void calls.push(`edit:${i.id}`);
+    const onCancel = (i: UpcomingItem): void => void calls.push(`cancel:${i.id}`);
     const tree = UpcomingCard({
       item,
       now: NOW,
       onOpen: (i) => calls.push(`open:${i.id}`),
-      onEdit: (i) => calls.push(`edit:${i.id}`),
-      onCancel: (i) => calls.push(`cancel:${i.id}`),
-    });
-    const all = elements(tree);
-    const click = (attr: string, value = ''): void => {
-      const el = all.find((e) => e.props[attr] === value);
-      (el?.props.onClick as (() => void) | undefined)?.();
+      onEdit,
+      onCancel,
+    }) as ReactElement<{ onPress?: () => void }>;
+    const rows = upcomingMenuItems(item, onEdit, onCancel);
+    const pick = (id: string): void => rows.find((r) => r.id === id)?.onSelect();
+    return {
+      calls,
+      tap: () => tree.props.onPress?.(),
+      pick,
+      rows,
+      html: renderToStaticMarkup(tree),
     };
-    return { calls, click, html: renderToStaticMarkup(tree) };
   }
 
   it('Edit, Cancel and the tap reach their handlers for a reminder', () => {
     if (reminder === undefined) throw new Error('no reminder');
     const card = wired(reminder);
-    card.click('data-upcoming-open');
-    card.click('data-upcoming-action', 'edit');
-    card.click('data-upcoming-action', 'cancel');
+    card.tap();
+    card.pick('edit');
+    card.pick('cancel');
     expect(card.calls).toEqual(['open:r1', 'edit:r1', 'cancel:r1']);
-    expect(card.html).toContain('Change time');
-    expect(card.html).toContain('Cancel');
+    expect(card.rows.map((r) => r.label)).toEqual(['Change time', 'Cancel']);
+    expect(card.html).toContain('data-list-card=""');
+    expect(card.html).toContain('data-upcoming-row="reminder"');
     expect(card.html).toContain('Reminder');
     expect(card.html).toContain('Launch crew');
     expect(card.html).toContain('Ship the reel');
@@ -215,21 +215,21 @@ describe('UpcomingCard: the Notifications card, with Edit and Cancel', () => {
   it('a scheduled message reads Scheduled, its chat, its preview and its send time', () => {
     if (scheduled === undefined) throw new Error('no scheduled');
     const card = wired(scheduled);
-    card.click('data-upcoming-action', 'edit');
-    card.click('data-upcoming-action', 'cancel');
+    card.pick('edit');
+    card.pick('cancel');
     expect(card.calls).toEqual(['edit:s1', 'cancel:s1']);
+    expect(card.rows.map((r) => r.label)).toEqual(['Edit', 'Cancel']);
     expect(card.html).toContain('Scheduled');
     expect(card.html).toContain('Morning team');
     expect(card.html).toContain('data-upcoming-due');
-    expect(card.html).toMatch(/>Edit</);
   });
 
-  it('is never unread: no dot, no accent border; 44px actions; tokens only', () => {
+  it('is never unread: no dot, no picked look; a 44 ⋯ on line 3; tokens only', () => {
     if (reminder === undefined) throw new Error('no reminder');
     const { html } = wired(reminder);
     expect(html).not.toContain('aria-label="Unread"');
     expect(html).not.toContain('lit-selected');
-    expect(html).toContain('h-11');
+    expect(html).toMatch(/data-list-card-more=""[^]*h-11 w-11/);
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(html).not.toMatch(/\bdark:/);
   });

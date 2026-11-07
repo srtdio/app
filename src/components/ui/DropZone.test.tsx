@@ -44,8 +44,8 @@ describe('DropZone', () => {
   });
 
   it('takes its minimum height from the minHeight prop, 44px by default', () => {
-    expect(tokens(render())).toContain('min-h-[44px]');
-    expect(tokens(render({ minHeight: 'tile' }))).toContain('min-h-[120px]');
-    expect(tokens(render({ minHeight: 'panel' }))).toContain('min-h-[160px]');
+    expect(tokens(render())).toContain('min-h-11');
+    expect(tokens(render({ minHeight: 'tile' }))).toContain('min-h-32');
+    expect(tokens(render({ minHeight: 'panel' }))).toContain('min-h-40');
   });
 });

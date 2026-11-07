@@ -14,8 +14,17 @@ import { cn } from '@/lib/cn';
  *   secondary  13/18 400 fg-2      previews, hints, captions (one line, truncate)
  *   label      14/20 500           buttons, chips, tabs, badges
  *   meta       12/16 400 mono fg-3 times, dates, counts, durations, sizes
+ *   section    12/16 600 uppercase tracked fg-2  section labels (CLAUDE.md Roles)
  */
-export type TextRole = 'display' | 'title' | 'heading' | 'body' | 'secondary' | 'label' | 'meta';
+export type TextRole =
+  | 'display'
+  | 'title'
+  | 'heading'
+  | 'body'
+  | 'secondary'
+  | 'label'
+  | 'meta'
+  | 'section';
 
 export const TEXT_ROLE: Record<TextRole, string> = {
   display: 'text-3xl font-semibold tracking-tight',
@@ -25,7 +34,18 @@ export const TEXT_ROLE: Record<TextRole, string> = {
   secondary: 'truncate text-md font-normal text-fg-2',
   label: 'text-base font-medium',
   meta: 'font-mono text-sm font-normal tabular-nums text-fg-3',
+  section: 'text-sm font-semibold uppercase tracking-label text-fg-2',
 };
+
+/**
+ * The section label (CLAUDE.md Design rules: sm/600 uppercase tracking-label, 0.06em
+ * fg-2), the same string as TEXT_ROLE.section, for call sites that compose a
+ * class string. It is the one tracked style, kept here so no call site writes
+ * tracking-*. SECTION_LABEL_INK is the same without the colour, for a label
+ * that sets its own ink.
+ */
+export const SECTION_LABEL_INK = 'text-sm font-semibold uppercase tracking-label';
+export const SECTION_LABEL = `${SECTION_LABEL_INK} text-fg-2`;
 
 /** Body inside a text field: 16/22 on phone (iOS never zooms), 14/20 from md. */
 export const INPUT_BODY = 'text-input md:text-base';

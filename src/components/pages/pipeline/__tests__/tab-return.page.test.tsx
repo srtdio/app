@@ -3,7 +3,7 @@
 // paint on the first render at any age, with no skeleton. Inside the freshness
 // window that is all (no request); past it the board refreshes quietly and the
 // new posts land only while the person has not touched the board (else they
-// are kept for the next visit). The board's own move updates the kept posts.
+// are kept for the next visit). The list's own move updates the kept posts.
 // The first visit shows the skeleton and reads once.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -16,8 +16,9 @@ import type { PipelinePost, Stage } from '@srtdio/posts';
 
 const h = vi.hoisted(() => ({
   listPosts: vi.fn(),
-  boards: [] as Array<Record<string, unknown[]>>,
-  onMovePost: null as null | ((postId: string, toStage: string) => void),
+  lists: [] as PipelinePost[][],
+  onLongPressPost: null as null | ((post: PipelinePost, to?: string) => void),
+  onConfirm: null as null | ((postId: string, to: string, reason: string | null) => void),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -58,17 +59,26 @@ vi.mock('@/components/pages/pipeline/member-role', async (orig) => ({
   ...(await orig<typeof import('@/components/pages/pipeline/member-role')>()),
   readMemberRole: async () => ({ ok: true, role: 'agency' }),
 }));
-vi.mock('@/components/pages/pipeline/PipelineBoard', () => ({
-  PipelineBoard: (props: {
-    grouped: Record<string, unknown[]>;
-    onMovePost: (postId: string, toStage: string) => void;
+vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({
+  PipelineFeed: (props: {
+    posts: PipelinePost[];
+    onLongPressPost: (post: PipelinePost, to?: string) => void;
   }) => {
-    h.boards.push(props.grouped);
-    h.onMovePost = props.onMovePost;
+    h.lists.push(props.posts);
+    h.onLongPressPost = props.onLongPressPost;
     return null;
   },
 }));
-vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({ PipelineFeed: () => null }));
+// The ask-first confirm is stubbed to hand its Confirm to the test.
+vi.mock('@/components/pages/pipeline/StageMoveConfirm', async (orig) => ({
+  ...(await orig<typeof import('@/components/pages/pipeline/StageMoveConfirm')>()),
+  StageMoveConfirm: (props: {
+    onConfirm: (postId: string, to: string, reason: string | null) => void;
+  }) => {
+    h.onConfirm = props.onConfirm;
+    return null;
+  },
+}));
 vi.mock('@/components/pages/pipeline/MoveSheet', () => ({ MoveSheet: () => null }));
 vi.mock('@/components/pages/pipeline/StageChips', () => ({ StageChips: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({
@@ -93,17 +103,10 @@ const OLD: PipelinePost[] = [x5Post({ id: 'old', title: 'Old title', stage: 'rev
 const NEW: PipelinePost[] = [x5Post({ id: 'old', title: 'New title', stage: 'approved' })];
 
 const skeleton = (): Element | null => document.querySelector('[data-posts-skeleton]');
-const lastBoardIds = (): string[] => {
-  const grouped = h.boards[h.boards.length - 1] ?? {};
-  return Object.values(grouped).flatMap((list) => (list as PipelinePost[]).map((p) => p.id));
-};
-const lastBoardStage = (id: string): Stage | undefined => {
-  const grouped = h.boards[h.boards.length - 1] ?? {};
-  for (const [stage, list] of Object.entries(grouped)) {
-    if ((list as PipelinePost[]).some((p) => p.id === id)) return stage as Stage;
-  }
-  return undefined;
-};
+const lastList = (): PipelinePost[] => h.lists[h.lists.length - 1] ?? [];
+const lastBoardIds = (): string[] => lastList().map((p) => p.id);
+const lastBoardStage = (id: string): Stage | undefined =>
+  lastList().find((p) => p.id === id)?.stage as Stage | undefined;
 
 async function visit(): Promise<void> {
   const host = document.createElement('div');
@@ -129,7 +132,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-26T10:00:00Z'));
   resetSessionReads();
-  h.boards = [];
+  h.lists = [];
   h.listPosts.mockReset();
 });
 
@@ -151,7 +154,7 @@ describe('Pipeline tab return', () => {
     await visit();
     leave();
     vi.setSystemTime(Date.now() + READ_FRESH_MS - 1_000);
-    h.boards = [];
+    h.lists = [];
     await act(async () => {
       const host = document.createElement('div');
       document.body.appendChild(host);
@@ -188,7 +191,7 @@ describe('Pipeline tab return', () => {
     await visit();
     leave();
     vi.setSystemTime(Date.now() + READ_FRESH_MS + 1_000);
-    h.boards = [];
+    h.lists = [];
     const land = holdNextRead();
     await visit();
     expect(skeleton()).toBeNull();
@@ -214,7 +217,7 @@ describe('Pipeline tab return', () => {
     expect(lastBoardStage('old')).toBe('review');
     expect(keptPipelinePosts('u1', 'ws-1')?.[0]?.stage).toBe('approved');
     leave();
-    h.boards = [];
+    h.lists = [];
     await visit();
     expect(lastBoardStage('old')).toBe('approved');
   });
@@ -230,14 +233,17 @@ describe('Pipeline tab return', () => {
     expect(lastBoardIds()).toEqual(['old']);
   });
 
-  it("the board's own move updates the kept posts, never drops them", async () => {
+  it("the list's own move updates the kept posts, never drops them", async () => {
     h.listPosts.mockResolvedValue({ ok: true, data: OLD });
     await visit();
-    await act(async () => h.onMovePost?.('old', 'parked'));
+    // The card's ⋮ Park row asks first; its Confirm moves.
+    const card = lastList().find((p) => p.id === 'old')!;
+    await act(async () => h.onLongPressPost?.(card, 'parked'));
+    await act(async () => h.onConfirm?.('old', 'parked', null));
     expect(lastBoardStage('old')).toBe('parked');
     expect(keptPipelinePosts('u1', 'ws-1')?.[0]?.stage).toBe('parked');
     leave();
-    h.boards = [];
+    h.lists = [];
     await visit();
     expect(skeleton()).toBeNull();
     expect(lastBoardStage('old')).toBe('parked');

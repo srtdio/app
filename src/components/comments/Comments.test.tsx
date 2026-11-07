@@ -517,8 +517,14 @@ describe('mergeCheckpoints (checkpoints never paginate away)', () => {
 
 describe('tombstoneText', () => {
   it('names the deleter when the author resolves', () => {
-    const c = row({ id: 'P', author_user_id: UUID_A, deleted_at: '2026-01-05T00:00:00.000Z' });
-    expect(tombstoneText(c, (id) => (id === UUID_A ? 'Ada' : null))).toMatch(/^Deleted by Ada · /);
+    const c = row({ id: 'P', author_user_id: UUID_A, deleted_at: '2026-01-05T12:00:00.000Z' });
+    expect(
+      tombstoneText(
+        c,
+        (id) => (id === UUID_A ? 'Ada' : null),
+        new Date('2026-01-07T12:00:00.000Z'),
+      ),
+    ).toBe('Deleted by Ada · Mon');
   });
 
   it('stays anonymous when the author no longer resolves', () => {
@@ -955,12 +961,17 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
     expect(pointWordCount(fiftyOne)).toBeGreaterThan(POINT_WORD_CAP);
   });
 
-  it('shows the edit time on comments and points ("edited 1 Mar, 2:14 PM")', () => {
-    const edited = new Date(2026, 2, 1, 14, 14);
-    const now = new Date(2026, 2, 1, 18, 0);
-    expect(editedTime(edited.toISOString(), now)).toBe('1 Mar, 2:14 PM');
-    expect(pointEditedMarker(edited.toISOString(), now)).toBe('edited 1 Mar, 2:14 PM');
-    expect(editedTime(new Date(2026, 2, 1, 0, 5).toISOString(), now)).toBe('1 Mar, 12:05 AM');
+  it('shows the edit time on comments and points in formatAgo ("edited 3h")', () => {
+    const edited = new Date('2026-03-01T14:14:00Z');
+    const now = new Date('2026-03-01T18:00:00Z');
+    expect(editedTime(edited.toISOString(), now)).toBe('3h');
+    expect(pointEditedMarker(edited.toISOString(), now)).toBe('edited 3h');
+    expect(editedTime('2026-03-01T17:59:30Z', now)).toBe('just now');
+    expect(editedTime('2026-03-01T17:15:00Z', now)).toBe('45m');
+    expect(editedTime(edited.toISOString(), new Date('2026-03-02T15:00:00Z'))).toBe('Yesterday');
+    expect(pointEditedMarker(edited.toISOString(), new Date('2026-03-20T09:00:00Z'))).toBe(
+      'edited 1 Mar',
+    );
     expect(editedTime('garbage', now)).toBe('');
   });
 

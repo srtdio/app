@@ -122,6 +122,7 @@ import {
   IconArrowUp,
   IconCheck,
   IconChevronRight,
+  IconEdit,
   IconEye,
   IconEyeOff,
   IconLink,
@@ -130,6 +131,9 @@ import {
   IconX,
 } from '@/components/ui/icons';
 import { Tag, isTagDot } from '@/components/ui/Tag';
+import { Card } from '@/components/ui/Card';
+import { Text, TEXT_ROLE } from '@/components/ui/Text';
+import { GUTTER } from '@/components/ui/layout';
 import { PostPicker } from '@/components/chat/PostPicker';
 import type { PostCardFields } from '@srtdio/posts';
 import { Thumbnail } from '@/components/media/Thumbnail';
@@ -276,7 +280,7 @@ import type { Result } from '@srtdio/rpc';
 function ConceptLinkCard(props: { text: string }): ReactElement | null {
   const url = firstExternalUrl(props.text);
   return url !== null ? (
-    <LinkPreviewCard key={url} url={url} className="mt-1 w-full max-w-[420px]" />
+    <LinkPreviewCard key={url} url={url} className="mt-1 w-full max-w-md" />
   ) : null;
 }
 
@@ -1331,92 +1335,90 @@ export function PlanItemScreen(props: {
   const pickedBuckets = bankBuckets.buckets.filter((b) => (picked ?? []).includes(b.id));
   const bucketsCard =
     concept && (agency || pickedBuckets.length > 0) ? (
-      <section
-        data-plan-buckets=""
-        aria-label={BUCKETS_LABEL}
-        className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <h4 className={SECTION_LABEL}>{BUCKETS_LABEL}</h4>
-          {agency && saveLabel !== null ? (
-            <span
-              data-plan-buckets-save={bucketsSaving > 0 ? 'saving' : 'saved'}
-              aria-live="polite"
-              className="text-sm text-fg-3"
-            >
-              {saveLabel}
-            </span>
-          ) : null}
-        </div>
-        {agency ? (
-          <div className="flex flex-wrap gap-2">
-            {bankBuckets.buckets.map((b) => (
-              <Chip
-                key={b.id}
-                label={b.name}
-                data-plan-bucket={b.id}
-                selected={(picked ?? []).includes(b.id)}
-                disabled={picked === null}
-                onClick={() => pickBucket(b.id)}
-              />
-            ))}
-            {addingBucket ? (
-              <form
-                data-plan-bucket-new=""
-                className="flex min-w-0 flex-1 items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void addBucket();
-                }}
+      <Card data-plan-buckets="" className="self-stretch">
+        <section aria-label={BUCKETS_LABEL} className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className={SECTION_LABEL}>{BUCKETS_LABEL}</h4>
+            {agency && saveLabel !== null ? (
+              <span
+                data-plan-buckets-save={bucketsSaving > 0 ? 'saving' : 'saved'}
+                aria-live="polite"
+                className="text-sm text-fg-3"
               >
-                <Input
-                  autoFocus
-                  value={bucketName}
-                  maxLength={40}
-                  aria-label={NEW_BUCKET_PLACEHOLDER}
-                  placeholder={NEW_BUCKET_PLACEHOLDER}
-                  onChange={(e) => {
-                    setBucketName(e.target.value);
-                    setBucketError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      e.stopPropagation();
-                      setAddingBucket(false);
-                      setBucketName('');
-                    }
-                  }}
-                  className="min-w-0 flex-1"
+                {saveLabel}
+              </span>
+            ) : null}
+          </div>
+          {agency ? (
+            <div className="flex flex-wrap gap-2">
+              {bankBuckets.buckets.map((b) => (
+                <Chip
+                  key={b.id}
+                  label={b.name}
+                  data-plan-bucket={b.id}
+                  selected={(picked ?? []).includes(b.id)}
+                  disabled={picked === null}
+                  onClick={() => pickBucket(b.id)}
                 />
-                <IconButton
-                  type="submit"
-                  label="Add"
-                  data-plan-bucket-add-go=""
-                  disabled={bucketName.trim() === '' || bucketBusy}
+              ))}
+              {addingBucket ? (
+                <form
+                  data-plan-bucket-new=""
+                  className="flex min-w-0 flex-1 items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void addBucket();
+                  }}
                 >
-                  <IconCheck size={ICON_SIZE.nav} />
-                </IconButton>
-              </form>
-            ) : (
-              <Chip
-                variant="add"
-                label={ADD_BUCKET_LABEL}
-                data-plan-bucket-add=""
-                dot={<IconPlus size={ICON_SIZE.inline} />}
-                disabled={picked === null}
-                onClick={() => setAddingBucket(true)}
-              />
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {pickedBuckets.map((b) => (
-              <Tag key={b.id} label={b.name} />
-            ))}
-          </div>
-        )}
-        {bucketError !== null ? <ErrorNote>{bucketError}</ErrorNote> : null}
-      </section>
+                  <Input
+                    autoFocus
+                    value={bucketName}
+                    maxLength={40}
+                    aria-label={NEW_BUCKET_PLACEHOLDER}
+                    placeholder={NEW_BUCKET_PLACEHOLDER}
+                    onChange={(e) => {
+                      setBucketName(e.target.value);
+                      setBucketError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        setAddingBucket(false);
+                        setBucketName('');
+                      }
+                    }}
+                    className="min-w-0 flex-1"
+                  />
+                  <IconButton
+                    type="submit"
+                    label="Add"
+                    data-plan-bucket-add-go=""
+                    disabled={bucketName.trim() === '' || bucketBusy}
+                  >
+                    <IconCheck size={ICON_SIZE.nav} />
+                  </IconButton>
+                </form>
+              ) : (
+                <Chip
+                  variant="add"
+                  label={ADD_BUCKET_LABEL}
+                  data-plan-bucket-add=""
+                  dot={<IconPlus size={ICON_SIZE.inline} />}
+                  disabled={picked === null}
+                  onClick={() => setAddingBucket(true)}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {pickedBuckets.map((b) => (
+                <Tag key={b.id} label={b.name} />
+              ))}
+            </div>
+          )}
+          {bucketError !== null ? <ErrorNote>{bucketError}</ErrorNote> : null}
+        </section>
+      </Card>
     ) : null;
 
   // Who can see this (a bank idea, agency only): Team only or Client can see,
@@ -1540,35 +1542,33 @@ export function PlanItemScreen(props: {
       plan: bank ? null : { id: bundle.plan.id, title: bundle.plan.title },
     });
   const whoCanSeeCard = whoCard ? (
-    <section
-      data-plan-who-can-see=""
-      aria-label={WHO_CAN_SEE_LABEL}
-      className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card"
-    >
-      <h4 className={SECTION_LABEL}>{WHO_CAN_SEE_LABEL}</h4>
-      <div className="flex items-center">
-        <Tag
-          label={shownToClient ? CLIENT_CAN_SEE : TEAM_ONLY}
-          tone={shownToClient ? 'good' : 'neutral'}
-        />
-      </div>
-      <p data-plan-who-line="" className="text-base text-fg-2">
-        {shownToClient ? clientSeesLine(joinNames(approvers)) : TEAM_ONLY_LINE}
-      </p>
-      <div>
-        {shownToClient ? (
-          <Button type="button" data-plan-who-hide="" onClick={hideFromClient}>
-            <IconEyeOff size={ICON_SIZE.inline} />
-            {HIDE_FROM_CLIENT_LABEL}
-          </Button>
-        ) : (
-          <Button type="button" data-plan-who-show="" onClick={() => setShowAsk(true)}>
-            <IconEye size={ICON_SIZE.inline} />
-            {SHOW_TO_CLIENT_LABEL}
-          </Button>
-        )}
-      </div>
-    </section>
+    <Card data-plan-who-can-see="" className="self-stretch">
+      <section aria-label={WHO_CAN_SEE_LABEL} className="flex flex-col gap-2">
+        <h4 className={SECTION_LABEL}>{WHO_CAN_SEE_LABEL}</h4>
+        <div className="flex items-center">
+          <Tag
+            label={shownToClient ? CLIENT_CAN_SEE : TEAM_ONLY}
+            tone={shownToClient ? 'good' : 'neutral'}
+          />
+        </div>
+        <p data-plan-who-line="" className="text-base text-fg-2">
+          {shownToClient ? clientSeesLine(joinNames(approvers)) : TEAM_ONLY_LINE}
+        </p>
+        <div>
+          {shownToClient ? (
+            <Button type="button" data-plan-who-hide="" onClick={hideFromClient}>
+              <IconEyeOff size={ICON_SIZE.inline} />
+              {HIDE_FROM_CLIENT_LABEL}
+            </Button>
+          ) : (
+            <Button type="button" data-plan-who-show="" onClick={() => setShowAsk(true)}>
+              <IconEye size={ICON_SIZE.inline} />
+              {SHOW_TO_CLIENT_LABEL}
+            </Button>
+          )}
+        </div>
+      </section>
+    </Card>
   ) : null;
   const plannedMenu = (): ActionMenuItem[] => {
     const rows = planItemMenuItems({
@@ -1702,7 +1702,6 @@ export function PlanItemScreen(props: {
                   data-plan-more=""
                   aria-expanded={moreOpen}
                   onClick={() => setMoreOpen(true)}
-                  className="shrink-0 text-fg"
                 />
               ),
             }
@@ -1718,7 +1717,7 @@ export function PlanItemScreen(props: {
               {mentionRows.length > 0 || picker.hiddenApprovers ? (
                 <div
                   data-mention-anchor=""
-                  className="absolute inset-x-0 bottom-full z-20 mb-2 flex flex-col gap-1"
+                  className="absolute inset-x-0 bottom-full z-sticky mb-2 flex flex-col gap-1"
                 >
                   <MentionPicker
                     members={mentionRows}
@@ -1822,7 +1821,7 @@ export function PlanItemScreen(props: {
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
                 <Suspense
-                  fallback={<Bone lit="lit-card" as="div" className="m-4 h-[170px] rounded-xl" />}
+                  fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}
                 >
                   <PostDetailPage
                     postId={item.post_id}
@@ -1849,7 +1848,7 @@ export function PlanItemScreen(props: {
             {removeButton}
           </>
         ) : (
-          <div className="flex flex-col gap-3.5 p-4">
+          <div className={cn('flex flex-col gap-4 py-4', GUTTER)}>
             {bank && cameFromLine(item) !== null ? (
               <p data-plan-came-from="" className="-mt-1 text-sm text-fg-3">
                 {cameFromLine(item)}
@@ -1859,14 +1858,11 @@ export function PlanItemScreen(props: {
               <h4 className={SECTION_LABEL}>Files</h4>
               <ItemMedia read={read} onRetry={reload} />
             </section>
-            <div
-              data-plan-description-card=""
-              className="flex flex-col gap-1.5 rounded-xl border bg-panel p-3 lit-card"
-            >
+            <Card data-plan-description-card="" className="self-stretch">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="min-w-0 break-words pt-2.5 text-lg font-semibold text-fg">
+                <Text as="h3" role="heading" className="min-w-0 break-words py-3">
                   {title}
-                </h3>
+                </Text>
                 {editable ? (
                   <Button
                     type="button"
@@ -1875,6 +1871,7 @@ export function PlanItemScreen(props: {
                     onClick={openEdit}
                     className="shrink-0"
                   >
+                    <IconEdit size={ICON_SIZE.inline} />
                     Edit
                   </Button>
                 ) : null}
@@ -1888,14 +1885,11 @@ export function PlanItemScreen(props: {
                 </p>
               ) : null}
               <ConceptLinkCard text={description} />
-            </div>
+            </Card>
             {bucketsCard}
             {whoCanSeeCard}
-            <div
-              data-plan-status=""
-              className="flex flex-col gap-1.5 rounded-xl border bg-panel p-3 lit-card"
-            >
-              <div className="flex min-h-[28px] items-center justify-between gap-2">
+            <Card data-plan-status="" className="self-stretch">
+              <div className="flex min-h-7 items-center justify-between gap-2">
                 <span className="text-base text-fg-3">Date</span>
                 <span className="flex items-center gap-1">
                   <span
@@ -1916,16 +1910,14 @@ export function PlanItemScreen(props: {
                       onClick={openEdit}
                       className="-mr-2"
                     >
+                      <IconEdit size={ICON_SIZE.inline} />
                       Edit
                     </Button>
                   ) : null}
                 </span>
               </div>
               {(bank ? [] : statusRows(bundle, item, side, overrides)).map((row) => (
-                <div
-                  key={row.label}
-                  className="flex min-h-[28px] items-center justify-between gap-2"
-                >
+                <div key={row.label} className="flex min-h-7 items-center justify-between gap-2">
                   <span className="text-base text-fg-3">{row.label}</span>
                   <PlanPill
                     pill={{
@@ -1937,7 +1929,7 @@ export function PlanItemScreen(props: {
                 </div>
               ))}
               <PostStatusRow link={link} onOpen={openLinked} />
-            </div>
+            </Card>
             {side === 'agency' ? (
               <LinkActions
                 linked={link.kind === 'linked'}
@@ -1977,10 +1969,10 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
             ) : null}
-            <section ref={commentsRef} className="flex flex-col gap-2.5" aria-label="Comments">
+            <section ref={commentsRef} className="flex flex-col gap-3" aria-label="Comments">
               <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
-                <Bone lit="lit-card" as="div" className="h-[72px] rounded-xl" />
+                <Bone lit="lit-card" as="div" className="h-18 rounded-xl" />
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
@@ -2141,7 +2133,7 @@ export function PostStatusRow(props: {
     return (
       <div
         data-plan-status-post={link.kind}
-        className="flex min-h-[28px] items-center justify-between gap-2"
+        className="flex min-h-7 items-center justify-between gap-2"
       >
         <span className="text-base text-fg-3">{STATUS_POST_ROW}</span>
         <span className="text-md text-fg-3">
@@ -2262,11 +2254,10 @@ export function LinkedPostPage(props: {
           data-plan-more=""
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen(true)}
-          className="shrink-0 text-fg"
         />
       }
     >
-      <Suspense fallback={<Bone lit="lit-card" as="div" className="m-4 h-[170px] rounded-xl" />}>
+      <Suspense fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}>
         <PostDetailPage
           postId={props.postId}
           embedded
@@ -2281,7 +2272,7 @@ export function LinkedPostPage(props: {
 }
 
 /** The section label style (design rules: sm/600 uppercase, fg-2). */
-const SECTION_LABEL = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+const SECTION_LABEL = TEXT_ROLE.section;
 
 /** The comment box's tallest: 4 lines (16px at 1.4) plus its padding; then it scrolls. */
 const COMMENT_BOX_MAX_PX = 110;
@@ -2306,7 +2297,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="failed"
-        className="flex min-h-[72px] items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
+        className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-4 lit-card"
       >
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>
@@ -2318,7 +2309,7 @@ function ItemMedia(props: {
   if (read.status !== 'ready') {
     return (
       <div data-plan-media="loading">
-        <Bone lit="lit-media" as="div" className="h-[170px] rounded-lg" />
+        <Bone lit="lit-media" as="div" className="h-44 rounded-lg" />
       </div>
     );
   }
@@ -2326,7 +2317,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="empty"
-        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
+        className="flex h-28 items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
       >
         No files
       </div>
@@ -2418,7 +2409,7 @@ function PlanNotes(props: {
     <section
       data-plan-notes=""
       aria-label={PLAN_NOTES_LABEL}
-      className="flex flex-col gap-2.5 px-4 pb-2 pt-4"
+      className="flex flex-col gap-3 px-4 pb-2 pt-4"
     >
       <h4 className={SECTION_LABEL}>{PLAN_NOTES_LABEL}</h4>
       <PlanItemThread

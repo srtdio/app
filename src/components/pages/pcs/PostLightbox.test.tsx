@@ -740,7 +740,7 @@ describe('files open in the FileViewer', () => {
     expect(all.some((text) => text.includes('file-0'))).toBe(false);
     const open = elements(tree).find((el) => el.type === Button && strings(el).includes('Open'));
     if (open === undefined) throw new Error('no Open button');
-    expect(className(open)).toContain('min-h-[44px]');
+    expect(className(open)).toContain('min-h-11');
     const stop = vi.fn();
     (open.props as { onClick: (e: { stopPropagation: () => void }) => void }).onClick({
       stopPropagation: stop,

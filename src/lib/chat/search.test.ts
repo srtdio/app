@@ -260,20 +260,23 @@ describe('matching and snippets', () => {
   });
 });
 
-describe('searchDateLabel', () => {
-  const tz = 'UTC';
-  const now = Date.parse('2026-10-03T15:00:00Z'); // a Saturday
-  it('today is the time', () => {
-    expect(searchDateLabel('2026-10-03T09:05:00Z', now, tz)).toBe('9:05 AM');
+describe('searchDateLabel (formatAgo)', () => {
+  // Sat 3 Oct 2026, 15:00Z; day-level cases sit at 15:00Z too, so the civil
+  // gap is the same in any device zone.
+  const now = Date.parse('2026-10-03T15:00:00Z');
+  it('under a minute is "just now", then minutes and hours', () => {
+    expect(searchDateLabel('2026-10-03T14:59:30Z', now)).toBe('just now');
+    expect(searchDateLabel('2026-10-03T14:55:00Z', now)).toBe('5m');
+    expect(searchDateLabel('2026-10-03T09:05:00Z', now)).toBe('5h');
   });
-  it('yesterday is "Yesterday"', () => {
-    expect(searchDateLabel('2026-10-02T23:00:00Z', now, tz)).toBe('Yesterday');
+  it('then Yesterday, the weekday, the day, and the year off the current year', () => {
+    expect(searchDateLabel('2026-10-02T15:00:00Z', now)).toBe('Yesterday');
+    expect(searchDateLabel('2026-09-29T15:00:00Z', now)).toBe('Tue');
+    expect(searchDateLabel('2026-07-20T15:00:00Z', now)).toBe('20 Jul');
+    expect(searchDateLabel('2025-09-20T15:00:00Z', now)).toBe('20 Sep 2025');
   });
-  it('the last 7 days are the weekday', () => {
-    expect(searchDateLabel('2026-09-29T10:00:00Z', now, tz)).toBe('Tuesday');
-  });
-  it('older is DD/MM/YY', () => {
-    expect(searchDateLabel('2026-09-20T10:00:00Z', now, tz)).toBe('20/09/26');
+  it('unparseable is empty', () => {
+    expect(searchDateLabel('nope', now)).toBe('');
   });
 });
 

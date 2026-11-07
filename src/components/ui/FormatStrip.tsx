@@ -266,7 +266,7 @@ export function FormatStrip({ field, open }: FormatStripProps): ReactNode {
   if (!open || pos === undefined || typeof document === 'undefined') return null;
   return createPortal(
     <div
-      className="pointer-events-none fixed z-50 flex justify-center px-4"
+      className="pointer-events-none fixed z-sheet flex justify-center px-4"
       style={{
         left: pos.left,
         width: pos.width,
@@ -288,7 +288,7 @@ export function FormatStrip({ field, open }: FormatStripProps): ReactNode {
             type="button"
             variant="ghost"
             data-format={b.style}
-            className={cn('min-w-[44px] px-3', b.className)}
+            className={cn('min-w-11 px-3', b.className)}
             onPointerDown={(e) => e.preventDefault()}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {

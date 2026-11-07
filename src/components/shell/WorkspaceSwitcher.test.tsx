@@ -129,7 +129,7 @@ describe('WorkspaceSwitcher', () => {
       'ttTikTok',
       'ytYouTube Shorts',
     ]);
-    for (const tile of tiles) expect(tile.className).toContain('min-h-[44px]');
+    for (const tile of tiles) expect(tile.className).toContain('min-h-11');
     expect(button('Continue').disabled).toBe(true);
 
     await typeName('Somaiya');

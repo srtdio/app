@@ -182,7 +182,7 @@ export function PipelineDateRangeCalendar({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      className="fixed inset-0 z-dialog flex items-center justify-center p-4"
       role="presentation"
       onClick={onClose}
     >
@@ -193,7 +193,7 @@ export function PipelineDateRangeCalendar({
         aria-modal="true"
         aria-label="Select a date range"
         onClick={(event) => event.stopPropagation()}
-        className="relative w-[320px] max-w-full rounded-2xl border bg-panel p-3 lit-overlay will-change-transform"
+        className="relative w-80 max-w-full rounded-2xl border bg-panel p-3 lit-overlay will-change-transform"
       >
         <div className="mb-2 flex items-center justify-between">
           <IconButton

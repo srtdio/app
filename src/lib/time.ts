@@ -1,14 +1,18 @@
 // The one date and time module for the whole app. Every visible date or time
 // reads through here so the register never drifts between surfaces:
-//   formatTime        "2:14 PM"
-//   formatChatTime    "2:14 PM" today, "Yesterday", "20 Oct", "20 Oct 2025"
-//   formatRelative    "just now", "5 min ago", "3 hours ago" ... "2 years ago"
+//   formatTime        "2:14 PM" (clock inside a message bubble, chosen times)
+// The three list-time functions, by meaning (every list caller uses one):
+//   formatAgo         things that just happened: "just now", "5m", "3h",
+//                     "Yesterday", "Mon", "2 Nov" ("2 Nov 2025" off-year)
+//   formatDue         deadlines: "Due today", "Due tomorrow", "Due Fri", "Due 12 Nov";
+//                     late via formatOverdue: "Overdue 1d" / "3w" / "2mo" / "1y";
+//                     plan starts via formatPlanStart: "Starts Mon", "Started 2d ago"
+//   formatAdded       records (never ticks): "10:27 AM" today, else "2 Nov"
+//   formatDayLabel    chat day dividers: "Today", "Yesterday", "Mon 2 Nov"
 //   formatDateTime    "23 Oct, 2:14 PM"; "23 Oct 2025, 2:14 PM" off the current year
-//   formatDate        "23 Oct"; "23 Oct 2025" off the current year
-//   formatDayRange    "19 - 25 Oct"; "28 Oct - 3 Nov"
-//   formatDueDate     "23 Oct" for a due/target date, on the workspace zone
-//   formatDue         "Due 23 Oct", on the workspace zone
-//   formatOverdue     "Overdue · 12 Oct" up to a month late, then "Overdue 5 months"
+//   formatDate        "23 Oct"; "23 Oct 2025" off the current year (pickers, calendars)
+//   formatDayRange    "19-25 Oct"; "28 Oct - 3 Nov"
+//   formatDueDate     "23 Oct" for a due/target date shown as a value
 //   formatSpokenDate  "Monday, 19 October 2026" (accessible names)
 // Moments (message, comment, activity times) are read on the VIEWER's device
 // time zone. Due dates (posts.target_date, brief due dates, plan days and plan
@@ -68,8 +72,6 @@ const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-const MONTH = 30 * DAY;
-const YEAR = 365 * DAY;
 
 interface Civil {
   year: number;
@@ -122,7 +124,11 @@ function civilOf(value: DateInput, timeZone: string): Civil | undefined {
     const match = DATE_ONLY.exec(value.trim());
     if (match !== null) {
       const civil = { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
-      if (civil.month < 1 || civil.month > 12 || civil.day < 1 || civil.day > 31) return undefined;
+      // A day the month does not have ("2026-02-31") is unparseable, never rolled over.
+      const check = new Date(Date.UTC(civil.year, civil.month - 1, civil.day));
+      if (check.getUTCMonth() !== civil.month - 1 || check.getUTCDate() !== civil.day) {
+        return undefined;
+      }
       return civil;
     }
   }
@@ -135,12 +141,6 @@ function civilKey(civil: Civil): string {
   return `${civil.year}-${pad(civil.month)}-${pad(civil.day)}`;
 }
 
-/** The day before a civil day (calendar arithmetic, no zone involved). */
-function previousDay(civil: Civil): Civil {
-  const d = new Date(Date.UTC(civil.year, civil.month - 1, civil.day - 1));
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
-}
-
 function monthName(month: number): string {
   return SHORT_MONTHS[month - 1] ?? '';
 }
@@ -148,10 +148,6 @@ function monthName(month: number): string {
 function dayText(civil: Civil, nowYear: number): string {
   const base = `${civil.day} ${monthName(civil.month)}`;
   return civil.year === nowYear ? base : `${base} ${civil.year}`;
-}
-
-function plural(count: number, unit: string): string {
-  return `${count} ${unit}${count === 1 ? '' : 's'}`;
 }
 
 /** The calendar date (YYYY-MM-DD) a value falls on, for day comparisons and grouping. */
@@ -182,8 +178,68 @@ export function formatDate(value: DateInput, now: Date = new Date(), timeZone?: 
   return dayText(civil, civilOfInstant(now, zone).year);
 }
 
-/** Today "2:14 PM", yesterday "Yesterday", this year "20 Oct", older "20 Oct 2025". */
-export function formatChatTime(
+const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** Whole civil days from `from` to `to` (calendar arithmetic, no zone involved). */
+function civilDaysBetween(from: Civil, to: Civil): number {
+  const a = Date.UTC(from.year, from.month - 1, from.day);
+  const b = Date.UTC(to.year, to.month - 1, to.day);
+  return Math.round((b - a) / DAY);
+}
+
+/** The weekday of a civil day: "Mon". */
+function weekdayOf(civil: Civil): string {
+  const weekday = new Date(Date.UTC(civil.year, civil.month - 1, civil.day)).getUTCDay();
+  return SHORT_WEEKDAYS[weekday] ?? '';
+}
+
+/**
+ * formatAgo: things that just happened (Chat list, Activity, the Pipeline
+ * status line, comments, post activity and versions). "just now" under a
+ * minute, "5m" under an hour, "3h" under 24 hours, then by civil day on the
+ * zone: "Yesterday", the weekday "Mon" 2-6 days back, else "2 Nov" ("2 Nov
+ * 2025" off the current year). A future instant reads "just now". Civil
+ * days read on `timeZone` (the viewer's device zone when omitted).
+ */
+export function formatAgo(value: DateInput, now: Date = new Date(), timeZone?: string): string {
+  const instant = instantOf(value);
+  if (instant === undefined) return '';
+  const diff = now.getTime() - instant.getTime();
+  if (diff < MINUTE) return 'just now';
+  if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m`;
+  if (diff < DAY) return `${Math.floor(diff / HOUR)}h`;
+  const zone = safeTimeZone(timeZone);
+  const civil = civilOfInstant(instant, zone);
+  const today = civilOfInstant(now, zone);
+  const days = civilDaysBetween(civil, today);
+  // A 25-hour (DST fall-back) day can hold 24h+ on one civil day: still hours.
+  if (days <= 0) return `${Math.floor(diff / HOUR)}h`;
+  if (days === 1) return 'Yesterday';
+  if (days <= 6) return weekdayOf(civil);
+  return dayText(civil, today.year);
+}
+
+/**
+ * formatAdded: when a record was made (Assets, Bank, Recently deleted, Members
+ * joined, Settings). Never ticks: "10:27 AM" on the same civil day, else
+ * "2 Nov" ("2 Nov 2025" off the current year).
+ */
+export function formatAdded(value: DateInput, now: Date = new Date(), timeZone?: string): string {
+  const zone = safeTimeZone(timeZone);
+  const instant = instantOf(value);
+  if (instant === undefined) return '';
+  const civil = civilOfInstant(instant, zone);
+  const today = civilOfInstant(now, zone);
+  if (civilDaysBetween(civil, today) === 0) return formatTime(instant, zone);
+  return dayText(civil, today.year);
+}
+
+/**
+ * A chat day divider: "Today", "Yesterday", else "Mon 2 Nov" ("Mon 2 Nov 2025"
+ * off the current year). Civil days on the given zone. The only absolute
+ * day text in a thread, beside the bubble clock (formatTime).
+ */
+export function formatDayLabel(
   value: DateInput,
   now: Date = new Date(),
   timeZone?: string,
@@ -192,27 +248,10 @@ export function formatChatTime(
   const civil = civilOf(value, zone);
   if (civil === undefined) return '';
   const today = civilOfInstant(now, zone);
-  const key = civilKey(civil);
-  if (key === civilKey(today)) return formatTime(value, zone);
-  if (key === civilKey(previousDay(today))) return 'Yesterday';
-  return dayText(civil, today.year);
-}
-
-/**
- * Spoken elapsed time: "just now" under a minute (and for a future instant),
- * then "5 min ago", "3 hours ago", "2 days ago" (under 30 days), "4 months ago"
- * (under a year), "2 years ago". Singular and plural agree.
- */
-export function formatRelative(value: DateInput, now: Date = new Date()): string {
-  const instant = instantOf(value);
-  if (instant === undefined) return '';
-  const diff = now.getTime() - instant.getTime();
-  if (diff < MINUTE) return 'just now';
-  if (diff < HOUR) return `${Math.floor(diff / MINUTE)} min ago`;
-  if (diff < DAY) return `${plural(Math.floor(diff / HOUR), 'hour')} ago`;
-  if (diff < MONTH) return `${plural(Math.floor(diff / DAY), 'day')} ago`;
-  if (diff < YEAR) return `${plural(Math.min(11, Math.floor(diff / MONTH)), 'month')} ago`;
-  return `${plural(Math.floor(diff / YEAR), 'year')} ago`;
+  const days = civilDaysBetween(civil, today);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return `${weekdayOf(civil)} ${dayText(civil, today.year)}`;
 }
 
 /** "23 Oct, 2:14 PM"; "23 Oct 2025, 2:14 PM" off the current year. */
@@ -271,14 +310,63 @@ export function formatDueDate(
   return formatDate(value, now, workspaceZone ?? undefined);
 }
 
-/** "Due 23 Oct" on the workspace zone (year rule as formatDate); '' for unparseable input. */
+/**
+ * Whole civil days from today to the value's day on the workspace zone:
+ * 0 today, 1 tomorrow, -1 yesterday; undefined when unparseable.
+ */
+export function daysFromToday(
+  value: DateInput,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): number | undefined {
+  const zone = safeTimeZone(workspaceZone);
+  const civil = civilOf(value, zone);
+  if (civil === undefined) return undefined;
+  return civilDaysBetween(civilOfInstant(now, zone), civil);
+}
+
+/** "today", "tomorrow", the weekday "Fri" 2-6 days ahead, else "12 Nov" ("12 Nov 2027" off-year). */
+function aheadText(value: DateInput, zone: string, now: Date): string | undefined {
+  const civil = civilOf(value, zone);
+  if (civil === undefined) return undefined;
+  const today = civilOfInstant(now, zone);
+  const days = civilDaysBetween(today, civil);
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days >= 2 && days <= 6) return weekdayOf(civil);
+  return dayText(civil, today.year);
+}
+
+/** How long ago a civil day was, short: "1d".."6d", "1w".."4w", "1mo".."11mo", "1y" (at least 1d). */
+function behindText(value: DateInput, zone: string, now: Date): string | undefined {
+  const civil = civilOf(value, zone);
+  if (civil === undefined) return undefined;
+  const today = civilOfInstant(now, zone);
+  const days = Math.max(1, civilDaysBetween(civil, today));
+  if (days < 7) return `${days}d`;
+  let months = (today.year - civil.year) * 12 + (today.month - civil.month);
+  if (today.day < civil.day) months -= 1;
+  if (months < 1) return `${Math.floor(days / 7)}w`;
+  if (months < 12) return `${months}mo`;
+  return `${Math.floor(months / 12)}y`;
+}
+
+/**
+ * formatDue: a deadline on the workspace zone (Pipeline, Briefs): "Due today",
+ * "Due tomorrow", "Due Fri" (2-6 days ahead), then "Due 12 Nov" ("Due 12 Nov
+ * 2027" off-year). A past day reads "Due 12 Oct": callers show formatOverdue
+ * instead unless the post is approved (approved is never overdue).
+ */
 export function formatDue(
   value: DateInput,
   workspaceZone: string | null | undefined,
   now: Date = new Date(),
 ): string {
-  const day = formatDueDate(value, workspaceZone, now);
-  return day === '' ? '' : `Due ${day}`;
+  const zone = safeTimeZone(workspaceZone);
+  const days = daysFromToday(value, zone, now);
+  if (days === undefined) return '';
+  if (days < 0) return `Due ${formatDueDate(value, zone, now)}`;
+  return `Due ${aheadText(value, zone, now) ?? ''}`;
 }
 
 /** An overdue reading; `bad` is always true so callers colour it with the bad token. */
@@ -288,9 +376,8 @@ interface OverdueLabel {
 }
 
 /**
- * Up to one calendar month late: "Overdue · 12 Oct". More than a month late:
- * whole months, "Overdue 1 month" / "Overdue 5 months". Days are civil days on
- * the workspace zone, so overdue flips at the workspace's midnight.
+ * How late a due day is, on the workspace zone: "Overdue 1d" .. "Overdue 6d",
+ * "Overdue 3w", "Overdue 2mo", "Overdue 1y". Flips at the workspace's midnight.
  * Unparseable input reads as plain "Overdue".
  */
 export function formatOverdue(
@@ -298,16 +385,25 @@ export function formatOverdue(
   workspaceZone: string | null | undefined,
   now: Date = new Date(),
 ): OverdueLabel {
+  const late = behindText(value, safeTimeZone(workspaceZone), now);
+  return { text: late === undefined ? 'Overdue' : `Overdue ${late}`, bad: true };
+}
+
+/**
+ * formatDue for a plan's start day on the workspace zone: "Starts today",
+ * "Starts tomorrow", "Starts Mon" (2-6 days ahead), then "Starts 16 Nov"; a
+ * past start reads "Started 2d ago" / "Started 3w ago" / "Started 2mo ago".
+ */
+export function formatPlanStart(
+  value: DateInput,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
   const zone = safeTimeZone(workspaceZone);
-  const civil = civilOf(value, zone);
-  if (civil === undefined) return { text: 'Overdue', bad: true };
-  const today = civilOfInstant(now, zone);
-  let months = (today.year - civil.year) * 12 + (today.month - civil.month);
-  if (today.day < civil.day) months -= 1;
-  // Exactly one month late (same day of the month) still reads as a date.
-  const moreThanMonth = months > 1 || (months === 1 && today.day > civil.day);
-  if (!moreThanMonth) return { text: `Overdue · ${dayText(civil, today.year)}`, bad: true };
-  return { text: `Overdue ${plural(months, 'month')}`, bad: true };
+  const days = daysFromToday(value, zone, now);
+  if (days === undefined) return '';
+  if (days < 0) return `Started ${behindText(value, zone, now) ?? ''} ago`;
+  return `Starts ${aheadText(value, zone, now) ?? ''}`;
 }
 
 /** "Monday, 19 October 2026": the full spoken date, for accessible names. '' when unparseable. */

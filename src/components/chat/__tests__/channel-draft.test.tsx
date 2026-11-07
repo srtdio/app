@@ -60,7 +60,7 @@ describe('chat list draft preview', () => {
     expect(html).not.toContain(DRAFT_PREFIX);
   });
 
-  it('a person tile has no preview line (the time is its meta)', () => {
+  it('a person row shows the draft on line 2, like a group row', () => {
     const parts = channelRowParts({
       channel: { ...channel, channelType: 'dm' },
       summary: undefined,
@@ -70,6 +70,7 @@ describe('chat list draft preview', () => {
       selecting: false,
       checked: false,
     });
-    expect(parts.preview).toBeNull();
+    const html = renderToStaticMarkup(parts.preview);
+    expect(html).toMatch(/<span class="text-accent font-medium">Draft: <\/span>half typed/);
   });
 });

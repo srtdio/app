@@ -76,12 +76,12 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         <button
           type="button"
           onClick={onPress}
-          className={`flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-lg px-3 py-2 text-left mv-tint lit-hover focus-visible:lit-focus ${error ? 'focus-visible:outline-accent-fg' : ''}`}
+          className={`flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-l-lg px-3 py-2 text-left mv-tint lit-hover focus-visible:lit-focus ${error ? 'focus-visible:outline-accent-fg' : ''}`}
         >
           {body}
         </button>
       ) : (
-        <div className="flex min-h-[44px] min-w-0 flex-1 items-center gap-3 px-3 py-2">{body}</div>
+        <div className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-3 py-2">{body}</div>
       )}
       <button
         type="button"
@@ -107,7 +107,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
             action.onPress();
             onDismiss(id);
           }}
-          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium mv-tint ${
+          className={`flex h-11 min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium mv-tint ${
             error
               ? 'text-accent-fg underline lit-hover focus-visible:lit-focus focus-visible:outline-accent-fg'
               : 'text-accent lit-hover focus-visible:lit-focus'
