@@ -123,6 +123,8 @@ import {
   type TaskCalendar,
   type TaskWhen,
 } from '@/lib/chat/task-when';
+import { formatDueDate } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import {
   DEFAULT_PRIORITY,
@@ -334,7 +336,8 @@ function AddRow(props: {
         ))}
         {quick === undefined && dueOn !== null ? (
           <Chip
-            label={rowDateLine({ dueOn, status: 'todo', doneAt: null }, props.calendar)?.text ?? ''}
+            // The picked day itself (a chosen date stays absolute): "12 Nov".
+            label={formatDueDate(dueOn, props.calendar.timeZone, props.calendar.now)}
             selected
             data-task-day="picked"
             className="font-mono tabular-nums"
@@ -506,6 +509,8 @@ interface TaskSheetProps {
 
 export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const { tasks, currentUserId } = props;
+  // The one shared minute clock: due and done lines age with it.
+  const nowMs = useMinuteClock();
   const [draft, setDraft] = useState<SheetDraft>(EMPTY_DRAFT);
   const [notices, setNotices] = useState<Map<string, Notice>>(new Map());
   const [saving, setSaving] = useState(false);
@@ -779,7 +784,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   // When each row falls, on the workspace calendar, as it looks with this
   // draft's changes; new tasks by the day they were given.
   const calendar: TaskCalendar = {
-    now: new Date(),
+    now: new Date(nowMs),
     timeZone: props.timeZone,
     weekStartDay: props.weekStartDay,
   };
