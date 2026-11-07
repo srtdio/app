@@ -79,7 +79,10 @@ vi.mock('@/components/pages/pipeline/StageMoveConfirm', async (orig) => ({
     return null;
   },
 }));
-vi.mock('@/components/pages/pipeline/MoveSheet', () => ({ MoveSheet: () => null }));
+vi.mock('@/components/pages/pipeline/MoveSheet', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/pages/pipeline/MoveSheet')>()),
+  MoveSheet: () => null,
+}));
 vi.mock('@/components/pages/pipeline/StageChips', () => ({ StageChips: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({
   PipelineSortControl: () => null,
