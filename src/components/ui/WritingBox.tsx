@@ -378,7 +378,10 @@ export function WritingBox(props: WritingBoxProps) {
   // ancestor (page slides, sheets, overflow) can trap or cut the full-screen
   // editor. Moving the node keeps the text, caret, bars and attachments.
   const [host] = useState<HTMLDivElement | null>(() => {
-    if (typeof document === 'undefined') return null;
+    // No DOM (a server render, a test's stub document): the box renders in place.
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      return null;
+    }
     const node = document.createElement('div');
     node.style.display = 'contents';
     node.dataset.writingHost = '';
@@ -402,7 +405,7 @@ export function WritingBox(props: WritingBoxProps) {
   );
   useLayoutEffect(() => {
     if (host === null) return;
-    const target = phoneExpanded ? document.body : slotNode.current;
+    const target = phoneExpanded ? (document.body ?? null) : slotNode.current;
     if (target === null || host.parentNode === target) return;
     const el = field();
     const active = typeof document !== 'undefined' ? document.activeElement : null;
