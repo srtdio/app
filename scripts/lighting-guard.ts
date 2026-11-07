@@ -314,8 +314,9 @@ export function scanSource(file: string, src: string): Occurrence[] {
       out.push({ role: m[2]!, file, line: i + 1, token: `${m[1] ?? ''}${m[2]!}`, kind: 'class' });
     }
     for (const c of carriers) {
-      for (const _m of useLines[i]!.matchAll(c.re)) {
-        const token = c.use.startsWith('<') ? `${c.use}>` : `${c.use})`;
+      const uses = useLines[i]!.match(c.re)?.length ?? 0;
+      const token = c.use.startsWith('<') ? `${c.use}>` : c.use.endsWith('(') ? `${c.use})` : c.use;
+      for (let n = 0; n < uses; n++) {
         for (const role of c.roles) out.push({ role, file, line: i + 1, token, kind: 'part' });
       }
     }

@@ -96,12 +96,9 @@ describe('stripComments / blankImports', () => {
   it('keeps every newline', () => {
     const src = 'a\n/* b\nc */\nd // e\nf';
     expect(stripComments(src).split('\n')).toHaveLength(5);
-    expect(blankImports(`import {\n  A,\n} from 'a';\nx`).split('\n')).toEqual([
-      '      ',
-      '    ',
-      '            ',
-      'x',
-    ]);
+    const lines = blankImports(`import {\n  A,\n} from 'a';\nx`).split('\n');
+    expect(lines.map((l) => l.trim())).toEqual(['', '', '', 'x']);
+    expect(lines.map((l) => l.length)).toEqual([8, 4, 11, 1]);
   });
 });
 
