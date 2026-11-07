@@ -71,10 +71,7 @@ window.matchMedia ??= ((query: string) => ({
 
 import { NotificationsPage } from '@/components/pages/NotificationsPage';
 import { resetSessionReads } from '@/lib/session-read';
-import {
-  TopbarActionsProvider,
-  useTopbarActionsValue,
-} from '@/components/shell/topbar-actions';
+import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
 
 /** Stands in for Topbar: renders what the page published into its two slots. */
 function TopbarProbe() {
@@ -230,15 +227,15 @@ describe('Activity header, order and the Unread zero state', () => {
   });
 
   it('Mark all read leaves the top bar empty when nothing is unread', async () => {
-    h.fetchActivityEntries
-      .mockReset()
-      .mockResolvedValue({
-        ok: true,
-        data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
-      });
+    h.fetchActivityEntries.mockReset().mockResolvedValue({
+      ok: true,
+      data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
+    });
     await mount();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
-    expect(document.querySelector('[data-test-topbar-sort] [aria-label="Sort activity"]')).not.toBeNull();
+    expect(
+      document.querySelector('[data-test-topbar-sort] [aria-label="Sort activity"]'),
+    ).not.toBeNull();
   });
 
   it('reads in the stored order: Oldest first on the device reads oldest', async () => {

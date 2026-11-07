@@ -61,6 +61,13 @@ const FORWARDERS: { file: string; renders: RegExp; caller: RegExp }[] = [
     renders: /'data-induction':\s*props\.induction/,
     caller: /\binduction=\{INDUCTION_KEYS\.(\w+)\}/g,
   },
+  {
+    // The top bar's filled "+" (Pipeline, Briefs, Assets): the old create
+    // button's key rides on it.
+    file: 'components/shell/topbar-actions.tsx',
+    renders: /'data-induction':\s*induction\b/,
+    caller: /\binduction=\{INDUCTION_KEYS\.(\w+)\}/g,
+  },
 ];
 
 /** The ways a component sets a key on its own control. */
