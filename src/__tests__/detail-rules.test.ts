@@ -153,6 +153,8 @@ describe('detail rules: IconSend only sends a message or comment', () => {
     'comments/CommentComposer.tsx', // the comment composer's send button
     'comments/SlotComposer.tsx', // the per-slide comment composer's send button
     'ui/PersonMessageInput.tsx', // the person card's inline composer send button
+    'pages/pcs/CaptionAnnotationComposer.tsx', // the caption comment sheet's Post (RowSend)
+    'pages/pcs/PinAnnotationComposer.tsx', // the image pin comment sheet's Post (RowSend)
   ]);
 
   it('IconSend appears only in the composer files', () => {

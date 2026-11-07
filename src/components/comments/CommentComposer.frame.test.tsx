@@ -117,10 +117,8 @@ describe('CommentComposer on ui/WritingBox', () => {
     expect(byLabel('Mention')).toBeNull();
     expect(byLabel('Record voice note')).toBeNull();
     expect(byLabel('Attach a file')).toBeNull();
-    // The + is the compact 36 grey circle.
-    const plus = byLabel('Add attachment');
-    expect(plus?.className).toContain('w-9');
-    expect(plus?.querySelector('[data-plus-icon]')?.className).toContain('bg-panel-3');
+    // The + is ComposerTray's compact key (its 36 grey circle).
+    expect(byLabel('Add attachment')?.hasAttribute('data-plus')).toBe(true);
   });
 
   it('Send is RowSend: solid ink when sendable, grey when not', async () => {

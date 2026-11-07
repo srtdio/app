@@ -100,7 +100,9 @@ function tileIds(): string[] {
 function focusBoxes(): void {
   act(() => {
     host
-      ?.querySelectorAll('[data-writing-field] textarea, [data-writing-field] [contenteditable="true"]')
+      ?.querySelectorAll(
+        '[data-writing-field] textarea, [data-writing-field] [contenteditable="true"]',
+      )
       .forEach((el) => el.dispatchEvent(new FocusEvent('focusin', { bubbles: true })));
   });
 }

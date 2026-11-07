@@ -104,7 +104,7 @@ export function CaptionAnnotationComposer({
               type="button"
               label="Post"
               icon={<IconSend size={ICON_SIZE.control} />}
-                data-induction={INDUCTION_KEYS.postCommentPost}
+              data-induction={INDUCTION_KEYS.postCommentPost}
               busy={submitting}
               disabled={!canPost}
               onClick={() => void onSubmit(body)}

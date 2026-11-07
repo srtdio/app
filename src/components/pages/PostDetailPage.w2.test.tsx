@@ -41,9 +41,17 @@ function collect(node: ReactNode, out: ReactElement[]): void {
   if (node === null || typeof node !== 'object' || !('props' in node)) return;
   const el = node as ReactElement;
   out.push(el);
-  const p = el.props as { children?: ReactNode; footer?: ReactNode };
+  // input / send: ui/WritingBox's field and send slots.
+  const p = el.props as {
+    children?: ReactNode;
+    footer?: ReactNode;
+    input?: ReactNode;
+    send?: ReactNode;
+  };
   collect(p.children, out);
   collect(p.footer, out);
+  collect(p.input, out);
+  collect(p.send, out);
 }
 
 function walk(tree: ReactNode): ReactElement[] {
