@@ -1832,9 +1832,6 @@ export function PlanItemScreen(props: {
                     onNavigateAway={props.onClose}
                     actionsOpen={props.open && moreOpen}
                     onActionsOpenChange={setMoreOpen}
-                    onOpenInPipeline={() => {
-                      if (item.post_id !== null) navigate(postRoute(item.post_id));
-                    }}
                   />
                 </Suspense>
               </PostSheetPlanRowsContext.Provider>
@@ -2232,7 +2229,6 @@ export function LinkedPostPage(props: {
   onClose: () => void;
   onDismiss?: () => void;
 }): ReactElement | null {
-  const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => {
     if (!props.open) setMoreOpen(false);
@@ -2264,7 +2260,6 @@ export function LinkedPostPage(props: {
           onNavigateAway={props.onClose}
           actionsOpen={props.open && moreOpen}
           onActionsOpenChange={setMoreOpen}
-          onOpenInPipeline={() => navigate(postRoute(props.postId))}
         />
       </Suspense>
     </PlanPage>

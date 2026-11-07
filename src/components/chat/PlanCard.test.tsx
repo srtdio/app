@@ -206,8 +206,8 @@ describe('Item screen rules', () => {
     expect(src).toContain('<ActionMenuTrigger');
     expect(src).toContain('actionsOpen={props.open && moreOpen}');
     expect(src).toContain('onActionsOpenChange={setMoreOpen}');
-    expect(src).toContain('onOpenInPipeline={() => {');
-    expect(src).toContain('navigate(postRoute(item.post_id))');
+    // Open in pipeline is retired from the post view's sheet; the host passes nothing for it.
+    expect(src).not.toContain('onOpenInPipeline');
     // The overflow is THE post view's sheet: no sheet of its own, no absolute button.
     expect(src).not.toContain('OverflowSheet');
     expect(src).not.toContain("from '@/components/ui/Sheet'");
