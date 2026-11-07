@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { userDensitySet } from '@srtdio/rpc';
 import { useNavigate } from 'react-router-dom';
 import { Sheet } from '@/components/ui/Sheet';
 import { MenuItem } from '@/components/shell/MenuItem';
@@ -20,6 +21,100 @@ import { useTheme } from '@/lib/use-theme';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useDismissLayer } from '@/lib/modal-focus';
 import { useMenuKeys } from '@/lib/useMenuKeys';
+import { Chip } from '@/components/ui/Chip';
+import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
+import { Text } from '@/components/ui/Text';
+import { supabase } from '@/lib/supabase';
+import { generateTraceId } from '@/lib/trace';
+import { logger } from '@/lib/logger';
+import { getProfileSnapshot } from '@/lib/use-current-profile';
+import {
+  activeDensity,
+  revertDensity,
+  setDensityLocal,
+  DENSITIES,
+  type Density,
+} from '@/lib/density';
+
+/** The density picks, in order (decided 8 Nov 2026; Cozy is the default). */
+export const DENSITY_LABEL: Record<Density, string> = {
+  compact: 'Compact',
+  cozy: 'Cozy',
+  calm: 'Calm',
+};
+
+/** The save failed: reverted, with a Retry (Words: "Couldn't {action}."). */
+export const DENSITY_SAVE_FAILED = "Couldn't save density.";
+
+/**
+ * Density under Appearance: label, then three tap chips in a 3-column grid.
+ * A tap applies at once (html attribute + device cache, no await) and saves
+ * fire-and-forget through user_density_set; a failed save reverts and shows
+ * the ErrorNote with Retry. The menu stays open.
+ */
+export function DensityRow() {
+  const [density, setDensity] = useState<Density>(() => activeDensity());
+  const [failed, setFailed] = useState<Density | null>(null);
+
+  function pick(next: Density): void {
+    const userId = getProfileSnapshot().userId;
+    const previous = setDensityLocal(userId, next);
+    setDensity(next);
+    setFailed(null);
+    if (next === previous) return;
+    const revert = (): void => {
+      // Only undo when this pick is still the one on screen.
+      if (activeDensity() !== next) return;
+      revertDensity(userId, previous);
+      setDensity(previous);
+      setFailed(next);
+    };
+    void userDensitySet(supabase, { p_density: next, p_trace_id: generateTraceId() }).then(
+      (result) => {
+        if (result.ok) return;
+        logger.error('user_density_set failed', { error: result.error.message });
+        revert();
+      },
+      (thrown: unknown) => {
+        logger.error('user_density_set failed', { error: String(thrown) });
+        revert();
+      },
+    );
+  }
+
+  return (
+    <div data-density-row="" className="flex flex-col gap-2 px-3 py-2">
+      <Text role="label" className="text-fg-2">
+        Density
+      </Text>
+      <div role="radiogroup" aria-label="Density" className="grid grid-cols-3 gap-2">
+        {DENSITIES.map((d) => (
+          <Chip
+            key={d}
+            size="tap"
+            label={DENSITY_LABEL[d]}
+            selected={density === d}
+            role="radio"
+            aria-checked={density === d}
+            aria-pressed={undefined}
+            data-density-pick={d}
+            className="w-full"
+            onClick={() => pick(d)}
+          />
+        ))}
+      </div>
+      {failed !== null ? (
+        <ErrorNote className="flex items-center justify-between gap-2">
+          <span>{DENSITY_SAVE_FAILED}</span>
+          <Button type="button" variant="ghost" onClick={() => pick(failed)}>
+            Retry
+          </Button>
+        </ErrorNote>
+      ) : null}
+    </div>
+  );
+}
 
 interface AvatarMenuProps {
   open: boolean;
@@ -70,6 +165,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         label="Appearance"
         onClick={toggle}
       />
+      <DensityRow />
       <MenuItem
         icon={<IconScrollText size={ICON_SIZE.tray} />}
         label="Help"
@@ -110,7 +206,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
           role="menu"
           aria-label="Account"
           onKeyDown={keys.onKeyDown}
-          className="fixed top-14 right-3 z-sheet w-60 rounded-xl border bg-panel p-1 lit-overlay"
+          className="fixed top-14 right-3 z-sheet w-72 rounded-xl border bg-panel p-1 lit-overlay"
         >
           {rows}
         </div>

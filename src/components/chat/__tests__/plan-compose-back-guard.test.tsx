@@ -19,6 +19,12 @@ vi.mock('@/components/chat/PostPicker', () => ({ PostPicker: () => null }));
 vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({ canAttach: false, uploadFile: undefined }),
 }));
+// The viewer's side (Add from bank is agency only) reads the session; no
+// SessionProvider here, so the side is stubbed and the bank sheet left out.
+vi.mock('@/lib/chat/viewer-role', () => ({
+  useViewerSide: () => ({ side: 'client', ready: true }),
+}));
+vi.mock('@/components/pages/plan-tab/BankPickSheet', () => ({ BankPickSheet: () => null }));
 
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ToastProvider } from '@/components/ui/toast';

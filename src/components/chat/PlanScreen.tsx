@@ -85,7 +85,6 @@ import {
 import { postUpdate, type PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { HeaderBar } from '@/components/ui/HeaderBar';
-import { Card } from '@/components/ui/Card';
 import { SECTION_LABEL_INK, Text, TEXT_ROLE } from '@/components/ui/Text';
 import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -310,6 +309,21 @@ import {
  * motion.
  */
 export const PLAN_PANEL_WIDTH = 'w-plan-narrow min-[972px]:w-plan-panel';
+
+/**
+ * Plan day density (flat sections, no card frame). Parts read density through
+ * the compact:/calm: CSS variants only; Cozy is the unprefixed default.
+ * PLAN_DAY_STACK: the gap inside a day (title, PLAN, POST, Add): 4 / 8 / 12.
+ * PLAN_DAY_PAD: a day's top and bottom padding: 8 / 12 / 16; with the hairline
+ * between days this is also the space between two days (no extra margin).
+ * PLAN_ROW_RULE: a second row in the same day sits under a hairline, the stack
+ * gap above it and below it.
+ */
+export const PLAN_DAY_STACK = 'gap-2 compact:gap-1 calm:gap-3';
+export const PLAN_DAY_PAD = 'py-3 compact:py-2 calm:py-4';
+export const PLAN_ROW_RULE = 'border-t border-border pt-2 compact:pt-1 calm:pt-3';
+/** The flat day section: GUTTER sides, density padding, a hairline under. */
+export const PLAN_DAY_SECTION = cn('flex flex-col border-b border-border', GUTTER, PLAN_DAY_PAD);
 
 /**
  * Anything other than a plan panel that owns an Escape pressed on the page
@@ -745,8 +759,8 @@ export function screenProgressLabel(bundle: PlanBundle, side?: ViewerSide): stri
 }
 
 /**
- * The progress under the header: two equal boxes (bg-panel-2, radius 12, 12px
- * padding, 8px apart). PLAN: "{ok}/{n} OK" over the items the viewer's side
+ * The progress under the header: two flat columns (no boxes), a hairline under,
+ * the day's density padding. PLAN: "{ok}/{n} OK" over the items the viewer's side
  * reviews, a 4px good bar; POST: "{approved}/{n} approved" over the post
  * items, a 4px accent bar. Numbers in JetBrains Mono.
  */
@@ -771,12 +785,15 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
     },
   ] as const;
   return (
-    <div data-plan-progress-block="" className="grid grid-cols-2 gap-2 px-4 pt-3">
+    <div
+      data-plan-progress-block=""
+      className={cn('grid grid-cols-2 gap-4 border-b border-border', GUTTER, PLAN_DAY_PAD)}
+    >
       {boxes.map((box) => (
         <div
           key={box.key}
           data-plan-screen-progress={box.key}
-          className="flex min-w-0 flex-col gap-2 rounded-xl bg-panel-2 p-3 lit-card-muted"
+          className={cn('flex min-w-0 flex-col', PLAN_DAY_STACK)}
         >
           <span className={TEXT_ROLE.section}>{box.label}</span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
@@ -2749,12 +2766,12 @@ export function PlanBody(props: {
   return (
     <>
       <PlanProgressRow bundle={bundle} side={side} />
-      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col gap-4 pb-4 pt-3">
+      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col pb-4">
         {props.groups.map((week, w) => (
           <section
             key={week.label ?? `days-${w}`}
             {...(week.label !== null ? { 'data-plan-week': week.label } : {})}
-            className="flex flex-col gap-4"
+            className="flex flex-col"
           >
             {week.label !== null ? (
               <h3
@@ -2782,16 +2799,16 @@ export function PlanBody(props: {
                   </p>
                 );
               return (
-                <Card
+                <div
                   key={day.day ?? 'none'}
                   data-plan-day={day.day ?? 'none'}
                   {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
                   {...(day.day === today ? { 'data-plan-day-today': '' } : {})}
-                  // One card per day on the page edge (16 in, 16 apart); today takes the selected edge.
-                  selected={day.day === today}
-                  className="mx-4 self-stretch md:mx-6"
+                  // One flat section per day: GUTTER sides, a hairline under. Today
+                  // has no outline; its date tile and Today pill mark it.
+                  className={PLAN_DAY_SECTION}
                 >
-                  <div className="flex flex-col gap-4">
+                  <div data-plan-day-stack="" className={cn('flex flex-col', PLAN_DAY_STACK)}>
                     {items.map((item, index) => (
                       <PlanRow
                         key={item.id}
@@ -2842,7 +2859,7 @@ export function PlanBody(props: {
                       <AddRow day={day.day} empty={false} onAdd={props.onAdd} />
                     ) : null}
                   </div>
-                </Card>
+                </div>
               );
             })}
           </section>
@@ -2854,8 +2871,9 @@ export function PlanBody(props: {
 
 /**
  * A day's Add row (agency, view mode): plus icon and "Add" (13px, 600, accent)
- * in a 44px target. Under a day's rows it sits on the title column and tucks
- * up so the gap stays 16px; on an empty day it sits right of "Nothing
+ * in a 44px target. Under a day's rows it sits on the title column and its
+ * 44 box overlaps the line (CONTROL_IN_LINE) so the visible gap is the day's
+ * density gap (PLAN_DAY_STACK); on an empty day it sits right of "Nothing
  * planned", beside the date tile.
  */
 function AddRow(props: {
@@ -2867,7 +2885,10 @@ function AddRow(props: {
   return (
     <div
       data-plan-add-row=""
-      className={cn('flex min-h-11 items-center gap-2', !props.empty && '-mb-3 -mt-2 pl-17')}
+      className={cn(
+        'flex min-h-11 items-center gap-2',
+        !props.empty && cn(CONTROL_IN_LINE, 'pl-17'),
+      )}
     >
       {props.empty ? (
         <p data-plan-day-empty="" className="flex-1 text-md text-fg-3">
@@ -2889,8 +2910,8 @@ function AddRow(props: {
 }
 
 /**
- * A day's calendar tile, shown once per day group: 56x56, radius 10, a 1px
- * border-strong, bg-panel. An 18px strip on top holds the weekday (10px/12px,
+ * A day's calendar tile, shown once per day group: 56x56, rounded-picture
+ * (10), flat bg-panel-2 (no border, no lit-card). An 18px strip on top holds the weekday (10px/12px,
  * 600, uppercase, 0.06em, bg-panel-2, text-fg-2); the day number sits centred
  * below it (JetBrains Mono 20px/24px, 500). Today (the workspace zone): the
  * whole tile solid accent (accent-fg strip and number), with a solid "Today"
@@ -2910,9 +2931,9 @@ export function DayColumn(props: {
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
       className={cn(
-        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-xl border lit-card',
-        // Today keeps its solid accent fill: bg-none drops lit-card's gradient.
-        isToday ? 'border-transparent bg-accent bg-none' : 'bg-panel',
+        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-picture',
+        // Flat: no border, no lit-card. Today keeps its solid accent fill.
+        isToday ? 'bg-accent' : 'bg-panel-2',
       )}
     >
       <span
@@ -3134,9 +3155,18 @@ function PlanStatusLines(props: {
     );
   }
   return (
-    <div data-plan-row-lines="" className="mt-1 flex flex-col">
+    <div data-plan-row-lines="" className={cn('flex flex-col', PLAN_DAY_STACK)}>
       {plan !== null ? (
-        <div data-plan-line="plan" className="flex min-h-11 items-center gap-3">
+        // The 44 tap boxes overlap the line (CONTROL_IN_LINE) so the visible
+        // gaps follow the density stack. The switch and the pill draw their
+        // whole 44 frame, so their line keeps 44 and the gap runs from the frame.
+        <div
+          data-plan-line="plan"
+          className={cn(
+            'flex min-h-11 items-center gap-3',
+            control.kind === 'text' && CONTROL_IN_LINE,
+          )}
+        >
           <span className={LINE_LABEL}>{PLAN_LINE_LABEL}</span>
           {plan}
         </div>
@@ -3144,7 +3174,9 @@ function PlanStatusLines(props: {
       {props.menu !== undefined && props.menu !== null ? (
         <div className="flex items-center justify-between gap-3">
           <PostStatusLine post={post} />
-          {props.menu}
+          <span data-plan-row-menu="" className={cn('flex shrink-0', CONTROL_IN_LINE)}>
+            {props.menu}
+          </span>
         </div>
       ) : (
         <PostStatusLine post={post} />
@@ -3207,7 +3239,7 @@ function PairedPostRow(props: {
     return (
       <div
         data-plan-pair={link.postId}
-        className="mt-2 flex flex-col border-l border-border-strong pl-3"
+        className="flex flex-col border-l border-border-strong pl-3"
       >
         <div
           role="button"
@@ -3235,10 +3267,7 @@ function PairedPostRow(props: {
       : '';
   const onOpen = props.onOpen;
   return (
-    <div
-      data-plan-pair={link.postId}
-      className="mt-2 flex flex-col border-l border-border-strong pl-3"
-    >
+    <div data-plan-pair={link.postId} className="flex flex-col border-l border-border-strong pl-3">
       <PressableRow
         type="button"
         data-plan-pair-row={link.postId}
@@ -3465,8 +3494,8 @@ function PlanRow(props: {
   const gesture = useMenuGesture(() => menu?.onOpenChange(id, true));
   // The tile column stays 56px wide on every row, so titles align.
   const tileCol = props.tile ?? <span aria-hidden="true" className="w-14 shrink-0" />;
-  // Rows under a day's first sit on a hairline, centred in the 16px gap.
-  const rowLine = props.tile === null && '-mt-2 border-t border-border pt-2';
+  // Rows under a day's first sit on a hairline: the stack gap above, the same below.
+  const rowLine = props.tile === null && PLAN_ROW_RULE;
   const dateLine = (
     <span
       data-plan-row-date={date.dated ? 'dated' : 'none'}
@@ -3621,7 +3650,7 @@ function PlanRow(props: {
   return (
     <div data-plan-row-wrap={id} className={cn('flex w-full min-w-0 items-start gap-3', rowLine)}>
       {tileCol}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div data-plan-row-stack="" className={cn('flex min-w-0 flex-1 flex-col', PLAN_DAY_STACK)}>
         {rowButton}
         {lines}
         {link.kind !== 'none' ? (

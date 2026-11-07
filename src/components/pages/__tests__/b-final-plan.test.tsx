@@ -132,9 +132,11 @@ describe('Card slots (additive)', () => {
     expect(other).not.toContain('lit-selected');
   });
 
-  it('the Plan screens draw their day, status, description, buckets and who-can-see cards with Card', () => {
+  it('the Plan item screen draws its status, description, buckets and who-can-see cards with Card; plan days are flat', () => {
     const week = read('chat/PlanScreen.tsx');
-    expect(week).toMatch(/<Card\s+key=\{day\.day \?\? 'none'\}/);
+    // Plan days are flat sections (hairline between days), never a Card frame.
+    expect(week).not.toMatch(/<Card\s+key=\{day\.day \?\? 'none'\}/);
+    expect(week).toContain('className={PLAN_DAY_SECTION}');
     expect(week).not.toContain("'mx-4 flex flex-col gap-4 rounded-xl border bg-panel p-3'");
     const item = read('chat/PlanItemScreen.tsx');
     for (const hook of [

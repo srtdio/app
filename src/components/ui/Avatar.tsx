@@ -5,8 +5,8 @@ import { IconUser } from '@/components/ui/icons';
 /**
  * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
  * name in a meta line; 'header' (32) in a thread or detail header; 'row' (40)
- * in a list row (members, search, pickers); 'card' (40) as a list row's
- * picture (ui/ListCard, flat look 7 Nov 2026); 'profile' (72) on a profile or group info screen.
+ * in a list row (members, search, pickers); 'card' (48, 40 in Compact density) as
+ * a list row's picture (ui/ListCard; <html data-density> through CSS); 'profile' (72) on a profile or group info screen.
  * No other sizes.
  */
 export type AvatarRole = 'inline' | 'header' | 'row' | 'card' | 'profile';
@@ -40,7 +40,8 @@ export const AVATAR_PX: Record<AvatarRole, number> = {
   inline: 20,
   header: 32,
   row: 40,
-  card: 40,
+  // 48 in Cozy and Calm; Compact draws it 40 through the compact: variant (CARD_SIZE).
+  card: 48,
   profile: 72,
 };
 
@@ -88,6 +89,17 @@ export function avatarShapeClass(role: AvatarRole, kind: AvatarKind = 'person'):
 
 const base = 'lit-avatar inline-flex shrink-0 items-center justify-center select-none';
 
+/**
+ * 'card' follows the density (ui/ListCard picture): sized by classes, not the
+ * inline style, so <html data-density="compact"> draws it 40 with no prop.
+ */
+const CARD_SIZE = 'h-12 w-12 compact:h-10 compact:w-10';
+
+/** The inline size for a role: none for 'card' (CARD_SIZE classes size it). */
+function sizeStyle(role: AvatarRole, px: number): CSSProperties | undefined {
+  return role === 'card' ? undefined : { width: px, height: px };
+}
+
 export function Avatar({ presence, ...props }: AvatarProps) {
   if (presence !== 'online') return <AvatarFace {...props} />;
   return (
@@ -120,8 +132,8 @@ function AvatarFace({
       ? { role: 'img', 'aria-label': label }
       : {};
   const px = AVATAR_PX[role];
-  const box = `${avatarShapeClass(role, kind)} ${base}`;
-  const style: CSSProperties = { width: px, height: px };
+  const box = cn(avatarShapeClass(role, kind), base, role === 'card' && CARD_SIZE);
+  const style = sizeStyle(role, px);
 
   if (src !== undefined && !errored) {
     return (

@@ -279,13 +279,10 @@ describe('Undo restores the exact previous status (A3)', () => {
 describe('week list layout (L1-L4)', () => {
   it('date tile: 56x56, weekday strip over the number; today solid accent with a Today pill; No date', () => {
     const today = renderToStaticMarkup(<DayColumn day="2026-10-14" today="2026-10-14" />);
-    expect(today).toContain(
-      'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-xl border lit-card',
-    );
-    // Today keeps its solid accent: bg-none drops lit-card's gradient.
-    expect(today).toMatch(
-      /data-plan-day-col="" data-plan-today=""[^>]*border-transparent bg-accent bg-none"/,
-    );
+    expect(today).toContain('flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-picture');
+    // Flat: no border, no lit-card; today keeps its solid accent.
+    expect(today).toMatch(/data-plan-day-col="" data-plan-today=""[^>]*rounded-picture bg-accent"/);
+    expect(today).not.toContain('lit-card');
     expect(today).toMatch(/data-plan-day-weekday=""[^>]*bg-accent text-accent-fg">Wed</);
     expect(today).toMatch(
       /data-plan-day-number=""[^>]*font-mono[^>]*tabular-nums text-accent-fg">14</,
@@ -299,9 +296,10 @@ describe('week list layout (L1-L4)', () => {
     expect(today).not.toMatch(/ text-accent">/);
     const other = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" />);
     expect(other).not.toContain('data-plan-today');
-    // A lit card: lit-card draws the edges (no border-border-strong).
-    expect(other).toContain('rounded-xl border lit-card bg-panel');
-    expect(other).not.toContain('border-border-strong');
+    // Flat tile: rounded-picture on bg-panel-2, no border, no lit-card.
+    expect(other).toContain('rounded-picture bg-panel-2');
+    expect(other).not.toContain('lit-card');
+    expect(other).not.toMatch(/data-plan-day-col=""[^>]*\bborder\b/);
     expect(other).toMatch(/^<div data-plan-day-col=""/);
     expect(other).toMatch(/data-plan-day-weekday=""[^>]*bg-panel-2 text-fg-2">Thu</);
     expect(other).toMatch(/tabular-nums text-fg">15</);
@@ -331,8 +329,9 @@ describe('week list layout (L1-L4)', () => {
       expect.arrayContaining(['whitespace-nowrap', 'text-xs', 'font-semibold', 'text-fg-2']),
     );
     expect(none).not.toContain('data-plan-today');
-    expect(none).not.toContain('border-transparent bg-accent');
-    expect(none).toContain('lit-card');
+    expect(none).not.toContain('rounded-picture bg-accent');
+    expect(none).toContain('rounded-picture bg-panel-2');
+    expect(none).not.toContain('lit-card');
   });
 
   it('dated tile: weekday in the strip, day number in mono', () => {
@@ -423,11 +422,15 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toMatch(
       /data-plan-day-empty="" class="flex min-h-11 items-center text-md text-fg-3">Planned posts show up here\./,
     );
-    // Day block: the shared Card on the page edge, rows 16px apart.
+    // Day block: a flat section (no Card frame), GUTTER sides, a hairline under,
+    // the density stack inside.
     expect(html).toMatch(
-      /data-plan-day="[^"]+"[^>]*class="[^"]*rounded-xl border bg-panel lit-card[^"]*mx-4/,
+      /data-plan-day="[^"]+"[^>]*class="flex flex-col border-b border-border px-4 md:px-6 py-3 compact:py-2 calm:py-4"/,
     );
-    expect(html).toContain('<div class="flex flex-col gap-4">');
+    expect(html).not.toMatch(/data-plan-day="[^"]+"[^>]*data-card=""/);
+    expect(html).toContain(
+      '<div data-plan-day-stack="" class="flex flex-col gap-2 compact:gap-1 calm:gap-3">',
+    );
     expect(html).toContain('flex min-w-0 flex-1 flex-col gap-1');
     // A client sees no Add, no drag.
     expect(html).not.toContain('data-plan-add=');

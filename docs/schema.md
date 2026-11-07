@@ -42,7 +42,10 @@ App-level profile. id mirrors auth.users.id (FK).
 | email_opt_in | boolean | not null, default true; catch-up email opt-out |
 | email_opt_out_by | uuid | nullable, FK users.id ON DELETE SET NULL; who turned catch-up emails off when it was not the person. NULL when on or self-off. Set only by trigger users_email_opt_out_by_trg (BEFORE UPDATE) from the transaction-local setting sorted.email_opt_out_by; any other write is overwritten by the trigger. authenticated has column SELECT, no UPDATE |
 | username | text | nullable, ^[a-z0-9._]{1,20}$ (minimum was 3 until 18 Oct 2026), unique across Sorted (users_username_unique, partial where not null); used for @mentions. Existing users backfilled from display_name on 14 Oct 2026 |
+| density | text | not null, default 'cozy', CHECK users_density_check (density in ('compact','cozy','calm')); row density per account (8 Nov 2026, 20261108010000_density_and_plan_bank). Read with the session profile; written only by user_density_set |
 | created_at / updated_at | timestamptz | default now() |
+
+user_density_set(p_density text, p_trace_id uuid) returns uuid, SECURITY DEFINER (search_path='', EXECUTE to authenticated only; 8 Nov 2026): sets users.density on auth.uid()'s own row only. lower(trim()) the value; null caller or a value outside compact/cozy/calm raises invalid_payload. Writes audit_log_write 'user_density_set' with {density}. Returns the user id.
 
 user_profile_update(p_display_name, p_designation, p_avatar_url, p_email_opt_in, p_trace_id) SECURITY DEFINER (search_path='', EXECUTE to authenticated only): the only write path to a user's own profile. Acts on auth.uid(); a null or blank display_name raises invalid_payload. designation / avatar_url / email_opt_in are coalesced (null leaves the existing value). profile_completed_at is stamped now() the first time an avatar exists and never overwritten. Writes a success audit row.
 
@@ -439,6 +442,9 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - plan_create_with_items(p_workspace_id, p_title, p_starts_on, p_ends_on, p_concepts jsonb, p_posts jsonb, p_trace_id) returns uuid (13 Oct, 20261013170000_plan_create_with_items): one transaction.
   Creates a Draft (team) plan, adds concepts in order, adds posts grouped by day (moves posts.target_date to noon in the workspace zone), and "No date" posts get posts.target_date cleared.
   Any failure saves nothing.
+- plan_create_with_items(p_workspace_id, p_title, p_starts_on, p_ends_on, p_concepts jsonb, p_posts jsonb, p_bank jsonb, p_trace_id) returns uuid (8 Nov 2026, 20261108010000_density_and_plan_bank): the 8-arg overload the app calls (p_bank [] when none).
+  p_bank = [{item_id, target_date?}], at most 50, distinct item_id (else invalid_payload); concepts + posts + bank together must be 1+.
+  After concepts and posts, each bank idea goes through plan_item_from_bank (agency only, show_to_client=false, past_date for a date before today); a missing target_date is greatest(starts_on, today in the workspace timezone). One transaction. The 7-arg overload stays (no DROP), unused by the app.
 - plan_update(p_plan_id, p_title, p_starts_on, p_ends_on, p_trace_id): rename or move dates.
 - plan_share_with_client(p_plan_id, p_trace_id): one-way team to client; drafts inside do not block it (20261011011500_plan_drafts_in_client_plans). Notifies plan_opened via _plan_notify; an already client plan is a no-op.
 - plan_delete(p_plan_id, p_trace_id): soft-delete the plan. Only the plan's creator or an active workspace owner/admin (any other agency-side member raises forbidden_role; 20261012162000_plan_delete_open_rules). Notifies plan_deleted via _plan_notify.

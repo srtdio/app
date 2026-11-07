@@ -29,8 +29,9 @@ interface ChipProps extends Omit<
   tab?: boolean;
   variant?: 'default' | 'add';
   /**
-   * Both sizes render the one 32px visible chip inside a 44px tap box (design
-   * system); 'tap' also centres the label. 'sm' stays accepted so call sites compile.
+   * Both sizes render the one visible chip (density: 32 Compact, 36 Cozy, 40
+   * Calm) inside a 44px tap box; 'tap' also centres the label (a chip filling a
+   * grid cell). 'sm' stays accepted so call sites compile.
    */
   size?: 'sm' | 'tap';
   /**
@@ -50,11 +51,24 @@ interface ChipProps extends Omit<
   onClear?: (() => void) | undefined;
 }
 
-/** The visible chip: 32 tall (min-h-8, borders included), 12 side padding. */
+/**
+ * The visible chip by density (<html data-density>, CSS variants; borders
+ * included): Compact 32 / 12 side pad, Cozy 36 / 16, Calm 40 / 16. The tap box
+ * stays 44 in all three.
+ */
+export const CHIP_FACE_SIZE = 'min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10';
+
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
-  sm: 'min-h-8 px-3',
-  tap: 'min-h-8 px-3 justify-center',
+  sm: CHIP_FACE_SIZE,
+  tap: cn(CHIP_FACE_SIZE, 'justify-center text-center'),
 };
+
+/**
+ * The resting edge: border-strong (3:1 edge rule, 8 Nov 2026). Picked: the ink
+ * line (border-fg) and fg ink, no fill.
+ */
+export const CHIP_REST_EDGE = 'border-border-strong text-fg-2';
+export const CHIP_PICKED_EDGE = 'border-fg text-fg';
 
 /**
  * The 44 tap box around the 32 chip: no look of its own (transparent, no
@@ -126,8 +140,8 @@ export function Chip({
           variant === 'add'
             ? 'border-dashed border-border-strong text-fg-3'
             : selected
-              ? 'border-fg text-fg'
-              : 'border-border text-fg-2',
+              ? CHIP_PICKED_EDGE
+              : CHIP_REST_EDGE,
           className,
         )}
       >

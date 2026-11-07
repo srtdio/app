@@ -85,7 +85,7 @@ describe('Pipeline controls buttons', () => {
     const faces = html.match(/<span data-chip-face=""[^>]*>/g) ?? [];
     expect(faces).toHaveLength(3);
     for (const face of faces) {
-      expect(classOf(face)).toEqual(expect.arrayContaining(['min-h-8', 'px-3', 'rounded-full']));
+      expect(classOf(face)).toEqual(expect.arrayContaining(['min-h-9', 'px-4', 'compact:min-h-8', 'compact:px-3', 'rounded-full']));
     }
     const active = /aria-current="true"[^>]*><span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
     const activeFace = classOf(active.slice(active.indexOf('<span')));

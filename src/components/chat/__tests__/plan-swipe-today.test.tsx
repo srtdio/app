@@ -194,20 +194,21 @@ describe('open at today', () => {
         html.match(new RegExp(`<div data-plan-day="${day}"[^>]*>`))?.[0] ?? '';
       const today = groupTag('2026-10-13');
       expect(today).toContain('data-plan-day-today=""');
-      // Each day is the shared Card; today's takes the selected edge, not a band.
-      expect(today).toContain('data-card=""');
-      expect(today).toContain('rounded-xl border bg-panel');
-      expect(today).toContain('lit-selected');
+      // Each day is a flat section with a hairline under; today has no outline
+      // (its date tile and Today pill mark it), not a band.
+      expect(today).not.toContain('data-card=""');
+      expect(today).toContain('border-b border-border');
+      expect(today).not.toContain('lit-selected');
       expect(today).not.toContain('lit-card');
       expect(today).not.toContain('bg-accent-soft');
       const other = groupTag('2026-10-15');
       expect(other).not.toContain('data-plan-day-today');
-      expect(other).toContain('rounded-xl border bg-panel');
-      expect(other).toContain('lit-card');
+      expect(other).toContain('border-b border-border');
+      expect(other).not.toContain('lit-card');
       expect(other).not.toContain('bg-accent-soft');
       expect(html.match(/data-plan-day-today=""/g)).toHaveLength(1);
       expect(html.match(/data-plan-today=""/g)).toHaveLength(1);
-      expect(html).toMatch(/data-plan-today=""[^>]*border-transparent bg-accent bg-none"/);
+      expect(html).toMatch(/data-plan-today=""[^>]*rounded-picture bg-accent"/);
       expect(html.match(/data-plan-today-pill=""[^>]*>Today</g)).toHaveLength(1);
       // The pill sits in today's group.
       const band = html.slice(html.indexOf(today), html.indexOf('data-plan-day="2026-10-14"'));

@@ -55,7 +55,7 @@ describe('Chip aria', () => {
     expect(tab).toContain('border-fg text-fg');
     expect(tab).not.toMatch(/bg-accent|lit-pill/);
     const idle = renderToStaticMarkup(<Chip label="Open" selected={false} />);
-    expect(idle).toContain('border-border text-fg-2');
+    expect(idle).toContain('border-border-strong text-fg-2');
     expect(idle).not.toMatch(/bg-panel-3|lit-well-soft|bg-accent|lit-pill/);
     expect(idle).not.toContain('data-selected');
   });
@@ -92,7 +92,7 @@ describe('Chip onClear', () => {
     // The chip keeps its selected look, with no reserved glyph spacer.
     expect(html).toContain('border-fg text-fg');
     expect(buttons[0]).toContain('min-h-11');
-    expect(html).toContain('min-h-8 px-3');
+    expect(html).toContain('min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10');
     expect(html).not.toContain('w-4 shrink-0');
   });
 });
@@ -109,14 +109,13 @@ describe('Chip 32 visible, 44 tap box', () => {
       expect(button).not.toMatch(/\b(bg-|lit-well|lit-pill|lit-hover|border|px-)/);
       expect(button).toContain('[&amp;:focus-visible&gt;span]:lit-focus');
       const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
-      expect(face).toContain('min-h-8 px-3');
+      expect(face).toContain('min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10');
       expect(face).toContain('rounded-full');
       expect(face).not.toContain('rounded-lg');
       expect(face).toContain('text-md font-medium');
       expect(face).toContain('gap-2');
-      expect(face).not.toContain('gap-2');
       expect(face).toContain('border text-md font-medium lit-hover');
-      expect(face).toContain('border-border text-fg-2');
+      expect(face).toContain('border-border-strong text-fg-2');
       expect(face).not.toMatch(/bg-panel-3|lit-well-soft/);
       expect(face).not.toContain('text-base');
     }
