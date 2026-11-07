@@ -110,6 +110,12 @@ const TASKS_STALE_MS = 60_000;
 const TASK_EDITING_EVENT = 'task_editing';
 /** Most event pages one older-history read walks before it lets the page go. */
 const MAX_EVENT_PAGES = 20;
+/**
+ * Perf mark: the task events every loaded message needs are read (runEnsure
+ * covered what the thread asked). Drops once per newly covered moment; a
+ * repeat ask for the same moment drops none.
+ */
+export const TASKS_COVERED_MARK = 'chat:tasks:covered';
 
 interface TasksState {
   channelId: string | null;
@@ -248,6 +254,8 @@ export function useChatTasks(params: {
   const requestedTasks = useRef(new Set<string>());
   const wantSinceRef = useRef<number | null>(null);
   const ensuringRef = useRef(false);
+  /** The ask (ms) the last TASKS_COVERED_MARK covered: a repeat ask drops no second mark. */
+  const markedWantRef = useRef<number | null>(null);
 
   const apply = useCallback(
     (forChannel: string, change: (prev: TasksState) => TasksState): void => {
@@ -267,17 +275,29 @@ export function useChatTasks(params: {
     [currentUserId],
   );
 
-  /** Read older events page by page down to what older history asked for. */
+  /**
+   * Read older events page by page down to what older history asked for. Once
+   * what was asked is covered (read, given up on after a failure, or the page
+   * cap) the TASKS_COVERED_MARK perf mark drops: the lines for every loaded
+   * message are in the state (the e2e waits on it instead of a clock). Once
+   * per asked moment: the thread re-asks the same moment whenever its first
+   * message object changes, and a repeat must not read as a new page covered.
+   */
   const runEnsure = useCallback(
     async (forChannel: string): Promise<void> => {
       if (ensuringRef.current) return;
       ensuringRef.current = true;
       let cover = stateRef.current.coveredFromMs;
+      let covered: number | null = null;
       try {
         for (let page = 0; page < MAX_EVENT_PAGES; page += 1) {
           const want = wantSinceRef.current;
           if (channelRef.current !== forChannel || !stateRef.current.loaded) return;
-          if (want === null || !(want < cover)) return;
+          if (want === null) return;
+          if (!(want < cover)) {
+            covered = want;
+            return;
+          }
           const res = await readTaskEvents(db, forChannel, {
             sinceIso: new Date(want - 1).toISOString(),
             untilIso: Number.isFinite(cover) ? new Date(cover).toISOString() : null,
@@ -293,6 +313,7 @@ export function useChatTasks(params: {
               ...prev,
               coveredFromMs: Math.min(prev.coveredFromMs, want),
             }));
+            covered = want;
             return;
           }
           const oldest = res.data.events[0];
@@ -311,9 +332,14 @@ export function useChatTasks(params: {
             ...prev,
             coveredFromMs: Math.min(prev.coveredFromMs, want),
           }));
+          covered = want;
         }
       } finally {
         ensuringRef.current = false;
+        if (covered !== null && covered !== markedWantRef.current) {
+          markedWantRef.current = covered;
+          mark(TASKS_COVERED_MARK);
+        }
       }
     },
     [db, apply],
@@ -371,6 +397,7 @@ export function useChatTasks(params: {
     setHeard(new Map());
     requestedTasks.current = new Set();
     wantSinceRef.current = null;
+    markedWantRef.current = null;
     if (channelId !== null) void load(channelId);
   }, [channelId, load]);
 

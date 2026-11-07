@@ -10,7 +10,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactElement,
+  ReactNode,
+} from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Textarea } from '@/components/ui/Textarea';
@@ -37,9 +42,16 @@ import {
   IconChevronDown,
   IconCopy,
   IconEdit,
+  IconReply,
   IconTrash,
   ICON_SIZE,
 } from '@/components/ui/icons';
+import { cancelPendingLongPressesWithin } from '@/components/ui/useLongPress';
+import {
+  createSwipeReplyController,
+  SWIPE_REST,
+  type SwipeReplyController,
+} from '@/lib/chat/swipe-reply';
 import { Text } from '@/components/ui/Text';
 import {
   CHECKPOINT_HIT_CLASS,
@@ -61,7 +73,7 @@ import { roleLabel } from '@/components/pages/settings/members-data';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
-import { Bone, GlideItem, itemIn, itemOut } from '@/lib/motion';
+import { Bone, GlideItem, itemIn, itemOut, motionOff, paintSwipe } from '@/lib/motion';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
@@ -1317,6 +1329,8 @@ interface RowOptions {
   below?: ReactNode;
   /** The checkpoint's circle state, so its caption quote circle matches. */
   circle?: CheckpointCircleState;
+  /** A touch swipe right: exactly the row's Reply. Null rubber-bands (no Reply to give). */
+  swipeReply?: (() => void) | null;
 }
 
 /** One thread (or checkpoint group) in the list: hairlines between, no card. */
@@ -1332,6 +1346,122 @@ export const OWN_CARD_CLASS = 'border-b border-border';
 
 /** The fixed left column: the root avatar, the group avatar or the point circle. */
 const LEAD_COLUMN_CLASS = 'flex w-11 shrink-0 justify-center';
+
+/**
+ * The swipe icons behind a comment row (the chat bubble's look): a 32 circle,
+ * panel-3 idle, accent when armed (data-armed). Reply sits behind the row's
+ * resting left edge, the bin behind its right edge. Scale and opacity are
+ * painted per frame by paintSwipe; at rest the classes hold them at scale 0,
+ * opacity 0.
+ */
+const SWIPE_ICON_CLASS =
+  'pointer-events-none absolute inset-y-0 my-auto flex h-8 w-8 scale-0 items-center justify-center rounded-full bg-panel-3 opacity-0 data-[armed]:bg-accent data-[armed]:text-accent-fg';
+
+/**
+ * One comment or reply row on touch: swipe right = its Reply, swipe left = its
+ * Delete (only where the row's ⋯ offers Delete; the same UndoStrip path), the
+ * one core (src/lib/chat/swipe-reply.ts) in 'both' ways. A way with nothing to
+ * do rubber-bands and never fires. A mouse never swipes (the core ignores it),
+ * so laptop is unchanged. Vertical moves stay the list's (touch-pan-y); the
+ * press is the row's own until it moves 8px sideways, so taps on links,
+ * mentions, pins, photos and the ⋯ still land. No layout read per move: frames
+ * are transforms painted by lib/motion. The wrapper clips sideways
+ * (overflow-x-clip, widened by the 12 trailing pull so the ⋯ hit box is never
+ * cut) so a slid row never makes anything scroll.
+ */
+function CommentSwipeRow(props: {
+  kind: 'root' | 'reply';
+  /** False while the row is being edited. */
+  enabled: boolean;
+  onReply: (() => void) | null;
+  onDelete: (() => void) | null;
+  children: ReactNode;
+}): ReactElement {
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const replyIconRef = useRef<HTMLSpanElement>(null);
+  const deleteIconRef = useRef<HTMLSpanElement>(null);
+  const latest = useRef(props);
+  latest.current = props;
+  const swipeRef = useRef<SwipeReplyController | null>(null);
+  if (swipeRef.current === null) {
+    swipeRef.current = createSwipeReplyController({
+      direction: 'both',
+      onReply: () => latest.current.onReply?.(),
+      onLeft: () => latest.current.onDelete?.(),
+      canTrigger: (side) =>
+        side === 'right' ? latest.current.onReply !== null : latest.current.onDelete !== null,
+      onFrame: (frame) => {
+        const left = frame.side === 'left';
+        paintSwipe(
+          sliderRef.current,
+          left ? deleteIconRef.current : replyIconRef.current,
+          frame,
+          frame.side,
+        );
+        // The other way's icon stays at rest.
+        paintSwipe(null, left ? replyIconRef.current : deleteIconRef.current, SWIPE_REST);
+      },
+      onStart: (pointerId) => {
+        // A swipe never opens anything: end any hold pressed inside the row
+        // (a person card's), drop the text selection the press started, and
+        // keep the pointer on the row.
+        if (sliderRef.current !== null) cancelPendingLongPressesWithin(sliderRef.current);
+        window.getSelection()?.removeAllRanges();
+        if (pointerId === undefined) return;
+        try {
+          sliderRef.current?.setPointerCapture(pointerId);
+        } catch {
+          // The pointer is already gone; the gesture ends on its own.
+        }
+      },
+      enabled: () => latest.current.enabled,
+      reducedMotion: motionOff,
+    });
+  }
+  const swipe = swipeRef.current;
+  useEffect(() => () => swipe.dispose(), [swipe]);
+  return (
+    <div data-comment-swipe="" className="relative -mx-3 overflow-x-clip px-3">
+      {props.onReply !== null ? (
+        <span
+          ref={replyIconRef}
+          aria-hidden="true"
+          data-comment-swipe-icon="reply"
+          className={cn(SWIPE_ICON_CLASS, 'left-3 text-fg-2')}
+        >
+          <IconReply size={ICON_SIZE.nav} />
+        </span>
+      ) : null}
+      {props.onDelete !== null ? (
+        <span
+          ref={deleteIconRef}
+          aria-hidden="true"
+          data-comment-swipe-icon="delete"
+          className={cn(SWIPE_ICON_CLASS, 'right-3 text-bad')}
+        >
+          <IconTrash size={ICON_SIZE.nav} />
+        </span>
+      ) : null}
+      <div
+        ref={sliderRef}
+        data-comment-row={props.kind}
+        onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => swipe.handlers.onPointerDown(e)}
+        onPointerMove={(e: ReactPointerEvent<HTMLDivElement>) => swipe.handlers.onPointerMove(e)}
+        onPointerUp={(e: ReactPointerEvent<HTMLDivElement>) => swipe.handlers.onPointerUp(e)}
+        onPointerCancel={() => swipe.handlers.onPointerCancel()}
+        onClickCapture={(e: ReactMouseEvent<HTMLDivElement>) => {
+          // The click that trails a swipe does nothing more.
+          if (!swipe.consumeClickSuppression()) return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        className="relative flex min-w-0 touch-pan-y touch-pinch-zoom items-start gap-2"
+      >
+        {props.children}
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -2713,87 +2843,104 @@ export function Comments({
       </div>
     );
 
+    // Swipe left = the ⋯'s Delete, only where the ⋯ offers it (same path).
+    const swipeDelete =
+      !editing && pointMenuMode(opts.actions) === 'menu' && opts.actions.canDelete
+        ? () => handleDelete(comment.id)
+        : null;
+
+    // The row slides on its own; the replies and the reply composer under a
+    // root sit beside it (same text column, the lead column kept empty), so a
+    // swipe on the root never moves them.
     return (
-      <div
-        data-comment-row={opts.reply ? 'reply' : 'root'}
-        className="flex min-w-0 items-start gap-2"
-      >
-        {opts.lead !== null ? <span className={LEAD_COLUMN_CLASS}>{opts.lead}</span> : null}
-        <div className="min-w-0 flex-1">
-          {header}
+      <>
+        <CommentSwipeRow
+          kind={opts.reply ? 'reply' : 'root'}
+          enabled={!editing}
+          onReply={opts.swipeReply ?? null}
+          onDelete={swipeDelete}
+        >
+          {opts.lead !== null ? <span className={LEAD_COLUMN_CLASS}>{opts.lead}</span> : null}
+          <div className="min-w-0 flex-1">
+            {header}
 
-          {editing ? (
-            renderEditor(comment.id)
-          ) : (
-            <div className={opts.point ? 'pt-1' : 'mt-1'}>
-              {annotationChip(
-                comment.id,
-                annotationsByCommentId?.[comment.id],
-                onAnnotationChipClick,
-                opts.circle,
-              )}
-              {comment.body.trim() !== '' ? (
-                <div
-                  className={cn(
-                    'text-base whitespace-pre-wrap [overflow-wrap:anywhere]',
-                    opts.muted === true ? 'text-fg-2' : 'text-fg',
-                  )}
+            {editing ? (
+              renderEditor(comment.id)
+            ) : (
+              <div className={opts.point ? 'pt-1' : 'mt-1'}>
+                {annotationChip(
+                  comment.id,
+                  annotationsByCommentId?.[comment.id],
+                  onAnnotationChipClick,
+                  opts.circle,
+                )}
+                {comment.body.trim() !== '' ? (
+                  <div
+                    className={cn(
+                      'text-base whitespace-pre-wrap [overflow-wrap:anywhere]',
+                      opts.muted === true ? 'text-fg-2' : 'text-fg',
+                    )}
+                  >
+                    {renderCommentBody(comment.body, handleOf, searchWords, cardUrl)}
+                  </div>
+                ) : null}
+                <CommentLinkCard body={comment.body} url={cardUrl} />
+                {attachments.length > 0 ? (
+                  <MessageAttachments
+                    attachments={attachments}
+                    cache={presignCache}
+                    presignEnabled={presignEnabled}
+                    onImageClick={(attachment) => {
+                      const nav = commentImageNav(attachments, attachment.assetId);
+                      if (nav.images.length > 0) {
+                        setLightbox({
+                          ...nav,
+                          title: commentViewerTitle(view.name, comment.created_at, new Date(nowMs)),
+                        });
+                      }
+                    }}
+                  />
+                ) : null}
+              </div>
+            )}
+
+            {/* One action line at meta size, on the text column. */}
+            {!editing ? (
+              <div data-comment-actions="" className={COMMENT_ACTIONS_ROW_CLASS}>
+                <Text
+                  role="meta"
+                  as="time"
+                  dateTime={comment.created_at}
+                  data-comment-time=""
+                  className={ROW_TIME_CLASS}
                 >
-                  {renderCommentBody(comment.body, handleOf, searchWords, cardUrl)}
-                </div>
-              ) : null}
-              <CommentLinkCard body={comment.body} url={cardUrl} />
-              {attachments.length > 0 ? (
-                <MessageAttachments
-                  attachments={attachments}
-                  cache={presignCache}
-                  presignEnabled={presignEnabled}
-                  onImageClick={(attachment) => {
-                    const nav = commentImageNav(attachments, attachment.assetId);
-                    if (nav.images.length > 0) {
-                      setLightbox({
-                        ...nav,
-                        title: commentViewerTitle(view.name, comment.created_at, new Date(nowMs)),
-                      });
-                    }
-                  }}
-                />
-              ) : null}
-            </div>
-          )}
-
-          {/* One action line at meta size, on the text column. */}
-          {!editing ? (
-            <div data-comment-actions="" className={COMMENT_ACTIONS_ROW_CLASS}>
-              <Text
-                role="meta"
-                as="time"
-                dateTime={comment.created_at}
-                data-comment-time=""
-                className={ROW_TIME_CLASS}
-              >
-                {formatAgo(comment.created_at, now)}
-              </Text>
-              {edited !== null ? (
-                <Text role="meta" className="shrink-0 whitespace-nowrap pr-2">
-                  {edited}
+                  {formatAgo(comment.created_at, now)}
                 </Text>
-              ) : null}
-              {opts.leading}
-              {opts.replyButton}
-              {privateReply !== null ? <ReplyPrivatelyButton draft={privateReply} /> : null}
-              {opts.actions.canCopy ? copyControl(comment) : null}
-              {rowMenu(comment, opts.actions, opts.menuLabel)}
-            </div>
-          ) : null}
+                {edited !== null ? (
+                  <Text role="meta" className="shrink-0 whitespace-nowrap pr-2">
+                    {edited}
+                  </Text>
+                ) : null}
+                {opts.leading}
+                {opts.replyButton}
+                {privateReply !== null ? <ReplyPrivatelyButton draft={privateReply} /> : null}
+                {opts.actions.canCopy ? copyControl(comment) : null}
+                {rowMenu(comment, opts.actions, opts.menuLabel)}
+              </div>
+            ) : null}
 
-          {rowError !== null && rowError.id === comment.id ? (
-            <ErrorNote className="mt-2">{rowError.message}</ErrorNote>
-          ) : null}
-
-          {opts.below}
-        </div>
-      </div>
+            {rowError !== null && rowError.id === comment.id ? (
+              <ErrorNote className="mt-2">{rowError.message}</ErrorNote>
+            ) : null}
+          </div>
+        </CommentSwipeRow>
+        {opts.below !== undefined ? (
+          <div className="flex min-w-0 gap-2">
+            {opts.lead !== null ? <span aria-hidden="true" className={LEAD_COLUMN_CLASS} /> : null}
+            <div className="min-w-0 flex-1">{opts.below}</div>
+          </div>
+        ) : null}
+      </>
     );
   }
 
@@ -2814,6 +2961,13 @@ export function Comments({
         {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
       </Button>
     );
+  }
+
+  // A root's swipe right: its Reply. While its composer is already open the
+  // button reads Cancel, so the swipe has nothing to add and rubber-bands
+  // (it never closes or discards a draft).
+  function rootSwipeReply(comment: CommentRow): (() => void) | null {
+    return replyOpen.has(comment.id) ? null : () => onReplyButton(comment);
   }
 
   // One reply, on the same row template. Every live reply (checkpoint or plain
@@ -2840,6 +2994,7 @@ export function Comments({
             Reply
           </Button>
         ) : null,
+      swipeReply: onReply ?? null,
     });
   }
 
@@ -2945,6 +3100,7 @@ export function Comments({
                 resolveButton(comment, 'Resolve', 'thread')
               ),
               replyButton: rootReplyButton(comment),
+              swipeReply: rootSwipeReply(comment),
               below: renderThreadBelow(comment, replies, false, true),
             })}
       </GlideItem>
@@ -3063,6 +3219,7 @@ export function Comments({
       muted: resolved,
       leading: checkpointLeading(comment),
       replyButton: rootReplyButton(comment),
+      swipeReply: rootSwipeReply(comment),
       below: renderThreadBelow(comment, replies, false, true),
     });
   }

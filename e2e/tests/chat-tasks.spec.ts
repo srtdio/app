@@ -115,6 +115,32 @@ async function swipeRow(row: ReturnType<Page['locator']>, dx: number): Promise<v
   await title.dispatchEvent('pointerup', { ...touch, clientX: x0 + dx });
 }
 
+/** useChatTasks' perf mark (TASKS_COVERED_MARK): the task events every loaded message needs are read. */
+const TASKS_COVERED_MARK = 'chat:tasks:covered';
+
+/**
+ * Wait until more than `seen` covered marks have dropped, then two animation
+ * frames so the state that dropped it has committed and laid out. Returns the
+ * count. A settle signal, not a clock.
+ */
+async function waitForTasksCovered(page: Page, seen: number): Promise<number> {
+  await page.waitForFunction(
+    (arg: { name: string; seen: number }) =>
+      performance.getEntriesByName(arg.name, 'mark').length > arg.seen,
+    { name: TASKS_COVERED_MARK, seen },
+    { timeout: 8000 },
+  );
+  return page.evaluate(
+    (name) =>
+      new Promise<number>((done) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => done(performance.getEntriesByName(name, 'mark').length)),
+        ),
+      ),
+    TASKS_COVERED_MARK,
+  );
+}
+
 /** The fixture row of task number `n` in the group chat. */
 function taskRow(network: HarnessNetwork, n: number): Record<string, unknown> {
   const row = network.world.tables.chat_tasks?.find(
@@ -407,8 +433,13 @@ test('an older page paints with its task lines in one commit; the reader does no
   const olderLines = `[data-task-id="${String(olderTask?.id)}"]`;
   await openChat(page, GROUP_NAME);
   // Rows paint before the task read lands (tasks are off the open hold): the
-  // first page's lines (a burst here) slot in first; the anchor is measured after.
+  // first page's lines (a burst here, read over several event pages) slot in
+  // first; the anchor is measured after. The first line is not the signal: the
+  // hook drops the covered mark once every page the first page needs is read
+  // (a later page landing after the measure moved the anchor a line, 44px), and
+  // that state commits within the next frame.
   await page.locator('[data-task-row]').first().waitFor({ state: 'attached', timeout: 8000 });
+  const firstCovered = await waitForTasksCovered(page, 0);
   await expect(page.locator(olderLines)).toHaveCount(0);
 
   // Any commit that shows an older row without all its lines is recorded.
@@ -455,6 +486,8 @@ test('an older page paints with its task lines in one commit; the reader does no
 
   await expect(page.locator(olderLines)).toHaveCount(3);
   await expect(page.getByText('Loading earlier messages')).toHaveCount(0);
+  // The older page's ask is covered and committed before the reader is measured.
+  await waitForTasksCovered(page, firstCovered);
   expect(Math.abs((await topOf()) - before)).toBeLessThanOrEqual(1);
   expect(
     await page.evaluate(() => (window as unknown as { splitCommit: boolean }).splitCommit),

@@ -28,6 +28,26 @@ interface SwipePointerSample {
   pointerId?: number;
   /** Event time (ms); absent reads the controller's clock. */
   timeStamp?: number;
+  /**
+   * The pressed element (React's currentTarget, else the target), read on the
+   * press only: a scroll cancels the swipe only when its scroller holds it.
+   * Absent: any scroll cancels.
+   */
+  currentTarget?: EventTarget | null;
+  target?: EventTarget | null;
+}
+
+/** An Element or the Document: something a scroll event can come from that may hold the press. */
+interface ScrollSource {
+  contains: (other: Node | null) => boolean;
+}
+
+/** The event target as a ScrollSource (duck-typed: no DOM globals needed). */
+function scrollSource(target: unknown): ScrollSource | null {
+  if (target === null || typeof target !== 'object') return null;
+  return typeof (target as { contains?: unknown }).contains === 'function'
+    ? (target as ScrollSource)
+    : null;
 }
 
 /** What the view paints: the bubble's translateX and the reply icon's state. */
@@ -42,7 +62,12 @@ export interface SwipeFrame {
   animate: boolean;
   /** The finger owns the bubble: will-change: transform is set only then. */
   dragging: boolean;
+  /** Which way the row is sliding: 'right' (reply) or 'left' (delete). */
+  side: SwipeSide;
 }
+
+/** A swipe's way: right = Reply, left = Delete (CLAUDE.md Swipe rule). */
+export type SwipeSide = 'right' | 'left';
 
 export const SWIPE_REST: SwipeFrame = {
   offset: 0,
@@ -50,6 +75,7 @@ export const SWIPE_REST: SwipeFrame = {
   progress: 0,
   animate: false,
   dragging: false,
+  side: 'right',
 };
 
 export interface SwipeReplyHandlers {
@@ -67,7 +93,7 @@ export interface SwipeReplyController {
    * click is the tail of a swipe and should be ignored.
    */
   consumeClickSuppression: () => boolean;
-  /** True while a rightward swipe owns the pointer. */
+  /** True while a swipe (either way) owns the pointer. */
   swiping: () => boolean;
   /** Abort without replying (a long-press fired, the list scrolled). */
   cancel: () => void;
@@ -76,8 +102,10 @@ export interface SwipeReplyController {
 }
 
 export interface SwipeReplyOptions {
-  /** Released past the trigger or flicked. Fires at most once per gesture. */
-  onReply: () => void;
+  /** A rightward swipe released past the trigger or flicked. At most once per gesture. */
+  onReply?: () => void;
+  /** A leftward swipe released past the trigger or flicked (Delete). At most once per gesture. */
+  onLeft?: () => void;
   /** Paint a frame (bubble offset, icon state). Drag frames arrive once per animation frame. */
   onFrame: (frame: SwipeFrame) => void;
   /**
@@ -97,10 +125,24 @@ export interface SwipeReplyOptions {
   now?: () => number;
   /**
    * Which way the gesture goes; default right (reply). 'left' mirrors it (a
-   * task row's swipe to delete): the frame's offset is still the magnitude,
-   * and a press within SWIPE_EDGE_PX of the right screen edge is the system's.
+   * task row's swipe to delete), 'both' takes either way, decided when the
+   * swipe locks in. The frame's offset is the magnitude and its side the way.
+   * A rightward swipe never starts within SWIPE_EDGE_PX of the left screen
+   * edge, a leftward one never within SWIPE_EDGE_PX of the right edge: those
+   * are the system's (back / forward).
    */
-  direction?: 'right' | 'left';
+  direction?: SwipeSide | 'both';
+  /**
+   * Per gesture, whether a way may trigger: false still lets the row
+   * rubber-band (a marked message, a tombstone) but nothing fires. Default true.
+   */
+  canTrigger?: (side: SwipeSide) => boolean;
+}
+
+/** A rubber band: the row follows a little and never arms (canTrigger false). */
+export function swipeRubberBand(dx: number): number {
+  if (dx <= 0) return 0;
+  return Math.min(SWIPE_TRIGGER_PX / 2, dx * SWIPE_RESISTANCE);
 }
 
 /** The bubble offset for a finger travel: 1:1 to the trigger, 0.3 beyond, capped, never left. */
@@ -148,6 +190,8 @@ function defaultNow(): number {
  */
 export function createSwipeReplyController({
   onReply,
+  onLeft,
+  canTrigger = () => true,
   onFrame,
   onStart,
   enabled = () => true,
@@ -158,12 +202,16 @@ export function createSwipeReplyController({
   now = defaultNow,
   direction = 'right',
 }: SwipeReplyOptions): SwipeReplyController {
-  const sign = direction === 'left' ? -1 : 1;
+  let sign = direction === 'left' ? -1 : 1;
+  let side: SwipeSide = direction === 'left' ? 'left' : 'right';
+  let allowed = true;
   let phase: 'idle' | 'pending' | 'swiping' = 'idle';
   let startX = 0;
   let startY = 0;
   let dx = 0;
   let pointerId: number | undefined;
+  /** The pressed element (see SwipePointerSample.currentTarget); null: unknown. */
+  let pressed: Node | null = null;
   let buzzed = false;
   let suppressClick = false;
   /** Recent (x, t) samples for the release velocity. */
@@ -171,12 +219,25 @@ export function createSwipeReplyController({
   let pending: SwipeFrame | null = null;
   let rafHandle: number | null = null;
 
+  /**
+   * A scroll the press moves with (the window, or a scroller around the
+   * pressed row) ends the swipe: the list scrolled. Any other scroller is not
+   * the press's business: the chat thread behind the Tasks sheet pinning to a
+   * new line (an autosave landing) must not end a task row's swipe. With no
+   * pressed element known, every scroll cancels.
+   */
+  function onScroll(event?: Event): void {
+    const from = scrollSource(event?.target);
+    if (pressed !== null && from !== null && !from.contains(pressed)) return;
+    cancel();
+  }
+
   function attachScroll(): void {
-    if (typeof window !== 'undefined') window.addEventListener('scroll', cancel, true);
+    if (typeof window !== 'undefined') window.addEventListener('scroll', onScroll, true);
   }
 
   function detachScroll(): void {
-    if (typeof window !== 'undefined') window.removeEventListener('scroll', cancel, true);
+    if (typeof window !== 'undefined') window.removeEventListener('scroll', onScroll, true);
   }
 
   function dropFrame(): void {
@@ -209,18 +270,24 @@ export function createSwipeReplyController({
     dx = 0;
     samples = [];
     pointerId = undefined;
+    pressed = null;
     detachScroll();
     dropFrame();
-    if (moved) onFrame({ ...SWIPE_REST, animate: !reducedMotion() });
+    if (moved) onFrame({ ...SWIPE_REST, side, animate: !reducedMotion() });
+    allowed = true;
+    if (direction === 'both') {
+      sign = 1;
+      side = 'right';
+    }
   }
 
   function cancel(): void {
     reset();
   }
 
-  /** The screen edge the system's own gesture owns: left for a rightward swipe, right for a leftward one. */
-  function nearSystemEdge(clientX: number): boolean {
-    if (direction === 'right') return clientX < SWIPE_EDGE_PX;
+  /** The screen edge the system's own gesture owns for a swipe that way. */
+  function nearSystemEdge(clientX: number, way: SwipeSide): boolean {
+    if (way === 'right') return clientX < SWIPE_EDGE_PX;
     const width = typeof window !== 'undefined' ? window.innerWidth : Number.POSITIVE_INFINITY;
     return clientX > width - SWIPE_EDGE_PX;
   }
@@ -248,11 +315,14 @@ export function createSwipeReplyController({
     reset();
     suppressClick = false;
     if ((event.pointerType ?? '') === 'mouse' || !enabled()) return;
-    if (nearSystemEdge(event.clientX)) return;
+    if (direction !== 'both' && nearSystemEdge(event.clientX, direction)) return;
     phase = 'pending';
     startX = event.clientX;
     startY = event.clientY;
     pointerId = event.pointerId;
+    // Only an element (anything with contains) counts as the press's node.
+    const node = event.currentTarget ?? event.target ?? null;
+    pressed = scrollSource(node) !== null ? (node as Node) : null;
     samples = [{ x: event.clientX, t: event.timeStamp ?? now() }];
     attachScroll();
   }
@@ -264,21 +334,33 @@ export function createSwipeReplyController({
     while (samples.length > 2 && t - (samples[0]?.t ?? t) > SWIPE_VELOCITY_WINDOW_MS) {
       samples.shift();
     }
-    dx = sign * (event.clientX - startX);
+    const rawDx = event.clientX - startX;
     const dy = event.clientY - startY;
     if (phase === 'pending') {
-      if (dx * dx + dy * dy < SWIPE_LOCK_PX * SWIPE_LOCK_PX) return;
-      if (dx <= 0 || Math.abs(dy) >= dx) {
-        // Vertical or the other way: not ours. The list scrolls, long-press as before.
+      if (rawDx * rawDx + dy * dy < SWIPE_LOCK_PX * SWIPE_LOCK_PX) return;
+      if (direction === 'both') {
+        sign = rawDx >= 0 ? 1 : -1;
+        side = rawDx >= 0 ? 'right' : 'left';
+      }
+      const lockDx = sign * rawDx;
+      if (
+        lockDx <= 0 ||
+        Math.abs(dy) >= lockDx ||
+        (direction === 'both' && nearSystemEdge(startX, side))
+      ) {
+        // Vertical, the other way or the system's edge: not ours. The list
+        // scrolls, long-press as before.
         reset();
         return;
       }
+      allowed = canTrigger(side);
       phase = 'swiping';
       suppressClick = true;
       onStart?.(pointerId);
     }
-    const offset = swipeOffset(dx);
-    const armed = offset >= SWIPE_TRIGGER_PX;
+    dx = sign * rawDx;
+    const offset = allowed ? swipeOffset(dx) : swipeRubberBand(dx);
+    const armed = allowed && offset >= SWIPE_TRIGGER_PX;
     if (armed && !buzzed) {
       buzzed = true;
       vibrate(SWIPE_VIBRATE_MS);
@@ -289,14 +371,19 @@ export function createSwipeReplyController({
       progress: Math.min(1, offset / SWIPE_TRIGGER_PX),
       animate: false,
       dragging: true,
+      side,
     });
   }
 
   function onPointerUp(event?: Pick<SwipePointerSample, 'timeStamp'>): void {
     const releaseT = event?.timeStamp ?? now();
-    const reply = phase === 'swiping' && swipeTriggers(dx, velocity(releaseT));
+    const fire = phase === 'swiping' && allowed && swipeTriggers(dx, velocity(releaseT));
+    const way = side;
     reset();
-    if (reply) onReply();
+    if (!fire) return;
+    if (way === 'right') onReply?.();
+    // A one-way 'left' controller may still name its action onReply (TaskRow, before).
+    else (onLeft ?? (direction === 'left' ? onReply : undefined))?.();
   }
 
   return {

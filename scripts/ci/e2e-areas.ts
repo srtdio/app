@@ -188,6 +188,8 @@ export const AREAS: Area[] = [
       'overlay-esc',
       'pdf-opens-instantly',
       'post-delete-undo',
+      // Swipe right = Reply, left = Delete on a post comment (swipe-reply core).
+      'post-comment-swipe',
       'post-open-media-cover',
     ].map(t),
   },

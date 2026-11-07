@@ -389,3 +389,148 @@ test('an own voice note uploading: the ring in the play slot, the real bars at r
   await expect(sent.locator('[data-voice-bars]')).not.toHaveClass(/opacity-\[\.45\]/);
   expect(network.blocked).toEqual([]);
 });
+
+// Swipe both ways on a chat row (iPhone only; a mouse never swipes): right =
+// Reply, left = the long-press menu's Delete (the same delete sheet). The
+// whole row is the grab area, own rows exactly as freely as others'. A row
+// whose menu has no Delete (a tombstone) rubber-bands and opens nothing.
+
+/**
+ * Swipe like a finger: pointerdown at `fromX` on the row's middle line, slow
+ * moves 100px `dir`, then lift. Dispatched on `target` (a bubble or the row);
+ * the events bubble to the row, which owns the swipe.
+ */
+async function swipeRow(
+  page: Page,
+  target: Locator,
+  dir: 'left' | 'right',
+  fromX?: (box: { x: number; width: number }) => number,
+): Promise<void> {
+  await target.scrollIntoViewIfNeeded();
+  // Let a settling scroll end: a scroll cancels the swipe like a finger that scrolled.
+  await page.waitForTimeout(300);
+  const box = await target.boundingBox();
+  if (box === null) throw new Error('no box');
+  const y = box.y + box.height / 2;
+  const x0 =
+    fromX !== undefined ? fromX(box) : dir === 'right' ? box.x + 24 : box.x + box.width - 24;
+  const sign = dir === 'right' ? 1 : -1;
+  const ev = (x: number) => ({
+    clientX: x,
+    clientY: y,
+    pointerType: 'touch',
+    isPrimary: true,
+    pointerId: 11,
+  });
+  await target.dispatchEvent('pointerdown', ev(x0));
+  for (const dx of [10, 30, 50, 70, 90, 100]) {
+    await target.dispatchEvent('pointermove', ev(x0 + sign * dx));
+    await page.waitForTimeout(16);
+  }
+  await target.dispatchEvent('pointerup', ev(x0 + sign * 100));
+}
+
+const composerArea = (page: Page): Locator => page.locator('form textarea').first();
+
+test.describe('swipe both ways on a chat row', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) >= 768, 'touch only: a mouse never swipes');
+
+  test('own message: swipe right opens the reply bar', async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    seedFreshOwnMessage(network);
+    await openDm(page, row(page, FRESH_OWN_ID));
+
+    await swipeRow(page, row(page, FRESH_OWN_ID).locator('[data-bubble]').first(), 'right');
+    await expect(composerArea(page)).toHaveAttribute('placeholder', /^Reply/);
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(page.getByTestId('delete-sheet')).toHaveCount(0);
+    expect(network.blocked).toEqual([]);
+  });
+
+  test('own row: a press in its empty part (away from the bubble) swipes too', async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    seedFreshOwnMessage(network);
+    await openDm(page, row(page, FRESH_OWN_ID));
+    const own = row(page, FRESH_OWN_ID);
+    const bubbleBox = await own.locator('[data-bubble]').first().boundingBox();
+    const rowBox = await own.boundingBox();
+    if (bubbleBox === null || rowBox === null) throw new Error('no box');
+    // A short own bubble leaves the row's left part empty: start there.
+    const start = rowBox.x + 140;
+    test.skip(start + 8 >= bubbleBox.x, 'the bubble fills the row on this width');
+
+    await swipeRow(page, own, 'left', () => start);
+    const sheet = page.getByTestId('delete-sheet');
+    await expect(sheet).toBeVisible();
+    await sheet.locator('[data-delete-choice="cancel"]').click();
+    await expect(row(page, FRESH_OWN_ID)).toBeVisible();
+  });
+
+  test('own message inside 30 minutes: swipe left opens Delete for everyone and Delete for me', async ({
+    page,
+  }) => {
+    const network = await installHarnessNetwork(page);
+    seedFreshOwnMessage(network);
+    await openDm(page, row(page, FRESH_OWN_ID));
+
+    await swipeRow(page, row(page, FRESH_OWN_ID).locator('[data-bubble]').first(), 'left');
+    const sheet = page.getByTestId('delete-sheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.locator('[data-delete-choice="everyone"]')).toHaveText(
+      'Delete for everyone',
+    );
+    await expect(sheet.locator('[data-delete-choice="me"]')).toHaveText('Delete for me');
+    // The swipe opened the sheet, never the long-press menu.
+    await expect(page.getByRole('menu', { name: 'Message actions' })).toHaveCount(0);
+    await sheet.locator('[data-delete-choice="cancel"]').click();
+    await expect(sheet).toHaveCount(0);
+    await expect(row(page, FRESH_OWN_ID)).toBeVisible();
+    expect(hideCalls(network)).toEqual([]);
+  });
+
+  test("someone else's message: swipe left offers Delete for me only", async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    const peer = newestPeerRow(network);
+    await openDm(page, row(page, peer.id));
+
+    await swipeRow(page, row(page, peer.id).locator('[data-bubble]').first(), 'left');
+    const sheet = page.getByTestId('delete-sheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.locator('[data-delete-choice="everyone"]')).toHaveCount(0);
+    await expect(sheet.locator('[data-delete-choice="me"]')).toHaveText('Delete for me');
+    await sheet.locator('[data-delete-choice="me"]').click();
+    await expect(row(page, peer.id)).toHaveCount(0);
+    await expect(undoStrip(page, 'Deleted for you')).toBeVisible();
+  });
+
+  test("someone else's message: swipe right still replies", async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    const peer = newestPeerRow(network);
+    await openDm(page, row(page, peer.id));
+    await swipeRow(page, row(page, peer.id).locator('[data-bubble]').first(), 'right');
+    await expect(composerArea(page)).toHaveAttribute('placeholder', /^Reply/);
+    await expect(page.getByTestId('delete-sheet')).toHaveCount(0);
+  });
+
+  test('a row with no Delete (a tombstone): swipe left opens nothing', async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    const peer = newestPeerRow(network);
+    const last = network.world.dmMessages[network.world.dmMessages.length - 1];
+    if (last !== undefined) {
+      Object.assign(last, { body: null, deleted_at: new Date(Date.now() - 60_000).toISOString() });
+    }
+    await openDm(page, row(page, peer.id));
+    const tomb = row(page, peer.id).getByTestId('tombstone');
+    await expect(tomb).toBeVisible();
+
+    await swipeRow(page, tomb, 'left');
+    await page.waitForTimeout(600);
+    await expect(page.getByTestId('delete-sheet')).toHaveCount(0);
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Delete for me' })).toHaveCount(0);
+    // Springs home: nothing left translated.
+    await expect.poll(() => tomb.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
+    await expect(row(page, peer.id)).toBeVisible();
+    expect(hideCalls(network)).toEqual([]);
+  });
+});
