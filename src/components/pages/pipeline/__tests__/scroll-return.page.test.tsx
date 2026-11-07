@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// B4, Back from a post to Pipeline: the board's kept scroll position is in
+// B4, Back from a post to Pipeline: the list's kept scroll position is in
 // place in the FIRST committed frame (a layout effect, before the browser
 // paints), not after the quiet refresh, covers or images land. A probe's
 // layout effect, which runs after the page's in the same commit and before
@@ -15,8 +15,7 @@ import type { PipelinePost } from '@srtdio/posts';
 
 const h = vi.hoisted(() => ({
   listPosts: vi.fn(),
-  boards: [] as Array<Record<string, unknown[]>>,
-  onMovePost: null as null | ((postId: string, toStage: string) => void),
+  lists: [] as PipelinePost[][],
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -57,17 +56,12 @@ vi.mock('@/components/pages/pipeline/member-role', async (orig) => ({
   ...(await orig<typeof import('@/components/pages/pipeline/member-role')>()),
   readMemberRole: async () => ({ ok: true, role: 'agency' }),
 }));
-vi.mock('@/components/pages/pipeline/PipelineBoard', () => ({
-  PipelineBoard: (props: {
-    grouped: Record<string, unknown[]>;
-    onMovePost: (postId: string, toStage: string) => void;
-  }) => {
-    h.boards.push(props.grouped);
-    h.onMovePost = props.onMovePost;
+vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({
+  PipelineFeed: (props: { posts: PipelinePost[] }) => {
+    h.lists.push(props.posts);
     return null;
   },
 }));
-vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({ PipelineFeed: () => null }));
 vi.mock('@/components/pages/pipeline/MoveSheet', () => ({ MoveSheet: () => null }));
 vi.mock('@/components/pages/pipeline/StageChips', () => ({ StageChips: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({
@@ -126,7 +120,7 @@ function leave(): void {
 
 beforeEach(() => {
   resetSessionReads();
-  h.boards = [];
+  h.lists = [];
   h.listPosts.mockReset();
   firstFrameTop = null;
   main = document.createElement('main');
