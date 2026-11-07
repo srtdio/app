@@ -21,7 +21,8 @@ describe('ChannelList buttons (design system)', () => {
     expect(tags.length).toBeGreaterThan(0);
     for (const tag of tags) {
       expect(tag).toContain('min-h-11');
-      expect(tag).toContain('rounded-full');
+      // The chip's tap box is the full pill; the Clear ghost button beside it keeps its own radius.
+      if (tag.includes('data-search-chip')) expect(tag).toContain('rounded-full');
       expect(tag).not.toMatch(/\bh-8\b|\bh-9\b|\bh-12\b|rounded-md|font-semibold/);
     }
     const faces = html.match(/<span data-chip-face=""[^>]*>/g) ?? [];
