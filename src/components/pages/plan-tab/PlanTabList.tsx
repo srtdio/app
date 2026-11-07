@@ -213,7 +213,9 @@ export function PlanTabCard(props: {
       time={formatPlanStart(plan.starts_on, props.timeZone, props.now)}
       timeHooks={{ 'data-plan-tab-start': '' }}
       tag={meta.tag}
-      tagHooks={meta.kind === 'draft' ? { 'data-plan-tab-draft': '' } : { 'data-plan-tab-progress': '' }}
+      tagHooks={
+        meta.kind === 'draft' ? { 'data-plan-tab-draft': '' } : { 'data-plan-tab-progress': '' }
+      }
     />
   );
 }

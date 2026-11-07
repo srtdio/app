@@ -87,8 +87,12 @@ describe('plan titles: one line, then an ellipsis', () => {
 describe('the plan card lines', () => {
   it('line 2: the date range then the post count; line 3: when it starts and "N of M OK"', () => {
     const html = card();
-    expect(html).toMatch(/data-list-card-preview=""[^>]*data-plan-tab-dates=""[^>]*>6–12 Nov · 1 post</);
-    expect(html).toMatch(/data-list-card-time=""[^>]*data-plan-tab-start=""[^>]*>Starts in 2 days</);
+    expect(html).toMatch(
+      /data-list-card-preview=""[^>]*data-plan-tab-dates=""[^>]*>6–12 Nov · 1 post</,
+    );
+    expect(html).toMatch(
+      /data-list-card-time=""[^>]*data-plan-tab-start=""[^>]*>Starts in 2 days</,
+    );
     expect(html).toMatch(/data-list-card-tag=""[^>]*data-plan-tab-progress=""/);
     expect(html).toContain('0 of 1 OK');
     expect(html).not.toContain('data-plan-tab-draft');
@@ -108,7 +112,9 @@ describe('the plan card lines', () => {
 
   it('the picture: the plan icon box with no cover, the image slot with one', () => {
     expect(card()).toMatch(/data-list-card-picture="icon"[^>]*data-plan-tab-cover="icon"/);
-    expect(card(BUNDLE, 'v1')).toMatch(/data-list-card-picture="image"[^>]*data-plan-tab-cover="image"/);
+    expect(card(BUNDLE, 'v1')).toMatch(
+      /data-list-card-picture="image"[^>]*data-plan-tab-cover="image"/,
+    );
   });
 
   it('the whole card is one button with no menu', () => {

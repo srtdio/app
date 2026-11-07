@@ -765,12 +765,11 @@ function BankBoxes(): ReactElement {
 // Sheets
 // ---------------------------------------------------------------------------
 
-/** Plan it's sheets: the date, No plan covers, the plan picker, the shared warning. */
-/** Plan it as a flow: open it for an idea, or run it for a dropped day; its sheets. */
+/** Plan it as a flow: open it for an idea, or run it for a picked day; its sheets. */
 export interface PlanItFlow {
   /** Open the day sheet for this idea. */
   start: (idea: BankIdea) => void;
-  /** Run Plan it for a known day (a calendar drop): one plan, none, several, shared. */
+  /** Run Plan it for a known day (the day sheet's pick): one plan, none, several, shared. */
   runFor: (idea: BankIdea, day: string) => Promise<void>;
   /** The PR 816 sheets (date, no plan, pick a plan, shared warning); render once. */
   sheets: ReactElement;

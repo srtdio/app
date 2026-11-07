@@ -64,7 +64,6 @@ function plan(id: string, startsOn: string, endsOn: string, audience = 'team'): 
   } as PlanRow;
 }
 
-
 describe('sort, star first', () => {
   const a = idea('a', {
     last_active_at: '2026-11-01T00:00:00Z',
