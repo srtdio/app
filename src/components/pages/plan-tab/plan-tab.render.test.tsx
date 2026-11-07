@@ -146,7 +146,7 @@ describe('PlanTabPage', () => {
       expect(html).toContain('compose-mounted');
       // One ListCard per plan (not per post), in LIST_CARD_GRID.
       expect(html.match(/data-list-card=""/g)).toHaveLength(2);
-      expect(html).toMatch(/class="grid grid-cols-1 gap-3 md:grid-cols-list-cards"/);
+      expect(html).toMatch(/class="grid grid-cols-1 gap-2 md:grid-cols-list-cards"/);
       // The same chips on both widths; no calendar, legend or Month | Week.
       for (const chip of ['bank', 'this', 'next', 'later', 'earlier', 'all']) {
         expect(html).toContain(`data-plan-tab-when="${chip}"`);

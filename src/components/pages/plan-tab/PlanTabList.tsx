@@ -2,10 +2,12 @@
 // retired 7 Nov 2026): one ui/ListCard per plan in LIST_CARD_GRID (one column
 // on a phone, auto-fill columns on a laptop), grouped in sections under All
 // (This week, Next week, Upcoming, Past; empty ones hidden). A card: the
-// plan's first cover (else the plan icon), its title, then its dates and post
-// count (a Draft adds "only your team sees this"), then when it starts
-// ("Starts Mon", "Started 3d ago") and one grey tag ("1 of 3 OK", or
-// "Draft"). A tap opens the plan's own screen. While more plans remain (the
+// plan's first cover (else the plan icon), its title and its time on line 1
+// (formatPlanStart: "Today", "Mon", "16 Nov" before it starts, "Live" while
+// on, its end day "1 Nov" once over), then on line 2 its dates and post count
+// (a Draft adds "only your team sees this") and one grey tag ("1 of 3 OK", or
+// "Draft"). No select: long-press does nothing. A tap opens the plan's own
+// screen. While more plans remain (the
 // read's next cursor), PlanTabPage hands the list its Load more (from
 // usePlanTabData) and the list ends with it (PlanTabLoadMore, which the Bank
 // and From bank end with too); the cards it appends rise into place (itemIn,
@@ -158,10 +160,10 @@ export function PlanTabList(props: {
 }
 
 /**
- * One plan on ui/ListCard: the first cover (else the plan icon), the title,
- * the dates and post count (wrapping to the card's two lines), then when it
- * starts and the one tag ("1 of 3 OK", or "Draft"). The whole card opens the
- * plan; its page grows out of the card (rememberCard).
+ * One plan on ui/ListCard: the first cover (else the plan icon), the title and
+ * its time (formatPlanStart with the end day), then the dates and post count
+ * (one line) and the one tag ("1 of 3 OK", or "Draft"). The whole card opens
+ * the plan; its page grows out of the card (rememberCard).
  */
 export function PlanTabCard(props: {
   bundle: PlanBundle;
@@ -210,7 +212,7 @@ export function PlanTabCard(props: {
       title={plan.title}
       preview={planCardPreview(bundle, props.timeZone, props.now)}
       previewHooks={{ 'data-plan-tab-dates': '' }}
-      time={formatPlanStart(plan.starts_on, props.timeZone, props.now)}
+      time={formatPlanStart(plan.starts_on, props.timeZone, props.now, plan.ends_on)}
       timeHooks={{ 'data-plan-tab-start': '' }}
       tag={meta.tag}
       tagHooks={

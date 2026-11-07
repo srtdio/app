@@ -7,30 +7,30 @@
 // through previewClient, else the file glyph, else the idea icon), its title,
 // its text (stripFormat) as the preview, then when it was added (formatAdded:
 // "10:27 AM" today, else "2 Nov") and its first bucket as the one tag.
-// A card taps open its idea (/plan/bank?item=); its ⋯ menu (ui/ActionMenu,
-// right-click on laptop) holds Open, Select, Plan it, Send to chat (the chat
-// picker, then chat_plan_item_share; IdeaShareFlow), Show to client or Hide
-// from client, Star or Unstar, Archive or Unarchive, Delete last. Plan it is
-// usePlanIt (shared with a bank idea's item screen). Long-press
-// enters select mode (a Checkbox where the ⋯ sits, the picked cards
-// lit-selected; the select bar sits above the cards). Writes are optimistic
-// over the kept page; Delete, Archive, Hide and every bulk write sit behind
-// the Undo strip first. A client reads only, with no menu, select mode or Add
-// idea. Tokens only. The Untouched for 90 days filter (the Filter and sort
+// A card taps open its idea (/plan/bank?item=). No ⋮: a long-press (phone)
+// or right-click / Shift-click / Cmd-click (laptop) enters select mode with
+// the idea ticked (ListCard `select`, useListSelection); a tap then toggles.
+// The bottom select bar (BankSelectBar on ui/SelectBar) holds "N selected"
+// and every old menu row: Open, Plan it, Send to chat (the chat picker, then
+// chat_plan_item_share; IdeaShareFlow) for one idea; Show to client or Hide
+// from client, Star or Unstar, Archive or Unarchive, Delete last for any
+// count; All ticks every loaded idea. Plan it is usePlanIt (shared with a bank
+// idea's item screen). Writes go through the bank procs only and are
+// optimistic over the kept page; Delete, Archive, Hide and every bulk write
+// sit behind the Undo strip first. A client reads only, with no select mode
+// or Add idea. Tokens only. The Untouched for 90 days filter (the Filter and sort
 // sheet) lists live ideas last active over 90 days ago and ends with "Archive
 // all {n}" (n = the rows loaded; bulk bank_idea_set behind the Undo strip).
 // Nothing in the Bank is ever counted.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent, ReactElement, ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { stripFormat } from '@srtdio/comments';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { Thumbnail } from '@/components/media/Thumbnail';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
 import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
@@ -39,32 +39,18 @@ import {
   ListCard,
   ListCardBox,
   type ListCardPicture,
+  type ListCardSelect,
 } from '@/components/ui/ListCard';
+import { useListSelection } from '@/components/ui/SelectBar';
 import { useInView } from '@/lib/use-in-view';
 import { PREVIEW_ROOT_MARGIN, previewClient, type LinkPreview } from '@/lib/links/preview';
 import { NoResults } from '@/components/ui/NoResults';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag } from '@/components/ui/Tag';
-import {
-  ICON_SIZE,
-  IconArchive,
-  IconBank,
-  IconCalendar,
-  IconCheckCircle,
-  IconEye,
-  IconEyeOff,
-  IconFile,
-  IconForward,
-  IconStar,
-  IconStarFilled,
-  IconTrash,
-  IconArrowUpRight,
-  IconX,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconBank, IconFile, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { IdeaShareFlow, type IdeaShareTarget } from '@/components/chat/IdeaShareFlow';
-import { useLongPress } from '@/components/ui/useLongPress';
 import type { BucketOption } from '@/lib/buckets';
 import type { BankIdea, PlanRow } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
@@ -367,52 +353,26 @@ interface CardProps {
   idea: BankIdea;
   buckets: readonly BucketOption[];
   now: Date;
-  canWrite: boolean;
-  selecting: boolean;
-  selected: boolean;
-  menuItems: ActionMenuItem[];
+  /** Select mode (creators only); absent: long-press and right-click do nothing. */
+  select: ListCardSelect | undefined;
   onOpen: () => void;
-  onToggle: () => void;
-  onHold: () => void;
 }
 
 /**
- * One idea on ui/ListCard: picture, title, its text as the preview, then last
- * active and its first bucket; the ⋯ (creators), or the Checkbox in select
- * mode. Tap opens (or toggles in select mode); long-press enters select mode;
- * right-click opens the menu (creators).
+ * One idea on ui/ListCard: picture, title and when it was added (formatAdded),
+ * then its text as the preview and its first bucket as the one tag. Tap opens;
+ * with `select`, long-press / right-click ticks it and, while selecting, a tap
+ * toggles (ListCard wires both).
  */
 function BankCard(props: CardProps): ReactElement {
   const { idea } = props;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const hold = useLongPress(() => props.onHold(), { ignoreMouse: true });
   const thumb = idea.thumb;
   return (
     <ListCard
-      surface={{
-        'data-bank-row': idea.id,
-        'data-selected': props.selected ? 'true' : undefined,
-        ...(props.canWrite
-          ? {
-              onContextMenu: (event: MouseEvent<HTMLElement>) => {
-                event.preventDefault();
-                hold.cancel();
-                setMenuOpen(true);
-              },
-            }
-          : {}),
-      }}
-      selected={props.selected}
-      onPress={() => {
-        if (hold.consumeClickSuppression()) return;
-        if (props.selecting) props.onToggle();
-        else props.onOpen();
-      }}
-      press={{
-        'data-bank-open': idea.id,
-        ...(props.selecting ? { 'aria-pressed': props.selected } : {}),
-        ...(props.canWrite ? hold.handlers : {}),
-      }}
+      surface={{ 'data-bank-row': idea.id }}
+      select={props.select}
+      onPress={props.onOpen}
+      press={{ 'data-bank-open': idea.id }}
       picture={bankCardPicture(idea)}
       pictureHooks={{ 'data-bank-thumb': thumb === null ? 'none' : thumb.kind }}
       title={idea.title ?? ''}
@@ -421,28 +381,6 @@ function BankCard(props: CardProps): ReactElement {
       timeHooks={{ 'data-bank-added': '' }}
       tag={ideaBucketTag(idea, props.buckets)}
       tagHooks={{ 'data-bank-bucket-tag': '' }}
-      {...(props.selecting && props.canWrite
-        ? {
-            check: (
-              <Checkbox
-                checked={props.selected}
-                onChange={props.onToggle}
-                aria-label={`Select ${idea.title ?? 'idea'}`}
-              />
-            ),
-          }
-        : props.canWrite
-          ? {
-              menu: (
-                <ActionMenu
-                  title={idea.title ?? 'Idea'}
-                  items={props.menuItems}
-                  open={menuOpen}
-                  onOpenChange={setMenuOpen}
-                />
-              ),
-            }
-          : {})}
     />
   );
 }
@@ -481,16 +419,12 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   const { data, filter, canWrite, now } = props;
   const showToast = useToast().show;
   const undoable = useUndoableAction();
-  const [selecting, setSelecting] = useState(false);
-  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-  const [showAsk, setShowAsk] = useState<BankIdea | null>(null);
+  const selection = useListSelection();
+  const [showAsk, setShowAsk] = useState<readonly BankIdea[] | null>(null);
   const [sendIdea, setSendIdea] = useState<IdeaShareTarget | null>(null);
   const ideas = data.ideas;
 
-  const leaveSelect = useCallback(() => {
-    setSelecting(false);
-    setPicked(new Set());
-  }, []);
+  const leaveSelect = selection.clear;
   // A chip change (or a filter change) leaves select mode.
   const filterKey = `${filter.sort}:${filter.bucketId ?? ''}:${String(filter.archived)}:${String(filter.review)}`;
   useEffect(() => leaveSelect(), [props.epoch, filterKey, leaveSelect]);
@@ -504,27 +438,48 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     [data],
   );
 
-  // Star and Show to client land at once; Archive, Hide and Delete wait behind Undo.
-  const star = (idea: BankIdea, on: boolean): void => {
-    replaceIdea(withFlags(idea, { starred: on }, new Date().toISOString()));
-    void setBankFlags(supabase, idea, { starred: on }).catch((error: unknown) => {
-      replaceIdea(idea);
-      showToast({ title: errorText(on ? 'star' : 'unstar', error), tone: 'error' });
+  // Star and Show to client land at once (each idea patched first, the
+  // bank_idea_set writes BANK_BULK_LIMIT at a time, a failed one put back with
+  // one error toast); Archive, Hide and Delete wait behind Undo.
+  const flagNow = (
+    list: readonly BankIdea[],
+    change: { starred: boolean } | { show: true },
+    action: string,
+  ): void => {
+    if (list.length === 0) return;
+    const at = new Date().toISOString();
+    for (const idea of list) replaceIdea(withFlags(idea, change, at));
+    let failure: unknown = null;
+    void runLimited(
+      list.map(
+        (idea) => () =>
+          setBankFlags(supabase, idea, change).catch((error: unknown) => {
+            replaceIdea(idea);
+            failure ??= error;
+          }),
+      ),
+    ).then(() => {
+      if (failure !== null) showToast({ title: errorText(action, failure), tone: 'error' });
     });
   };
-  const showToClient = (idea: BankIdea): void => {
-    replaceIdea(withFlags(idea, { show: true }, new Date().toISOString()));
-    void setBankFlags(supabase, idea, { show: true }).catch((error: unknown) => {
-      replaceIdea(idea);
-      showToast({ title: errorText('show it to the client', error), tone: 'error' });
-    });
-  };
-  const hide = (idea: BankIdea): void => {
-    replaceIdea(withFlags(idea, { show: false }, new Date().toISOString()));
+  const starMany = (list: readonly BankIdea[], on: boolean): void =>
+    flagNow(list, { starred: on }, on ? 'star' : 'unstar');
+  const showToClient = (list: readonly BankIdea[]): void =>
+    flagNow(list, { show: true }, 'show it to the client');
+  const hideMany = (list: readonly BankIdea[]): void => {
+    if (list.length === 0) return;
+    const at = new Date().toISOString();
+    for (const idea of list) replaceIdea(withFlags(idea, { show: false }, at));
+    selection.clear();
     undoable.run({
-      label: 'Idea hidden',
-      commit: () => setBankFlags(supabase, idea, { show: false }),
-      revert: () => replaceIdea(idea),
+      label: list.length === 1 ? 'Idea hidden' : `${list.length} ideas hidden`,
+      commit: () =>
+        runLimited(list.map((idea) => () => setBankFlags(supabase, idea, { show: false }))).then(
+          () => undefined,
+        ),
+      revert: () => {
+        for (const idea of list) replaceIdea(idea);
+      },
     });
   };
   const archiveMany = (list: readonly BankIdea[], on: boolean): void => {
@@ -574,81 +529,39 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     onUnplaced: (idea) => data.patch((cur) => [idea, ...cur]),
   });
 
-  const menuFor = (idea: BankIdea): ActionMenuItem[] => [
-    {
-      id: 'open',
-      label: 'Open',
-      icon: IconArrowUpRight,
-      onSelect: () => props.onOpenIdea(idea.id),
-    },
-    {
-      id: 'select',
-      label: 'Select',
-      icon: IconCheckCircle,
-      onSelect: () => {
-        setSelecting(true);
-        setPicked(new Set([idea.id]));
-      },
-    },
-    {
-      id: 'plan-it',
-      label: 'Plan it',
-      icon: IconCalendar,
-      onSelect: () => planIt.start(idea),
-    },
-    {
-      id: 'send-to-chat',
-      label: 'Send to chat',
-      icon: IconForward,
-      onSelect: () =>
-        setSendIdea({
-          id: idea.id,
-          title: idea.title ?? '',
-          commentCount: idea.comment_count,
-          plan: null,
-        }),
-    },
-    idea.show_to_client === true
-      ? { id: 'hide', label: 'Hide from client', icon: IconEyeOff, onSelect: () => hide(idea) }
-      : { id: 'show', label: 'Show to client', icon: IconEye, onSelect: () => setShowAsk(idea) },
-    idea.starred_at != null
-      ? { id: 'unstar', label: 'Unstar', icon: IconStar, onSelect: () => star(idea, false) }
-      : { id: 'star', label: 'Star', icon: IconStarFilled, onSelect: () => star(idea, true) },
-    {
-      id: 'archive',
-      label: idea.archived_at != null ? 'Unarchive' : 'Archive',
-      icon: IconArchive,
-      onSelect: () => archiveMany([idea], idea.archived_at == null),
-    },
-    {
-      id: 'delete',
-      label: 'Delete',
-      icon: IconTrash,
-      tone: 'danger',
-      onSelect: () => deleteMany([idea]),
-    },
-  ];
-
-  const toggle = (id: string): void =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const pickedIdeas = (ideas ?? []).filter((i) => picked.has(i.id));
+  const pickedIdeas = (ideas ?? []).filter((i) => selection.ids.has(i.id));
   const searching = data.search.active;
 
-  const head = selecting ? (
-    <BankSelectBar
-      count={picked.size}
-      onCancel={leaveSelect}
-      onAll={() => setPicked(new Set((ideas ?? []).map((i) => i.id)))}
-      onNone={() => setPicked(new Set())}
-      onArchive={() => archiveMany(pickedIdeas, !filter.archived)}
-      onDelete={() => deleteMany(pickedIdeas)}
-    />
-  ) : null;
+  // The select bar: every old ⋮ row. Open and the sheet flows leave select
+  // mode first (its Back entry popped), so their own history steps sit clean.
+  const selectBar =
+    canWrite && selection.active ? (
+      <BankSelectBar
+        picked={pickedIdeas}
+        onCancel={selection.clear}
+        onAll={() => selection.setMany((ideas ?? []).map((i) => i.id))}
+        onOpen={(idea) => selection.leaveThen(() => props.onOpenIdea(idea.id))}
+        onPlanIt={(idea) => selection.leaveThen(() => planIt.start(idea))}
+        onSend={(idea) =>
+          selection.leaveThen(() =>
+            setSendIdea({
+              id: idea.id,
+              title: idea.title ?? '',
+              commentCount: idea.comment_count,
+              plan: null,
+            }),
+          )
+        }
+        onShow={(list) => selection.leaveThen(() => setShowAsk(list.length > 0 ? list : null))}
+        onHide={hideMany}
+        onStar={(list, on) => {
+          selection.clear();
+          starMany(list, on);
+        }}
+        onArchive={archiveMany}
+        onDelete={deleteMany}
+      />
+    ) : null;
   // Untouched for 90 days: Archive all {n} after the rows (n = the rows loaded).
   const archiveAll =
     canWrite && filter.review && !searching && ideas !== null && ideas.length > 0 ? (
@@ -697,16 +610,8 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
             idea={idea}
             buckets={props.buckets}
             now={now}
-            canWrite={canWrite}
-            selecting={selecting}
-            selected={picked.has(idea.id)}
-            menuItems={menuFor(idea)}
+            select={canWrite ? selection.selectFor(idea.id) : undefined}
             onOpen={() => props.onOpenIdea(idea.id)}
-            onToggle={() => toggle(idea.id)}
-            onHold={() => {
-              setSelecting(true);
-              setPicked(new Set([idea.id]));
-            }}
           />
         ))}
       </div>
@@ -715,12 +620,12 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
 
   return (
     <div data-bank="list" className="flex flex-col gap-2 pb-8 pt-2">
-      {head}
       <div className={cn('flex flex-col gap-3', GUTTER)}>
         {body}
         {data.more !== null ? <PlanTabLoadMore more={data.more} /> : null}
         {archiveAll}
       </div>
+      {selectBar}
       {canWrite ? (
         <>
           {planIt.sheets}
@@ -736,12 +641,14 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
             }}
           />
           <BankShowSheet
-            idea={showAsk}
+            idea={showAsk?.[0] ?? null}
+            ideas={showAsk ?? undefined}
             workspaceId={props.workspaceId}
             onClose={() => setShowAsk(null)}
-            onShow={(idea) => {
+            onShow={() => {
+              const list = showAsk ?? [];
               setShowAsk(null);
-              showToClient(idea);
+              showToClient(list);
             }}
           />
         </>
@@ -1025,6 +932,8 @@ export function BankPlanItSheets(props: {
 /** Show to client: the warning naming the workspace's approvers (never a ConfirmDialog). */
 export function BankShowSheet(props: {
   idea: BankIdea | null;
+  /** Every idea being shown (the Bank's select bar); absent: just `idea`. */
+  ideas?: readonly BankIdea[] | undefined;
   workspaceId: string;
   onClose: () => void;
   onShow: (idea: BankIdea) => void;
@@ -1053,13 +962,15 @@ export function BankShowSheet(props: {
         </div>
       }
     >
-      {idea !== null ? <ShowWarning idea={idea} workspaceId={props.workspaceId} /> : null}
+      {idea !== null ? (
+        <ShowWarning ideas={props.ideas ?? [idea]} workspaceId={props.workspaceId} />
+      ) : null}
     </Sheet>
   );
 }
 
 /** The warning line; the members read runs only while the sheet is open. */
-function ShowWarning(props: { idea: BankIdea; workspaceId: string }): ReactElement {
+function ShowWarning(props: { ideas: readonly BankIdea[]; workspaceId: string }): ReactElement {
   const members = useWorkspaceMembers(props.workspaceId);
   const names = useMemo(
     () => approverNames(members.rows, members.profiles),
@@ -1067,7 +978,11 @@ function ShowWarning(props: { idea: BankIdea; workspaceId: string }): ReactEleme
   );
   return (
     <p data-bank-show-warning="" className="p-4 text-base text-fg">
-      {showToClientWarning(names, props.idea.comment_count)}
+      {showToClientWarning(
+        names,
+        props.ideas.reduce((sum, idea) => sum + idea.comment_count, 0),
+        props.ideas.length,
+      )}
     </p>
   );
 }
