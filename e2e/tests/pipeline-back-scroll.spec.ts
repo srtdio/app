@@ -18,7 +18,7 @@ async function sampleFrames(page: Page, ms: number): Promise<void> {
       // (html.scroll-page, src/lib/scroll-mode.ts), else <main>.
       const page = document.documentElement.classList.contains('scroll-page');
       const scroller = page ? document.scrollingElement : document.querySelector('main');
-      const cards = document.querySelector('[data-post-card-thumb], [data-card]');
+      const cards = document.querySelector('[data-induction-post]');
       w.__frames.push([scroller?.scrollTop ?? -1, cards !== null]);
       if (performance.now() - start < duration) requestAnimationFrame(tick);
     };

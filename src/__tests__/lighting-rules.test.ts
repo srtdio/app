@@ -93,11 +93,6 @@ const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
     'uploading / failed thumbnail: opacity on the image box only; its lit-badge label reads the state',
   ],
   [
-    'pages/plan-tab/PlanCalendar.tsx',
-    "props.lifted && 'opacity-40'",
-    'the drag ghost left in place while its lifted copy floats (lit-float)',
-  ],
-  [
     'chat/UploadRing.tsx',
     'bg-overlay opacity-60',
     'the dim layer over an uploading thumbnail (a media overlay, no text)',
@@ -313,10 +308,10 @@ describe('lighting rules', () => {
     expect(flat).not.toContain("[class*='hover:bg-']");
   });
 
-  it('plan filter chips are the shared Chip (full ink idle)', () => {
-    const cal = src('pages/plan-tab/PlanCalendar.tsx');
-    expect(cal).toContain('<Chip');
-    expect(cal).not.toMatch(/variant="ghost"[^>]*data-plan-tab-chip/);
+  it('plan chips are the shared Chip (full ink idle)', () => {
+    const tab = src('pages/PlanTabPage.tsx');
+    expect(tab).toContain('<Chip');
+    expect(tab).not.toMatch(/variant="ghost"[^>]*data-plan-tab-when/);
   });
 
   it('hover is the --hover-fill overlay (lit-hover), never a flat hover:bg-panel-2/3 swap', () => {

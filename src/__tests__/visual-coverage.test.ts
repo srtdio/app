@@ -21,6 +21,12 @@ const DEFAULT_PROJECTS: readonly Project[] = ['iphone-light', 'iphone-dark', 'la
 /** Every screen name, sorted. */
 const REQUIRED: readonly string[] = [
   'activity-bank',
+  'activity-chip-briefs',
+  'activity-chip-mentions',
+  'activity-chip-plans',
+  'activity-chip-snoozed',
+  'activity-chip-unread',
+  'activity-chip-upcoming',
   'approve-confirm-approver',
   'asset-more-menu',
   'asset-picker',
@@ -30,6 +36,12 @@ const REQUIRED: readonly string[] = [
   'assets-empty',
   'assets-files-approver',
   'assets-search-empty',
+  'assets-select',
+  'assets-tab-docs',
+  'assets-tab-links',
+  'assets-tab-media',
+  'assets-tab-pdf',
+  'assets-tab-sheets',
   'boxes-activity',
   'boxes-members',
   'boxes-plan-tab',
@@ -58,6 +70,8 @@ const REQUIRED: readonly string[] = [
   'chat-home-chip-videos-dark',
   'chat-home-chip-voice-notes',
   'chat-home-chip-voice-notes-dark',
+  'chat-idea-card',
+  'chat-idea-share-sheet',
   'chat-info-group',
   'chat-list',
   'chat-media-lightbox-details',
@@ -159,12 +173,18 @@ const REQUIRED: readonly string[] = [
   'person-photo-viewer-laptop',
   'pipeline',
   'pipeline-approver',
-  'pipeline-drag-drop',
+  'pipeline-chip-all',
+  'pipeline-chip-approved',
+  'pipeline-chip-draft',
+  'pipeline-chip-parked',
+  'pipeline-chip-rejected',
   'pipeline-search-empty',
   'pipeline-search-focused',
   'pipeline-search-typed',
+  'plan-from-bank',
   'plan-item',
   'plan-item-bank',
+  'plan-item-bank-more-menu',
   'plan-item-mention-picker',
   'plan-item-more-menu',
   'plan-item-notes',
@@ -174,22 +194,22 @@ const REQUIRED: readonly string[] = [
   'plan-screen',
   'plan-screen-today',
   'plan-screen-today-dark',
+  'plan-screen-trace',
+  'plan-share-draft-sheet',
   'plan-tab',
   'plan-tab-bank',
   'plan-tab-bank-add',
   'plan-tab-bank-filter',
   'plan-tab-bank-filter-bucket-menu',
-  'plan-screen-trace',
-  'plan-from-bank',
-  'plan-tab-month-trace',
-  'plan-share-draft-sheet',
-  'chat-idea-card',
-  'chat-idea-share-sheet',
-  'plan-item-bank-more-menu',
   'plan-tab-bank-panel',
   'plan-tab-bank-plan-it',
   'plan-tab-bank-select',
   'plan-tab-bank-table',
+  'plan-tab-chip-all',
+  'plan-tab-chip-earlier',
+  'plan-tab-chip-later',
+  'plan-tab-chip-next',
+  'plan-tab-month-trace',
   'plan-tab-week',
   'plan-tab-week-dark',
   'plan-tab-week-zero',
@@ -234,6 +254,24 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   'name: `support-contact-sheet${suffix}`': withDark('support-contact-sheet'),
   'name: `chat-home-chip-${chip.name}${suffix}`': CHIPS.flatMap((c) => withDark(`${CHIP}${c}`)),
   'name: `chat-media-lightbox-details${suffix}`': withDark('chat-media-lightbox-details'),
+  // The six ListCard lists, chip by chip (7 Nov 2026).
+  'name: `pipeline-chip-${stage}`': ['all', 'draft', 'approved', 'parked', 'rejected'].map(
+    (stage) => `pipeline-chip-${stage}`,
+  ),
+  'name: `assets-tab-${tab}`': ['media', 'pdf', 'docs', 'sheets', 'links'].map(
+    (tab) => `assets-tab-${tab}`,
+  ),
+  'name: `activity-chip-${chip}`': [
+    'unread',
+    'mentions',
+    'briefs',
+    'plans',
+    'upcoming',
+    'snoozed',
+  ].map((chip) => `activity-chip-${chip}`),
+  'name: `plan-tab-chip-${chip}`': ['next', 'later', 'earlier', 'all'].map(
+    (chip) => `plan-tab-chip-${chip}`,
+  ),
 };
 
 interface Exception {
@@ -254,8 +292,7 @@ const PHONE_ONLY_NAMES = [
 
 /**
  * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel, the Week
- * view, the Bank side panel and table, the board drag (a mouse-only gesture) and
- * the chip hover (a hover pointer).
+ * view, the Bank side panel and table and the chip hover (a hover pointer).
  */
 const LAPTOP_LIGHT_NAMES = [
   'pipeline-search-typed',
@@ -265,7 +302,6 @@ const LAPTOP_LIGHT_NAMES = [
   'plan-tab-bank-panel',
   'plan-tab-month-trace',
   'plan-tab-bank-table',
-  'pipeline-drag-drop',
   'chip-row-hover',
 ];
 

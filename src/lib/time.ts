@@ -126,7 +126,11 @@ function civilOf(value: DateInput, timeZone: string): Civil | undefined {
     const match = DATE_ONLY.exec(value.trim());
     if (match !== null) {
       const civil = { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
-      if (civil.month < 1 || civil.month > 12 || civil.day < 1 || civil.day > 31) return undefined;
+      // A day the month does not have ("2026-02-31") is unparseable, never rolled over.
+      const check = new Date(Date.UTC(civil.year, civil.month - 1, civil.day));
+      if (check.getUTCMonth() !== civil.month - 1 || check.getUTCDate() !== civil.day) {
+        return undefined;
+      }
       return civil;
     }
   }

@@ -3027,41 +3027,6 @@ SCREENS.push(
 // "Visible and lit" (PR 1): the states the lighting pass changed, each in the
 // projects of the visual-coverage guard (src/__tests__/visual-coverage.test.ts).
 
-/**
- * Lifts a draggable card and holds it over the first other column its role may
- * drop it in: a native dragstart on the card (it lifts one height, lit-float)
- * and a dragover on the column (lit-drop), never a drop, so nothing moves in
- * the world. The target is found by trying each other column (canRoleMove
- * decides which one lights), so the screen does not depend on the seed's stages.
- */
-async function liftOverReview(page: Page): Promise<void> {
-  await pipelineReady(page);
-  const card = await firstVisible(
-    [page.locator('[data-drag-container] [data-drag-item][draggable="true"]')],
-    'a draggable card',
-  );
-  const from = await card.evaluate(
-    (el) => el.closest('[data-drag-container]')?.getAttribute('data-stage') ?? '',
-  );
-  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-  await card.dispatchEvent('dragstart', { dataTransfer });
-  const columns = page.locator('[data-drag-container]');
-  const count = await columns.count();
-  for (let i = 0; i < count; i += 1) {
-    const column = columns.nth(i);
-    if ((await column.getAttribute('data-stage')) === from) continue;
-    await column.scrollIntoViewIfNeeded();
-    await column.dispatchEvent('dragenter', { dataTransfer });
-    await column.dispatchEvent('dragover', { dataTransfer });
-    if (/(^|\s)lit-drop(\s|$)/.test((await column.getAttribute('class')) ?? '')) {
-      await expect(card).toHaveClass(/(^|\s)lit-float(\s|$)/);
-      return;
-    }
-    await column.dispatchEvent('dragleave', { dataTransfer });
-  }
-  throw new Error('not reached: a column that takes the lifted card');
-}
-
 /** The Profile panel's alerts block in view (Sound, Notifications, Pause for). */
 async function alertsBlock(page: Page): Promise<void> {
   const block = page.locator('[data-alerts-block]');
@@ -3070,17 +3035,6 @@ async function alertsBlock(page: Page): Promise<void> {
 }
 
 SCREENS.push(
-  {
-    // Laptop board: a card lifted (lit-float) over a column it may drop in (lit-drop,
-    // the 1px dashed line plus its inset ring).
-    name: 'pipeline-drag-drop',
-    seed: creator,
-    only: 'laptop',
-    // The kanban (one column per stage) shows only on All; a single stage is
-    // a grid with nowhere to drop.
-    url: '/pipeline?stage=all',
-    steps: liftOverReview,
-  },
   {
     // ME's own voice note in the DM (n=28 in the fixture): played and unplayed
     // bars, the speed pill and the transcribe link in on-bubble ink (dark too).
