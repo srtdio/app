@@ -239,18 +239,16 @@ for (const photo of [true, false]) {
     await page.goto('/chat');
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
-    // The notes card is ui/ListCard's person slot at 48: the own photo, round,
-    // with the notes badge; the notebook (no badge) without a photo.
+    // The notes card is ui/ListCard's person slot at 48 (ui/Avatar 'card'):
+    // the user's own photo, round; their initials (no image) without one.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
     const box = await picture.boundingBox();
     expect(Math.round(box?.width ?? 0)).toBe(48);
     expect(Math.round(box?.height ?? 0)).toBe(48);
-    const tileAvatar = tile.locator('[data-notes-avatar]');
-    await expect(tileAvatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
+    const tileAvatar = tile.locator('[data-avatar-role="card"]');
     await expect(tileAvatar).toHaveClass(/rounded-full/);
-    await expect(tile.locator('[data-notes-badge]')).toHaveCount(photo ? 1 : 0);
-    if (!photo) await expect(tile.locator('img')).toHaveCount(0);
+    await expect(tile.locator('img')).toHaveCount(photo ? 1 : 0);
 
     await tile.click();
     const header = page.locator('[data-header-line]');
@@ -263,7 +261,9 @@ for (const photo of [true, false]) {
   });
 }
 
-test('notes avatar: a photo that fails to load falls back to the notebook', async ({ page }) => {
+test('notes avatar: a photo that fails to load falls back (initials on the card, the notebook in the header)', async ({
+  page,
+}) => {
   const network = await installHarnessNetwork(page);
   setOwnAvatar(network.world, OWN_PHOTO_URL);
   await page.route(OWN_PHOTO_URL, (route) =>
@@ -272,10 +272,8 @@ test('notes avatar: a photo that fails to load falls back to the notebook', asyn
   await page.goto('/chat');
   const tile = page.locator('[data-notes-tile]');
   await tile.waitFor({ state: 'visible', timeout: 30_000 });
-  await expect(tile.locator('[data-notes-avatar]')).toHaveAttribute(
-    'data-notes-avatar',
-    'notebook',
-  );
+  await expect(tile.locator('[data-avatar-role="card"]')).toBeVisible();
+  await expect(tile.locator('img')).toHaveCount(0);
   await tile.click();
   const headAvatar = page.locator(HEADER_NOTES_AVATAR).first();
   await expect(headAvatar).toHaveAttribute('data-notes-avatar', 'notebook');

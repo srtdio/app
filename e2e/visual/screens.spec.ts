@@ -3627,14 +3627,17 @@ SCREENS.push(
   },
   {
     // The chat home: the Personal notes card shows the user's own photo
-    // (round, with the notes badge) among the person cards.
+    // (round, ui/Avatar 'card' at 48) among the person cards.
     name: 'chat-list-notes-photo',
     seed: creator,
     extra: seedOwnPhoto,
     url: '/chat',
     steps: async (page) => {
       await chatListAllRows(page);
-      await waitFor([page.locator('[data-notes-tile] [data-notes-avatar="photo"]')], 'notes photo');
+      await waitFor(
+        [page.locator('[data-notes-tile] img[data-avatar-role="card"]')],
+        'notes photo',
+      );
     },
   },
 );
