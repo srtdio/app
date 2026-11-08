@@ -11,7 +11,7 @@ export function listSkeleton(label: string, rows = 3): ReactElement {
     <ul data-list-skeleton="" aria-busy="true" aria-label={label} className="flex flex-col">
       {Array.from({ length: rows }, (_, i) => (
         <li key={`bone-${i}`} aria-hidden="true" className="flex min-h-11 items-center gap-3 px-1">
-          <Bone lit="lit-avatar" className="h-8 w-8 shrink-0 rounded-full" />
+          <Bone lit="lit-avatar" className="h-8 w-8 shrink-0 rounded-lg" />
           <Bone lit="flat" className="h-3 w-32 rounded" />
         </li>
       ))}

@@ -15,7 +15,6 @@ vi.mock('@/lib/logger', () => ({
 
 import { CHAT_HOME_EDGE, CHAT_HOME_STACK, CHAT_ROW_LIST } from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
-import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
 import { SelectionHeader } from '@/components/chat/SelectionBar';
 
 const read = (rel: string): string =>
@@ -44,28 +43,11 @@ function over(top: readonly number[], alpha: number, under: readonly number[]): 
 }
 
 describe('11c own-bubble post card', () => {
-  it('card surfaces take an on-bubble/12 overlay, secondary ink at full accent-fg (no opacity)', () => {
-    for (const token of [
-      '[&_.bg-panel]:bg-on-bubble/[.12]',
-      '[&_.bg-panel-2]:bg-on-bubble/[.12]',
-      '[&_.bg-panel-3]:bg-on-bubble/[.12]',
-      '[&_.text-fg-2]:text-accent-fg',
-      '[&_.text-fg-3]:text-accent-fg',
-    ]) {
-      expect(OWN_BUBBLE_CONTENT).toContain(token);
-    }
-    for (const gone of [
-      '[&_.bg-panel]:bg-white/[.16]',
-      '[&_.bg-panel-2]:bg-white/[.16]',
-      '[&_.bg-panel-3]:bg-white/[.16]',
-      '[&_.bg-panel]:bg-black/[.12]',
-      '[&_.bg-panel-2]:bg-black/[.12]',
-      '[&_.bg-panel-3]:bg-black/[.12]',
-      '[&_.text-fg-2]:opacity-80',
-      '[&_.text-fg-3]:opacity-80',
-    ]) {
-      expect(OWN_BUBBLE_CONTENT).not.toContain(gone);
-    }
+  // L1 (8 Nov 2026): no own bubble, so no own-bubble restyle of cards.
+  it('the own-bubble restyle is gone from the chat row', () => {
+    const src = read('../MessageThread.tsx');
+    expect(src).not.toContain('OWN_BUBBLE_CONTENT');
+    expect(src).not.toContain('bg-bubble-own');
   });
 
   it('"Waiting on approvers" and the Review chip reach 4.5:1 on the darkened card, both themes', () => {

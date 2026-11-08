@@ -95,9 +95,10 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(dm.avatarUrl).toBe(PEER_PHOTO);
     const html = rowHtml(dm);
     expect(html).toContain(`src="${PEER_PHOTO}"`);
-    // A DM is a ListCard: a 48 circular photo (card role, person kind).
+    // A DM is a ListCard: a 48 rounded-square photo (card role, person kind; L2).
     expect(html).toMatch(/data-list-card-picture="person" data-person-photo=""/);
-    expect(html).toContain('rounded-full');
+    expect(html).toContain('rounded-lg');
+    expect(html).not.toContain('rounded-full lit-avatar');
     expect(html).toContain('data-avatar-role="card"');
   });
 });

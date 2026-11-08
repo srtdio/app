@@ -66,20 +66,26 @@ function usePopIn<T extends HTMLElement>(visible: boolean): RefObject<T> {
   return ref;
 }
 
-/** The unread divider row above the first unread message: hairline + "N unread". */
+/** The "New" line above the first unread message: thick ink rule + ink "New" pill (L7). */
 export function UnreadDivider({ count }: { count: number }): ReactElement {
+  // L7 (8 Nov 2026): a thick ink line and an ink "New" pill on the right
+  // (replaces "N unread"); the main chat and the thread screen share it.
   return (
     <li
       role="separator"
-      aria-label={unreadLabel(count)}
+      aria-label={`New, ${unreadLabel(count)}`}
       data-unread-divider=""
-      className={cn('flex items-center gap-3 px-4 pb-1 pt-3', NO_TOUCH_SELECT)}
+      data-new-line=""
+      className={cn('flex items-center gap-2 px-4 pb-1 pt-3', NO_TOUCH_SELECT)}
     >
-      <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
-      <span className="text-sm font-medium text-accent">
-        <span className="font-mono tabular-nums">{count}</span> unread
+      <span aria-hidden="true" data-new-rule="" className="h-0.5 flex-1 bg-fg" />
+      <span
+        aria-hidden="true"
+        data-new-pill=""
+        className="flex h-5 shrink-0 items-center rounded-full bg-fg px-2 text-xs font-semibold text-bg"
+      >
+        New
       </span>
-      <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
     </li>
   );
 }
@@ -168,7 +174,8 @@ export function SeenLine(props: {
     <li
       data-seen-line=""
       className={cn(
-        'flex justify-end px-4 pt-1',
+        // L1: left-aligned under the last own message's text (photo 32 + gap 8).
+        'flex justify-start pl-14 pr-4 pt-1',
         props.rail === true && 'relative',
         NO_TOUCH_SELECT,
       )}
@@ -201,7 +208,11 @@ export function ReadByLine(props: {
   return (
     <li
       data-read-by-line=""
-      className={cn('flex justify-end px-2', props.rail === true && 'relative', NO_TOUCH_SELECT)}
+      className={cn(
+        'flex justify-start pl-12 pr-2',
+        props.rail === true && 'relative',
+        NO_TOUCH_SELECT,
+      )}
     >
       {props.rail === true ? <RailThrough /> : null}
       <PressableRow

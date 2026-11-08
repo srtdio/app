@@ -44,6 +44,7 @@ import {
   WORKSPACE_ID,
   civilPlus,
   mondayOf,
+  MAYA_NAME,
 } from '../fixtures/chat-data';
 import {
   AUDIT_BRIEF_ID,
@@ -1276,6 +1277,51 @@ const SCREENS: Screen[] = [
     seed: creator,
     url: '/chat',
     steps: openDmMessageMenu,
+  },
+  {
+    // L10: the sheet's second page ("<" More actions).
+    name: 'message-action-menu-more',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDmMessageMenu(page);
+      await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
+      await waitFor([page.locator('[data-menu-page="more"]')], 'More actions page');
+    },
+  },
+  {
+    // L1: the group chat, everyone on the left, square photos, name + time lines.
+    name: 'chat-group-work',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, GROUP_NAME);
+      await threadStill(page);
+    },
+  },
+  {
+    // L3: a root's replies row in the main chat (a post-card thread).
+    name: 'chat-replies-row',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await waitFor([page.locator('[data-replies-row]').first()], 'replies row');
+    },
+  },
+  {
+    // L4: the thread screen (post-card title), root, "N replies", replies.
+    name: 'chat-thread-screen',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button')],
+        'replies row',
+      );
+      await waitFor([page.locator('[data-thread-separator]')], 'thread screen');
+    },
   },
   {
     name: 'new-chat-sheet',
@@ -2699,33 +2745,28 @@ function seedLongPrivateReplies(network: HarnessNetwork): void {
 }
 
 /**
- * The bubble stays inside its column (BUBBLE_MAX of the row: 76% touch, 65%
- * laptop) and inside the viewport, mine and theirs.
+ * L1 (8 Nov 2026): the message stays inside its column (the row's content
+ * column right of the photo gutter, no bubble cap) and inside the viewport,
+ * mine and theirs.
  */
 async function expectBubbleInsideColumn(page: Page, body: string): Promise<void> {
   const bubble = await lastVisible(page.locator('[data-bubble]', { hasText: body }), body);
   await bubble.scrollIntoViewIfNeeded();
-  const max = isLaptop(page) ? 0.65 : 0.76;
-  const box = await bubble.evaluate((el, cap) => {
+  const box = await bubble.evaluate((el) => {
     const b = el.getBoundingClientRect();
     let col: Element | null = el.parentElement;
-    while (col !== null && !/max-w-\[(76|65)%\]/.test(col.className)) col = col.parentElement;
+    while (col !== null && !/\bflex-col\b/.test(col.className)) col = col.parentElement;
     const c = col?.getBoundingClientRect() ?? null;
-    const row = el.closest('li');
-    const rowWidth = row !== null ? row.clientWidth : 0;
     return {
       left: b.left,
       right: b.right,
-      width: b.width,
       colLeft: c?.left ?? Number.NaN,
       colRight: c?.right ?? Number.NaN,
-      cap: rowWidth * cap,
       vw: window.innerWidth,
     };
-  }, max);
+  });
   expect(box.left, `${body}: left edge inside column`).toBeGreaterThanOrEqual(box.colLeft - 0.5);
   expect(box.right, `${body}: right edge inside column`).toBeLessThanOrEqual(box.colRight + 0.5);
-  expect(box.width, `${body}: width <= BUBBLE_MAX`).toBeLessThanOrEqual(box.cap + 0.5);
   expect(box.left, `${body}: on screen`).toBeGreaterThanOrEqual(0);
   expect(box.right, `${body}: on screen`).toBeLessThanOrEqual(box.vw);
 }
@@ -2797,7 +2838,8 @@ async function openGroupMessageMenu(page: Page): Promise<void> {
       break;
     }
   }
-  await waitFor(menuRow(page, /Reply privately/), 'Reply privately in the message menu');
+  // L10: Reply privately sits on the More actions page.
+  await waitFor(menuRow(page, /More actions/), 'More actions in the message menu');
 }
 
 SCREENS.push(
@@ -2907,6 +2949,9 @@ async function openCommentAuthorCard(page: Page): Promise<void> {
   await author.click();
   await waitFor([page.locator('[data-person-card-message]')], 'inline message card');
   await waitFor([page.locator('[data-person-context]')], 'context line');
+  // The open moves focus: a writing box that lost it collapses on its 200ms
+  // blur fallback (ui/WritingBox), a timer stabilise does not see. Shoot after it.
+  await page.waitForTimeout(300);
 }
 
 /** The DM header's photo: the photo-only viewer opens. */
@@ -3416,6 +3461,8 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await openDmMessageMenu(page);
+      // L10: select-text sits on the More actions page.
+      await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
       await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
       await waitFor([page.locator('[data-selecting-text]')], 'select mode');
       await page.mouse.move(0, 0);
@@ -3538,6 +3585,8 @@ async function openDmMenuOn(page: Page, text: string): Promise<void> {
 /** The message menu's Delete: the delete sheet opens. */
 async function openDeleteSheetOn(page: Page, text: string): Promise<Locator> {
   await openDmMenuOn(page, text);
+  // L10: delete sits on the More actions page.
+  await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
   await tap([page.locator('[data-menu-item="delete"]')], 'menu Delete');
   return firstVisible([page.getByTestId('delete-sheet')], 'delete sheet');
 }

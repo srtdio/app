@@ -16,6 +16,8 @@ import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
 import { replyCountLabel } from '@/lib/chat/thread-rail';
+import { Avatar } from '@/components/ui/Avatar';
+import { LIST_CARD_UNREAD_DOT } from '@/components/ui/ListCard';
 
 /** The rail's ink: the stronger border token. */
 const RAIL_INK = 'bg-border-strong';
@@ -208,6 +210,66 @@ export function RepliesSeparatorRow(props: { label: string; through: boolean }):
     >
       {props.through ? <RailThrough /> : null}
       <span className="text-sm text-fg-3">{props.label}</span>
+    </li>
+  );
+}
+
+/**
+ * L3 (8 Nov 2026): the replies row under a thread root in the main chat (the
+ * work-chat layout, aligned under the root's text: photo 32 + gap 8). Up to 3
+ * square photos (24) of the latest repliers, "N replies" (semibold), the
+ * latest reply's first line (fg-3, one line, truncates) and an 8px ink dot
+ * while a reply is unread by me. The whole row is one 44 tall target that
+ * opens the thread. Tokens only; light and dark at parity.
+ */
+export function RepliesRow(props: {
+  label: string;
+  repliers: readonly { id: string; name: string; src?: string | undefined }[];
+  line: string;
+  unread: boolean;
+  coarse: boolean;
+  onOpen: () => void;
+}): ReactElement {
+  return (
+    <li
+      data-replies-row=""
+      data-unread={props.unread ? '' : undefined}
+      className={cn('flex min-w-0 pl-12 pr-4', NO_TOUCH_SELECT)}
+      {...guardProps(props.coarse)}
+    >
+      <PressableRow
+        inline
+        type="button"
+        data-thread-open="replies"
+        aria-label={`${props.label}${props.unread ? ', unread' : ''}. Open thread`}
+        onClick={props.onOpen}
+        className={cn('flex min-w-0 max-w-full items-center gap-2 px-2', NO_TOUCH_SELECT)}
+      >
+        {props.repliers.length > 0 ? (
+          <span data-replies-photos="" className="flex shrink-0 items-center gap-1">
+            {props.repliers.map((r) => (
+              <Avatar
+                key={r.id}
+                role="stack"
+                name={r.name}
+                {...(r.src !== undefined ? { src: r.src } : {})}
+                decorative
+              />
+            ))}
+          </span>
+        ) : null}
+        <span data-replies-count="" className="shrink-0 text-md font-semibold text-fg">
+          {props.label}
+        </span>
+        {props.line !== '' ? (
+          <span data-replies-latest="" className="min-w-0 truncate text-md text-fg-3">
+            {props.line}
+          </span>
+        ) : null}
+        {props.unread ? (
+          <span aria-hidden="true" data-replies-dot="" className={LIST_CARD_UNREAD_DOT} />
+        ) : null}
+      </PressableRow>
     </li>
   );
 }

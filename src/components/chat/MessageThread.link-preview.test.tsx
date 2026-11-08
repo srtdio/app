@@ -75,10 +75,11 @@ describe('MessageBubble link card', () => {
     expect(bubble('just words')).not.toContain('data-link-card');
   });
 
-  it('own (accent) bubbles use the translucent on-accent surface', () => {
+  // L1 (8 Nov 2026): no own fill, so an own link card is the same flat card.
+  it('own messages draw the same link card as everyone else', () => {
     const html = bubble('https://a.com/x', true);
-    expect(html).toContain('bg-overlay-surface');
-    expect(html).toContain('border-overlay-line');
+    expect(html).not.toContain('bg-overlay-surface');
+    expect(html).toContain('bg-panel');
   });
 
   it('an unsafe first link gets the warning card, also for the sender', () => {

@@ -144,30 +144,46 @@ describe('ownMessageActions: the edit and delete windows', () => {
   });
 });
 
-describe('messageMenuItems: one level, row set per case', () => {
+describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per case', () => {
   it('own within 15 min', () => {
-    expect(rowsFor(msg(ago(5)))).toEqual(['Reply', 'Copy', 'Select', 'Forward', 'Edit', 'Delete']);
+    expect(rowsFor(msg(ago(5)))).toEqual([
+      'Reply',
+      'Forward',
+      'Copy text',
+      'Select text',
+      'Edit',
+      'Delete',
+    ]);
   });
 
   it('own at 20 min: no Edit', () => {
-    expect(rowsFor(msg(ago(20)))).toEqual(['Reply', 'Copy', 'Select', 'Forward', 'Delete']);
+    expect(rowsFor(msg(ago(20)))).toEqual([
+      'Reply',
+      'Forward',
+      'Copy text',
+      'Select text',
+      'Delete',
+    ]);
   });
 
   it('own at 40 min: neither Edit nor Delete', () => {
-    expect(rowsFor(msg(ago(40)))).toEqual(['Reply', 'Copy', 'Select', 'Forward']);
+    expect(rowsFor(msg(ago(40)))).toEqual(['Reply', 'Forward', 'Copy text', 'Select text']);
   });
 
   it('peer: never Edit or Delete', () => {
     expect(rowsFor(msg({ ...ago(1), mine: false }))).toEqual([
       'Reply',
-      'Copy',
-      'Select',
       'Forward',
+      'Copy text',
+      'Select text',
     ]);
   });
 
-  it('the full order: Reply .. Edit, then Remove file and Delete last', () => {
+  it('the full order: tiles, rows, then More actions with Delete last', () => {
     const all: Partial<ItemProps> = {
+      canAddToTasks: true,
+      canMarkUnread: true,
+      canCopyLink: true,
       canReplyPrivately: true,
       replyPrivatelyName: 'Priya Shah',
       canTranscribe: true,
@@ -176,26 +192,46 @@ describe('messageMenuItems: one level, row set per case', () => {
       canRemoveFile: true,
       canDelete: true,
     };
-    expect(messageMenuItems(itemProps(all)).map((i) => i.key)).toEqual([
+    const items = messageMenuItems(itemProps(all));
+    expect(items.map((i) => i.key)).toEqual([
       'reply',
-      'reply-privately',
+      'forward',
+      'add-task',
+      'mark-unread',
+      'copy-link',
       'copy',
+      'reply-privately',
       'select-text',
       'transcribe',
-      'forward',
       'save-notes',
       'edit',
       'remove-file',
       'delete',
     ]);
+    expect(items.map((i) => i.group)).toEqual([
+      'tile',
+      'tile',
+      'tile',
+      'row',
+      'row',
+      'row',
+      'more',
+      'more',
+      'more',
+      'more',
+      'more',
+      'more',
+      'more',
+    ]);
   });
 
-  it('no More row and no Back row, ever', () => {
+  it('Remind, Star and Mark as stay removed', () => {
     const keys = messageMenuItems(
       itemProps({ canTranscribe: true, canSaveToNotes: true, canRemoveFile: true }),
     ).map((i) => i.key);
-    expect(keys).not.toContain('more');
-    expect(keys).not.toContain('back');
+    expect(keys).not.toContain('remind');
+    expect(keys).not.toContain('star');
+    expect(keys).not.toContain('mark');
   });
 
   it('the size flows to every icon', () => {
@@ -225,7 +261,7 @@ describe('messageMenuItems: one level, row set per case', () => {
         canDelete: own.canDelete,
         canSelectText: false,
       }),
-    ).toEqual(['Reply', 'Copy']);
+    ).toEqual(['Reply', 'Copy text']);
   });
 
   it('hides rows that do not apply (never greyed)', () => {
@@ -322,7 +358,7 @@ describe('messageMenuItems: one level, row set per case', () => {
 
 describe('QUICK_REACTIONS', () => {
   it('is exactly the approved quick-react set, in order, followed by the "+"', () => {
-    expect([...QUICK_REACTIONS]).toEqual(['👍', '❤️', '😂', '👌', '🙏']);
+    expect([...QUICK_REACTIONS]).toEqual(['👍', '✅', '❤️', '😂', '🙏']);
     const buttons = rowButtons(row());
     expect(buttons.map((b) => b.props['aria-label'])).toEqual([
       ...QUICK_REACTIONS.map((e) => `React ${e}`),
@@ -605,7 +641,8 @@ describe('Transcribe', () => {
       canTranscribe: true,
       onTranscribe: () => {},
     };
-    expect(menu(voice)).toEqual(['Reply', 'Transcribe', 'Forward']);
+    // L10: Forward is a tile; Transcribe sits on the More actions page.
+    expect(menu(voice)).toEqual(['Reply', 'Forward', 'Transcribe']);
   });
 
   it('hides Transcribe when not offered (loading, or a transcript exists)', () => {
@@ -634,7 +671,8 @@ describe('the divider is the 1px border token', () => {
       'utf8',
     );
     expect(src).toContain('data-menu-divider="" className="border-t border-border"');
-    expect(src.split('data-menu-divider').length - 1).toBe(1);
+    // L10: one hairline before More actions, one before the danger rows on its page.
+    expect(src.split('data-menu-divider').length - 1).toBe(2);
   });
 });
 

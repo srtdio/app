@@ -25,11 +25,14 @@ const NOTES_AVATAR_SIZE: Record<NotesAvatarRole, string> = {
   row: 'h-10 w-10',
 };
 
-/** The box's shape: the note rounded square, or round where it sits among person cards. */
+/**
+ * The box's shape. 'round' is kept as a name for the person-card slot; since
+ * 8 Nov 2026 people are rounded squares too, so both draw the same shape.
+ */
 type NotesAvatarShape = 'note' | 'round';
 
-function notesBox(role: NotesAvatarRole, shape: NotesAvatarShape = 'note'): string {
-  return cn(NOTES_AVATAR_SIZE[role], avatarShapeClass(role, shape === 'round' ? 'person' : 'note'));
+function notesBox(role: NotesAvatarRole): string {
+  return cn(NOTES_AVATAR_SIZE[role], avatarShapeClass(role));
 }
 
 const NOTES_GLYPH_SIZE: Record<NotesAvatarRole, number> = {
@@ -146,7 +149,7 @@ export function notesAvatarView(input: {
 }): ReactElement {
   const usable = input.src !== null && input.src !== '' && !input.failed;
   const shown = usable && input.loaded;
-  const box = notesBox(input.role, input.shape);
+  const box = notesBox(input.role);
   const badge = NOTES_BADGE[input.role];
   return (
     <span

@@ -1,10 +1,14 @@
-// The message action menu: the quick reactions on top, then ONE level of
-// rows (no More submenu): Reply, Reply privately, Copy, Select, Transcribe,
-// Forward, Save to notes, Edit, then one hairline divider and the danger
-// rows, Remove file and Delete (last). The divider shows only when a danger
-// row does. Each row shows only when it applies (the same conditions as
-// before); Edit and Delete keep their "15 min" / "30 min" hints. A phone gets
-// a ui/Sheet, a laptop a MenuPopover at the bubble.
+// The message action menu (L10, 8 Nov 2026). Phone: a ui/Sheet with a grab
+// handle and no title: a row of round quick reactions plus "+", three big
+// tiles (Reply, Forward, Add to Tasks), the rows Mark unread, Copy link and
+// Copy text, a divider, then "More actions ›", which opens a second page
+// ("<" More actions): Reply privately (with "to <Name>"), Select text,
+// Transcribe, Save to notes, Edit, Remove file, a divider, Delete (danger).
+// Laptop (right-click): the same groups and order in a MenuPopover, the tiles
+// drawn as its first three rows. Each entry shows only when it applies (plan
+// and idea cards hide Forward, Add to Tasks, Save to notes and Edit as
+// before); Edit and Delete keep their "15 min" / "30 min" hints. Remind,
+// Star and Mark as stay removed.
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
@@ -13,17 +17,22 @@ import { menuOrigin } from '@/components/ui/popover-classes';
 import { createPortal } from 'react-dom';
 import {
   ICON_SIZE,
+  IconChevronRight,
   IconCopy,
   IconEdit,
   IconFile,
   IconForward,
+  IconLink,
+  IconMail,
   IconPlus,
   IconReply,
   IconReplyPrivately,
   IconSelectText,
+  IconTaskSquare,
   IconText,
   IconTrash,
 } from '@/components/ui/icons';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
@@ -44,7 +53,8 @@ import { personFirstName } from '@/lib/person-card';
 import { errorText } from '@/lib/error-copy';
 
 /** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
-export const QUICK_REACTIONS = ['👍', '❤️', '😂', '👌', '🙏'] as const;
+// L9 (8 Nov 2026): ✅ replaces 👌. ✅ is a reaction only; it never means approval anywhere.
+export const QUICK_REACTIONS = ['👍', '✅', '❤️', '😂', '🙏'] as const;
 
 /** The "+" after the quick reactions: opens the full emoji picker. */
 export const MORE_REACTIONS_LABEL = 'More reactions';
@@ -221,7 +231,19 @@ interface MessageActionMenuProps {
    */
   canRemoveFile?: boolean;
   onRemoveFile?: () => void;
+  /** L11: Mark unread (a recorded message from someone else). */
+  canMarkUnread?: boolean;
+  onMarkUnread?: () => void;
+  /** L12: Add to Tasks (a chat with a Tasks list; not on plan or idea cards). */
+  canAddToTasks?: boolean;
+  onAddToTasks?: () => void;
+  /** L13: Copy link (a recorded message). */
+  canCopyLink?: boolean;
+  onCopyLink?: () => void;
 }
+
+/** Where an entry sits (L10): a big tile, a row on the first page, or under More actions. */
+export type MenuGroup = 'tile' | 'row' | 'more';
 
 /** One entry of the message action menu. */
 export interface MessageMenuItem {
@@ -230,6 +252,8 @@ export interface MessageMenuItem {
   label: string;
   icon: ReactNode;
   run: () => void;
+  /** The entry's group; absent reads as 'more'. */
+  group?: MenuGroup;
   /** Text in the bad token (Delete). */
   danger?: boolean;
   /** Muted note at the right ("15 min"). */
@@ -261,7 +285,20 @@ type MenuItemProps = Pick<
   | 'onSelectText'
   | 'canRemoveFile'
   | 'onRemoveFile'
+  | 'canMarkUnread'
+  | 'onMarkUnread'
+  | 'canAddToTasks'
+  | 'onAddToTasks'
+  | 'canCopyLink'
+  | 'onCopyLink'
 >;
+
+/** L10 labels. */
+export const ADD_TO_TASKS_LABEL = 'Add to Tasks';
+export const MARK_UNREAD_LABEL = 'Mark unread';
+export const COPY_LINK_LABEL = 'Copy link';
+export const COPY_TEXT_LABEL = 'Copy text';
+export const MORE_ACTIONS_LABEL = 'More actions';
 
 /** The menu row that copies a message into Personal notes. */
 export const SAVE_TO_NOTES_LABEL = 'Save to notes';
@@ -280,15 +317,15 @@ export function runMenuItem(item: MessageMenuItem, menu: { close: () => void }):
 export const MENU_ICON_SIZE = ICON_SIZE.tray;
 
 /** The row that selects part of one message's text in place. */
-export const SELECT_TEXT_LABEL = 'Select';
+export const SELECT_TEXT_LABEL = 'Select text';
 
 /**
- * The rows in display order, one level: Reply, Reply privately (someone else's
- * message in a group), Copy, Select, Transcribe, Forward, Save to notes,
- * Edit, then the danger rows: Remove file, Delete (last). Rows that do not
- * apply are not rendered; the divider before the danger rows is the
- * renderer's (dividerBefore). Pure (no hooks) so the row set is unit-tested
- * without a DOM.
+ * The entries in display order (L10). Tiles: Reply, Forward, Add to Tasks.
+ * Rows: Mark unread, Copy link, Copy text. More actions: Reply privately,
+ * Select text, Transcribe, Save to notes, Edit, then the danger rows Remove
+ * file and Delete (last). Entries that do not apply are not returned; the
+ * divider before the danger rows is the renderer's (dividerBefore). Pure (no
+ * hooks) so the set is unit-tested without a DOM.
  */
 export function messageMenuItems(
   props: MenuItemProps,
@@ -300,9 +337,60 @@ export function messageMenuItems(
       key: 'reply',
       label: 'Reply',
       icon: <IconReply size={size} />,
+      group: 'tile',
       run: props.onReply,
     },
   ];
+  if (props.canForward === true) {
+    items.push({
+      kind: 'action',
+      key: 'forward',
+      label: 'Forward',
+      icon: <IconForward size={size} />,
+      group: 'tile',
+      run: () => props.onForward?.(),
+    });
+  }
+  if (props.canAddToTasks === true) {
+    items.push({
+      kind: 'action',
+      key: 'add-task',
+      label: ADD_TO_TASKS_LABEL,
+      icon: <IconTaskSquare size={size} />,
+      group: 'tile',
+      run: () => props.onAddToTasks?.(),
+    });
+  }
+  if (props.canMarkUnread === true) {
+    items.push({
+      kind: 'action',
+      key: 'mark-unread',
+      label: MARK_UNREAD_LABEL,
+      icon: <IconMail size={size} />,
+      group: 'row',
+      run: () => props.onMarkUnread?.(),
+    });
+  }
+  if (props.canCopyLink === true) {
+    items.push({
+      kind: 'action',
+      key: 'copy-link',
+      label: COPY_LINK_LABEL,
+      icon: <IconLink size={size} />,
+      group: 'row',
+      run: () => props.onCopyLink?.(),
+    });
+  }
+  if (props.canCopy) {
+    items.push({
+      kind: 'action',
+      key: 'copy',
+      label: COPY_TEXT_LABEL,
+      icon: <IconCopy size={size} />,
+      group: 'row',
+      run: props.onCopy,
+    });
+  }
   if (props.canReplyPrivately === true) {
     const first = personFirstName(props.replyPrivatelyName ?? '');
     items.push({
@@ -311,16 +399,8 @@ export function messageMenuItems(
       label: REPLY_PRIVATELY,
       icon: <IconReplyPrivately size={size} />,
       ...(first !== '' ? { hint: replyPrivatelyTo(first) } : {}),
+      group: 'more',
       run: () => props.onReplyPrivately?.(),
-    });
-  }
-  if (props.canCopy) {
-    items.push({
-      kind: 'action',
-      key: 'copy',
-      label: 'Copy',
-      icon: <IconCopy size={size} />,
-      run: props.onCopy,
     });
   }
   if (props.canSelectText === true) {
@@ -329,6 +409,7 @@ export function messageMenuItems(
       key: 'select-text',
       label: SELECT_TEXT_LABEL,
       icon: <IconSelectText size={size} />,
+      group: 'more',
       run: () => props.onSelectText?.(),
     });
   }
@@ -338,16 +419,8 @@ export function messageMenuItems(
       key: 'transcribe',
       label: 'Transcribe',
       icon: <IconText size={size} />,
+      group: 'more',
       run: () => props.onTranscribe?.(),
-    });
-  }
-  if (props.canForward === true) {
-    items.push({
-      kind: 'action',
-      key: 'forward',
-      label: 'Forward',
-      icon: <IconForward size={size} />,
-      run: () => props.onForward?.(),
     });
   }
   if (props.canSaveToNotes === true) {
@@ -356,6 +429,7 @@ export function messageMenuItems(
       key: 'save-notes',
       label: SAVE_TO_NOTES_LABEL,
       icon: <IconFile size={size} />,
+      group: 'more',
       run: () => props.onSaveToNotes?.(),
     });
   }
@@ -366,6 +440,7 @@ export function messageMenuItems(
       label: 'Edit',
       icon: <IconEdit size={size} />,
       ...(props.notes === true ? {} : { hint: '15 min' }),
+      group: 'more',
       run: () => props.onEdit?.(),
     });
   }
@@ -376,6 +451,7 @@ export function messageMenuItems(
       label: REMOVE_FILE_MENU_LABEL,
       icon: <IconTrash size={size} />,
       danger: true,
+      group: 'more',
       run: () => props.onRemoveFile?.(),
     });
   }
@@ -389,10 +465,19 @@ export function messageMenuItems(
         ? {}
         : { hint: '30 min' }),
       danger: true,
+      group: 'more',
       run: () => props.onDelete?.(),
     });
   }
   return items;
+}
+
+/** The entries of one group, in order. Pure. */
+export function itemsOfGroup(
+  items: readonly MessageMenuItem[],
+  group: MenuGroup,
+): MessageMenuItem[] {
+  return items.filter((item) => (item.group ?? 'more') === group);
 }
 
 /**
@@ -463,6 +548,34 @@ export function MenuRow(props: {
 }
 
 /**
+ * A big tile on the phone sheet (L10): the icon over the label, 72 tall, a
+ * hairline card, one third of the row. Laptop draws the same entry as a row.
+ */
+export function MenuTile(props: {
+  item: MessageMenuItem;
+  onRun: (item: MessageMenuItem) => void;
+}): ReactElement {
+  const item = props.item;
+  return (
+    <PressableRow
+      card
+      type="button"
+      role="menuitem"
+      data-menu-item={item.key}
+      data-menu-tile=""
+      align="center"
+      onClick={() => props.onRun(item)}
+      className="flex min-h-18 min-w-0 flex-1 flex-col items-center justify-center gap-1 border border-border px-2 text-md text-fg"
+    >
+      <span data-menu-icon="" className="flex items-center justify-center">
+        {item.icon}
+      </span>
+      <span className="min-w-0 max-w-full truncate">{item.label}</span>
+    </PressableRow>
+  );
+}
+
+/**
  * The laptop popover's width. Six 44x44 reaction cells (the touch-target
  * floor), the row's 10px sides and the 1px border each side need 286px.
  */
@@ -518,7 +631,8 @@ export function ReactionsRow(props: {
           {...(reactionsOnly ? { 'data-menu-item': `react-${emoji}` } : {})}
           onClick={() => props.onReact(emoji)}
           className={cn(
-            'shrink-0 text-2xl',
+            // L10: round reaction buttons, 44 and up.
+            'h-12 w-12 shrink-0 rounded-full text-2xl',
             emoji === currentReaction && 'border bg-panel lit-selected',
           )}
         >
@@ -533,7 +647,7 @@ export function ReactionsRow(props: {
         aria-haspopup="dialog"
         {...(reactionsOnly ? { 'data-menu-item': 'react-more' } : {})}
         onClick={props.onMore}
-        className="shrink-0 bg-panel-2"
+        className="h-12 w-12 shrink-0 rounded-full bg-panel-2"
       >
         <IconPlus size={ICON_SIZE.control} />
       </IconButton>
@@ -1016,10 +1130,36 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const reactionsOnly = props.reactionsOnly === true;
   const size = MENU_ICON_SIZE;
   const items = !active || reactionsOnly ? [] : messageMenuItems(props, size);
-  const divider = dividerBefore(items);
+  const tiles = itemsOfGroup(items, 'tile');
+  const rows = itemsOfGroup(items, 'row');
+  const more = itemsOfGroup(items, 'more');
+  const divider = dividerBefore(more);
+  // L10: the first page, or the "More actions" page.
+  const [page, setPage] = useState<'main' | 'more'>('main');
+  useEffect(() => {
+    if (!open) setPage('main');
+  }, [open]);
+  useEffect(() => {
+    if (open) focusFirstMenuItem(containerRef.current);
+  }, [open, page]);
   const run = (item: MessageMenuItem): void => {
     runMenuItem(item, { close: onClose });
   };
+  const moreRow =
+    more.length > 0 ? (
+      <PressableRow
+        flat
+        type="button"
+        role="menuitem"
+        data-menu-item="more-actions"
+        aria-haspopup="menu"
+        onClick={() => setPage('more')}
+        className={cn(MENU_ROW, 'text-base mv-tint focus-visible:bg-panel-2 text-fg')}
+      >
+        <span className="min-w-0 flex-1 truncate">{MORE_ACTIONS_LABEL}</span>
+        <IconChevronRight size={ICON_SIZE.control} className="shrink-0 text-fg-3" />
+      </PressableRow>
+    ) : null;
 
   const body = (
     <div
@@ -1038,7 +1178,20 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           : undefined
       }
     >
-      {props.canReact !== false ? (
+      {page === 'more' ? (
+        <div data-menu-page="more" className="flex flex-col">
+          <HeaderBar compact title={MORE_ACTIONS_LABEL} onBack={() => setPage('main')} />
+          {more.map((item, index) => (
+            <Fragment key={item.key}>
+              {index === divider ? (
+                <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
+              ) : null}
+              <MenuRow item={item} onRun={run} />
+            </Fragment>
+          ))}
+        </div>
+      ) : null}
+      {page === 'main' && props.canReact !== false ? (
         <ReactionsRow
           currentReaction={currentReaction}
           reactionsOnly={reactionsOnly}
@@ -1050,14 +1203,26 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           moreRef={moreRef}
         />
       ) : null}
-      {items.map((item, index) => (
-        <Fragment key={item.key}>
-          {index === divider ? (
-            <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
-          ) : null}
-          <MenuRow item={item} onRun={run} />
-        </Fragment>
-      ))}
+      {page === 'main' && tiles.length > 0 ? (
+        isLaptop ? (
+          tiles.map((item) => <MenuRow key={item.key} item={item} onRun={run} />)
+        ) : (
+          <div data-menu-tiles="" className="flex gap-2 py-2">
+            {tiles.map((item) => (
+              <MenuTile key={item.key} item={item} onRun={run} />
+            ))}
+          </div>
+        )
+      ) : null}
+      {page === 'main'
+        ? rows.map((item) => <MenuRow key={item.key} item={item} onRun={run} />)
+        : null}
+      {page === 'main' && moreRow !== null ? (
+        <>
+          <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
+          {moreRow}
+        </>
+      ) : null}
     </div>
   );
 
@@ -1081,7 +1246,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   if (!isLaptop) {
     return (
       <>
-        <Sheet open={active} onClose={onClose} title="Message actions">
+        <Sheet open={active} onClose={onClose} title="Message actions" handle>
           {active ? body : null}
         </Sheet>
         {picker}

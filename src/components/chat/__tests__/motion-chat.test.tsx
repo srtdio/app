@@ -172,12 +172,14 @@ describe('thread loading boxes', () => {
     expect(chatThreadLoading({ ...READY, pageLoading: true })).toBe(true);
   });
 
-  it('are bubble-shaped Bone boxes on alternating sides, never a pulse', () => {
+  // L1 (8 Nov 2026): flat lines, all on the left (no bubbles), never a pulse.
+  it('are flat Bone lines on the left, never a pulse', () => {
     const html = renderToStaticMarkup(threadSkeleton());
     const sides = [...html.matchAll(/data-skeleton-bubble="(own|other)"/g)].map((m) => m[1]);
     expect(sides).toEqual(['other', 'own', 'other', 'own', 'other']);
     expect(html.match(/data-bone=""/g)).toHaveLength(5);
-    expect(html).toContain('rounded-xl');
+    expect(html).toContain('rounded-lg');
+    expect(html).not.toContain('justify-end');
     expect(html).not.toMatch(/animate-pulse|opacity|transition/);
   });
 });

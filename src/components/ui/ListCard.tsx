@@ -23,8 +23,8 @@ export type ListCardHooks = { [hook: `data-${string}`]: string | undefined };
 
 /**
  * The picture slot (48x48, 40x40 in Compact; left, vertically centred, 12 to the text):
- * - person: the person's photo, a circle (ui/Avatar 'card', 48 / 40; initials on their colour when none);
- *   `node` replaces the Avatar with a caller's circle filling the slot;
+ * - person: the person's photo, a rounded square (ui/Avatar 'card', 48 / 40; initials on their colour when none);
+ *   `node` replaces the Avatar with a caller's square filling the slot;
  * - image: a caller's picture (a thumbnail, a group photo or mark) in the rounded-picture (10) squircle;
  * - icon: a 20 glyph in fg-2 on the panel-2 squircle (a brief, an activity kind);
  * - placeholder: ui/PostPlaceholder ("Aa", the play glyph) filling the squircle.
@@ -460,7 +460,7 @@ export function ListCardBox({
       <div className={LIST_CARD_BODY}>
         <Bone
           lit={round ? 'lit-avatar' : 'flat'}
-          className={cn(LIST_CARD_PICTURE, round ? 'rounded-full' : PICTURE_BOX)}
+          className={cn(LIST_CARD_PICTURE, round ? 'rounded-lg' : PICTURE_BOX)}
         />
         <div className={LIST_CARD_TEXT}>
           <div className={LIST_CARD_LINE1}>

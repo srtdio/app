@@ -73,6 +73,8 @@ export interface ConversationSummary {
   unread: number;
   /** Id of the message the line shows, when known (a delete of it re-reads the line). */
   lastMessageId?: string;
+  /** L5 (2): the line's message is a thread reply ("<Name> in thread: ..."). */
+  inThread?: boolean;
 }
 
 /**
@@ -128,6 +130,8 @@ export interface IncomingMessage {
   text: string;
   prefix?: string;
   ts: number;
+  /** L5 (2): a thread reply. */
+  inThread?: boolean;
 }
 
 /** A just-sent outbound message, used to refresh the channel's last line. */
@@ -159,6 +163,7 @@ function summary(
   unread: number,
   prefix?: string,
   messageId?: string,
+  inThread?: boolean,
 ): ConversationSummary {
   return {
     lastMessageText: text,
@@ -166,6 +171,7 @@ function summary(
     unread,
     ...(prefix !== undefined ? { lastMessagePrefix: prefix } : {}),
     ...(messageId !== undefined ? { lastMessageId: messageId } : {}),
+    ...(inThread === true ? { inThread: true } : {}),
   };
 }
 
@@ -415,10 +421,12 @@ export function applyPreviews(
       previewPrefix({
         senderUserId: preview.senderUserId,
         currentUserId,
-        isGroup: isGroupChannel(state, preview.channelId),
+        // A thread reply names its sender in a DM too ("<Name> in thread: ...").
+        isGroup: isGroupChannel(state, preview.channelId) || preview.threadRootId != null,
         nameOf,
       }),
       preview.messageId,
+      preview.threadRootId != null,
     );
   }
   return { ...state, conversations };
@@ -591,7 +599,7 @@ export function applyIncoming(state: ChatStoreState, message: IncomingMessage): 
   return setConversation(
     state,
     message.channelId,
-    summary(message.text, message.ts, unread, message.prefix, message.messageId),
+    summary(message.text, message.ts, unread, message.prefix, message.messageId, message.inThread),
   );
 }
 

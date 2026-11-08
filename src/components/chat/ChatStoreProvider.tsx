@@ -89,6 +89,7 @@ import { leaveSelectionThen } from '@/lib/chat/forward';
 import { chatEntryFrom, entryUsr } from '@/lib/chat/use-history-step';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { generateTraceId } from '@/lib/trace';
+import { loadThreadsForMe, threadAlertText } from '@/lib/chat/thread-signals';
 import { useChat } from '@/lib/chat/chat-context';
 import { createTextMessage } from '@/lib/chat/message-factory';
 import { sendMessageRecord } from '@/lib/chat/record';
@@ -1744,6 +1745,26 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   }, []);
   afterIncomingRef.current = (row, text) => {
     debouncedRefresh.schedule(null);
+    // L5 (1): a thread reply alerts (sound, toast, tab) only its participants:
+    // the root sender, anyone who replied or was @mentioned, everyone in a chat
+    // of 6 or fewer (chat_threads_for_me answers exactly that set). Its line
+    // and unread count still land for everyone.
+    const rootId = row.thread_root_message_id ?? null;
+    if (rootId === null) {
+      alertIncomingRef.current(row, text);
+      return;
+    }
+    void loadThreadsForMe(supabase, row.channel_id, generateTraceId()).then((result) => {
+      if (!result.ok || !result.data.some((t) => t.rootId === rootId)) return;
+      const sender =
+        row.sender_user_id !== null
+          ? mentionNamesIn(row.workspace_id)(row.sender_user_id)
+          : undefined;
+      alertIncomingRef.current(row, threadAlertText(sender ?? 'Someone', row.body ?? text));
+    });
+  };
+  const alertIncomingRef = useRef<(row: ChatMessageRow, text: string) => void>(() => {});
+  alertIncomingRef.current = (row, text) => {
     const summary = summariesRef.current.get(row.channel_id);
     for (const listener of liveListenersRef.current) {
       listener({
@@ -1857,10 +1878,12 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
             : [],
         );
         const text = previewLineFor(rowPreviewContent(row), row.workspace_id);
+        const inThread = row.thread_root_message_id != null;
         const prefix = store.previewPrefix({
           senderUserId: row.sender_user_id,
           currentUserId: forUser,
-          isGroup,
+          // L5 (2): a thread reply names its sender in a DM too.
+          isGroup: isGroup || inThread,
           nameOf: mentionNamesIn(row.workspace_id),
         });
         const ts = Date.parse(row.created_at);
@@ -1869,6 +1892,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
           messageId: row.id,
           senderIsSelf: false,
           text,
+          ...(inThread ? { inThread: true } : {}),
           ...(prefix !== undefined ? { prefix } : {}),
           ts: Number.isNaN(ts) ? mapped.message.time : ts,
         };

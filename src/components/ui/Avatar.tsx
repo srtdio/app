@@ -4,21 +4,21 @@ import { IconUser } from '@/components/ui/icons';
 
 /**
  * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
- * name in a meta line; 'header' (32) in a thread or detail header; 'row' (40)
+ * name in a meta line; 'stack' (24) in a chat replies row's repliers (L3); 'header' (32) in a thread or detail header; 'row' (40)
  * in a list row (members, search, pickers); 'card' (48, 40 in Compact density) as
  * a list row's picture (ui/ListCard; <html data-density> through CSS); 'profile' (72) on a profile or group info screen.
  * No other sizes.
  */
-export type AvatarRole = 'inline' | 'header' | 'row' | 'card' | 'profile';
+export type AvatarRole = 'inline' | 'stack' | 'header' | 'row' | 'card' | 'profile';
 
-/** Who the avatar stands for: people are circles, groups and personal notes rounded squares. */
+/** Who the avatar stands for: people, groups and personal notes all draw the same rounded square. */
 type AvatarKind = 'person' | 'group' | 'note';
 
 interface AvatarProps {
   name?: string;
   src?: string;
   role: AvatarRole;
-  /** Defaults to 'person' (circle). */
+  /** Defaults to 'person' (rounded square, like every kind). */
   kind?: AvatarKind;
   /** 'online' adds a bottom-right presence dot (and "online" to the name); absent renders no dot. */
   presence?: 'online' | undefined;
@@ -38,6 +38,7 @@ export function avatarLabel(name: string | undefined, online: boolean): string {
 /** The pixel size of each role (exported for tests and for layout that must line up with it). */
 export const AVATAR_PX: Record<AvatarRole, number> = {
   inline: 20,
+  stack: 24,
   header: 32,
   row: 40,
   // 48 in Cozy and Calm; Compact draws it 40 through the compact: variant (CARD_SIZE).
@@ -47,6 +48,7 @@ export const AVATAR_PX: Record<AvatarRole, number> = {
 
 const INITIALS_TYPE: Record<AvatarRole, string> = {
   inline: 'text-xs',
+  stack: 'text-xs',
   header: 'text-sm',
   row: 'text-base',
   card: 'text-base',
@@ -81,9 +83,13 @@ export function initialsFor(name: string): string {
   return (first + last).toUpperCase();
 }
 
-/** The shape class for a kind at a role: circle for people; rounded-lg (8) at 48 and below, rounded-xl above. */
-export function avatarShapeClass(role: AvatarRole, kind: AvatarKind = 'person'): string {
-  if (kind === 'person') return 'rounded-full';
+/**
+ * One shape rule for every kind (people, groups, personal notes): a rounded
+ * square, rounded-lg (8) at 48 and below, rounded-xl above. People are square
+ * like groups since 8 Nov 2026 (work chat, Slack way). The kind is kept as
+ * data-avatar-kind only.
+ */
+export function avatarShapeClass(role: AvatarRole): string {
   return AVATAR_PX[role] <= 48 ? 'rounded-lg' : 'rounded-xl';
 }
 
@@ -132,7 +138,7 @@ function AvatarFace({
       ? { role: 'img', 'aria-label': label }
       : {};
   const px = AVATAR_PX[role];
-  const box = cn(avatarShapeClass(role, kind), base, role === 'card' && CARD_SIZE);
+  const box = cn(avatarShapeClass(role), base, role === 'card' && CARD_SIZE);
   const style = sizeStyle(role, px);
 
   if (src !== undefined && !errored) {
@@ -144,6 +150,7 @@ function AvatarFace({
         height={px}
         style={style}
         data-avatar-role={role}
+        data-avatar-kind={kind}
         onError={() => setErrored(true)}
         className={cn(box, 'object-cover')}
       />
@@ -155,6 +162,7 @@ function AvatarFace({
       <div
         style={style}
         data-avatar-role={role}
+        data-avatar-kind={kind}
         {...a11y}
         className={cn(box, avatarFillFor(name), 'text-avatar-ink font-medium', INITIALS_TYPE[role])}
       >
@@ -167,6 +175,7 @@ function AvatarFace({
     <div
       style={style}
       data-avatar-role={role}
+      data-avatar-kind={kind}
       {...a11y}
       className={cn(box, 'bg-accent-soft border border-border text-accent')}
     >

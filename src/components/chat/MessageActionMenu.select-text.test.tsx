@@ -91,12 +91,12 @@ function keysFor(message: ThreadMessage, opts: KeyOpts = {}): string[] {
 }
 
 describe('menu order', () => {
-  it('mine: Reply / Copy / Select / Forward / Save / Edit / Delete', () => {
+  it('mine: Reply / Forward / Copy text, then More actions: Select / Save / Edit / Delete', () => {
     expect(keysFor(msg())).toEqual([
       'reply',
+      'forward',
       'copy',
       'select-text',
-      'forward',
       'save-notes',
       'edit',
       'delete',
@@ -106,9 +106,9 @@ describe('menu order', () => {
   it('theirs: no Edit or Delete', () => {
     expect(keysFor(msg({ mine: false }))).toEqual([
       'reply',
+      'forward',
       'copy',
       'select-text',
-      'forward',
       'save-notes',
     ]);
   });
@@ -117,8 +117,8 @@ describe('menu order', () => {
     const voice = msg({ mine: false, body: '', attachments: [VOICE] });
     expect(keysFor(voice, { transcribe: true })).toEqual([
       'reply',
-      'transcribe',
       'forward',
+      'transcribe',
       'save-notes',
     ]);
   });
@@ -145,9 +145,9 @@ describe('menu order', () => {
     const old = msg({ createdAt: new Date(NOW - 90 * MIN).toISOString() });
     expect(keysFor(old, { notes: true })).toEqual([
       'reply',
+      'forward',
       'copy',
       'select-text',
-      'forward',
       'edit',
       'delete',
     ]);
@@ -220,7 +220,7 @@ describe('menu style', () => {
       'utf8',
     );
     expect(src).toContain('const isLaptop = useIsLaptop();');
-    expect(src).toContain('<Sheet open={active} onClose={onClose} title="Message actions">');
+    expect(src).toContain('<Sheet open={active} onClose={onClose} title="Message actions" handle>');
     expect(src).toMatch(
       /<MenuPopover\s+open\s+onClose=\{onClose\}\s+align=\{mine \? 'right' : 'left'\}/,
     );
@@ -286,7 +286,8 @@ describe('menu style', () => {
         onMore={() => {}}
       />,
     );
-    expect(html.match(/h-11 w-11 min-h-11 min-w-11[^"]*shrink-0/g)?.length).toBe(6);
+    // L10: six round cells, 48 visible (44 and up).
+    expect(html.match(/<button[^>]*class="[^"]*\bh-12\b[^"]*\brounded-full\b/g)?.length).toBe(6);
     expect(html).toContain('px-2 py-2');
     expect(html).toContain('border-b border-border');
   });

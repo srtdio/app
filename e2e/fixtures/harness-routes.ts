@@ -1415,6 +1415,134 @@ const RPC: Record<string, RpcHandler> = {
       })
       .filter((row) => row.reply_count > 0);
   },
+  // Thread read point, forward only (chat_thread_read_set).
+  chat_thread_read_set: (args, tables) => {
+    const msg = (tables.chat_messages ?? []).find(
+      (m) =>
+        m.id === args.p_message_id &&
+        m.channel_id === args.p_channel_id &&
+        (m.id === args.p_root_id || m.thread_root_message_id === args.p_root_id),
+    );
+    if (msg === undefined) throw new HarnessRpcError('message not found');
+    const rows = (tables.chat_thread_reads ??= []);
+    const at = String(msg.created_at);
+    const row = rows.find((r) => r.root_message_id === args.p_root_id && r.user_id === ME);
+    if (row === undefined) {
+      rows.push({
+        root_message_id: args.p_root_id,
+        user_id: ME,
+        channel_id: args.p_channel_id,
+        workspace_id: msg.workspace_id,
+        last_read_at: at,
+        updated_at: new Date().toISOString(),
+      });
+    } else if (at > String(row.last_read_at)) {
+      row.last_read_at = at;
+    }
+    return null;
+  },
+  // Thread read point set just before that reply (chat_thread_mark_unread).
+  chat_thread_mark_unread: (args, tables) => {
+    const msg = (tables.chat_messages ?? []).find(
+      (m) =>
+        m.id === args.p_message_id &&
+        m.channel_id === args.p_channel_id &&
+        m.thread_root_message_id === args.p_root_id,
+    );
+    if (msg === undefined) throw new HarnessRpcError('message not found');
+    const rows = (tables.chat_thread_reads ??= []);
+    const before = new Date(Date.parse(String(msg.created_at)) - 1).toISOString();
+    const row = rows.find((r) => r.root_message_id === args.p_root_id && r.user_id === ME);
+    if (row === undefined) {
+      rows.push({
+        root_message_id: args.p_root_id,
+        user_id: ME,
+        channel_id: args.p_channel_id,
+        workspace_id: msg.workspace_id,
+        last_read_at: before,
+        updated_at: new Date().toISOString(),
+      });
+    } else row.last_read_at = before;
+    return null;
+  },
+  // Chat cursor moved to just before a top-level message (chat_mark_unread).
+  chat_mark_unread: (args, tables) => {
+    const msg = (tables.chat_messages ?? []).find(
+      (m) =>
+        m.id === args.p_message_id &&
+        m.channel_id === args.p_channel_id &&
+        (m.thread_root_message_id ?? null) === null,
+    );
+    if (msg === undefined) throw new HarnessRpcError('message not found');
+    const cursors = (tables.chat_read_cursors ??= []);
+    const before = new Date(Date.parse(String(msg.created_at)) - 1).toISOString();
+    const row = cursors.find((c) => c.channel_id === args.p_channel_id && c.user_id === ME);
+    if (row === undefined) {
+      cursors.push({
+        channel_id: args.p_channel_id,
+        user_id: ME,
+        workspace_id: msg.workspace_id,
+        last_read_message_id: msg.id,
+        last_read_at: before,
+        updated_at: before,
+        read_at: new Date().toISOString(),
+      });
+    } else row.last_read_at = before;
+    return null;
+  },
+  // Threads I am in, unread first, newest reply first, max 50.
+  chat_threads_for_me: (args, tables) => {
+    const all = (tables.chat_messages ?? []).filter((m) => m.channel_id === args.p_channel_id);
+    const replies = all.filter((m) => m.thread_root_message_id != null && m.deleted_at == null);
+    const roots = [...new Set(replies.map((m) => String(m.thread_root_message_id)))];
+    const reads = tables.chat_thread_reads ?? [];
+    const small = channelMemberIds(tables, String(args.p_channel_id)).length <= 6;
+    const mentions = (m: Row): boolean =>
+      Array.isArray(m.mentions) && (m.mentions as unknown[]).includes(ME);
+    return roots
+      .map((rootId) => {
+        const own = replies
+          .filter((m) => m.thread_root_message_id === rootId)
+          .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+        const last = own[own.length - 1] as Row;
+        const root = all.find((m) => m.id === rootId);
+        // Fixture rule: with no thread read row, my chat cursor stands in (the
+        // fixture world's chats are read up to it); specs seed
+        // chat_thread_reads rows to make a thread unread or read.
+        const cursor = (tables.chat_read_cursors ?? []).find(
+          (c) => c.channel_id === args.p_channel_id && c.user_id === ME,
+        );
+        const read =
+          reads.find((r) => r.root_message_id === rootId && r.user_id === ME) ??
+          (cursor !== undefined ? { last_read_at: cursor.last_read_at } : undefined);
+        const inIt =
+          root?.sender_user_id === ME ||
+          (root !== undefined && mentions(root)) ||
+          own.some((m) => m.sender_user_id === ME || mentions(m));
+        return {
+          inIt,
+          row: {
+            root_message_id: rootId,
+            reply_count: own.length,
+            last_reply_at: last.created_at,
+            last_reply_id: last.id,
+            last_reply_sender: last.sender_user_id,
+            last_reply_body: String(last.body ?? '').slice(0, 140),
+            unread:
+              last.sender_user_id !== ME &&
+              String(last.created_at) > String(read?.last_read_at ?? ''),
+          },
+        };
+      })
+      .filter((t) => small || t.inIt)
+      .map((t) => t.row)
+      .sort(
+        (a, b) =>
+          Number(b.unread) - Number(a.unread) ||
+          String(b.last_reply_at).localeCompare(String(a.last_reply_at)),
+      )
+      .slice(0, 50);
+  },
   // The record write: the row lands now, its thread root set by the trigger's rule.
   chat_message_send: (args, tables) => {
     const rows = tables.chat_messages ?? [];

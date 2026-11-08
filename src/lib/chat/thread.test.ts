@@ -906,9 +906,15 @@ describe('breaksRun / isTimeGap', () => {
     expect(breaksRun(undefined, own(0))).toBe(true);
   });
 
-  it('keeps one sender under 10 minutes in one run', () => {
-    expect(breaksRun(own(0), own(9))).toBe(false);
-    expect(breaksRun(peer(0), peer(5))).toBe(false);
+  // L1: consecutive messages from one sender within 5 minutes share one photo and name.
+  it('keeps one sender under 5 minutes in one group', () => {
+    expect(breaksRun(own(0), own(4))).toBe(false);
+    expect(breaksRun(peer(0), peer(4))).toBe(false);
+  });
+
+  it('starts a new group (photo and name again) at 5 minutes', () => {
+    expect(breaksRun(own(0), own(5))).toBe(true);
+    expect(breaksRun(peer(0), peer(9))).toBe(true);
   });
 
   it('breaks on a sender switch or a different peer', () => {
@@ -917,7 +923,7 @@ describe('breaksRun / isTimeGap', () => {
     expect(breaksRun(peer(0, 'p1'), peer(1, 'p2'))).toBe(true);
   });
 
-  it('breaks on a gap of exactly 10 minutes or more', () => {
+  it('isTimeGap still marks 10 minutes or more', () => {
     expect(isTimeGap(own(0), own(10))).toBe(true);
     expect(breaksRun(own(0), own(10))).toBe(true);
     expect(isTimeGap(own(0), own(9))).toBe(false);

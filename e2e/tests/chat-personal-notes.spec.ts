@@ -129,15 +129,15 @@ test('personal notes: phone', async ({ page }) => {
     menu
       .locator('[data-menu-item]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('data-menu-item')));
-  // One level: Copy, Select, then Save to notes after Forward.
+  // L10: the first page holds Copy text and More actions; Select text then
+  // Save to notes sit on the More actions page.
   const keys = await menuKeys();
   expect(keys).toContain('copy');
-  expect(keys).not.toContain('more');
-  const selectAt = keys.indexOf('select-text');
-  const saveAt = keys.indexOf('save-notes');
-  expect(selectAt).toBeGreaterThan(keys.indexOf('copy'));
-  expect(saveAt).toBeGreaterThan(selectAt);
+  expect(keys).toContain('more-actions');
   const sends = rpcCalls(page, 'chat_message_send');
+  await menu.locator('[data-menu-item="more-actions"]').click();
+  const moreKeys = await menuKeys();
+  expect(moreKeys.indexOf('save-notes')).toBeGreaterThan(moreKeys.indexOf('select-text'));
   await menu.locator('[data-menu-item="save-notes"]').click();
   const toast = page.getByRole('button', { name: /Saved to Personal notes/ });
   await expect(toast).toBeVisible();
@@ -227,7 +227,7 @@ for (const photo of [true, false]) {
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
     // The notes row is ui/ListCard's person slot at 48 in Cozy (ui/Avatar 'card'):
-    // the user's own photo, round; their initials (no image) without one.
+    // the user's own photo, a rounded square (L2); their initials (no image) without one.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
     // Polled: the photo landing re-renders the row for a frame, when a single
@@ -238,7 +238,8 @@ for (const photo of [true, false]) {
     };
     await expect.poll(size).toBe('48x48');
     const tileAvatar = tile.locator('[data-avatar-role="card"]');
-    await expect(tileAvatar).toHaveClass(/rounded-full/);
+    // L2: people are rounded squares like groups.
+    await expect(tileAvatar).toHaveClass(/rounded-lg/);
     await expect(tile.locator('img')).toHaveCount(photo ? 1 : 0);
 
     await tile.click();

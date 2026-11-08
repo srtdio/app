@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ComponentType, PointerEvent, ReactElement, ReactNode } from 'react';
 import { stripFormat } from '@srtdio/comments';
+import { threadPreviewLine } from '@/lib/chat/thread-signals';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
@@ -417,6 +418,10 @@ export function channelListError(onRetry: () => void): ReactElement {
  */
 export function previewLine(summary: ConversationSummary): string {
   if (summary.lastMessageText === '') return '';
+  // L5 (2): the newest message is a thread reply: "<Name> in thread: <first line>".
+  if (summary.inThread === true) {
+    return threadPreviewLine(summary.lastMessagePrefix ?? 'Someone', summary.lastMessageText);
+  }
   const prefix = summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : '';
   return `${prefix}${stripFormat(summary.lastMessageText)}`;
 }
@@ -563,7 +568,11 @@ export function channelRowParts(props: {
       <span {...(hasMessage ? {} : { className: 'text-fg-3' })}>
         {previewIcon !== null && hasMessage ? (
           <>
-            {summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : ''}
+            {summary.lastMessagePrefix !== undefined
+              ? summary.inThread === true
+                ? `${summary.lastMessagePrefix} in thread: `
+                : `${summary.lastMessagePrefix}: `
+              : ''}
             <SummaryGlyph icon={previewIcon} className="mr-1" />
             {summary.lastMessageText}
           </>

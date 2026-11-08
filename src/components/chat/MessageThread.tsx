@@ -153,13 +153,12 @@ import { civilDay, formatAgo, formatTime } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
-  BUBBLE_MAX,
   BUBBLE_META_TYPE,
   BUBBLE_PAD,
+  SENDER_NAME_TYPE,
+  SENDER_TIME_TYPE,
   BUBBLE_SHAPE,
-  BUBBLE_TAIL,
   DATE_PILL_TYPE,
-  GROUP_SENDER_TYPE,
   HEADER_LINE_TYPE,
   HEADER_NAME_TYPE,
   HEADER_PAD,
@@ -201,11 +200,12 @@ import {
 import { SharedPostCards } from '@/components/chat/PostCard';
 import { ChatCardOwn } from '@/components/ui/ChatCard';
 import { ThreadViewFrame } from '@/components/chat/ThreadView';
+import { ThreadsSheet } from '@/components/chat/ThreadsSheet';
 import {
   RailElbow,
   RailThrough,
   RailTick,
-  RepliesButtonRow,
+  RepliesRow,
   RepliesSeparatorRow,
   ThreadChipRow,
 } from '@/components/chat/ThreadRail';
@@ -224,7 +224,7 @@ import { SharedPlanCards } from '@/components/chat/PlanCard';
 import { SharedIdeaCards, ideaTitleOf } from '@/components/chat/PlanItemCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
-import { ChatStatus } from '@/components/chat/StatusTicker';
+import { ChatStatus, ThreadsStripItem } from '@/components/chat/StatusTicker';
 import { planProgress, todayInZone } from '@/components/chat/plan-card';
 import { briefRoute } from '@/lib/chat/briefs';
 import { useOpenPosts, type UseOpenPosts } from '@/lib/chat/use-open-posts';
@@ -279,6 +279,8 @@ import {
   shareSnapshot,
   tasksSeenKey,
   writeTasksSeen,
+  DEFAULT_PRIORITY,
+  TASK_TITLE_MAX,
   type TaskEvent,
   type TaskLine,
 } from '@/lib/chat/tasks';
@@ -323,7 +325,6 @@ import {
   hydrationDeadline,
   newestCardFor,
   parentIndexOf,
-  replyForSend,
   rowReady,
   type PageGate,
 } from '@/lib/chat/post-refs';
@@ -353,6 +354,26 @@ import {
 } from '@/lib/chat/thread-rail';
 import { loadThreadReplyCounts } from '@/lib/chat/history';
 import { threadViewRows, useThreadView } from '@/lib/chat/use-thread-view';
+import {
+  chatOpenTarget,
+  firstUnreadReply,
+  isTopLevel,
+  threadsStripLabel,
+  latestReplyLine,
+  loadThreadsForMe,
+  localThreadReadAt,
+  mainChatMessages,
+  rememberThreadRead,
+  repliesInfoByRoot,
+  repliesLabel,
+  markChatUnread,
+  markThreadUnread,
+  setThreadRead,
+  threadRootOf,
+  withThreadRead,
+  withThreadUnread,
+  type ThreadForMe,
+} from '@/lib/chat/thread-signals';
 import { applyEdit, applyReactionOp, markMessagesDeleted } from '@/lib/chat/thread';
 import { generateTraceId } from '@/lib/trace';
 import { supabase } from '@/lib/supabase';
@@ -406,6 +427,7 @@ import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import type { ChatConnection } from '@/lib/chat/types';
 import { errorText } from '@/lib/error-copy';
+import { chatMessageHref } from '@/lib/inbox/bell-types';
 
 interface MessageThreadProps {
   title: string;
@@ -907,6 +929,22 @@ export function nextVoiceIds(messages: readonly ThreadMessage[]): Map<string, st
 }
 
 /** Whether the menu may offer "Transcribe": a recorded message whose one attachment is audio. */
+/** L12: the longest task title a message gives (the spec's 280, capped by the table's 200). */
+export const TASK_FROM_MESSAGE_MAX = Math.min(280, TASK_TITLE_MAX);
+
+/**
+ * L12: a task's title from a message: its text (format stripped, first 280
+ * characters, capped by the table's limit); a file-only message uses the file
+ * name; empty when it has neither. Pure.
+ */
+export function taskTitleOf(message: Pick<ThreadMessage, 'body' | 'attachments'>): string {
+  const text = stripFormat(message.body).replace(/\s+/g, ' ').trim();
+  if (text !== '') return text.slice(0, TASK_FROM_MESSAGE_MAX).trim();
+  const file = message.attachments[0];
+  const name = file !== undefined ? file.name.trim() : '';
+  return name.slice(0, TASK_FROM_MESSAGE_MAX);
+}
+
 export function isTranscribable(
   message: Pick<ThreadMessage, 'attachments' | 'state' | 'deleted'>,
 ): boolean {
@@ -1162,7 +1200,8 @@ export const SHARE_UNAVAILABLE_TOAST = errorText('share', null);
 const THREAD_OPEN_FAILED_TOAST = errorText('open this thread', null);
 
 /** The thread view composer's placeholder. */
-const THREAD_REPLY_PLACEHOLDER = 'Reply in thread';
+/** L4: the thread composer's hint. */
+const THREAD_REPLY_PLACEHOLDER = 'Reply';
 
 /**
  * The About reply a send may carry: only while the About bar shows its post.
@@ -1470,6 +1509,26 @@ function senderName(message: ThreadMessage, profiles: Map<string, ChatProfile>):
   if (message.mine) return 'You';
   const profile = message.senderUserId !== null ? profiles.get(message.senderUserId) : undefined;
   return profile?.displayName ?? 'Unknown';
+}
+
+/** L1: the group head's name: own messages show the viewer's own name (never "You"). */
+function headerName(message: ThreadMessage, profiles: Map<string, ChatProfile>): string {
+  const profile = message.senderUserId !== null ? profiles.get(message.senderUserId) : undefined;
+  return profile?.displayName ?? (message.mine ? 'You' : 'Unknown');
+}
+
+/** Whether a meta has nothing to draw ("edited", time and status all absent). Pure. */
+export function metaIsEmpty(meta: BubbleMeta): boolean {
+  return !meta.edited && meta.time === '' && metaTick(meta.status) === null;
+}
+
+/**
+ * L1 (8 Nov 2026): the group head carries the clock time (and on own messages
+ * the send state) on its name line, so the in-body meta keeps only "edited"
+ * and, on a continuation row, the send state. Pure.
+ */
+export function bodyMetaOf(meta: BubbleMeta, head: boolean): BubbleMeta {
+  return { time: '', edited: meta.edited, status: head ? null : meta.status };
 }
 
 function senderAvatarProps(
@@ -1808,16 +1867,8 @@ export interface BubbleShape {
  * at the top on the first bubble of a run; later bubbles are fully rounded.
  */
 export function bubbleCorners(shape: BubbleShape): string {
-  if (shape.layout === 'laptop') {
-    return cn(
-      sized(BUBBLE_SHAPE, 'laptop'),
-      shape.head && (shape.mine ? 'rounded-tr-none' : 'rounded-tl-none'),
-    );
-  }
-  return cn(
-    sized(BUBBLE_SHAPE, 'touch'),
-    shape.tail && (shape.mine ? BUBBLE_TAIL.mine : BUBBLE_TAIL.theirs),
-  );
+  // L1: no bubble, no tail; the radius is the media frame's (an album's corners).
+  return sized(BUBBLE_SHAPE, shape.layout);
 }
 
 /**
@@ -1850,25 +1901,22 @@ export function bubbleClass(
     );
   }
   return cn(
-    // max-w-full: an own bubble is fit-content in an items-end column, so a
-    // nowrap line (the Reply privately quote) would push its min-content past
-    // the column; this caps every bubble at BUBBLE_MAX (min-w album/voice win).
-    // A 284px plan card (max-w-full) now shrinks to fit a narrow phone column.
-    'group/bubble relative min-w-0 max-w-full focus-visible:lit-focus',
+    // L1 (8 Nov 2026): no bubble. Text sits on the page in fg, no fill, no
+    // tail, no padding; own and peer messages draw the same. max-w-full keeps
+    // a nowrap line (the Reply privately quote) inside the column; a 284px
+    // plan card shrinks to fit a narrow phone column.
+    'group/bubble relative min-w-0 max-w-full text-fg focus-visible:lit-focus',
     NO_TOUCH_SELECT,
-    bubbleCorners(state),
-    state.album === true ? 'min-w-60 p-1' : sized(BUBBLE_PAD, state.layout),
-    state.voiceOnly && 'min-w-56',
-    state.mine
-      ? 'bg-bubble-own text-accent-fg lit-bubble-own'
-      : 'bg-panel-2 text-fg lit-bubble-other',
-    state.failed && 'border border-bad lit-bad',
+    state.album === true && 'min-w-60',
+    // A voice note keeps its own player frame (a hairline card).
+    state.voiceOnly &&
+      cn('min-w-56 border border-border', bubbleCorners(state), sized(BUBBLE_PAD, state.layout)),
   );
 }
 
 /**
- * A deleted message's bubble: the same shell, side, radius, tail, padding and
- * light as a peer bubble (panel-2 fill, lit-bubble-other) in secondary ink
+ * A deleted message: one grey line in the message layout (L1, no bubble shell
+ * or light) in secondary ink
  * (fg-3). Its text takes the body size (italic) and its time the normal meta
  * (TombstoneBubble). One height always: one line, never wrapping (the label
  * truncates), the time in flow on the right, so it is exactly as tall as a
@@ -1876,10 +1924,10 @@ export function bubbleClass(
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
+    // L1: one grey italic line in the message layout; no bubble.
+    'relative flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap rounded-lg text-fg-3 focus-visible:lit-focus',
     NO_TOUCH_SELECT,
-    bubbleCorners(shape),
-    sized(BUBBLE_PAD, shape.layout),
+    sized(BUBBLE_BODY_TYPE, shape.layout),
   );
 }
 
@@ -1986,32 +2034,6 @@ export const SELECTION_CHECK_SLOT = 'absolute left-4 top-1/2 flex -translate-y-1
 export const SELECTED_ROW_TINT =
   'pointer-events-none absolute inset-0 -z-raised border-y lit-selected';
 
-/**
- * Own-bubble inner content (reply quote, file chips, shared cards, voice note)
- * restyled for the solid fill without touching the shared child components:
- * ink goes accent-fg (secondary at opacity-90), card surfaces an on-bubble/12
- * overlay with on-bubble/16 edges, the quote rule and played waveform
- * on-bubble/70, icons follow currentColor. on-bubble is the bubble's own ink in
- * each theme (white on the near-black light-theme fill, near-black on the light
- * dark-theme fill), the same value as accent-fg, so accent-fg ink such as
- * "Waiting on approvers" and the Review chip text keeps at least 4.5:1 over the
- * overlay in both themes. Peer bubbles never get this class. The UploadRing
- * (data-upload-ring) is left alone: it draws on overlay tokens and stays a
- * solid dark circle, never a translucent tile.
- */
-export const OWN_BUBBLE_CONTENT = cn(
-  '[&_.bg-panel]:bg-on-bubble/[.12] [&_.bg-panel-2]:bg-on-bubble/[.12] [&_.bg-panel-3]:bg-on-bubble/[.12] [&_.border-border]:border-on-bubble/[.16]',
-  // Lit surfaces inside the fill: drop their light gradient (it would paint
-  // over the on-bubble/12 overlay) and take the same on-bubble/16 edge.
-  '[&_.lit-card]:bg-none [&_.lit-card-muted]:bg-none [&_.lit-chip]:bg-none [&_.lit-btn-secondary]:bg-none',
-  '[&_.lit-card]:border-on-bubble/[.16] [&_.lit-card-muted]:border-on-bubble/[.16] [&_.lit-chip]:border-on-bubble/[.16]',
-  '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-transparent [&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-on-bubble-hover [&_a:hover>span]:bg-transparent [&_a:hover>span]:bg-on-bubble-hover',
-  '[&_.bg-accent]:bg-on-bubble/70 [&_.bg-accent.text-accent-fg]:bg-on-bubble/[.16] [&_.bg-fg-3]:bg-on-bubble/40',
-  '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
-  '[&_.text-fg-2]:text-accent-fg',
-  '[&_.text-fg-3]:text-accent-fg',
-);
-
 // renderMessageBody, bodyLinkClass and markSearchWords live in message-body.tsx
 // (the Plan item screen renders descriptions with them without importing this
 // module); re-exported here so every importer keeps its path.
@@ -2076,19 +2098,19 @@ export function mentionsMe(
 }
 
 /**
- * A mention's ink inside a bubble, always bold: accent-fg on own, accent-hover
- * on peer (the accent family token that clears 4.5:1 on panel-2 in both
- * themes). A mention of me also sits on a tint: the hover fill on a peer
- * bubble, on-bubble at 15% on my own. Tokens only, so light and dark stay at
- * parity.
+ * A mention's ink in a message, always bold: accent-hover (others' mentions,
+ * unchanged). L8 (8 Nov 2026): a mention of me is the bold name in ink (fg) on
+ * a stronger tint, fg at 12%, inline, no outline; the radius is rounded-sm
+ * (6, the highlight token: there is no 4px radius token). `mine` is kept for
+ * callers; with no own bubble since L1 every row passes false. Tokens only, so
+ * light and dark stay at parity.
  */
-export const MENTION_ME_PEER = 'bg-hover-fill';
-export const MENTION_ME_OWN = 'bg-on-bubble/15';
+export const MENTION_ME_PEER = 'bg-fg/[.12] text-fg';
+export const MENTION_ME_OWN = MENTION_ME_PEER;
 export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
     'whitespace-nowrap font-semibold',
-    mine ? 'text-accent-fg' : 'text-accent-hover',
-    self && cn('rounded-sm px-1', mine ? MENTION_ME_OWN : MENTION_ME_PEER),
+    self ? cn('rounded-sm px-1', MENTION_ME_PEER) : mine ? 'text-accent-fg' : 'text-accent-hover',
   );
 }
 
@@ -2310,7 +2332,7 @@ export const REACTION_ROW_SPACE = 'mb-6';
  */
 /** On a PressableRow (inline): 44 tall, a 44px width floor, the glyph centred in bad. */
 export const FAILED_RETRY_CLASS =
-  'absolute right-full top-1/2 mr-1 flex h-11 min-w-11 -translate-y-1/2 items-center justify-center text-bad';
+  'absolute left-full top-1/2 ml-1 flex h-11 min-w-11 -translate-y-1/2 items-center justify-center text-bad';
 
 /**
  * A row's piece of the rail (none for a left root card no member follows yet,
@@ -2511,8 +2533,11 @@ export function MessageBubble(props: {
   const mine = message.mine;
   const reply = message.reply;
   const name = senderName(message, profiles);
-  const showMeta = isGroup && !mine && head;
-  const gutter = isGroup && !mine && !head;
+  // L1: everyone on the left. Every group head (own included, DMs and notes
+  // too) carries the 32 square photo and the name + time line; a
+  // continuation keeps the photo's gutter so its body aligns under the first.
+  const showMeta = head;
+  const gutter = !head;
   const hasReactions = message.reactions.length > 0;
   const failed = message.state === 'failed';
   const selection = props.selection;
@@ -2536,7 +2561,10 @@ export function MessageBubble(props: {
     sharedIdeaIds.length === 0;
   const totalReactions = message.reactions.reduce((sum, r) => sum + r.count, 0);
   const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
-  const meta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
+  const fullMeta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
+  // The name line carries the time (and own send state) on a head.
+  const meta = bodyMetaOf(fullMeta, head);
+  const metaEmpty = metaIsEmpty(meta);
   const placement = metaPlacement(message);
   // Selecting this bubble's text: the native selection owns its gestures.
   const textSelect = selection === undefined && props.selectingText === true;
@@ -2559,7 +2587,9 @@ export function MessageBubble(props: {
       : kind === lastCard
         ? {
             inBubble: false,
-            cardMeta: <BubbleMetaView meta={meta} mine={mine} placement="card" />,
+            ...(metaEmpty
+              ? {}
+              : { cardMeta: <BubbleMetaView meta={meta} mine={false} placement="card" /> }),
           }
         : { inBubble: false };
   // An own send still uploading can be stopped with the ring's stop square; once
@@ -2572,8 +2602,8 @@ export function MessageBubble(props: {
     onCancelUpload !== undefined
       ? () => onCancelUpload(message.id)
       : undefined;
-  const column = cn('flex min-w-0 flex-col gap-1', sized(BUBBLE_MAX, layout), mine && 'items-end');
-  const shape: BubbleShape = { mine, head, tail, layout };
+  const column = cn('flex min-w-0 flex-1 flex-col items-start gap-1');
+  const shape: BubbleShape = { mine: false, head, tail, layout };
   const selecting = selection !== undefined;
   // The sender's photo and name open the person card (never while selecting:
   // a tap there toggles the row).
@@ -2599,29 +2629,58 @@ export function MessageBubble(props: {
     ) : (
       node
     );
-  const senderLine = showMeta
-    ? asPerson(
-        <span className={cn('text-fg', sized(GROUP_SENDER_TYPE, layout))}>{name}</span>,
+  const headTick = mine ? metaTick(fullMeta.status) : null;
+  const senderLine = showMeta ? (
+    // One block line, its parts inline: the name trigger stays an inline
+    // control in running text (its hit area is the trigger's 44 box), and the
+    // whole line truncates.
+    <span data-sender-line="" className="block min-w-0 max-w-full truncate">
+      {asPerson(
+        <span data-sender-name="" className={cn('text-fg', SENDER_NAME_TYPE)}>
+          {headerName(message, profiles)}
+        </span>,
         'inline',
-        'self-start',
-      )
-    : null;
+      )}
+      {fullMeta.time !== '' ? (
+        <span
+          aria-hidden="true"
+          data-sender-time=""
+          className={cn('ml-2 text-fg-3', SENDER_TIME_TYPE)}
+        >
+          {fullMeta.time}
+        </span>
+      ) : null}
+      {headTick !== null ? (
+        <span className="ml-1 inline-flex align-middle text-fg-3">
+          <MetaGlyph status={headTick} />
+        </span>
+      ) : null}
+    </span>
+  ) : null;
   // The rail is never drawn while selecting: the row keeps today's place.
   const rail = selecting ? undefined : props.rail;
   const railEdge = { head, afterLabel: props.afterLabel === true, hasReactions };
   const threadMember = props.threadMember === true;
   const rowClass = cn(
     'group flex items-start gap-2',
-    railRowClass(rail, mine),
+    railRowClass(rail, false),
     NO_TOUCH_SELECT,
     head ? (props.afterLabel === true ? 'pt-0' : 'pt-3') : 'pt-1',
-    mine ? 'flex-row-reverse' : 'flex-row',
+    'flex-row',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
   );
   const photo = showMeta
     ? withRailPhoto(
-        asPerson(<Avatar name={name} {...senderAvatar} role="header" />, 'block'),
+        asPerson(
+          <Avatar
+            name={headerName(message, profiles)}
+            {...senderAvatar}
+            role="header"
+            decorative
+          />,
+          'block',
+        ),
         rail,
         railEdge,
       )
@@ -2630,7 +2689,7 @@ export function MessageBubble(props: {
   const rowContextMenu = press?.coarse === true ? preventDefault : undefined;
   if (message.deleted === true) {
     // A tombstone keeps its side, meta and run grouping; nothing else.
-    const tombMeta: BubbleMeta = { time: meta.time, edited: false, status: null };
+    const tombMeta: BubbleMeta = { time: head ? '' : fullMeta.time, edited: false, status: null };
     // A tombstone rubber-bands under a swipe either way; nothing fires.
     const tombSwipe = selecting ? undefined : props.swipe;
     return (
@@ -2666,12 +2725,14 @@ export function MessageBubble(props: {
               >
                 {deletedMessageLabel({ mine })}
               </span>
-              <BubbleMetaView
-                meta={tombMeta}
-                mine={false}
-                placement="inline"
-                className="static ml-2"
-              />
+              {metaIsEmpty(tombMeta) ? null : (
+                <BubbleMetaView
+                  meta={tombMeta}
+                  mine={false}
+                  placement="inline"
+                  className="static ml-2"
+                />
+              )}
             </TombstoneBubble>,
             rail,
             railEdge,
@@ -2682,13 +2743,13 @@ export function MessageBubble(props: {
   }
   const checked = selection?.checked === true;
   const parentDeleted = message.parentDeleted === true;
-  const spacer = placement === 'inline' ? <MetaSpacer meta={meta} /> : null;
+  const spacer = placement === 'inline' && !metaEmpty ? <MetaSpacer meta={meta} /> : null;
   // Files the sender removed: one line where they were (never on a tombstone,
   // which returned above). Above the caption of media, at the files' spot, or
   // above the text when nothing is left beside it.
   const removedLine =
     message.removedFiles !== undefined ? (
-      <FilesRemovedLine counts={message.removedFiles} mine={mine} layout={layout} />
+      <FilesRemovedLine counts={message.removedFiles} mine={false} layout={layout} />
     ) : null;
   const hasAttachments = message.attachments.length > 0;
   const quotedMine =
@@ -2700,7 +2761,7 @@ export function MessageBubble(props: {
       data-selecting-text={textSelect ? '' : undefined}
       className={cn(bodyText(layout), textSelect && SELECTING_TEXT_BODY)}
     >
-      {renderBodyWithMentions(message.body, mine, {
+      {renderBodyWithMentions(message.body, false, {
         nameOf: profileNameOf(profiles, props.workspaceId ?? null),
         viewerUserId: props.viewerUserId ?? null,
         // Inert while selecting: a mention is plain "@Name" text in the selection.
@@ -2719,7 +2780,7 @@ export function MessageBubble(props: {
       <LinkPreviewCard
         key={cardUrl}
         url={cardUrl}
-        tone={mine ? 'out' : 'in'}
+        tone="in"
         className={sized(LINK_CARD_INSET, layout)}
       />
     ) : null;
@@ -2798,21 +2859,16 @@ export function MessageBubble(props: {
               {message.forwarded === true ? (
                 savedFrom !== null ? (
                   savedLine !== null ? (
-                    <SavedFromLabel line={savedLine} mine={mine} onOpen={savedFrom.onOpen} />
+                    <SavedFromLabel line={savedLine} mine={false} onOpen={savedFrom.onOpen} />
                   ) : null
                 ) : (
-                  <ForwardedLabel mine={mine} />
+                  <ForwardedLabel mine={false} />
                 )
               ) : null}
             </div>
-            {/* Every card in this message takes its side's fill: own, the
-                own-bubble ink (ui/ChatCard), never a light peer card. */}
-            <ChatCardOwn value={mine}>
-              <div
-                data-bubble-content=""
-                // A card-only message's card is the bubble, never inside the own fill.
-                className={cn('contents', mine && !cardOnly && OWN_BUBBLE_CONTENT)}
-              >
+            {/* L1: no own fill, so every card draws the same flat card on both sides. */}
+            <ChatCardOwn value={false}>
+              <div data-bubble-content="" className="contents">
                 {threadMember ? null : chip?.kind === 'chip' && !parentDeleted ? (
                   <PostRefChip
                     post={chip.post}
@@ -2868,11 +2924,14 @@ export function MessageBubble(props: {
                       onCancelUpload={cancelUpload}
                       voice={{
                         messageId: message.id,
-                        mine,
+                        // L1: no own fill behind the player, so it takes the received look.
+                        mine: false,
                         sender: { name, ...senderAvatarProps(message, profiles) },
                         nextVoiceId: props.nextVoiceId ?? null,
                         // The time sits in the note's last row (Transcribe row / length row).
-                        meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
+                        meta: metaEmpty ? null : (
+                          <BubbleMetaView meta={meta} mine={false} placement={placement} />
+                        ),
                         ...(props.onTranscribe !== undefined && isTranscribable(message)
                           ? { onTranscribe: props.onTranscribe }
                           : {}),
@@ -2935,10 +2994,10 @@ export function MessageBubble(props: {
                 )}
               </div>
             </ChatCardOwn>
-            {voiceOnly || cardOnly ? null : (
+            {voiceOnly || cardOnly || metaEmpty ? null : (
               <BubbleMetaView
                 meta={meta}
-                mine={mine}
+                mine={false}
                 placement={placement}
                 className={placement === 'row' && album ? 'px-2 pb-1' : undefined}
               />
@@ -2984,9 +3043,7 @@ export function MessageBubble(props: {
                     // On a card (the card is the bubble) the glyph's visible
                     // edge comes in to the card's 12px content edge.
                     cardOnly ? 'pr-2' : 'pr-1',
-                    mine && !cardOnly
-                      ? 'from-bubble-own text-bubble-meta-own'
-                      : 'from-panel-2 text-bubble-meta',
+                    'from-bg text-fg-3',
                   )}
                 >
                   <ChevronGlyph />
@@ -2999,9 +3056,7 @@ export function MessageBubble(props: {
                   {distinctEmojis}
                 </span>
                 {totalReactions > 1 ? (
-                  <span className={cn(BUBBLE_META_TYPE, mine ? 'text-fg-2' : 'text-fg-3')}>
-                    {totalReactions}
-                  </span>
+                  <span className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>{totalReactions}</span>
                 ) : null}
               </ReactionBadge>
             ) : null}
@@ -3009,7 +3064,7 @@ export function MessageBubble(props: {
           rail,
           railEdge,
         )}
-        {meta.status === 'failed' && mine && canDiscardFailed(message) ? (
+        {fullMeta.status === 'failed' && mine && canDiscardFailed(message) ? (
           <FailedActions
             {...(message.refusal !== undefined ? { refusal: message.refusal } : {})}
             {...(props.onRetry !== undefined ? { onRetry: () => props.onRetry?.(message.id) } : {})}
@@ -3017,8 +3072,8 @@ export function MessageBubble(props: {
               ? { onDelete: () => props.onDiscard?.(message.id) }
               : {})}
           />
-        ) : meta.status === 'failed' || meta.status === 'files-missing' ? (
-          <FailedLine status={meta.status} />
+        ) : fullMeta.status === 'failed' || fullMeta.status === 'files-missing' ? (
+          <FailedLine status={fullMeta.status} />
         ) : null}
       </div>
       {onReact !== undefined ? (
@@ -3288,9 +3343,9 @@ export function threadListItems(
       // FN24: a skeleton bubble, not a plain line; the words stay for screen readers.
       <li key="loading-older" aria-busy="true" className="flex flex-col gap-2 px-4 py-2">
         <span className="sr-only">Loading earlier messages</span>
-        {/* Two bubble-shaped boxes (other, then own side); a sweep, never a pulse. */}
-        <Bone lit="lit-bubble-other" className="h-9 w-48 rounded-2xl" />
-        <Bone lit="lit-bubble-own" className="h-9 w-36 self-end rounded-2xl" />
+        {/* L1: two text lines on the left (no bubbles); a sweep, never a pulse. */}
+        <Bone lit="flat" className="h-9 w-48 rounded-lg" />
+        <Bone lit="flat" className="h-9 w-36 rounded-lg" />
       </li>,
     );
   }
@@ -3806,6 +3861,15 @@ export function listRailPlans(
   return railPlans(items, memberOf);
 }
 
+/** L3: one root's replies row as the main chat draws it (RepliesRow). */
+export interface RepliesRowData {
+  label: string;
+  repliers: { id: string; name: string; src?: string | undefined }[];
+  line: string;
+  unread: boolean;
+  onOpen: () => void;
+}
+
 /** The thread list's props (the chat's list and the thread view's list). */
 type ThreadBodyProps = Parameters<typeof ThreadBody>[0];
 
@@ -3872,6 +3936,19 @@ function ThreadBody(
     olderKey?: string;
     /** Card threads: the rail, chips and "N replies"; absent draws none. */
     threads?: ThreadBodyThreads;
+    /**
+     * L3: the main chat's replies row under a thread root (null: none). Absent
+     * in the thread screen, which shows its "N replies" separator instead.
+     */
+    repliesFor?: (message: ThreadMessage) => RepliesRowData | null;
+    /** L4: the thread screen: no reply quote or post chip on a reply (every reply targets the root). */
+    hideQuotes?: boolean;
+    /** L11: menu "Mark unread"; absent hides it. */
+    onMarkUnread?: (message: ThreadMessage) => void;
+    /** L12: menu "Add to Tasks"; absent hides it. */
+    onAddToTask?: (message: ThreadMessage) => void;
+    /** L13: menu "Copy link"; absent hides it. */
+    onCopyLink?: (message: ThreadMessage) => void;
     /** Menu "Transcribe" picked on a voice note; absent hides the row. */
     onTranscribe?: (message: ThreadMessage) => void;
     /**
@@ -4977,9 +5054,16 @@ function ThreadBody(
                       }),
                     }
                   : undefined;
+              // L4: the thread screen's root (any message, not only a card)
+              // heads the "N replies" separator; the main chat draws the
+              // replies row instead (repliesFor).
               const replies =
-                threads !== undefined && rootCard
+                threads !== undefined && viewRoot
                   ? replyCountLabel(threads.countOf(row.message.id))
+                  : null;
+              const repliesRow =
+                props.repliesFor !== undefined && props.selection === undefined
+                  ? props.repliesFor(row.message)
                   : null;
               const openThread = (rootId: string): void => threads?.onOpen(rootId);
               const id = row.message.id;
@@ -5058,7 +5142,7 @@ function ThreadBody(
                         onTalkAbout: onTalkAboutRow,
                         onTalkAboutFocus: onTalkAboutFocusRow,
                       })}
-                      threadMember={memberOf?.(row.message) != null}
+                      threadMember={props.hideQuotes === true || memberOf?.(row.message) != null}
                       rail={rowCaches.rail(id, rowRail)}
                       {...(props.selection !== undefined
                         ? {
@@ -5084,15 +5168,14 @@ function ThreadBody(
                       selectingText={selectingTextId === row.message.id}
                     />
                   </ErrorBoundary>
-                  {replies !== null && !viewRoot ? (
-                    <RepliesButtonRow
-                      label={replies}
-                      mine={row.message.mine}
-                      isGroup={props.isGroup}
-                      shifted={rowRail !== undefined && rowRail.geometry.shift > 0}
-                      through={plan.continues}
+                  {repliesRow !== null ? (
+                    <RepliesRow
+                      label={repliesRow.label}
+                      repliers={repliesRow.repliers}
+                      line={repliesRow.line}
+                      unread={repliesRow.unread}
                       coarse={coarsePointer}
-                      onOpen={() => openThread(row.message.id)}
+                      onOpen={() => repliesRow.onOpen()}
                     />
                   ) : null}
                   {replies !== null && viewRoot ? (
@@ -5223,6 +5306,32 @@ function ThreadBody(
         }}
         onReply={() => {
           if (menu) props.onReply(menu.message);
+        }}
+        canMarkUnread={
+          menu !== null &&
+          props.onMarkUnread !== undefined &&
+          menu.message.state === 'sent' &&
+          menu.message.deleted !== true
+        }
+        onMarkUnread={() => {
+          if (menu) props.onMarkUnread?.(menu.message);
+        }}
+        canAddToTasks={
+          menu !== null &&
+          props.onAddToTask !== undefined &&
+          menu.message.state === 'sent' &&
+          menu.message.deleted !== true &&
+          !menuPlan &&
+          taskTitleOf(menu.message) !== ''
+        }
+        onAddToTasks={() => {
+          if (menu) props.onAddToTask?.(menu.message);
+        }}
+        canCopyLink={
+          menu !== null && props.onCopyLink !== undefined && menu.message.state === 'sent'
+        }
+        onCopyLink={() => {
+          if (menu) props.onCopyLink?.(menu.message);
         }}
         canReplyPrivately={menuReplyPrivately}
         replyPrivatelyName={menu !== null ? senderName(menu.message, props.profiles) : ''}
@@ -5388,7 +5497,7 @@ export function threadOpeningSkeleton(
             <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
-        <Bone lit="lit-avatar" as="div" className="h-9 w-9 shrink-0 rounded-full" />
+        <Bone lit="lit-avatar" as="div" className="h-9 w-9 shrink-0 rounded-lg" />
         <Bone lit="flat" as="div" className="h-3 w-32 rounded" />
       </div>
       {threadSkeleton()}
@@ -5433,15 +5542,9 @@ export function threadSkeleton(): ReactElement {
       className="flex flex-1 flex-col gap-3 overflow-hidden px-4 py-4"
     >
       {THREAD_SKELETON_WIDTHS.map((width, i) => (
-        <li
-          key={width}
-          data-skeleton-bubble={i % 2 === 1 ? 'own' : 'other'}
-          className={cn('flex', i % 2 === 1 && 'justify-end')}
-        >
-          <Bone
-            lit={i % 2 === 1 ? 'lit-bubble-own' : 'lit-bubble-other'}
-            className={cn('h-10 rounded-xl', width)}
-          />
+        <li key={width} data-skeleton-bubble={i % 2 === 1 ? 'own' : 'other'} className="flex">
+          {/* L1: every skeleton line on the left, flat, no bubble light. */}
+          <Bone lit="flat" className={cn('h-10 rounded-lg', width)} />
         </li>
       ))}
     </ul>
@@ -5939,8 +6042,50 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const counts = countsRef.current;
   // The open card thread (full screen over the chat) and its reply draft.
   const threadView = useThreadView({ channelId, currentUserId: props.currentUserId ?? '' });
-  const [viewReply, setViewReply] = useState<DraftReply | null>(null);
+  const [, setViewReply] = useState<DraftReply | null>(null);
   const view = threadView.view;
+  // L3: a Reply opens the thread with its composer focused.
+  const [viewFocus, setViewFocus] = useState(false);
+  // L5/L6b: the threads I am in, one chat_threads_for_me call started with the
+  // chat (in parallel with the first history page, never awaited before the
+  // first paint); a later reply from someone else reads it again.
+  const [threadsForMe, setThreadsForMe] = useState<{
+    channelId: string;
+    rows: ThreadForMe[];
+  } | null>(null);
+  const latestReplyKey = useMemo(() => {
+    for (let i = props.messages.length - 1; i >= 0; i -= 1) {
+      const m = props.messages[i];
+      if (m !== undefined && typeof m.threadRootId === 'string' && !m.mine) return m.id;
+    }
+    return null;
+  }, [props.messages]);
+  // L6b: whether this chat's first page has painted, and the threads-for-me
+  // answer when it landed before that paint (only then may the chat open
+  // straight onto the Threads sheet; a later answer shows the strip item only).
+  const paintedRef = useRef<string | null>(null);
+  const earlyThreadsRef = useRef<{ channelId: string; rows: ThreadForMe[] } | null>(null);
+  const [threadsOpen, setThreadsOpen] = useState(false);
+  useEffect(() => {
+    if (channelId === undefined || props.notes === true) return;
+    let live = true;
+    void loadThreadsForMe(supabase, channelId, generateTraceId()).then((result) => {
+      if (!live) return;
+      if (!result.ok) {
+        logger.warn('chat: threads for me read failed', { error: result.error.message });
+        return;
+      }
+      if (paintedRef.current !== channelId) {
+        earlyThreadsRef.current = { channelId, rows: result.data };
+      }
+      setThreadsForMe({ channelId, rows: result.data });
+    });
+    return () => {
+      live = false;
+    };
+  }, [channelId, props.notes, latestReplyKey]);
+  const myThreads =
+    threadsForMe !== null && threadsForMe.channelId === channelId ? threadsForMe.rows : null;
   // The view's replies the chat has not loaded (older than its pages).
   const viewOnly = useMemo(() => {
     if (view === null) return [];
@@ -6370,16 +6515,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // The composers' inputs: a Reply focuses them inside the user's own event.
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const viewComposerInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const handleReply = replyWithFocus(
-    () => composerInputRef.current,
-    (message: ThreadMessage) => {
-      const preview = replyPreview(message);
-      setReplyDraft({
-        authorName: senderName(message, props.profiles),
-        quote: { id: message.id, authorUserId: message.senderUserId, preview },
-      });
-    },
-  );
+  // L3/L14: Reply (sheet tile, swipe right, laptop right-click) opens that
+  // message's thread with its composer focused; no quote-reply in the main chat.
+  const openThreadRef = useRef<(rootId: string, focus?: boolean) => void>(() => undefined);
+  const handleReply = (message: ThreadMessage): void => {
+    openThreadRef.current(threadRootOf(message), true);
+  };
   // The quoted message became a tombstone: the reply chip loses its text and
   // reads the deleted label (the draft map is stripped by the store too).
   const replyQuoteId =
@@ -6619,7 +6760,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     onSearchRequestTaken?.();
   }, [searchRequest, bodyLoading, onSearchRequestTaken]);
   const gatedIndex = useMemo(() => parentIndexOf(onScreen), [onScreen]);
-  const shownMessages = onScreen;
+  // L3: thread replies never show in the main chat; its list, unread line,
+  // Seen and Read by read the top-level messages only.
+  const shownMessages = useMemo(() => mainChatMessages(onScreen), [onScreen]);
   // A bell task row: once the first page is on screen, the sheet opens on
   // that item (once per link; the caller then drops it).
   const initialTaskId = props.initialTaskId ?? null;
@@ -6653,7 +6796,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   }, [admitted, props.messages, taskCovers]);
   // Lines show for the rows on screen only: a held older page's lines come
   // with its rows, in the same commit.
-  const oldestShown = shownMessages[0];
+  const oldestShown = onScreen[0];
   const rowsHeld = oldestLoaded !== undefined && oldestLoaded.id !== oldestShown?.id;
   const olderPageHeld = rowsHeld && oldestShown !== undefined;
   const windowEvents = useMemo(
@@ -6720,11 +6863,47 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   ) {
     setFrozenUnread({ value: computedUnread });
   }
-  const unread: FirstUnread | null | undefined = !readingOn
-    ? undefined
-    : frozenUnread !== null
-      ? frozenUnread.value
-      : computedUnread;
+  // L11: a Mark unread on a main-chat message moves my "New" line above it.
+  const [markedUnread, setMarkedUnread] = useState<{ channelId: string; firstId: string } | null>(
+    null,
+  );
+  const markedId =
+    markedUnread !== null && markedUnread.channelId === channelId ? markedUnread.firstId : null;
+  const markedHere = markedId !== null;
+  const markedFirst = markedId !== null ? shownMessages.findIndex((m) => m.id === markedId) : -1;
+  const unread: FirstUnread | null | undefined =
+    markedId !== null && markedFirst >= 0
+      ? {
+          kind: 'loaded',
+          firstId: markedId,
+          count: Math.max(
+            1,
+            shownMessages.slice(markedFirst).filter((m) => !m.mine && m.deleted !== true).length,
+          ),
+        }
+      : !readingOn
+        ? undefined
+        : frozenUnread !== null
+          ? frozenUnread.value
+          : computedUnread;
+  // L6b open rule (B), decided once as the first page paints: unread
+  // top-level messages open at the "New" line (as today); else unread threads
+  // (known before this paint) open straight onto the Threads sheet; else the
+  // chat opens as today. Never holds the paint.
+  useEffect(() => {
+    if (channelId === undefined || bodyLoading || paintedRef.current === channelId) return;
+    paintedRef.current = channelId;
+    const early = earlyThreadsRef.current;
+    const target = chatOpenTarget({
+      unreadTopLevel: unread != null && (unread.kind === 'beyond' || unread.count > 0) ? 1 : 0,
+      threads: early !== null && early.channelId === channelId ? early.rows : null,
+      painted: false,
+    });
+    earlyThreadsRef.current = null;
+    if (target === 'threads' && initialMessageId === null) setThreadsOpen(true);
+    // Once per chat open, at the first paint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId, bodyLoading]);
   // Pill tap: a loaded run jumps through the jump path; a run above the
   // loaded pages first pages back to the cursor message (5s bound), then jumps.
   // A miss leaves the pill as it is and shows nothing else.
@@ -6850,9 +7029,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
    * Opens at 0 replies too (the root and the composer).
    */
   const openingRef = useRef(false);
-  const openThread = (rootId: string): void => {
+  const openThread = (rootId: string, focus = false): void => {
     if (openingRef.current) return;
     openingRef.current = true;
+    setViewFocus(focus);
     void threadView
       .open(rootId, props.messages)
       .catch(() => false)
@@ -6895,6 +7075,104 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         : actionable.find((m) => m.threadRootId === rootId)?.rootPostIds?.[0];
     return postId !== undefined ? (postRef(postId) ?? null) : null;
   };
+  openThreadRef.current = openThread;
+  // L3: each loaded root's replies row (one pass over the loaded rows; the
+  // unread dot from the threads-for-me read). No call per row.
+  const repliesInfo = useMemo(
+    () =>
+      repliesInfoByRoot(
+        actionable,
+        (rootId) => myThreads?.some((t) => t.rootId === rootId && t.unread) === true,
+      ),
+    [actionable, myThreads],
+  );
+  const profileNameFor = (userId: string | null): string =>
+    userId === null
+      ? 'Member'
+      : userId === props.currentUserId
+        ? (props.profiles.get(userId)?.displayName ?? 'You')
+        : (props.profiles.get(userId)?.displayName ?? 'Member');
+  const repliesFor = (message: ThreadMessage): RepliesRowData | null => {
+    const info = repliesInfo.get(message.id);
+    if (info === undefined || info.count === 0) return null;
+    return {
+      label: repliesLabel(info.count),
+      repliers: info.repliers.map((id) => {
+        const src = props.profiles.get(id)?.avatarUrl;
+        return { id, name: profileNameFor(id), ...(src != null ? { src } : {}) };
+      }),
+      line: latestReplyLine(info.last, profileNameFor(info.last?.senderUserId ?? null)),
+      unread: info.unread,
+      onOpen: () => openThread(message.id),
+    };
+  };
+  // L4/L7: the thread screen's "New" line, decided once as the thread opens
+  // (from the threads-for-me flag and this device's read point), then the
+  // thread is marked read to its newest reply (chat_thread_read_set).
+  const [viewNewLine, setViewNewLine] = useState<{ rootId: string; firstId: string | null } | null>(
+    null,
+  );
+  const viewRootKey = view?.rootId ?? null;
+  const viewReplies = viewParts?.replies;
+  useEffect(() => {
+    if (viewRootKey === null || viewReplies === undefined || channelId === undefined) return;
+    if (viewNewLine?.rootId !== viewRootKey) {
+      const unread = myThreads?.some((t) => t.rootId === viewRootKey && t.unread) === true;
+      setViewNewLine({
+        rootId: viewRootKey,
+        firstId: firstUnreadReply(viewReplies, { unread, readAt: localThreadReadAt(viewRootKey) }),
+      });
+    }
+    const newest = viewReplies[viewReplies.length - 1];
+    if (newest === undefined || newest.state !== 'sent') return;
+    rememberThreadRead(viewRootKey, newest.time);
+    setThreadsForMe((prev) =>
+      prev !== null ? { ...prev, rows: withThreadRead(prev.rows, viewRootKey) } : prev,
+    );
+    void setThreadRead({
+      client: supabase,
+      channelId,
+      rootId: viewRootKey,
+      messageId: newest.id,
+      traceId: generateTraceId(),
+    }).then((result) => {
+      if (!result.ok) logger.warn('chat: thread read set failed', { error: result.message });
+    });
+    // The newest reply id is the trigger: reading to the bottom marks it read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewRootKey, viewReplies?.[viewReplies.length - 1]?.id, channelId]);
+  const viewUnread: FirstUnread | null =
+    viewNewLine !== null && viewNewLine.rootId === viewRootKey && viewNewLine.firstId !== null
+      ? {
+          kind: 'loaded',
+          firstId: viewNewLine.firstId,
+          count: (viewReplies ?? []).filter(
+            (m, i, all) => i >= all.findIndex((r) => r.id === viewNewLine.firstId) && !m.mine,
+          ).length,
+        }
+      : null;
+  // L13: a jump (deep link, search, Activity) to a thread reply opens its
+  // thread with that reply highlighted; the main chat never holds replies.
+  const jumpTarget = jumpRequest !== null ? known.get(jumpRequest.id) : undefined;
+  const jumpIsReply = jumpTarget !== undefined && !isTopLevel(jumpTarget);
+  const mainJump = jumpIsReply ? null : jumpRequest;
+  const [viewJump, setViewJump] = useState<{ id: string; seq: number } | null>(null);
+  const routedJumpRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (jumpRequest === null || jumpTarget === undefined || !jumpIsReply) return;
+    if (routedJumpRef.current === jumpRequest.seq) return;
+    routedJumpRef.current = jumpRequest.seq;
+    openThread(threadRootOf(jumpTarget));
+    setViewJump({ id: jumpTarget.id, seq: jumpRequest.seq });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpRequest, jumpIsReply]);
+  // L3: a Talk about (a post's card) opens that card's thread, never a quote bar.
+  useEffect(() => {
+    if (aboutDraft === null) return;
+    setAboutDraft(null);
+    openThread(aboutDraft.cardMessageId, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aboutDraft]);
   const mainThreads: ThreadBodyThreads = {
     memberOf,
     countOf,
@@ -6907,7 +7185,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const viewPostId =
     viewRoot !== undefined && isRootCard(viewRoot) ? viewRoot.sharedPostIds[0] : undefined;
   const viewPost = viewPostId !== undefined ? (postRef(viewPostId) ?? null) : null;
-  const viewTitle = viewPost?.title ?? 'Shared post';
+  // L4: a thread on a post card takes the post's title; every other thread
+  // is "Thread" with the chat's name as its second line. No naming step.
+  const viewTitle = viewPost?.title ?? 'Thread';
+  const viewSubtitle = viewPost === null ? props.title : undefined;
   // The view's count: the chat's own when it has the root loaded (or the
   // counts read's), else the view's rows once it has read them all.
   const viewCount = ((): number | null => {
@@ -6920,13 +7201,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const viewThreads: ThreadBodyThreads | undefined =
     view !== null
       ? {
-          // Every reply in the view is on its rail while the root is a live card.
-          memberOf: (message) =>
-            viewPostId !== undefined &&
-            message.id !== view.rootId &&
-            message.threadRootId === view.rootId
-              ? { rootId: view.rootId, postId: viewPostId }
-              : null,
+          // L3: no rail, chips or inline replies any more (post cards too).
+          memberOf: () => null,
           countOf: () => viewCount,
           postOf: threadPostOf,
           onOpen: openThread,
@@ -6934,29 +7210,22 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         }
       : undefined;
   /** Swipe or menu Reply inside the view: the reply bar names that member. */
-  const viewHandleReply = replyWithFocus(
-    () => viewComposerInputRef.current,
-    (message: ThreadMessage) => {
-      setViewReply({
-        authorName: senderName(message, props.profiles),
-        quote: {
-          id: message.id,
-          authorUserId: message.senderUserId,
-          preview: replyPreview(message),
-        },
-      });
-    },
-  );
+  // L3: inside a thread, Reply just focuses the composer (no nested threads).
+  const viewHandleReply = (): void => {
+    focusComposerInput(viewComposerInputRef.current);
+  };
   /** A send from the view replies to the root (or the member its reply bar names). */
   const viewSend: ComposerSend = (text, attachments, sharedPostIds, reply, sharedBriefIds) => {
     if (viewRoot === undefined) return;
-    const quote = reply ?? {
+    // L3: every thread reply records reply_to_message_id = the root (no
+    // nested threads); the server trigger keeps thread_root_message_id.
+    void reply;
+    const quote = {
       id: viewRoot.id,
       authorUserId: viewRoot.senderUserId,
       preview: replyPreview(viewRoot),
     };
-    const parent = viewMessages.find((m) => m.id === quote.id);
-    props.onSend(text, attachments, sharedPostIds, withThreadRoot(quote, parent), sharedBriefIds);
+    props.onSend(text, attachments, sharedPostIds, withThreadRoot(quote, viewRoot), sharedBriefIds);
   };
   // A reaction in the view also lands on the view's own copy of a row the chat has not loaded.
   const onToggleReaction = props.onToggleReaction;
@@ -6974,14 +7243,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           );
         }
       : undefined;
-  // The composer's send: the reply draft wins, else the About card while its
-  // bar shows the post; a one-post share (paperclip or pasted link) makes its
-  // new card the About, a several-post share leaves no About.
-  const aboutReply = aboutReplyFor(
-    aboutDraft,
-    aboutPost,
-    aboutDraft !== null ? messagesById.get(aboutDraft.cardMessageId) : undefined,
-  );
+  // The composer's send: always top level (L3). A one-post share (paperclip
+  // or pasted link) still waits for its card; a several-post share clears it.
   const composerSend: ComposerSend = (
     text,
     attachments,
@@ -6996,9 +7259,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       cardWait.clear();
       setAboutDraft(null);
     }
-    const quote = replyForSend(reply, aboutReply, sharedPostIds.length > 0);
-    // The root rides the send (optimistic row, live ext) when the parent is loaded.
-    const rooted = withThreadRoot(quote, quote !== null ? known.get(quote.id) : undefined);
+    // L3: the main chat never sends a quote reply (Reply opens the thread); a
+    // stored draft quote from before is dropped, so a send stays top level.
+    void reply;
+    const rooted = null;
     // Reply privately's quote rides as the sixth argument only when attached.
     if (privateReply !== undefined) {
       props.onSend(text, attachments, sharedPostIds, rooted, sharedBriefIds, privateReply);
@@ -7022,6 +7286,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     ? deleteSelectionBlock(selected, selectable, serverNow(), notes)
     : null;
   const stripSlot = threadStripSlot({ chatPage, selecting });
+  // L5 (4): "N threads" + dot after the strip's items while a thread is unread.
+  const threadsStrip = myThreads !== null ? threadsStripLabel(myThreads) : null;
   // The status ticker: the workspace's shared plans current today on its
   // clock (every chat, shared here or not), then the bar.
   const statusOpenPlans = currentSharedPlans(
@@ -7165,11 +7431,74 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           onReplyPrivatelyProp(message.senderUserId, quote);
         }
       : undefined;
+  // L11: Mark unread. A main-chat message moves my chat cursor to just
+  // before it (chat_mark_unread; the chat turns unread with its count in the
+  // chat list) and my "New" line moves above it; reading on does not move the
+  // cursor forward again until the chat is left. A thread reply moves the
+  // thread's read point (chat_thread_mark_unread). Private to me, from the
+  // database, so every device follows.
+  const markUnread = (message: ThreadMessage): void => {
+    if (channelId === undefined) return;
+    const traceId = generateTraceId();
+    if (isTopLevel(message)) {
+      setMarkedUnread({ channelId, firstId: message.id });
+      void markChatUnread({ client: supabase, channelId, messageId: message.id, traceId }).then(
+        (result) => {
+          if (!result.ok) {
+            logger.warn('chat: mark unread failed', { error: result.message });
+            toast.show({ title: errorText('mark this unread', null) });
+          }
+        },
+      );
+      return;
+    }
+    const rootId = threadRootOf(message);
+    rememberThreadRead(rootId, message.time - 1, true);
+    setThreadsForMe((prev) =>
+      prev !== null ? { ...prev, rows: withThreadUnread(prev.rows, rootId) } : prev,
+    );
+    void markThreadUnread({
+      client: supabase,
+      channelId,
+      rootId,
+      messageId: message.id,
+      traceId,
+    }).then((result) => {
+      if (!result.ok) {
+        logger.warn('chat: thread mark unread failed', { error: result.message });
+        toast.show({ title: errorText('mark this unread', null) });
+      }
+    });
+  };
+  // L12: Add to Tasks: one task in this chat's Tasks list from the message's
+  // text (a file-only message: the file name), default priority, through the
+  // task save proc (chat_task_save_batch).
+  const addToTask = (message: ThreadMessage): void => {
+    const title = taskTitleOf(message);
+    if (title === '') return;
+    const side = viewerSide.side === 'client' ? 'client' : 'agency';
+    void chatTasks
+      .saveBatch({ creates: [{ title, priority: DEFAULT_PRIORITY, side }], edits: [], deletes: [] })
+      .then((outcome) =>
+        toast.show({ title: outcome.ok ? 'Added to Tasks' : errorText('add to Tasks', null) }),
+      );
+  };
+  // L13: Copy link: the open-chat-at-message route (a reply opens its thread
+  // with the reply highlighted; membership is checked on open).
+  const copyLink = (message: ThreadMessage): void => {
+    if (channelId === undefined) return;
+    const url = `${currentOrigin() ?? ''}${chatMessageHref(channelId, message.id)}`;
+    void copyText(url).then((ok) => toast.show({ title: ok ? 'Link copied' : COPY_FAILED }));
+  };
   const bodyActions: Omit<
     ThreadBodyProps,
     'messages' | 'loading' | 'onReply' | 'jumpRequest' | 'threads'
   > = {
     layout,
+    ...(channelId !== undefined && notes !== true
+      ? { onMarkUnread: markUnread, onCopyLink: copyLink }
+      : {}),
+    ...(taskChannel !== null && !selecting ? { onAddToTask: addToTask } : {}),
     viewerUserId: props.currentUserId,
     mentions: props.mentions,
     workspaceId,
@@ -7335,14 +7664,22 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           }}
           briefRoute={briefRoute}
           locationKey={props.locationKey}
+          {...(threadsStrip !== null
+            ? {
+                trailing: (
+                  <ThreadsStripItem label={threadsStrip} onOpen={() => setThreadsOpen(true)} />
+                ),
+              }
+            : {})}
         />
       ) : null}
       <SearchWordsContext.Provider value={headerWords}>
         <ThreadBody
           {...bodyActions}
-          jumpRequest={jumpRequest}
+          jumpRequest={mainJump}
           {...(props.onEnsureLoaded !== undefined ? { onEnsureLoaded: props.onEnsureLoaded } : {})}
           messages={shownMessages}
+          repliesFor={repliesFor}
           chipFor={chipFor}
           onTalkAbout={talkAbout}
           onTalkAboutFocus={() => focusComposerInput(composerInputRef.current)}
@@ -7359,7 +7696,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             : {})}
           {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
           {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
-          {...(props.onNewestVisible !== undefined
+          {...(props.onNewestVisible !== undefined && !markedHere
             ? { onNewestVisible: props.onNewestVisible }
             : {})}
           {...(props.onToggleReaction !== undefined
@@ -7415,15 +7752,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           onSend={composerSend}
           onTyping={props.onTyping}
           onCancelReply={() => setReplyDraft(null)}
-          {...(replyDraft !== null ? { reply: replyDraft } : {})}
-          {...(replyDraft !== null && replyDraft.deleted !== true
-            ? {
-                replyMedia: quoteMedia(props.messages.find((m) => m.id === replyDraft.quote.id)),
-                replyThumbSource: { cache: presignCache, presignEnabled },
-              }
-            : {})}
-          {...(aboutDraft !== null && !aboutGone ? { about: aboutPost ?? null } : {})}
-          {...(notes && replyDraft === null ? { placeholder: NOTES_PLACEHOLDER } : {})}
+          // L3: no quote strip in the main chat; Reply opens the thread.
+          {...(notes ? { placeholder: NOTES_PLACEHOLDER } : {})}
           {...(notes ? { notes: true } : {})}
           onCancelAbout={() => setAboutDraft(null)}
           {...(taskChannel !== null
@@ -7554,22 +7884,42 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           />
         </SearchWordsContext.Provider>
       ) : null}
+      {myThreads !== null ? (
+        <ThreadsSheet
+          open={threadsOpen && !selecting}
+          onClose={() => setThreadsOpen(false)}
+          threads={myThreads}
+          loaded={known}
+          currentUserId={props.currentUserId ?? ''}
+          nameOf={profileNameFor}
+          photoOf={(userId) =>
+            userId !== null ? (props.profiles.get(userId)?.avatarUrl ?? undefined) : undefined
+          }
+          onOpenThread={(rootId) => {
+            setThreadsOpen(false);
+            openThread(rootId);
+          }}
+        />
+      ) : null}
       {view !== null && viewParts !== null && viewThreads !== undefined ? (
         <ThreadViewFrame
           key={`thread:${view.rootId}`}
           title={viewTitle}
+          {...(viewSubtitle !== undefined ? { subtitle: viewSubtitle } : {})}
           selecting={selecting}
           onClosed={closeThread}
         >
           <ThreadBody
             {...bodyActions}
             {...(viewToggleReaction !== undefined ? { onToggleReaction: viewToggleReaction } : {})}
-            jumpRequest={null}
+            jumpRequest={viewJump !== null && viewJump.id !== view.rootId ? viewJump : null}
             messages={viewMessages}
             chipFor={chipFor}
             threads={viewThreads}
             loading={false}
             onReply={viewHandleReply}
+            reading={{ unread: viewUnread, seen: null, readBy: null }}
+            hideQuotes
             loadingOlder={threadView.loadingOlder}
             hasMore={view.hasMore}
             onLoadOlder={threadView.loadOlder}
@@ -7582,16 +7932,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               expandTitle={viewTitle}
               inputRef={viewComposerInputRef}
               focusOnMount={finePointer}
+              focusForReply={viewFocus}
               onSend={viewSend}
               placeholder={THREAD_REPLY_PLACEHOLDER}
               onCancelReply={() => setViewReply(null)}
-              {...(viewReply !== null ? { reply: viewReply } : {})}
-              {...(viewReply !== null && viewReply.deleted !== true
-                ? {
-                    replyMedia: quoteMedia(viewMessages.find((m) => m.id === viewReply.quote.id)),
-                    replyThumbSource: { cache: presignCache, presignEnabled },
-                  }
-                : {})}
               {...composerShared(true)}
             />
           )}

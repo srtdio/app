@@ -295,6 +295,12 @@ const REQUIRED: readonly string[] = [
   'emoji-sheet',
   'post-caption-box',
   'post-comment-box',
+  // Work-chat threads (8 Nov 2026): the More actions page, the group layout,
+  // the replies row and the thread screen.
+  'message-action-menu-more',
+  'chat-group-work',
+  'chat-replies-row',
+  'chat-thread-screen',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */

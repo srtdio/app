@@ -286,6 +286,16 @@ export function WritingBox(props: WritingBoxProps) {
   // collapsing on pointerdown would move what the finger is on (the button
   // under the box) before its click. Bumped by every focus to drop a stale one.
   const blurToken = useRef(0);
+  // The pending blur's cleanup: an unmount cancels its timers and listener so
+  // no collapse lands after the box is gone.
+  const blurCancel = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      blurToken.current += 1;
+      blurCancel.current?.();
+    },
+    [],
+  );
   const [formatOpen, setFormatOpen] = useState(false);
   const [on, setOn] = useState<ReadonlySet<FormatAction>>(() => new Set());
   const [expanded, setExpanded] = useState(false);
@@ -635,14 +645,22 @@ export function WritingBox(props: WritingBoxProps) {
         if (next instanceof Node && e.currentTarget.contains(next)) return;
         const token = ++blurToken.current;
         let timer = 0;
-        const done = (): void => {
+        let settle = 0;
+        blurCancel.current?.();
+        const cancel = (): void => {
+          document.removeEventListener('pointerup', done, true);
+          window.clearTimeout(timer);
+          window.clearTimeout(settle);
+        };
+        function done(): void {
           document.removeEventListener('pointerup', done, true);
           window.clearTimeout(timer);
           // After the click that follows this pointerup (same task).
-          window.setTimeout(() => {
+          settle = window.setTimeout(() => {
             if (blurToken.current === token) setFocused(false);
           }, 0);
-        };
+        }
+        blurCancel.current = cancel;
         // Listened to only between a blur and its press ending; a keyboard
         // blur (no press) collapses on the fallback.
         document.addEventListener('pointerup', done, true);

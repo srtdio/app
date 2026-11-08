@@ -60,6 +60,12 @@ interface SheetProps {
    * is always the "<" back on the leading edge.
    */
   headerAction?: ReactNode;
+  /**
+   * A grab handle instead of the titled header (the chat long-press sheet,
+   * L10): a 36x4 grabber centred in a 20 tall drag strip, no title text (the
+   * title stays the dialog's name) and no back; the dim and the drag close it.
+   */
+  handle?: boolean;
 }
 
 /**
@@ -90,6 +96,7 @@ export function Sheet({
   busy = false,
   busyLabel = 'Saving…',
   headerAction,
+  handle = false,
 }: SheetProps) {
   // Motion (docs/motion.md, rise): the panel renders at its resting place from
   // the first frame and the move is laid over it. Phone: rises from 100%
@@ -284,10 +291,23 @@ export function Sheet({
             actions leave (min-w-0, truncate); the actions never shrink. One
             exit: the "<" back leading (LEADING_PULL); a header verb, when
             given, takes the trailing slot. */}
+        {handle ? (
+          <div
+            data-sheet-grab=""
+            data-sheet-handle=""
+            className="flex h-5 shrink-0 items-center justify-center touch-none md:touch-auto"
+            {...drag}
+          >
+            <span aria-hidden="true" className="h-1 w-9 rounded-sm bg-border-strong" />
+          </div>
+        ) : null}
         <div
           data-sheet-grab=""
-          className="flex h-14 shrink-0 items-center gap-2 px-4 border-b border-border touch-none md:touch-auto"
-          {...drag}
+          className={cn(
+            'flex h-14 shrink-0 items-center gap-2 px-4 border-b border-border touch-none md:touch-auto',
+            handle && 'hidden',
+          )}
+          {...(handle ? {} : drag)}
         >
           {backButton()}
           <h2 className={textRole('heading', 'min-w-0 flex-1 truncate')}>{title}</h2>
@@ -302,7 +322,7 @@ export function Sheet({
         </div>
         <div
           className={cn(
-            'px-4 py-4 overflow-y-auto',
+            handle ? 'px-4 pb-4 pt-2 overflow-y-auto' : 'px-4 py-4 overflow-y-auto',
             // No footer: the body is the bottom edge, so it clears the home bar.
             footer === undefined && 'pb-[max(16px,env(safe-area-inset-bottom))]',
             fixedHeight === true && 'sm:flex sm:min-h-0 sm:flex-1 sm:flex-col',

@@ -104,7 +104,7 @@ export function PersonTrigger({
         'relative cursor-pointer focus-visible:lit-focus',
         // The invisible 44x44 minimum hit box, centred on the content.
         'after:absolute after:left-1/2 after:top-1/2 after:h-11 after:min-h-full after:w-11 after:min-w-full after:-translate-x-1/2 after:-translate-y-1/2',
-        display === 'block' ? 'inline-flex shrink-0 rounded-full' : 'inline',
+        display === 'block' ? 'inline-flex shrink-0 rounded-lg' : 'inline',
         className,
       )}
     >
