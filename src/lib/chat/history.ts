@@ -707,14 +707,17 @@ export interface ConversationPreview extends PreviewContent {
   messageId: string;
   senderUserId: string | null;
   createdAt: string;
+  /** L5 (2): the line's message is a thread reply (its root); null or absent: top level. */
+  threadRootId?: string | null;
 }
 
 /** The columns the preview scan selects. */
 const PREVIEW_COLUMNS =
-  'id, channel_id, sender_user_id, body, attachment_asset_ids, attachment_meta, shared_post_ids, shared_brief_ids, shared_plan_ids, shared_plan_item_ids, created_at';
+  'id, channel_id, sender_user_id, body, attachment_asset_ids, attachment_meta, shared_post_ids, shared_brief_ids, shared_plan_ids, shared_plan_item_ids, created_at, thread_root_message_id';
 
 type PreviewScanRow = Pick<ChatMessageRow, 'id' | 'channel_id' | 'sender_user_id' | 'created_at'> &
-  Partial<PreviewRow>;
+  Partial<PreviewRow> &
+  Partial<Pick<ChatMessageRow, 'thread_root_message_id'>>;
 
 /** Reduce a newest-first scan to the first (latest) row per channel. */
 export function latestPerChannel(rows: readonly PreviewScanRow[]): ConversationPreview[] {
@@ -737,6 +740,7 @@ export function latestPerChannel(rows: readonly PreviewScanRow[]): ConversationP
         shared_plan_item_ids: row.shared_plan_item_ids ?? null,
       }),
       createdAt: row.created_at,
+      threadRootId: row.thread_root_message_id ?? null,
     });
   }
   return previews;
