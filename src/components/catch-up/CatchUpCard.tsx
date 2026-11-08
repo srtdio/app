@@ -110,7 +110,10 @@ function EntityBlock({ item }: { item: ActivityItem }): ReactElement | null {
     (item.welcome != null ? WELCOME_BODY : null);
   if (kind === undefined && words === null) return null;
   return (
-    <div data-catch-up-entity="" className="flex min-w-0 flex-col gap-2 border-b border-border px-4 py-3">
+    <div
+      data-catch-up-entity=""
+      className="flex min-w-0 flex-col gap-2 border-b border-border px-4 py-3"
+    >
       {kind !== undefined ? <Tag label={kind} /> : null}
       {words !== null && words.trim() !== '' ? (
         <Text role="secondary" as="p" className="line-clamp-2 whitespace-normal">
@@ -245,7 +248,11 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           {title}
         </Text>
       </div>
-      <div ref={bodyRef} data-catch-up-body="" className="min-h-0 flex-1 overflow-y-auto border-t border-border">
+      <div
+        ref={bodyRef}
+        data-catch-up-body=""
+        className="min-h-0 flex-1 overflow-y-auto border-t border-border"
+      >
         {kind === 'thread-started' ? <ThreadCardBlock item={item} /> : null}
         {!chat ? <EntityBlock item={item} /> : null}
         {!chat && item.body !== null && item.body.trim() !== '' ? (
