@@ -137,9 +137,22 @@ test('an agency member turns a comment into a task for Me @theme', async ({ page
   // Finishing a task never resolves the comment: Resolve is still offered.
   await expect(bar.getByRole('button', { name: 'Resolve' })).toBeVisible();
 
-  // The tag opens that chat's Tasks sheet on the task.
+  // The tag opens that chat's Tasks sheet on the task: it navigates to the chat
+  // task link. ChatConnected consumes and drops `task` from the URL at once, so
+  // the link is read from the history push, not from the settled URL.
+  await page.evaluate(() => {
+    const w = window as unknown as { __pushed: string[] };
+    w.__pushed = [];
+    const push = history.pushState.bind(history);
+    history.pushState = (data: unknown, unused: string, url?: string | URL | null) => {
+      if (url !== undefined && url !== null) w.__pushed.push(String(url));
+      push(data, unused, url);
+    };
+  });
   await tag.locator('[data-comment-task-open]').click();
-  await expect(page).toHaveURL(new RegExp(`/chat\\?channel=${encodeURIComponent(NOTES)}&task=`));
+  await expect(page).toHaveURL(new RegExp(`/chat\\?channel=${encodeURIComponent(NOTES)}`));
+  const pushed = await page.evaluate(() => (window as unknown as { __pushed: string[] }).__pushed);
+  expect(pushed.some((u) => u.includes(`channel=${encodeURIComponent(NOTES)}&task=`))).toBe(true);
 });
 
 test('a client never sees To-do and reads the bare task state', async ({ page }) => {
