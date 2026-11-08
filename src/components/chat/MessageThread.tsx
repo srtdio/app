@@ -2631,25 +2631,27 @@ export function MessageBubble(props: {
     );
   const headTick = mine ? metaTick(fullMeta.status) : null;
   const senderLine = showMeta ? (
-    <span data-sender-line="" className="flex min-w-0 items-baseline gap-2">
+    // One block line, its parts inline: the name trigger stays an inline
+    // control in running text (its hit area is the trigger's 44 box), and the
+    // whole line truncates.
+    <span data-sender-line="" className="block min-w-0 max-w-full truncate">
       {asPerson(
-        <span data-sender-name="" className={cn('truncate text-fg', SENDER_NAME_TYPE)}>
+        <span data-sender-name="" className={cn('text-fg', SENDER_NAME_TYPE)}>
           {headerName(message, profiles)}
         </span>,
         'inline',
-        'min-w-0',
       )}
       {fullMeta.time !== '' ? (
         <span
           aria-hidden="true"
           data-sender-time=""
-          className={cn('shrink-0 text-fg-3', SENDER_TIME_TYPE)}
+          className={cn('ml-2 text-fg-3', SENDER_TIME_TYPE)}
         >
           {fullMeta.time}
         </span>
       ) : null}
       {headTick !== null ? (
-        <span className="flex shrink-0 self-center text-fg-3">
+        <span className="ml-1 inline-flex align-middle text-fg-3">
           <MetaGlyph status={headTick} />
         </span>
       ) : null}
