@@ -2507,6 +2507,16 @@ export function MessageBubble(props: {
   rowRef?: Ref<HTMLLIElement>;
   /** Swipe right to reply, left to delete (touch and pen); off while selecting. */
   swipe?: BubbleSwipe;
+  /**
+   * Extra data-* hooks on the row (a plan comment's ids and marks); chat's own
+   * hooks win over them. Absent: none (chat passes none).
+   */
+  rowData?: { [hook: `data-${string}`]: string | undefined } | undefined;
+  /**
+   * One line at the top inside the bubble, above the body (a plan note's
+   * "Creators only"). Absent: none (chat passes none).
+   */
+  topLine?: ReactNode;
   press?: {
     handlers: BubblePointerHandlers;
     onContextMenu: (event: MouseEvent) => void;
@@ -2694,6 +2704,7 @@ export function MessageBubble(props: {
     const tombSwipe = selecting ? undefined : props.swipe;
     return (
       <li
+        {...props.rowData}
         ref={props.rowRef}
         data-msg-id={message.id}
         data-state={message.state}
@@ -2786,6 +2797,7 @@ export function MessageBubble(props: {
     ) : null;
   return (
     <li
+      {...props.rowData}
       ref={props.rowRef}
       data-msg-id={message.id}
       data-state={message.state}
@@ -2865,6 +2877,7 @@ export function MessageBubble(props: {
                   <ForwardedLabel mine={false} />
                 )
               ) : null}
+              {props.topLine ?? null}
             </div>
             {/* L1: no own fill, so every card draws the same flat card on both sides. */}
             <ChatCardOwn value={false}>
