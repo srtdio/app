@@ -128,7 +128,9 @@ describe('11f "1 selected" on the 16px edge', () => {
       expect(classes(count.props.className)).toContain('pl-2');
     }
     expect(read('../ChatInfoTabs.tsx')).toContain('<SelectionHeader');
-    expect(read('../MessageThread.tsx') + read('../MessageBubble.tsx')).toContain('<SelectionHeader');
+    expect(read('../MessageThread.tsx') + read('../MessageBubble.tsx')).toContain(
+      '<SelectionHeader',
+    );
   });
 });
 

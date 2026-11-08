@@ -195,7 +195,8 @@ describe('chat cards: the card is the bubble (no wrapper bubble)', () => {
       expect(src, file).not.toMatch(/rounded-xl border[^'"`]*bg-panel/);
       expect(src, file).not.toMatch(/w-\[2(40|84)px\]/);
     }
-    const thread = read('components/chat/MessageThread.tsx') + read('components/chat/MessageBubble.tsx');
+    const thread =
+      read('components/chat/MessageThread.tsx') + read('components/chat/MessageBubble.tsx');
     expect(thread).toContain('card: cardOnly');
     expect(thread).toContain('voiceOnly || cardOnly || metaEmpty ? null');
     expect(thread).not.toContain('OWN_BUBBLE_CONTENT');

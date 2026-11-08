@@ -246,6 +246,11 @@ describe('MessageThread window: memoised rows', () => {
 
 describe('MessageThread window: the list wiring', () => {
   const src = readFileSync(join(process.cwd(), 'src/components/chat/MessageThread.tsx'), 'utf8');
+  // The row's own markup (MessageBubble) moved to MessageBubble.tsx.
+  const bubbleSrc = readFileSync(
+    join(process.cwd(), 'src/components/chat/MessageBubble.tsx'),
+    'utf8',
+  );
   const rowJsx = src.slice(
     src.indexOf('<MessageRow\n'),
     src.indexOf('selectingText={selectingTextId === row.message.id}'),
@@ -271,7 +276,7 @@ describe('MessageThread window: the list wiring', () => {
   it('renders only the window, with every data attribute kept', () => {
     expect(src).toContain('const { win, set: setWin } = useThreadWindow(ids);');
     expect(src).toContain('props.messages.slice(win.start, win.end)');
-    expect(src).toContain('data-msg-id={message.id}');
+    expect(bubbleSrc).toContain('data-msg-id={message.id}');
     expect(src).toContain('data-unread-divider');
     expect(src).toContain('data-load-older=""');
   });
