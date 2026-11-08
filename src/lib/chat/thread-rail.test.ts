@@ -15,8 +15,13 @@ import {
   railPlans,
   renderedMembership,
   replyCountLabel,
+  rootCardOf,
   rowGeometry,
   senderRootFor,
+  THREAD_TITLE,
+  threadTitleOf,
+  withRootCards,
+  type RootCardTitles,
   threadReplyCount,
   withThreadRoot,
   type MembershipMap,
@@ -410,5 +415,99 @@ describe('rowGeometry', () => {
     expect(
       rowGeometry({ role: null, mine: false, isGroup: false, photo: false, selecting: false }),
     ).toMatchObject({ padLeft: 'pl-4', shift: 0, reach: '' });
+  });
+});
+
+describe('rootCardOf / threadTitleOf: a thread on any card takes the card name', () => {
+  const titles: RootCardTitles = {
+    post: (id) => (id === 'p1' ? 'Monday carousel' : null),
+    brief: (id) => (id === 'b1' ? 'Autumn launch' : null),
+    plan: (id) => (id === 'pl1' ? 'Pre & Post Diwali' : null),
+    item: (id) => (id === 'i1' ? 'Season opening reel' : null),
+  };
+
+  it('returns the card kind and id for each kind', () => {
+    expect(rootCardOf(msg('a', { sharedPostIds: ['p1'] }))).toEqual({ kind: 'post', id: 'p1' });
+    expect(rootCardOf(msg('a', { sharedBriefIds: ['b1'] }))).toEqual({ kind: 'brief', id: 'b1' });
+    expect(rootCardOf(msg('a', { sharedPlanIds: ['pl1'] }))).toEqual({ kind: 'plan', id: 'pl1' });
+    expect(rootCardOf(msg('a', { sharedPlanItemIds: ['i1'] }))).toEqual({
+      kind: 'item',
+      id: 'i1',
+    });
+    expect(rootCardOf(msg('a'))).toBeNull();
+    expect(rootCardOf(msg('a', { sharedPlanIds: [], sharedPlanItemIds: [] }))).toBeNull();
+  });
+
+  it('picks in a fixed order: post, brief, plan, plan item; first id of that kind', () => {
+    const all = msg('a', {
+      sharedPostIds: ['p1', 'p2'],
+      sharedBriefIds: ['b1'],
+      sharedPlanIds: ['pl1'],
+      sharedPlanItemIds: ['i1'],
+    });
+    expect(rootCardOf(all)).toEqual({ kind: 'post', id: 'p1' });
+    expect(rootCardOf({ ...all, sharedPostIds: [] })).toEqual({ kind: 'brief', id: 'b1' });
+    expect(rootCardOf({ ...all, sharedPostIds: [], sharedBriefIds: [] })).toEqual({
+      kind: 'plan',
+      id: 'pl1',
+    });
+    expect(
+      rootCardOf({ ...all, sharedPostIds: [], sharedBriefIds: [], sharedPlanIds: [] }),
+    ).toEqual({ kind: 'item', id: 'i1' });
+  });
+
+  it('titles a thread by its root card, per kind', () => {
+    expect(threadTitleOf(msg('a', { sharedPostIds: ['p1'] }), titles)).toBe('Monday carousel');
+    expect(threadTitleOf(msg('a', { sharedBriefIds: ['b1'] }), titles)).toBe('Autumn launch');
+    expect(threadTitleOf(msg('a', { sharedPlanIds: ['pl1'] }), titles)).toBe('Pre & Post Diwali');
+    expect(threadTitleOf(msg('a', { sharedPlanItemIds: ['i1'] }), titles)).toBe(
+      'Season opening reel',
+    );
+  });
+
+  it('falls back to "Thread": no card, title not held yet, blank title, deleted or unknown root', () => {
+    expect(THREAD_TITLE).toBe('Thread');
+    expect(threadTitleOf(msg('a'), titles)).toBe('Thread');
+    expect(threadTitleOf(msg('a', { sharedPlanIds: ['other'] }), titles)).toBe('Thread');
+    expect(
+      threadTitleOf(msg('a', { sharedPlanIds: ['pl1'] }), { ...titles, plan: () => '  ' }),
+    ).toBe('Thread');
+    expect(threadTitleOf(msg('a', { sharedPlanIds: ['pl1'], deleted: true }), titles)).toBe(
+      'Thread',
+    );
+    expect(threadTitleOf(undefined, titles)).toBe('Thread');
+  });
+
+  it('swaps in the title once the held card lands (same root, cache now holds it)', () => {
+    const root = msg('a', { sharedPlanIds: ['pl1'] });
+    const held = new Map<string, string>();
+    const lookup: RootCardTitles = { ...titles, plan: (id) => held.get(id) ?? null };
+    expect(threadTitleOf(root, lookup)).toBe('Thread');
+    held.set('pl1', 'Pre & Post Diwali');
+    expect(threadTitleOf(root, lookup)).toBe('Pre & Post Diwali');
+  });
+
+  it('every card kind heads a thread (isRootCard uses rootCardOf)', () => {
+    for (const over of [
+      { sharedPostIds: ['p1'] },
+      { sharedBriefIds: ['b1'] },
+      { sharedPlanIds: ['pl1'] },
+      { sharedPlanItemIds: ['i1'] },
+    ]) {
+      expect(isRootCard(msg('c', over))).toBe(true);
+      expect(isRootCard(msg('c', { ...over, deleted: true }))).toBe(false);
+      expect(isRootCard(msg('c', { ...over, threadRootId: 'x' }))).toBe(false);
+    }
+  });
+
+  it('withRootCards keeps the view root card ids when the loaded copy lacks them', () => {
+    const held = msg('a', { sharedPlanIds: ['pl1'] });
+    const live = msg('a', { body: 'edited' });
+    const kept = withRootCards(live, held);
+    expect(kept.body).toBe('edited');
+    expect(kept.sharedPlanIds).toEqual(['pl1']);
+    const loaded = msg('a', { sharedBriefIds: ['b1'] });
+    expect(withRootCards(loaded, held)).toBe(loaded);
+    expect(withRootCards(live, msg('a'))).toBe(live);
   });
 });

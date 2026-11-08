@@ -397,6 +397,19 @@ const NO_SUBSCRIBE = (): (() => void) => () => {};
 const NO_VERSION = (): number => 0;
 
 /**
+ * The open chat's card cache when there is one (re-rendering on every applied
+ * read unless `subscribe` is false); null outside a chat. Never creates a
+ * cache and never reads: a caller only looks up what the chat's cards already
+ * hold (a thread's brief title).
+ */
+export function useSharedCardCache(subscribe = true): ThreadCardCache | null {
+  const shared = useContext(SharedCardsContext);
+  const watched = subscribe ? shared : null;
+  useSyncExternalStore(watched?.subscribe ?? NO_SUBSCRIBE, watched?.version ?? NO_VERSION);
+  return shared;
+}
+
+/**
  * The thread's card cache, or (outside a thread) one of this card's own, so a
  * card rendered anywhere still reads in one batch per message. Pure plumbing.
  */

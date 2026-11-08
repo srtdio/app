@@ -301,6 +301,7 @@ const REQUIRED: readonly string[] = [
   'chat-group-work',
   'chat-replies-row',
   'chat-thread-screen',
+  'chat-thread-screen-plan',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */

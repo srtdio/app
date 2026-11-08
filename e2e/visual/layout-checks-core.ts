@@ -276,8 +276,43 @@ export interface LayoutViolation {
     | 'chip-row'
     | 'upload-bar'
     | 'writing-box'
-    | 'comment-bar';
+    | 'comment-bar'
+    | 'thread-header';
   message: string;
+}
+
+/** The thread screen's header as read: its title and second line, and the bar. */
+export interface ThreadHeaderGeom {
+  title: { text: string; lines: number; box: Box } | null;
+  subtitle: { text: string; lines: number; box: Box } | null;
+  bar: Box | null;
+}
+
+/**
+ * The thread header rule: a title and the chat's name under it on every
+ * thread, each one line (the title truncates), both inside the bar. Pure.
+ */
+export function threadHeaderViolations(geom: ThreadHeaderGeom): string[] {
+  const out: string[] = [];
+  if (geom.title === null || geom.title.text.trim() === '') out.push('the thread has no title');
+  if (geom.subtitle === null || geom.subtitle.text.trim() === '') {
+    out.push("the thread has no second line (the chat's name)");
+  }
+  for (const [name, part] of [
+    ['title', geom.title],
+    ['second line', geom.subtitle],
+  ] as const) {
+    if (part === null) continue;
+    if (part.lines > 1) out.push(`the ${name} wraps to ${part.lines} lines`);
+    if (geom.bar !== null) {
+      const b = geom.bar;
+      const p = part.box;
+      if (p.x < b.x - 0.5 || p.x + p.width > b.x + b.width + 0.5) {
+        out.push(`the ${name} runs past the bar (${boxText(p)} in ${boxText(b)})`);
+      }
+    }
+  }
+  return out;
 }
 
 /** The failure text: one line per violation, each naming the screen. */

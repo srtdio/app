@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { loadMessagesByIds } from '@/lib/chat/history';
 import { replyPreview, rowToThreadMessage, type ThreadMessage } from '@/lib/chat/thread';
 import { firstLineOf, repliesLabel, type ThreadForMe } from '@/lib/chat/thread-signals';
+import { rootCardOf, THREAD_TITLE } from '@/lib/chat/thread-rail';
 
 /** The sheet's title and the laptop pane's header. */
 export const THREADS_TITLE = 'Threads';
@@ -40,13 +41,17 @@ export interface ThreadsRow {
 
 /**
  * The list's rows: unread first, then read, each newest reply first (the
- * proc's order, kept stable). A root not known yet reads "Message". Pure.
+ * proc's order, kept stable). A root not known yet reads "Message". A root
+ * carrying a card (post, brief, plan, plan item) with no text of its own
+ * previews the card's title, the same name its thread screen shows. Pure.
  */
 export function threadsRows(input: {
   threads: readonly ThreadForMe[];
   rootOf: (rootId: string) => ThreadMessage | undefined;
   nameOf: (userId: string | null) => string;
   photoOf: (userId: string | null) => string | undefined;
+  /** The root card's held title (thread-rail threadTitleOf), or null. */
+  cardTitleOf?: (root: ThreadMessage) => string | null;
   now: Date;
 }): ThreadsRow[] {
   const sorted = [...input.threads].sort(
@@ -60,10 +65,12 @@ export function threadsRows(input: {
         ? 'Message'
         : root.deleted === true
           ? 'This message was deleted'
-          : firstLineOf(root.body) || replyPreview(root);
+          : firstLineOf(root.body) ||
+            (rootCardOf(root) !== null ? input.cardTitleOf?.(root) : null) ||
+            replyPreview(root);
     return {
       rootId: t.rootId,
-      name: root !== undefined ? input.nameOf(sender) : 'Thread',
+      name: root !== undefined ? input.nameOf(sender) : THREAD_TITLE,
       src: root !== undefined ? input.photoOf(sender) : undefined,
       time: formatAgo(t.lastReplyAt, input.now),
       preview,
@@ -82,6 +89,7 @@ export function ThreadsSheet(props: {
   currentUserId: string;
   nameOf: (userId: string | null) => string;
   photoOf: (userId: string | null) => string | undefined;
+  cardTitleOf?: (root: ThreadMessage) => string | null;
   onOpenThread: (rootId: string) => void;
 }): ReactElement | null {
   const laptop = useIsLaptop();
@@ -120,11 +128,13 @@ export function ThreadsSheet(props: {
         rootOf: (id) => loaded.get(id) ?? fetched.get(id),
         nameOf: props.nameOf,
         photoOf: props.photoOf,
+        ...(props.cardTitleOf !== undefined ? { cardTitleOf: props.cardTitleOf } : {}),
         now: new Date(),
       }),
-    // nameOf / photoOf read the latest profiles at render.
+    // nameOf / photoOf read the latest profiles at render; cardTitleOf is
+    // new each render so a card title that lands swaps in.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [threads, loaded, fetched],
+    [threads, loaded, fetched, props.cardTitleOf],
   );
   const list =
     rows.length === 0 ? (

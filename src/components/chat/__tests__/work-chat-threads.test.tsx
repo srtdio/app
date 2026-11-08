@@ -30,6 +30,7 @@ import {
 import { RepliesRow } from '@/components/chat/ThreadRail';
 import { UnreadDivider } from '@/components/chat/ReadingLayer';
 import { threadsRows, THREADS_EMPTY } from '@/components/chat/ThreadsSheet';
+import { THREAD_TITLE } from '@/lib/chat/thread-rail';
 import { ThreadsStripItem } from '@/components/chat/StatusTicker';
 import { avatarShapeClass } from '@/components/ui/Avatar';
 import { PresignCache } from '@/lib/asset-presign';
@@ -189,12 +190,23 @@ describe('L3: the replies row', () => {
 });
 
 describe('L4: the thread screen', () => {
-  it('composer hint "Reply", no Also send to chat, a plain thread titled "Thread" over the chat name', () => {
+  it('composer hint "Reply", no Also send to chat, every thread titled by threadTitleOf over the chat name', () => {
     const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).toContain("const THREAD_REPLY_PLACEHOLDER = 'Reply';");
     expect(src).not.toContain('Also send to chat');
-    expect(src).toContain("viewPost?.title ?? 'Thread'");
+    expect(src).toContain('const viewTitle = threadTitleOf(viewRoot, cardTitles);');
+    // The chat's name is the second line of every thread (card threads too).
+    expect(src).toContain('const viewSubtitle = props.title;');
+    expect(src).not.toContain("viewPost?.title ?? 'Thread'");
     expect(read('../ThreadView.tsx')).toContain('data-thread-view-subtitle');
+  });
+
+  it('the thread title reads only held caches: no await or read on the open path', () => {
+    const src = read('../MessageThread.tsx');
+    const start = src.indexOf('export function heldCardTitles(');
+    const block = src.slice(start, src.indexOf('function ThreadViewTitled(', start));
+    expect(start).toBeGreaterThan(-1);
+    expect(block).not.toMatch(/await|\.request\(|fetch|callRpc|\.from\(/);
   });
 });
 
@@ -360,5 +372,57 @@ describe('L11 / L14 wiring', () => {
       'markChatUnread({ client: supabase, channelId, messageId: message.id, traceId })',
     );
     expect(src).toContain('void markThreadUnread({');
+  });
+});
+
+describe('Threads list: a card root names its row like its thread screen', () => {
+  const thread = {
+    rootId: 'root',
+    replyCount: 1,
+    lastReplyAt: '2026-11-08T11:00:00Z',
+    lastReplyId: 'x',
+    lastReplySender: 'leo',
+    lastReplyBody: 'ok',
+    unread: false,
+  };
+  const base = {
+    threads: [thread],
+    nameOf: (id: string | null) => PROFILES.get(id ?? '')?.displayName ?? 'Member',
+    photoOf: () => undefined,
+    now: new Date('2026-11-08T12:00:00Z'),
+  };
+
+  it('a card root with no text previews the card title, for every card kind', () => {
+    const roots: ThreadMessage[] = [
+      msg({ id: 'root', body: '', sharedPostIds: ['p1'] }),
+      msg({ id: 'root', body: '', sharedBriefIds: ['b1'] }),
+      msg({ id: 'root', body: '', sharedPlanIds: ['pl1'] }),
+      msg({ id: 'root', body: '', sharedPlanItemIds: ['i1'] }),
+    ];
+    for (const root of roots) {
+      const rows = threadsRows({
+        ...base,
+        rootOf: () => root,
+        cardTitleOf: () => 'Pre & Post Diwali',
+      });
+      expect(rows[0]?.preview).toBe('Pre & Post Diwali');
+    }
+  });
+
+  it('a card title not held yet falls back to the card label; a plain root never asks', () => {
+    const plan = msg({ id: 'root', body: '', sharedPlanIds: ['pl1'] });
+    const rows = threadsRows({ ...base, rootOf: () => plan, cardTitleOf: () => null });
+    expect(rows[0]?.preview).toBe('Shared plan');
+    const asked = vi.fn(() => 'never');
+    const plain = msg({ id: 'root', body: 'Hello' });
+    expect(threadsRows({ ...base, rootOf: () => plain, cardTitleOf: asked })[0]?.preview).toBe(
+      'Hello',
+    );
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it('a root not known yet is named "Thread"', () => {
+    const rows = threadsRows({ ...base, rootOf: () => undefined });
+    expect(rows[0]?.name).toBe(THREAD_TITLE);
   });
 });
