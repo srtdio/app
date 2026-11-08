@@ -118,7 +118,10 @@ function ThreadCardBlock({ item }: { item: ActivityItem }): ReactElement {
   const label =
     kind === 'brief' ? 'Brief' : kind === 'plan' ? 'Plan' : kind === 'item' ? 'Plan' : 'Post';
   return (
-    <div data-catch-up-thread-card={kind ?? 'post'} className="flex min-w-0 flex-col gap-2 border-b px-4 py-3">
+    <div
+      data-catch-up-thread-card={kind ?? 'post'}
+      className="flex min-w-0 flex-col gap-2 border-b px-4 py-3"
+    >
       <Tag label={label} />
       {item.title !== null && item.title !== '' ? (
         <Text role="label" className="truncate text-fg">
@@ -222,7 +225,10 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       className="relative flex min-h-0 flex-1 touch-pan-y select-none flex-col overflow-hidden rounded-2xl border bg-panel"
     >
       {props.typingRow ?? null}
-      <div data-catch-up-head="" className="flex min-w-0 flex-col items-center gap-1 px-4 pb-3 pt-4 text-center">
+      <div
+        data-catch-up-head=""
+        className="flex min-w-0 flex-col items-center gap-1 px-4 pb-3 pt-4 text-center"
+      >
         <Text role="secondary" as="p" data-catch-up-kicker="" className="max-w-full">
           {catchUpKicker(item)}
         </Text>

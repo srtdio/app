@@ -83,11 +83,7 @@ describe.runIf(CATCH_UP_SUITE)('catch up: thread entries and mark unread', () =>
     return id;
   }
 
-  async function reply(
-    sender: SeededUser,
-    rootId: string,
-    mentions?: string[],
-  ): Promise<string> {
+  async function reply(sender: SeededUser, rootId: string, mentions?: string[]): Promise<string> {
     const id = crypto.randomUUID();
     const args: SendArgs = {
       p_id: id,

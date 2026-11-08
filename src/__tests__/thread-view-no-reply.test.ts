@@ -21,7 +21,9 @@ describe('thread view: no reply gesture or Reply action', () => {
   });
 
   it('message rows refuse the right swipe inside a thread view', () => {
-    expect(thread).toMatch(/takes: \(side\) => side !== 'right' \|\| latest\.current\.replyBlocked !== true/);
+    expect(thread).toMatch(
+      /takes: \(side\) => side !== 'right' \|\| latest\.current\.replyBlocked !== true/,
+    );
     expect(thread).toMatch(/replyBlocked=\{props\.threads\?\.viewRootId !== undefined\}/);
   });
 

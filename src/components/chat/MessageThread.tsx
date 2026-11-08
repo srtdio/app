@@ -2795,12 +2795,14 @@ function ThreadBody(
       ...(addToTask !== undefined && live && !plan && taskTitleOf(m) !== ''
         ? { onTasks: () => addToTask(m) }
         : {}),
-      ...(forward !== undefined && canForward(m) && !plan ? {
+      ...(forward !== undefined && canForward(m) && !plan
+        ? {
             onForward: () => {
               anchorSelection(m);
               if (forward(m) !== true) selectionScroll.cancelEntry();
             },
-          } : {}),
+          }
+        : {}),
       ...(m.deleted !== true ? { onMore: () => onOpenRow(m, null, null) } : {}),
     };
   };

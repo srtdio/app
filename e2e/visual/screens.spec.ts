@@ -1495,8 +1495,7 @@ const SCREENS: Screen[] = [
     seed: creator,
     extra: seedCatchUp,
     url: '/activity',
-    steps: async (page) =>
-      waitFor([page.locator('[data-activity-catch-up-bar]')], 'catch up bar'),
+    steps: async (page) => waitFor([page.locator('[data-activity-catch-up-bar]')], 'catch up bar'),
   },
   {
     // Catch up's first card: a mention in a thread (kicker "Thread in <chat>").

@@ -73,7 +73,12 @@ function both(a: CatchUpWrite, b: CatchUpWrite): CatchUpWrite {
  */
 export async function markCatchUpRead(
   client: Client,
-  input: { workspaceId: string; item: ActivityItem; latestReplyId?: string | null; traceId: string },
+  input: {
+    workspaceId: string;
+    item: ActivityItem;
+    latestReplyId?: string | null;
+    traceId: string;
+  },
 ): Promise<CatchUpWrite> {
   const point = chatPointOf(input.item);
   const [entry, chat] = await Promise.all([

@@ -47,7 +47,13 @@ import {
   isChatCard,
   leftLabel,
 } from '@/lib/catch-up/copy';
-import { flyOut, springHome, swipeDecision, swipeTint, swipeTransform } from '@/lib/catch-up/card-swipe';
+import {
+  flyOut,
+  springHome,
+  swipeDecision,
+  swipeTint,
+  swipeTransform,
+} from '@/lib/catch-up/card-swipe';
 import { CatchUpCard, TypingCheck, type SentMessage } from '@/components/catch-up/CatchUpCard';
 import { CatchUpReply } from '@/components/catch-up/CatchUpReply';
 import { CatchUpEnd } from '@/components/catch-up/CatchUpEnd';
@@ -117,9 +123,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   useEffect(() => {
     const want = [current, next].filter(
       (item): item is ActivityItem =>
-        item !== null &&
-        isChatCard(catchUpCardKind(item)) &&
-        !requestedRef.current.has(item.id),
+        item !== null && isChatCard(catchUpCardKind(item)) && !requestedRef.current.has(item.id),
     );
     if (want.length === 0) return;
     for (const item of want) requestedRef.current.add(item.id);
@@ -201,7 +205,13 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     if (target instanceof Element && target.closest('form, button, a, textarea, input') !== null) {
       return;
     }
-    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, locked: false };
+    dragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      dx: 0,
+      locked: false,
+    };
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const drag = dragRef.current;

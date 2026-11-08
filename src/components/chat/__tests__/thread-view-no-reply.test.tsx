@@ -122,7 +122,13 @@ describe('thread view divider', () => {
 
 describe('thread view starts at the top', () => {
   it('main chat: the spacer pins the list to the bottom (mt-auto)', () => {
-    const out = renderToStaticMarkup(<ul>{threadListItems([], false, () => <li />)}</ul>);
+    const out = renderToStaticMarkup(
+      <ul>
+        {threadListItems([], false, () => (
+          <li />
+        ))}
+      </ul>,
+    );
     expect(out).toContain('mt-auto');
   });
 

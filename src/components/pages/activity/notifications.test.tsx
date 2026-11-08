@@ -597,7 +597,9 @@ describe('notifications fixes: page and provider wiring', () => {
 
   it('fix 9 (catch up): opening a group opens catch up at its newest entry, the others follow', () => {
     expect(page).toContain('const head = groupHeadEntry(group);');
-    expect(page).toMatch(/openCatchUp\(\s*head,\s*group\.filter\(\(e\) => e\.id !== head\.id\),?\s*\);/);
+    expect(page).toMatch(
+      /openCatchUp\(\s*head,\s*group\.filter\(\(e\) => e\.id !== head\.id\),?\s*\);/,
+    );
     // A tap no longer marks the group read: catch up decides per card.
     expect(page).not.toContain('markEntriesRead(unread);');
   });

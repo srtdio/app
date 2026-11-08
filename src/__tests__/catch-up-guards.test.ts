@@ -81,7 +81,12 @@ describe('catch-up guards', () => {
         actor_user_id: null,
       });
     // Two comments on the same post are two cards (Activity groups them; catch up never does).
-    const queue = buildCatchUpQueue({ tapped: null, held: [row('a', 'p1'), row('bb', 'p1')], nowMs: 0, workspaceId: 'ws' });
+    const queue = buildCatchUpQueue({
+      tapped: null,
+      held: [row('a', 'p1'), row('bb', 'p1')],
+      nowMs: 0,
+      workspaceId: 'ws',
+    });
     expect(queue.map((i) => i.id)).toEqual(['bb', 'a']);
     const queueSrc = FILES.find((f) => f.rel === 'lib/catch-up/queue.ts')?.src ?? '';
     expect(queueSrc).not.toMatch(/groupDigest|entityKey/);

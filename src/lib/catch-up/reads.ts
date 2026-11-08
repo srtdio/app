@@ -130,9 +130,16 @@ export async function readCatchUpChat(
   });
   if (points.length === 0) return out;
   const messageIds = [
-    ...new Set(points.flatMap(({ point }) => [point.messageId, ...(point.rootId !== null ? [point.rootId] : [])])),
+    ...new Set(
+      points.flatMap(({ point }) => [
+        point.messageId,
+        ...(point.rootId !== null ? [point.rootId] : []),
+      ]),
+    ),
   ];
-  const rootIds = [...new Set(points.flatMap(({ point }) => (point.rootId !== null ? [point.rootId] : [])))];
+  const rootIds = [
+    ...new Set(points.flatMap(({ point }) => (point.rootId !== null ? [point.rootId] : []))),
+  ];
   const [byId, replies] = await Promise.all([
     loadMessagesByIds(client, messageIds),
     rootIds.length > 0
@@ -178,7 +185,12 @@ export async function readCatchUpChat(
     ),
   ];
   const [titles] = await Promise.all([
-    readTitles(client, { post: of('post'), brief: of('brief'), plan: of('plan'), item: of('item') }),
+    readTitles(client, {
+      post: of('post'),
+      brief: of('brief'),
+      plan: of('plan'),
+      item: of('item'),
+    }),
     resolvePeople(client, workspaceId, senders),
   ]);
   const names = mentionNamesIn(workspaceId);

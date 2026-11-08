@@ -550,10 +550,7 @@ export function NotificationsPage() {
     },
     [searchParams, setSearchParams],
   );
-  const handleOpenEntry = useCallback(
-    (entry: ActivityItem) => openCatchUp(entry),
-    [openCatchUp],
-  );
+  const handleOpenEntry = useCallback((entry: ActivityItem) => openCatchUp(entry), [openCatchUp]);
   const handleOpenGroup = useCallback(
     (group: ActivityItem[]) => {
       const head = groupHeadEntry(group);

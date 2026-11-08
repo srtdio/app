@@ -10,13 +10,7 @@
 // callout).
 
 import type { ReactElement } from 'react';
-import {
-  ICON_SIZE,
-  IconForward,
-  IconMore,
-  IconTodo,
-  RailCurveGlyph,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconForward, IconMore, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
 import { textRole } from '@/components/ui/Text';
 import { CHAT_GUTTER, TRAILING_PULL } from '@/components/ui/layout';

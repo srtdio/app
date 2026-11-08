@@ -1352,7 +1352,8 @@ const RPC: Record<string, RpcHandler> = {
     const ids = new Set((args.p_ids as string[] | undefined) ?? []);
     const now = new Date().toISOString();
     for (const e of tables.inbox_entries ?? []) {
-      if (ids.has(String(e.id)) && e.user_id === ME && (e.read_at ?? null) === null) e.read_at = now;
+      if (ids.has(String(e.id)) && e.user_id === ME && (e.read_at ?? null) === null)
+        e.read_at = now;
     }
     return null;
   },
@@ -1366,7 +1367,11 @@ const RPC: Record<string, RpcHandler> = {
   inbox_mark_all_read: (args, tables) => {
     const now = new Date().toISOString();
     for (const e of tables.inbox_entries ?? []) {
-      if (e.workspace_id === args.p_workspace_id && e.user_id === ME && (e.read_at ?? null) === null) {
+      if (
+        e.workspace_id === args.p_workspace_id &&
+        e.user_id === ME &&
+        (e.read_at ?? null) === null
+      ) {
         e.read_at = now;
       }
     }

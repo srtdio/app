@@ -68,8 +68,13 @@ export function flyOut(el: HTMLElement | null, decision: 'read' | 'keep', fromDx
 /** Spring the card home from `fromDx` (it already rests at its final, unmoved pose). */
 export function springHome(el: HTMLElement | null, fromDx: number): Played {
   const width = el?.offsetWidth ?? 0;
-  return play(el, CARD_SWING, [{ transform: swipeTransform(fromDx, width) || 'none' }, { transform: 'none' }], {
-    duration: DUR_SLOW_MS,
-    easing: EASE.enter,
-  });
+  return play(
+    el,
+    CARD_SWING,
+    [{ transform: swipeTransform(fromDx, width) || 'none' }, { transform: 'none' }],
+    {
+      duration: DUR_SLOW_MS,
+      easing: EASE.enter,
+    },
+  );
 }

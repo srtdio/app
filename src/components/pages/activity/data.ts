@@ -1769,7 +1769,8 @@ function threadCardTitle(
     case 'item': {
       const info = from.planItems.get(id);
       if (info === undefined) return null;
-      if (info.kind === 'post') return info.postId !== null ? (from.postTitles.get(info.postId) ?? null) : null;
+      if (info.kind === 'post')
+        return info.postId !== null ? (from.postTitles.get(info.postId) ?? null) : null;
       return info.title !== null && info.title !== '' ? info.title : null;
     }
     default:

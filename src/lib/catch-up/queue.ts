@@ -52,7 +52,9 @@ export function groupHeadEntry(group: readonly ActivityItem[]): ActivityItem | u
 }
 
 /** Every distinct entry the screen holds, from any number of lists, first copy wins. Pure. */
-export function heldEntries(...lists: ReadonlyArray<readonly ActivityItem[] | undefined>): ActivityItem[] {
+export function heldEntries(
+  ...lists: ReadonlyArray<readonly ActivityItem[] | undefined>
+): ActivityItem[] {
   const seen = new Set<string>();
   const out: ActivityItem[] = [];
   for (const list of lists) {

@@ -131,7 +131,9 @@ describe('catch-up screen', () => {
     click('[data-catch-up-keep]');
     expect(writes.markCatchUpRead).not.toHaveBeenCalled();
     expect(document.querySelector('[data-catch-up-left]')?.textContent).toBe(leftLabel(1));
-    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe('b');
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'b',
+    );
   });
 
   it('marks read through the write, then ends with the count', async () => {
@@ -149,7 +151,9 @@ describe('catch-up screen', () => {
     await act(async () => Promise.resolve());
     click('[data-catch-up-undo]');
     expect(writes.undoCatchUpRead).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe('a');
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'a',
+    );
   });
 
   it('shows no reply box on a card that takes none, and one on a comment card', () => {
