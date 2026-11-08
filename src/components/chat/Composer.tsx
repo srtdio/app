@@ -167,6 +167,8 @@ export interface ComposerProps {
    * a menu, sheet or lightbox is open over the thread.
    */
   focusOnMount?: boolean | undefined;
+  /** L3: opened by a Reply: focus on mount on any pointer, menu or not. */
+  focusForReply?: boolean | undefined;
   /** The expanded editor's title on a phone (the chat's name), ui/WritingBox. */
   expandTitle?: ReactNode;
   /**
@@ -671,8 +673,12 @@ export function focusComposerInput(el: ComposerInput | null): void {
 }
 
 /** Whether a menu, sheet or lightbox is open in the document. */
-function overlayOpen(): boolean {
-  return typeof document !== 'undefined' && document.querySelector(OVERLAY_SELECTOR) !== null;
+/** An overlay is up that does not hold `own` (the thread view holds its own composer). */
+function overlayOpen(own?: HTMLElement | null): boolean {
+  if (typeof document === 'undefined') return false;
+  return Array.from(document.querySelectorAll(OVERLAY_SELECTOR)).some(
+    (overlay) => own === null || own === undefined || !overlay.contains(own),
+  );
 }
 
 let pendingSeq = 0;
@@ -1689,19 +1695,22 @@ export function Composer(props: ComposerProps): ReactElement {
   // Laptop: the cursor sits in the composer when a chat opens (once, on mount),
   // unless a restored draft reopened the hash or @ picker.
   const focusOnMount = props.focusOnMount === true;
+  // L3: a Reply that opened a thread focuses its composer on touch too (the
+  // menu that asked may still be leaving, so no overlay check).
+  const replyFocus = props.focusForReply === true;
   const hashOpenOnMount = hashQuery !== null || mentionRows.length > 0;
   useEffect(() => {
+    const el = textareaRef.current;
     if (
       !shouldFocusComposer({
-        finePointer: focusOnMount,
+        finePointer: focusOnMount || replyFocus,
         editing: editingNow,
         hashOpen: hashOpenOnMount,
-        overlayOpen: overlayOpen(),
+        overlayOpen: !replyFocus && overlayOpen(el),
       })
     ) {
       return;
     }
-    const el = textareaRef.current;
     if (el === null) return;
     el.focus({ preventScroll: true });
     const end = el.value.length;

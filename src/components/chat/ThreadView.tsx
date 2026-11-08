@@ -72,8 +72,11 @@ export function ThreadViewFrame(props: {
     // Mount only: the push runs once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Focus lands on Close so Escape reaches the view.
+  // Focus lands on Close so Escape reaches the view, unless the composer
+  // already took it (a Reply opened the thread, L3).
   useEffect(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && rootRef.current?.contains(active) === true) return;
     closeRef.current?.focus({ preventScroll: true });
   }, []);
   /**

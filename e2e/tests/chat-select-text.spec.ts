@@ -100,6 +100,8 @@ async function expectMenuStyle(page: Page): Promise<void> {
     const ref = getComputedStyle(probe);
     const rows = Array.from(panel.querySelectorAll<HTMLElement>('[data-menu-item]'))
       .filter((row) => row.getAttribute('data-menu-item') !== 'delete')
+      // L10: the More actions row is a label and a chevron, no icon.
+      .filter((row) => row.getAttribute('data-menu-item') !== 'more-actions')
       .filter((row) => !row.getAttribute('data-menu-item')?.startsWith('react'));
     const icons = rows.map((row) => {
       const svg = row.querySelector('[data-menu-icon] svg');

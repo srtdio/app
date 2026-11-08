@@ -3,10 +3,10 @@ import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { MAYA_NAME, PEER_NAME } from '../fixtures/chat-data';
 
 // L3 (8 Nov 2026): every reply is a thread. Reply (long-press menu, swipe
-// right, laptop chevron, right-click) and Talk about (a card hold or the
-// sheet's) open that message's thread with its composer focused (hint
-// "Reply"), so typing lands there with no extra tap; inside a thread, Reply
-// just focuses the thread composer. Decision 32 holds: opening a chat on touch
+// right, laptop chevron, right-click) opens that message's thread with its
+// composer focused (hint "Reply"), so typing lands there with no extra tap;
+// inside a thread, Reply just focuses the thread composer. Talk about (a card
+// hold or the sheet's) focuses the main composer. Decision 32 holds: opening a chat on touch
 // focuses nothing.
 // Linux WebKit approximates iOS WebKit (it never shows a keyboard); it is not iOS.
 
@@ -109,6 +109,19 @@ async function expectFocusedAtEnd(page: Page): Promise<void> {
     .poll(() => threadComposer(page).evaluate((el) => document.activeElement === el))
     .toBe(true);
   const state = await threadComposer(page).evaluate((el) => {
+    const area = el as HTMLTextAreaElement;
+    return { caret: area.selectionStart, end: area.selectionEnd, length: area.value.length };
+  });
+  expect(state.caret).toBe(state.length);
+  expect(state.end).toBe(state.length);
+}
+
+/** Talk about keeps the main chat: its composer owns focus, caret at the end. */
+async function expectMainFocusedAtEnd(page: Page): Promise<void> {
+  await expect
+    .poll(() => composer(page).evaluate((el) => document.activeElement === el))
+    .toBe(true);
+  const state = await composer(page).evaluate((el) => {
     const area = el as HTMLTextAreaElement;
     return { caret: area.selectionStart, end: area.selectionEnd, length: area.value.length };
   });
@@ -253,7 +266,7 @@ test.describe('laptop', () => {
     await page.mouse.up();
     await page.waitForTimeout(300);
     await expect(page.getByRole('button', { name: /^Talk about/ })).toHaveCount(0);
-    await expectFocusedAtEnd(page);
+    await expectMainFocusedAtEnd(page);
   });
 
   test('card hold with the mouse moved off the card still focuses the composer', async ({
@@ -273,8 +286,8 @@ test.describe('laptop', () => {
     await page.mouse.move(box.x + box.width + 40, box.y - 40, { steps: 4 });
     await page.mouse.up();
     await expect(page.getByRole('menu')).toHaveCount(0);
-    // L3: Talk about opens the card's thread, its composer focused.
-    await expectFocusedAtEnd(page);
+    // Talk about stays in the main chat: its composer is focused.
+    await expectMainFocusedAtEnd(page);
     await expect(composer(page)).toHaveValue('about ');
   });
 });
@@ -296,7 +309,7 @@ test.describe('iPhone, cards and threads', () => {
     await settle(page, card);
     await hold(page, card);
     await expect(page.getByRole('menu')).toHaveCount(0);
-    await expectFocusedAtEnd(page);
+    await expectMainFocusedAtEnd(page);
   });
 
   test('sheet Talk about focuses the composer', async ({ page }) => {
@@ -308,7 +321,7 @@ test.describe('iPhone, cards and threads', () => {
     await expect(talk).toBeVisible();
     await talk.click();
     await expect(talk).toHaveCount(0);
-    await expectFocusedAtEnd(page);
+    await expectMainFocusedAtEnd(page);
   });
 
   test('Reply inside the thread view focuses the view composer', async ({ page }) => {

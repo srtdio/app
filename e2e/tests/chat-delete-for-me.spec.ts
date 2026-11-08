@@ -361,7 +361,8 @@ test('an own voice note uploading: the ring in the play slot, the real bars at r
 
   const note = page.getByTestId('voice-uploading');
   await expect(note).toBeVisible();
-  await expect(note).toHaveAttribute('data-voice-side', 'own');
+  // L1: own rows look the same as everyone's (no own bubble inks).
+  await expect(note).toHaveAttribute('data-voice-side', 'received');
   // The ring sits inside the 44px play slot, in the bubble's inks.
   const slot = note.locator('[data-voice-play-slot="upload"]');
   await expect(slot).toBeVisible();
@@ -387,13 +388,13 @@ test('an own voice note uploading: the ring in the play slot, the real bars at r
   // The upload lands: the ring goes, play shows, the bars are at full emphasis.
   held.release();
   await expect(page.getByTestId('voice-uploading')).toHaveCount(0, { timeout: 20_000 });
-  const sent = page.locator('[data-voice-side="own"]').last();
+  const sent = page.locator('[data-voice-note]').last();
   await expect(sent.locator('[data-voice-bars]')).not.toHaveClass(/opacity-\[\.45\]/);
   expect(network.blocked).toEqual([]);
 });
 
 // Swipe both ways on a chat row (iPhone only; a mouse never swipes): right =
-// Reply, left = the long-press menu's Delete (the same delete sheet). The
+// Reply (opens the message's thread, L14), left = the long-press menu's Delete (the same delete sheet). The
 // whole row is the grab area, own rows exactly as freely as others'. A row
 // whose menu has no Delete (a tombstone) rubber-bands and opens nothing.
 
@@ -432,18 +433,20 @@ async function swipeRow(
   await target.dispatchEvent('pointerup', ev(x0 + sign * 100));
 }
 
-const composerArea = (page: Page): Locator => page.locator('form textarea').first();
+/** L14: swipe right opens the message's thread; its composer reads "Reply". */
+const threadComposerArea = (page: Page): Locator =>
+  page.locator('[data-thread-view] form textarea').first();
 
 test.describe('swipe both ways on a chat row', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) >= 768, 'touch only: a mouse never swipes');
 
-  test('own message: swipe right opens the reply bar', async ({ page }) => {
+  test('own message: swipe right opens its thread', async ({ page }) => {
     const network = await installHarnessNetwork(page);
     seedFreshOwnMessage(network);
     await openDm(page, row(page, FRESH_OWN_ID));
 
     await swipeRow(page, row(page, FRESH_OWN_ID).locator('[data-bubble]').first(), 'right');
-    await expect(composerArea(page)).toHaveAttribute('placeholder', /^Reply/);
+    await expect(threadComposerArea(page)).toHaveAttribute('placeholder', 'Reply');
     await expect(page.getByRole('menu')).toHaveCount(0);
     await expect(page.getByTestId('delete-sheet')).toHaveCount(0);
     expect(network.blocked).toEqual([]);
@@ -505,12 +508,12 @@ test.describe('swipe both ways on a chat row', () => {
     await expect(undoStrip(page, 'Deleted for you')).toBeVisible();
   });
 
-  test("someone else's message: swipe right still replies", async ({ page }) => {
+  test("someone else's message: swipe right opens its thread", async ({ page }) => {
     const network = await installHarnessNetwork(page);
     const peer = newestPeerRow(network);
     await openDm(page, row(page, peer.id));
     await swipeRow(page, row(page, peer.id).locator('[data-bubble]').first(), 'right');
-    await expect(composerArea(page)).toHaveAttribute('placeholder', /^Reply/);
+    await expect(threadComposerArea(page)).toHaveAttribute('placeholder', 'Reply');
     await expect(page.getByTestId('delete-sheet')).toHaveCount(0);
   });
 

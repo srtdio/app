@@ -191,7 +191,8 @@ export function repliesInfoByRoot(
 ): Map<string, RepliesInfo> {
   const byRoot = new Map<string, ThreadMessage[]>();
   for (const m of messages) {
-    if (isTopLevel(m) || m.deleted === true) continue;
+    // A refused (failed) reply never counts, like localReplyCounts.
+    if (isTopLevel(m) || m.deleted === true || m.state === 'failed') continue;
     const root = threadRootOf(m);
     const list = byRoot.get(root);
     if (list === undefined) byRoot.set(root, [m]);

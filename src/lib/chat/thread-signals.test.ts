@@ -141,6 +141,8 @@ describe('L3: every reply is a thread; the main chat holds top-level messages on
         ...at(10),
       }),
       msg({ id: 'gone', threadRootId: 'root', senderUserId: 'ana', deleted: true, ...at(5) }),
+      // A refused reply never counts.
+      msg({ id: 'refused', threadRootId: 'root', senderUserId: 'me', state: 'failed', ...at(1) }),
     ];
     const info = repliesInfoByRoot(rows, (id) => id === 'root').get('root');
     expect(info?.count).toBe(4);

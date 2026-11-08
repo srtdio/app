@@ -7931,7 +7931,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               key={`thread:${view.rootId}`}
               expandTitle={viewTitle}
               inputRef={viewComposerInputRef}
-              focusOnMount={finePointer || viewFocus}
+              focusOnMount={finePointer}
+              focusForReply={viewFocus}
               onSend={viewSend}
               placeholder={THREAD_REPLY_PLACEHOLDER}
               onCancelReply={() => setViewReply(null)}

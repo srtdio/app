@@ -71,6 +71,8 @@ async function deleteFromMenu(page: Page, text: string): Promise<void> {
     await holdBubble(page, text);
     await expect(menu).toBeVisible({ timeout: 1_500 });
   }).toPass({ timeout: 10_000 });
+  // L10: Delete sits on the More actions page.
+  await menu.locator('[data-menu-item="more-actions"]').click();
   const remove = menu.locator('[data-menu-item="delete"]');
   expectMinTouchTarget(await remove.boundingBox());
   await remove.click();
