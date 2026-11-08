@@ -230,9 +230,13 @@ for (const photo of [true, false]) {
     // the user's own photo, round; their initials (no image) without one.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
-    const box = await picture.boundingBox();
-    expect(Math.round(box?.width ?? 0)).toBe(48);
-    expect(Math.round(box?.height ?? 0)).toBe(48);
+    // Polled: the photo landing re-renders the row for a frame, when a single
+    // read can find no box.
+    const size = async (): Promise<string> => {
+      const box = await picture.boundingBox();
+      return `${Math.round(box?.width ?? 0)}x${Math.round(box?.height ?? 0)}`;
+    };
+    await expect.poll(size).toBe('48x48');
     const tileAvatar = tile.locator('[data-avatar-role="card"]');
     await expect(tileAvatar).toHaveClass(/rounded-full/);
     await expect(tile.locator('img')).toHaveCount(photo ? 1 : 0);
@@ -242,7 +246,9 @@ for (const photo of [true, false]) {
     await expect(header).toHaveText('Only you can see this');
     const headAvatar = page.locator(HEADER_NOTES_AVATAR).first();
     await expect(headAvatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
-    expect(Math.round((await headAvatar.boundingBox())?.width ?? 0)).toBe(32);
+    await expect
+      .poll(async () => Math.round((await headAvatar.boundingBox())?.width ?? 0))
+      .toBe(32);
     await expect(page.locator('[data-contact-open]')).toHaveCount(0);
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });

@@ -1313,7 +1313,7 @@ export function Composer(props: ComposerProps): ReactElement {
     props.onTyping?.();
     requestAnimationFrame(() => {
       const area = textareaRef.current;
-      if (area === null) return;
+      if (area === null || area.value !== next.value) return;
       area.focus();
       area.setSelectionRange(next.caret, next.caret);
     });
@@ -1393,7 +1393,9 @@ export function Composer(props: ComposerProps): ReactElement {
         props.onTyping?.();
         requestAnimationFrame(() => {
           const el = textareaRef.current;
-          if (el === null) return;
+          // Typed since (a fast typist, a busy frame): the caret is already
+          // theirs; putting it back would land the next letters before them.
+          if (el === null || el.value !== edit.value) return;
           el.setSelectionRange(edit.caret, edit.caret);
         });
         return;
@@ -1676,6 +1678,8 @@ export function Composer(props: ComposerProps): ReactElement {
     const el = textareaRef.current;
     if (el !== null) {
       requestAnimationFrame(() => {
+        // Typed since the pick: the caret is already theirs.
+        if (el.value !== next.text) return;
         el.focus();
         el.setSelectionRange(next.caret, next.caret);
       });
@@ -1714,6 +1718,8 @@ export function Composer(props: ComposerProps): ReactElement {
     const el = textareaRef.current;
     if (el !== null) {
       requestAnimationFrame(() => {
+        // Typed since the pick: the caret is already theirs.
+        if (el.value !== next.text) return;
         el.focus();
         el.setSelectionRange(next.caret, next.caret);
       });
