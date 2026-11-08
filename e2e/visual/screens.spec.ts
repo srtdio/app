@@ -2949,6 +2949,9 @@ async function openCommentAuthorCard(page: Page): Promise<void> {
   await author.click();
   await waitFor([page.locator('[data-person-card-message]')], 'inline message card');
   await waitFor([page.locator('[data-person-context]')], 'context line');
+  // The open moves focus: a writing box that lost it collapses on its 200ms
+  // blur fallback (ui/WritingBox), a timer stabilise does not see. Shoot after it.
+  await page.waitForTimeout(300);
 }
 
 /** The DM header's photo: the photo-only viewer opens. */
