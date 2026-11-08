@@ -1703,10 +1703,15 @@ export function isTimeGap(
   return next.time - prev.time >= RUN_GAP_MS;
 }
 
+/** L1 (8 Nov 2026): one sender's messages within 5 minutes share one photo and name. */
+export const SENDER_GROUP_MS = 5 * 60 * 1000;
+
 /**
- * Whether `next` starts a new run after `prev`: a switch between own and peer, a
- * different peer sender, or a gap of 10 minutes or more. A day change also breaks
- * a run; the caller knows the day pills and applies that separately.
+ * Whether `next` starts a new message group after `prev` (the work-chat layout,
+ * everyone on the left): a different sender (own vs peer, or another peer), or
+ * 5 minutes or more between them. A day change also breaks a group; the caller
+ * knows the day pills and applies that separately. Unusable times (0) never
+ * count as a gap.
  */
 export function breaksRun(
   prev: Pick<ThreadMessage, 'mine' | 'senderUserId' | 'time'> | undefined,
@@ -1715,5 +1720,6 @@ export function breaksRun(
   if (prev === undefined) return true;
   if (prev.mine !== next.mine) return true;
   if (!prev.mine && prev.senderUserId !== next.senderUserId) return true;
-  return isTimeGap(prev, next);
+  if (!(prev.time > 0) || !(next.time > 0)) return false;
+  return next.time - prev.time >= SENDER_GROUP_MS;
 }

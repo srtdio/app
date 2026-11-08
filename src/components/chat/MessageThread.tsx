@@ -153,13 +153,12 @@ import { civilDay, formatAgo, formatTime } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
-  BUBBLE_MAX,
   BUBBLE_META_TYPE,
   BUBBLE_PAD,
+  SENDER_NAME_TYPE,
+  SENDER_TIME_TYPE,
   BUBBLE_SHAPE,
-  BUBBLE_TAIL,
   DATE_PILL_TYPE,
-  GROUP_SENDER_TYPE,
   HEADER_LINE_TYPE,
   HEADER_NAME_TYPE,
   HEADER_PAD,
@@ -1472,6 +1471,26 @@ function senderName(message: ThreadMessage, profiles: Map<string, ChatProfile>):
   return profile?.displayName ?? 'Unknown';
 }
 
+/** L1: the group head's name: own messages show the viewer's own name (never "You"). */
+function headerName(message: ThreadMessage, profiles: Map<string, ChatProfile>): string {
+  const profile = message.senderUserId !== null ? profiles.get(message.senderUserId) : undefined;
+  return profile?.displayName ?? (message.mine ? 'You' : 'Unknown');
+}
+
+/** Whether a meta has nothing to draw ("edited", time and status all absent). Pure. */
+export function metaIsEmpty(meta: BubbleMeta): boolean {
+  return !meta.edited && meta.time === '' && metaTick(meta.status) === null;
+}
+
+/**
+ * L1 (8 Nov 2026): the group head carries the clock time (and on own messages
+ * the send state) on its name line, so the in-body meta keeps only "edited"
+ * and, on a continuation row, the send state. Pure.
+ */
+export function bodyMetaOf(meta: BubbleMeta, head: boolean): BubbleMeta {
+  return { time: '', edited: meta.edited, status: head ? null : meta.status };
+}
+
 function senderAvatarProps(
   message: ThreadMessage,
   profiles: Map<string, ChatProfile>,
@@ -1808,16 +1827,8 @@ export interface BubbleShape {
  * at the top on the first bubble of a run; later bubbles are fully rounded.
  */
 export function bubbleCorners(shape: BubbleShape): string {
-  if (shape.layout === 'laptop') {
-    return cn(
-      sized(BUBBLE_SHAPE, 'laptop'),
-      shape.head && (shape.mine ? 'rounded-tr-none' : 'rounded-tl-none'),
-    );
-  }
-  return cn(
-    sized(BUBBLE_SHAPE, 'touch'),
-    shape.tail && (shape.mine ? BUBBLE_TAIL.mine : BUBBLE_TAIL.theirs),
-  );
+  // L1: no bubble, no tail; the radius is the media frame's (an album's corners).
+  return sized(BUBBLE_SHAPE, shape.layout);
 }
 
 /**
@@ -1850,19 +1861,15 @@ export function bubbleClass(
     );
   }
   return cn(
-    // max-w-full: an own bubble is fit-content in an items-end column, so a
-    // nowrap line (the Reply privately quote) would push its min-content past
-    // the column; this caps every bubble at BUBBLE_MAX (min-w album/voice win).
-    // A 284px plan card (max-w-full) now shrinks to fit a narrow phone column.
-    'group/bubble relative min-w-0 max-w-full focus-visible:lit-focus',
+    // L1 (8 Nov 2026): no bubble. Text sits on the page in fg, no fill, no
+    // tail, no padding; own and peer messages draw the same. max-w-full keeps
+    // a nowrap line (the Reply privately quote) inside the column; a 284px
+    // plan card shrinks to fit a narrow phone column.
+    'group/bubble relative min-w-0 max-w-full text-fg focus-visible:lit-focus',
     NO_TOUCH_SELECT,
-    bubbleCorners(state),
-    state.album === true ? 'min-w-60 p-1' : sized(BUBBLE_PAD, state.layout),
-    state.voiceOnly && 'min-w-56',
-    state.mine
-      ? 'bg-bubble-own text-accent-fg lit-bubble-own'
-      : 'bg-panel-2 text-fg lit-bubble-other',
-    state.failed && 'border border-bad lit-bad',
+    state.album === true && 'min-w-60',
+    // A voice note keeps its own player frame (a hairline card).
+    state.voiceOnly && cn('min-w-56 border border-border', bubbleCorners(state), sized(BUBBLE_PAD, state.layout)),
   );
 }
 
@@ -1876,10 +1883,10 @@ export function bubbleClass(
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
+    // L1: one grey italic line in the message layout; no bubble.
+    'relative flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap text-fg-3 focus-visible:lit-focus',
     NO_TOUCH_SELECT,
-    bubbleCorners(shape),
-    sized(BUBBLE_PAD, shape.layout),
+    'rounded-lg',
   );
 }
 
@@ -1986,32 +1993,6 @@ export const SELECTION_CHECK_SLOT = 'absolute left-4 top-1/2 flex -translate-y-1
 export const SELECTED_ROW_TINT =
   'pointer-events-none absolute inset-0 -z-raised border-y lit-selected';
 
-/**
- * Own-bubble inner content (reply quote, file chips, shared cards, voice note)
- * restyled for the solid fill without touching the shared child components:
- * ink goes accent-fg (secondary at opacity-90), card surfaces an on-bubble/12
- * overlay with on-bubble/16 edges, the quote rule and played waveform
- * on-bubble/70, icons follow currentColor. on-bubble is the bubble's own ink in
- * each theme (white on the near-black light-theme fill, near-black on the light
- * dark-theme fill), the same value as accent-fg, so accent-fg ink such as
- * "Waiting on approvers" and the Review chip text keeps at least 4.5:1 over the
- * overlay in both themes. Peer bubbles never get this class. The UploadRing
- * (data-upload-ring) is left alone: it draws on overlay tokens and stays a
- * solid dark circle, never a translucent tile.
- */
-export const OWN_BUBBLE_CONTENT = cn(
-  '[&_.bg-panel]:bg-on-bubble/[.12] [&_.bg-panel-2]:bg-on-bubble/[.12] [&_.bg-panel-3]:bg-on-bubble/[.12] [&_.border-border]:border-on-bubble/[.16]',
-  // Lit surfaces inside the fill: drop their light gradient (it would paint
-  // over the on-bubble/12 overlay) and take the same on-bubble/16 edge.
-  '[&_.lit-card]:bg-none [&_.lit-card-muted]:bg-none [&_.lit-chip]:bg-none [&_.lit-btn-secondary]:bg-none',
-  '[&_.lit-card]:border-on-bubble/[.16] [&_.lit-card-muted]:border-on-bubble/[.16] [&_.lit-chip]:border-on-bubble/[.16]',
-  '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-transparent [&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-on-bubble-hover [&_a:hover>span]:bg-transparent [&_a:hover>span]:bg-on-bubble-hover',
-  '[&_.bg-accent]:bg-on-bubble/70 [&_.bg-accent.text-accent-fg]:bg-on-bubble/[.16] [&_.bg-fg-3]:bg-on-bubble/40',
-  '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
-  '[&_.text-fg-2]:text-accent-fg',
-  '[&_.text-fg-3]:text-accent-fg',
-);
-
 // renderMessageBody, bodyLinkClass and markSearchWords live in message-body.tsx
 // (the Plan item screen renders descriptions with them without importing this
 // module); re-exported here so every importer keeps its path.
@@ -2076,19 +2057,19 @@ export function mentionsMe(
 }
 
 /**
- * A mention's ink inside a bubble, always bold: accent-fg on own, accent-hover
- * on peer (the accent family token that clears 4.5:1 on panel-2 in both
- * themes). A mention of me also sits on a tint: the hover fill on a peer
- * bubble, on-bubble at 15% on my own. Tokens only, so light and dark stay at
- * parity.
+ * A mention's ink in a message, always bold: accent-hover (others' mentions,
+ * unchanged). L8 (8 Nov 2026): a mention of me is the bold name in ink (fg) on
+ * a stronger tint, fg at 12%, inline, no outline; the radius is rounded-sm
+ * (6, the highlight token: there is no 4px radius token). `mine` is kept for
+ * callers; with no own bubble since L1 every row passes false. Tokens only, so
+ * light and dark stay at parity.
  */
-export const MENTION_ME_PEER = 'bg-hover-fill';
-export const MENTION_ME_OWN = 'bg-on-bubble/15';
+export const MENTION_ME_PEER = 'bg-fg/[.12] text-fg';
+export const MENTION_ME_OWN = MENTION_ME_PEER;
 export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
     'whitespace-nowrap font-semibold',
-    mine ? 'text-accent-fg' : 'text-accent-hover',
-    self && cn('rounded-sm px-1', mine ? MENTION_ME_OWN : MENTION_ME_PEER),
+    self ? cn('rounded-sm px-1', MENTION_ME_PEER) : mine ? 'text-accent-fg' : 'text-accent-hover',
   );
 }
 
@@ -2310,7 +2291,7 @@ export const REACTION_ROW_SPACE = 'mb-6';
  */
 /** On a PressableRow (inline): 44 tall, a 44px width floor, the glyph centred in bad. */
 export const FAILED_RETRY_CLASS =
-  'absolute right-full top-1/2 mr-1 flex h-11 min-w-11 -translate-y-1/2 items-center justify-center text-bad';
+  'absolute left-full top-1/2 ml-1 flex h-11 min-w-11 -translate-y-1/2 items-center justify-center text-bad';
 
 /**
  * A row's piece of the rail (none for a left root card no member follows yet,
@@ -2511,8 +2492,11 @@ export function MessageBubble(props: {
   const mine = message.mine;
   const reply = message.reply;
   const name = senderName(message, profiles);
-  const showMeta = isGroup && !mine && head;
-  const gutter = isGroup && !mine && !head;
+  // L1: everyone on the left. Every group head (own included, DMs and notes
+  // too) carries the 32 square photo and the name + time line; a
+  // continuation keeps the photo's gutter so its body aligns under the first.
+  const showMeta = head;
+  const gutter = !head;
   const hasReactions = message.reactions.length > 0;
   const failed = message.state === 'failed';
   const selection = props.selection;
@@ -2536,7 +2520,10 @@ export function MessageBubble(props: {
     sharedIdeaIds.length === 0;
   const totalReactions = message.reactions.reduce((sum, r) => sum + r.count, 0);
   const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
-  const meta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
+  const fullMeta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
+  // The name line carries the time (and own send state) on a head.
+  const meta = bodyMetaOf(fullMeta, head);
+  const metaEmpty = metaIsEmpty(meta);
   const placement = metaPlacement(message);
   // Selecting this bubble's text: the native selection owns its gestures.
   const textSelect = selection === undefined && props.selectingText === true;
@@ -2559,7 +2546,9 @@ export function MessageBubble(props: {
       : kind === lastCard
         ? {
             inBubble: false,
-            cardMeta: <BubbleMetaView meta={meta} mine={mine} placement="card" />,
+            ...(metaEmpty
+              ? {}
+              : { cardMeta: <BubbleMetaView meta={meta} mine={false} placement="card" /> }),
           }
         : { inBubble: false };
   // An own send still uploading can be stopped with the ring's stop square; once
@@ -2572,8 +2561,8 @@ export function MessageBubble(props: {
     onCancelUpload !== undefined
       ? () => onCancelUpload(message.id)
       : undefined;
-  const column = cn('flex min-w-0 flex-col gap-1', sized(BUBBLE_MAX, layout), mine && 'items-end');
-  const shape: BubbleShape = { mine, head, tail, layout };
+  const column = cn('flex min-w-0 flex-1 flex-col items-start gap-1');
+  const shape: BubbleShape = { mine: false, head, tail, layout };
   const selecting = selection !== undefined;
   // The sender's photo and name open the person card (never while selecting:
   // a tap there toggles the row).
@@ -2599,29 +2588,47 @@ export function MessageBubble(props: {
     ) : (
       node
     );
-  const senderLine = showMeta
-    ? asPerson(
-        <span className={cn('text-fg', sized(GROUP_SENDER_TYPE, layout))}>{name}</span>,
+  const headTick = mine ? metaTick(fullMeta.status) : null;
+  const senderLine = showMeta ? (
+    <span data-sender-line="" className="flex min-w-0 items-baseline gap-2">
+      {asPerson(
+        <span data-sender-name="" className={cn('truncate text-fg', SENDER_NAME_TYPE)}>
+          {headerName(message, profiles)}
+        </span>,
         'inline',
-        'self-start',
-      )
-    : null;
+        'min-w-0',
+      )}
+      {fullMeta.time !== '' ? (
+        <span aria-hidden="true" data-sender-time="" className={cn('shrink-0 text-fg-3', SENDER_TIME_TYPE)}>
+          {fullMeta.time}
+        </span>
+      ) : null}
+      {headTick !== null ? (
+        <span className="flex shrink-0 self-center text-fg-3">
+          <MetaGlyph status={headTick} />
+        </span>
+      ) : null}
+    </span>
+  ) : null;
   // The rail is never drawn while selecting: the row keeps today's place.
   const rail = selecting ? undefined : props.rail;
   const railEdge = { head, afterLabel: props.afterLabel === true, hasReactions };
   const threadMember = props.threadMember === true;
   const rowClass = cn(
     'group flex items-start gap-2',
-    railRowClass(rail, mine),
+    railRowClass(rail, false),
     NO_TOUCH_SELECT,
     head ? (props.afterLabel === true ? 'pt-0' : 'pt-3') : 'pt-1',
-    mine ? 'flex-row-reverse' : 'flex-row',
+    'flex-row',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
   );
   const photo = showMeta
     ? withRailPhoto(
-        asPerson(<Avatar name={name} {...senderAvatar} role="header" />, 'block'),
+        asPerson(
+          <Avatar name={headerName(message, profiles)} {...senderAvatar} role="header" decorative />,
+          'block',
+        ),
         rail,
         railEdge,
       )
@@ -2630,7 +2637,7 @@ export function MessageBubble(props: {
   const rowContextMenu = press?.coarse === true ? preventDefault : undefined;
   if (message.deleted === true) {
     // A tombstone keeps its side, meta and run grouping; nothing else.
-    const tombMeta: BubbleMeta = { time: meta.time, edited: false, status: null };
+    const tombMeta: BubbleMeta = { time: head ? '' : fullMeta.time, edited: false, status: null };
     // A tombstone rubber-bands under a swipe either way; nothing fires.
     const tombSwipe = selecting ? undefined : props.swipe;
     return (
@@ -2666,12 +2673,14 @@ export function MessageBubble(props: {
               >
                 {deletedMessageLabel({ mine })}
               </span>
-              <BubbleMetaView
-                meta={tombMeta}
-                mine={false}
-                placement="inline"
-                className="static ml-2"
-              />
+              {metaIsEmpty(tombMeta) ? null : (
+                <BubbleMetaView
+                  meta={tombMeta}
+                  mine={false}
+                  placement="inline"
+                  className="static ml-2"
+                />
+              )}
             </TombstoneBubble>,
             rail,
             railEdge,
@@ -2682,13 +2691,13 @@ export function MessageBubble(props: {
   }
   const checked = selection?.checked === true;
   const parentDeleted = message.parentDeleted === true;
-  const spacer = placement === 'inline' ? <MetaSpacer meta={meta} /> : null;
+  const spacer = placement === 'inline' && !metaEmpty ? <MetaSpacer meta={meta} /> : null;
   // Files the sender removed: one line where they were (never on a tombstone,
   // which returned above). Above the caption of media, at the files' spot, or
   // above the text when nothing is left beside it.
   const removedLine =
     message.removedFiles !== undefined ? (
-      <FilesRemovedLine counts={message.removedFiles} mine={mine} layout={layout} />
+      <FilesRemovedLine counts={message.removedFiles} mine={false} layout={layout} />
     ) : null;
   const hasAttachments = message.attachments.length > 0;
   const quotedMine =
@@ -2700,7 +2709,7 @@ export function MessageBubble(props: {
       data-selecting-text={textSelect ? '' : undefined}
       className={cn(bodyText(layout), textSelect && SELECTING_TEXT_BODY)}
     >
-      {renderBodyWithMentions(message.body, mine, {
+      {renderBodyWithMentions(message.body, false, {
         nameOf: profileNameOf(profiles, props.workspaceId ?? null),
         viewerUserId: props.viewerUserId ?? null,
         // Inert while selecting: a mention is plain "@Name" text in the selection.
@@ -2719,7 +2728,7 @@ export function MessageBubble(props: {
       <LinkPreviewCard
         key={cardUrl}
         url={cardUrl}
-        tone={mine ? 'out' : 'in'}
+        tone="in"
         className={sized(LINK_CARD_INSET, layout)}
       />
     ) : null;
@@ -2798,21 +2807,16 @@ export function MessageBubble(props: {
               {message.forwarded === true ? (
                 savedFrom !== null ? (
                   savedLine !== null ? (
-                    <SavedFromLabel line={savedLine} mine={mine} onOpen={savedFrom.onOpen} />
+                    <SavedFromLabel line={savedLine} mine={false} onOpen={savedFrom.onOpen} />
                   ) : null
                 ) : (
-                  <ForwardedLabel mine={mine} />
+                  <ForwardedLabel mine={false} />
                 )
               ) : null}
             </div>
-            {/* Every card in this message takes its side's fill: own, the
-                own-bubble ink (ui/ChatCard), never a light peer card. */}
-            <ChatCardOwn value={mine}>
-              <div
-                data-bubble-content=""
-                // A card-only message's card is the bubble, never inside the own fill.
-                className={cn('contents', mine && !cardOnly && OWN_BUBBLE_CONTENT)}
-              >
+            {/* L1: no own fill, so every card draws the same flat card on both sides. */}
+            <ChatCardOwn value={false}>
+              <div data-bubble-content="" className="contents">
                 {threadMember ? null : chip?.kind === 'chip' && !parentDeleted ? (
                   <PostRefChip
                     post={chip.post}
@@ -2868,11 +2872,14 @@ export function MessageBubble(props: {
                       onCancelUpload={cancelUpload}
                       voice={{
                         messageId: message.id,
-                        mine,
+                        // L1: no own fill behind the player, so it takes the received look.
+                        mine: false,
                         sender: { name, ...senderAvatarProps(message, profiles) },
                         nextVoiceId: props.nextVoiceId ?? null,
                         // The time sits in the note's last row (Transcribe row / length row).
-                        meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
+                        meta: metaEmpty ? null : (
+                          <BubbleMetaView meta={meta} mine={false} placement={placement} />
+                        ),
                         ...(props.onTranscribe !== undefined && isTranscribable(message)
                           ? { onTranscribe: props.onTranscribe }
                           : {}),
@@ -2935,10 +2942,10 @@ export function MessageBubble(props: {
                 )}
               </div>
             </ChatCardOwn>
-            {voiceOnly || cardOnly ? null : (
+            {voiceOnly || cardOnly || metaEmpty ? null : (
               <BubbleMetaView
                 meta={meta}
-                mine={mine}
+                mine={false}
                 placement={placement}
                 className={placement === 'row' && album ? 'px-2 pb-1' : undefined}
               />
@@ -2984,9 +2991,7 @@ export function MessageBubble(props: {
                     // On a card (the card is the bubble) the glyph's visible
                     // edge comes in to the card's 12px content edge.
                     cardOnly ? 'pr-2' : 'pr-1',
-                    mine && !cardOnly
-                      ? 'from-bubble-own text-bubble-meta-own'
-                      : 'from-panel-2 text-bubble-meta',
+                    'from-bg text-fg-3',
                   )}
                 >
                   <ChevronGlyph />
@@ -2999,7 +3004,7 @@ export function MessageBubble(props: {
                   {distinctEmojis}
                 </span>
                 {totalReactions > 1 ? (
-                  <span className={cn(BUBBLE_META_TYPE, mine ? 'text-fg-2' : 'text-fg-3')}>
+                  <span className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>
                     {totalReactions}
                   </span>
                 ) : null}

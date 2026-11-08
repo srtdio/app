@@ -192,10 +192,14 @@ describe('T8 tray and emoji button by pointer', () => {
 });
 
 describe('reading layer elements', () => {
-  it('divider and pill read "N unread" with mono digits', () => {
+  // L7: the "New" line: thick ink rule + ink "New" pill on the right, no "N unread".
+  it('the New line is a thick ink rule with an ink New pill; the pill reads "N unread"', () => {
     const divider = renderToStaticMarkup(<UnreadDivider count={5} />);
-    expect(divider).toContain('font-mono');
-    expect(divider).toContain('5 unread');
+    expect(divider).toContain('data-new-pill');
+    expect(divider).toContain('h-0.5 flex-1 bg-fg');
+    expect(divider).toContain('bg-fg px-2 text-xs font-semibold text-bg');
+    expect(divider.replace(/<[^>]*>/g, '').trim()).toBe('New');
+    expect(divider).toContain('aria-label="New, 5 unread"');
     const pill = renderToStaticMarkup(<UnreadPill count={5} visible onJump={() => undefined} />);
     expect(pill).toContain('h-11');
     expect(pill).toContain('font-mono');
@@ -218,8 +222,10 @@ describe('reading layer elements', () => {
     expect(none).not.toContain('data-count-badge');
   });
 
-  it('Seen line is 11/14 muted with a sans tabular time', () => {
+  it('Seen line is 11/14 muted with a sans tabular time, left-aligned (L1)', () => {
     const html = renderToStaticMarkup(<SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" />);
+    expect(html).toContain('justify-start pl-14');
+    expect(html).not.toContain('justify-end');
     expect(html).toContain('text-xs');
     expect(html).toContain('Seen');
     expect(html).toContain('font-sans tabular-nums');

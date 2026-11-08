@@ -61,6 +61,12 @@ export const GROUP_SENDER_TYPE: ChatSize = {
   laptop: 'text-md font-medium',
 };
 
+/** L1: a message group's name line: 13/18 (md), 600 on both, fg. */
+export const SENDER_NAME_TYPE = 'text-md font-semibold';
+
+/** L1: the clock time beside the name: 12/16 (sm), 400, mono tabular (the time rule). */
+export const SENDER_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
+
 /** A bubble's reply quote author: 13/18 (md), 600 touch, 500 laptop. */
 export const QUOTE_AUTHOR_TYPE: ChatSize = {
   touch: 'text-md font-semibold',
@@ -154,12 +160,6 @@ export const BUBBLE_SHAPE: ChatSize = {
   touch: 'rounded-[18px]',
   laptop: 'rounded-xl',
 };
-
-/** The touch bubble's 4px tail corner, bottom right on own, bottom left on peer. */
-export const BUBBLE_TAIL = {
-  mine: 'rounded-br-[4px]',
-  theirs: 'rounded-bl-[4px]',
-} as const;
 
 /** Bubble padding: 8/12 touch, 8 laptop. */
 export const BUBBLE_PAD: ChatSize = {

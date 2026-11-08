@@ -13,7 +13,7 @@ vi.mock('agora-chat', () => ({
 import { searchChips } from '@/components/chat/ChannelList';
 import { TEXT_ROLE } from '@/components/ui/Text';
 import { QUICK_REACTIONS } from '@/components/chat/MessageActionMenu';
-import { mentionClass, OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
+import { mentionClass } from '@/components/chat/MessageThread';
 import { holdTipView } from '@/components/chat/ThreadHoldTip';
 import { DATE_PILL_TYPE } from '@/components/chat/chat-type';
 import { SEARCH_MARK_CLASS } from '@/components/ui/SearchHighlight';
@@ -23,10 +23,6 @@ const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
 describe('chat visual pass', () => {
-  it('own-bubble cards remap the panel-2 fill, so the stage tag reads on indigo', () => {
-    expect(OWN_BUBBLE_CONTENT).toContain('[&_.bg-panel-2]:bg-on-bubble/[.12]');
-  });
-
   it('times and dates are mono: bubble time, day pill, list time', () => {
     expect(read('../MessageThread.tsx')).toMatch(
       /<span aria-hidden="true" className="font-mono">\s*\{meta\.time\}/,
@@ -101,7 +97,8 @@ describe('chat visual pass', () => {
   });
 
   it('quick reactions are all pictures', () => {
-    expect([...QUICK_REACTIONS]).toContain('👌');
+    expect([...QUICK_REACTIONS]).toContain('✅');
+    expect([...QUICK_REACTIONS]).not.toContain('👌');
     expect([...QUICK_REACTIONS]).not.toContain('🆗');
   });
 

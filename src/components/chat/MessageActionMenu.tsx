@@ -44,7 +44,8 @@ import { personFirstName } from '@/lib/person-card';
 import { errorText } from '@/lib/error-copy';
 
 /** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
-export const QUICK_REACTIONS = ['👍', '❤️', '😂', '👌', '🙏'] as const;
+// L9 (8 Nov 2026): ✅ replaces 👌. ✅ is a reaction only; it never means approval anywhere.
+export const QUICK_REACTIONS = ['👍', '✅', '❤️', '😂', '🙏'] as const;
 
 /** The "+" after the quick reactions: opens the full emoji picker. */
 export const MORE_REACTIONS_LABEL = 'More reactions';

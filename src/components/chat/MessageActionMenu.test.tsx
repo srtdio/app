@@ -322,7 +322,7 @@ describe('messageMenuItems: one level, row set per case', () => {
 
 describe('QUICK_REACTIONS', () => {
   it('is exactly the approved quick-react set, in order, followed by the "+"', () => {
-    expect([...QUICK_REACTIONS]).toEqual(['👍', '❤️', '😂', '👌', '🙏']);
+    expect([...QUICK_REACTIONS]).toEqual(['👍', '✅', '❤️', '😂', '🙏']);
     const buttons = rowButtons(row());
     expect(buttons.map((b) => b.props['aria-label'])).toEqual([
       ...QUICK_REACTIONS.map((e) => `React ${e}`),
