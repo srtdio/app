@@ -236,10 +236,12 @@ function dueOf(e: Entry): string | null {
 function AddRow(props: {
   disabled: boolean;
   calendar: TaskCalendar;
+  /** Text the field opens with (Add to Tasks from a message); nothing is added until +. */
+  initialText: string;
   onAdd: (title: string, priority: TaskPriority, dueOn: string | null) => void;
   onPickDate: (current: string | null, set: (dueOn: string) => void) => void;
 }): ReactElement {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(props.initialText.slice(0, TASK_TITLE_MAX));
   const [priority, setPriority] = useState<TaskPriority>(DEFAULT_PRIORITY);
   const choices = dayChoices(props.calendar);
   const today = choices[0]?.dueOn ?? null;
@@ -397,6 +399,8 @@ interface TaskSheetProps {
   seenMs: number | null;
   /** Opened for one task (a bell row): that row is brought into view. */
   focusTaskId: string | null;
+  /** Add to Tasks from a message: the add field opens holding this text, unsaved. */
+  prefill?: string | null | undefined;
   /** Share through the thread's send and forward; absent hides Share. */
   share?: TaskShareWiring;
   /** The workspace zone the due days read on (IANA). */
@@ -1022,6 +1026,9 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
                 </li>
               ) : null}
               <AddRow
+                // A fresh field each open, holding the prefill when there is one.
+                key={openedAt}
+                initialText={props.prefill ?? ''}
                 calendar={calendar}
                 disabled={side === null || draft.creates.length >= 50}
                 onPickDate={(current, set) => setPick({ current, set })}

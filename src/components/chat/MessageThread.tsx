@@ -198,7 +198,6 @@ import {
   shareSnapshot,
   tasksSeenKey,
   writeTasksSeen,
-  DEFAULT_PRIORITY,
   TASK_TITLE_MAX,
   type TaskEvent,
 } from '@/lib/chat/tasks';
@@ -2803,7 +2802,10 @@ function ThreadBody(
             },
           }
         : {}),
-      ...(m.deleted !== true ? { onMore: () => onOpenRow(m, null, null) } : {}),
+      // The sheet opens only with an anchor: the ⋮ button's own box.
+      ...(m.deleted !== true
+        ? { onMore: (from: HTMLElement) => onOpenRow(m, from.getBoundingClientRect(), null) }
+        : {}),
     };
   };
   const onSwipeReply = useStableCallback(props.onReply);
@@ -4200,7 +4202,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     open: boolean;
     focus: string | null;
     seenAtOpen: number | null;
-  }>({ open: false, focus: null, seenAtOpen: null });
+    prefill: string | null;
+  }>({ open: false, focus: null, seenAtOpen: null, prefill: null });
   const seenKey = taskChannel !== null ? tasksSeenKey(taskChannel) : null;
   const [seenMs, setSeenMs] = useState<{ key: string | null; ms: number | null }>(() => ({
     key: seenKey,
@@ -4211,11 +4214,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const taskUnseen = hasUnseenChanges(chatTasks.events, props.currentUserId ?? '', seenNow);
   const refetchTasks = chatTasks.refetch;
   const openTasks = useCallback(
-    (focus: string | null): void => {
+    (focus: string | null, prefill: string | null = null): void => {
       setTaskSheet({
         open: true,
         focus,
         seenAtOpen: seenKey !== null ? readTasksSeen(seenKey) : null,
+        prefill,
       });
       refetchTasks();
     },
@@ -4231,7 +4235,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   }, [seenKey]);
   // Leaving the chat closes its sheet.
   useEffect(() => {
-    setTaskSheet({ open: false, focus: null, seenAtOpen: null });
+    setTaskSheet({ open: false, focus: null, seenAtOpen: null, prefill: null });
   }, [taskChannel]);
   // One layer, one back step: back from the sheet is the thread.
   useHistoryStep(taskSheet.open, 'chatTasks', closeTasks);
@@ -5515,18 +5519,13 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       }
     });
   };
-  // L12: Add to Tasks: one task in this chat's Tasks list from the message's
-  // text (a file-only message: the file name), default priority, through the
-  // task save proc (chat_task_save_batch).
+  // L12: Add to Tasks (8 Nov 2026): opens this chat's Tasks sheet with the
+  // message's text (a file-only message: the file name) in the add field.
+  // Nothing is saved until the person adds it there.
   const addToTask = (message: ThreadMessage): void => {
     const title = taskTitleOf(message);
     if (title === '') return;
-    const side = viewerSide.side === 'client' ? 'client' : 'agency';
-    void chatTasks
-      .saveBatch({ creates: [{ title, priority: DEFAULT_PRIORITY, side }], edits: [], deletes: [] })
-      .then((outcome) =>
-        toast.show({ title: outcome.ok ? 'Added to Tasks' : errorText('add to Tasks', null) }),
-      );
+    openTasks(null, title);
   };
   // L13: Copy link: the open-chat-at-message route (a reply opens its thread
   // with the reply highlighted; membership is checked on open).
@@ -5904,6 +5903,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             }
             seenMs={taskSheet.seenAtOpen}
             focusTaskId={taskSheet.focus}
+            prefill={taskSheet.prefill}
             timeZone={props.timeZone}
             weekStartDay={workspaceWeekStart}
             {...(onForward !== undefined && forwardChannels !== undefined
