@@ -255,10 +255,9 @@ describe.runIf(RLS_SUITE)('chat threads: read points, Mark unread and threads fo
       .from('chat_unread_counters')
       .select('unread')
       .eq('channel_id', dm)
-      .eq('user_id', alice.id)
-      .single();
+      .eq('user_id', alice.id);
     expect(counter.error).toBeNull();
     // bob's root counts; alice's own reply does not.
-    expect((counter.data as { unread: number } | null)?.unread).toBe(1);
+    expect((counter.data as { unread: number }[] | null)?.[0]?.unread).toBe(1);
   });
 });
