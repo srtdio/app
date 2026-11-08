@@ -83,6 +83,8 @@ async function userSelect(target: Locator): Promise<string> {
 /** Select is a top-level row (the menu is one level). */
 async function pickSelect(page: Page): Promise<void> {
   await expect(menu(page).locator('[data-menu-item="more"]')).toHaveCount(0);
+  // L10: select-text sits on the More actions page.
+  await menu(page).locator('[data-menu-item="more-actions"]').click();
   await menu(page).locator('[data-menu-item="select-text"]').click();
   await expect(menu(page)).toHaveCount(0);
 }
@@ -144,7 +146,8 @@ test.describe('iPhone', () => {
     const viewport = page.viewportSize();
     if (viewport !== null) expect(panel.y + panel.height).toBeLessThanOrEqual(viewport.height);
     await expectMenuStyle(page);
-    await expect(menu(page).locator('[data-menu-item="select-text"]')).toBeVisible();
+    // L10: Select text sits on the More actions page.
+    await expect(menu(page).locator('[data-menu-item="more-actions"]')).toBeVisible();
     await expect(menu(page).locator('[data-menu-item="select"]')).toHaveCount(0);
   });
 
@@ -277,6 +280,8 @@ test.describe('iPhone', () => {
     const row = page.locator('[data-msg-id][data-state="sent"]', { hasText: line });
     await expect(row).toBeVisible();
     await hold(page, bubbleWith(page, line));
+    // L10: delete sits on the More actions page.
+    await menu(page).locator('[data-menu-item="more-actions"]').click();
     await menu(page).locator('[data-menu-item="delete"]').click();
     // Delete opens the delete sheet; a fresh own message offers Delete for everyone.
     await page.getByTestId('delete-sheet').locator('[data-delete-choice="everyone"]').click();

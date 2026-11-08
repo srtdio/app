@@ -93,6 +93,8 @@ async function openMenu(page: Page, target: Locator, menu: Locator): Promise<voi
 async function openDeleteSheet(page: Page, messageId: string): Promise<Locator> {
   const menu = page.getByRole('menu', { name: 'Message actions' });
   await openMenu(page, row(page, messageId).locator('[data-bubble]').first(), menu);
+  // L10: delete sits on the More actions page.
+  await menu.locator('[data-menu-item="more-actions"]').click();
   await menu.locator('[data-menu-item="delete"]').click();
   const sheet = page.getByTestId('delete-sheet');
   await expect(sheet).toBeVisible();

@@ -2797,7 +2797,8 @@ async function openGroupMessageMenu(page: Page): Promise<void> {
       break;
     }
   }
-  await waitFor(menuRow(page, /Reply privately/), 'Reply privately in the message menu');
+  // L10: Reply privately sits on the More actions page.
+  await waitFor(menuRow(page, /More actions/), 'More actions in the message menu');
 }
 
 SCREENS.push(
@@ -3416,6 +3417,8 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await openDmMessageMenu(page);
+      // L10: select-text sits on the More actions page.
+      await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
       await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
       await waitFor([page.locator('[data-selecting-text]')], 'select mode');
       await page.mouse.move(0, 0);
@@ -3538,6 +3541,8 @@ async function openDmMenuOn(page: Page, text: string): Promise<void> {
 /** The message menu's Delete: the delete sheet opens. */
 async function openDeleteSheetOn(page: Page, text: string): Promise<Locator> {
   await openDmMenuOn(page, text);
+  // L10: delete sits on the More actions page.
+  await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
   await tap([page.locator('[data-menu-item="delete"]')], 'menu Delete');
   return firstVisible([page.getByTestId('delete-sheet')], 'delete sheet');
 }

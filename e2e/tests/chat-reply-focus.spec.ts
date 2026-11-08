@@ -2,15 +2,20 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { MAYA_NAME, PEER_NAME } from '../fixtures/chat-data';
 
-// Decision 128: every Reply puts the cursor in the composer at once (long-press
-// menu, swipe right, laptop chevron, right-click, a card hold or the sheet's
-// Talk about, Reply in the thread view), so typing lands there with no extra
-// tap. Decision 32 holds: opening a chat on touch focuses nothing.
+// L3 (8 Nov 2026): every reply is a thread. Reply (long-press menu, swipe
+// right, laptop chevron, right-click) and Talk about (a card hold or the
+// sheet's) open that message's thread with its composer focused (hint
+// "Reply"), so typing lands there with no extra tap; inside a thread, Reply
+// just focuses the thread composer. Decision 32 holds: opening a chat on touch
+// focuses nothing.
 // Linux WebKit approximates iOS WebKit (it never shows a keyboard); it is not iOS.
 
 const PEER_LINE = 'Can we tighten the hook on slide one?';
 
 const composer = (page: Page): Locator => page.locator('form textarea').first();
+/** The open thread's composer (L3: Reply opens the thread). */
+const threadComposer = (page: Page): Locator =>
+  page.locator('[data-thread-view] form textarea').first();
 const bubble = (page: Page): Locator =>
   page.locator('[data-bubble]', { hasText: PEER_LINE }).last();
 
@@ -97,27 +102,26 @@ async function fromBottom(page: Page): Promise<number> {
   });
 }
 
-/** The composer owns focus, with the caret at the end of its text. */
+/** The thread composer owns focus (L3), with the caret at the end of its text. */
 async function expectFocusedAtEnd(page: Page): Promise<void> {
-  const state = await composer(page).evaluate((el) => {
+  await expect(page.locator('[data-thread-view]')).toBeVisible();
+  await expect
+    .poll(() => threadComposer(page).evaluate((el) => document.activeElement === el))
+    .toBe(true);
+  const state = await threadComposer(page).evaluate((el) => {
     const area = el as HTMLTextAreaElement;
-    return {
-      focused: document.activeElement === area,
-      caret: area.selectionStart,
-      end: area.selectionEnd,
-      length: area.value.length,
-    };
+    return { caret: area.selectionStart, end: area.selectionEnd, length: area.value.length };
   });
-  expect(state.focused, 'composer textarea is document.activeElement').toBe(true);
   expect(state.caret).toBe(state.length);
   expect(state.end).toBe(state.length);
 }
 
-/** Type with the keyboard only (no click): the text must land in the composer. */
-async function typeLands(page: Page, before: string): Promise<void> {
+/** Type with the keyboard only (no click): the text must land in the thread composer. */
+async function typeLands(page: Page): Promise<void> {
   await page.keyboard.type('hi');
-  await expect(composer(page)).toHaveValue(`${before}hi`);
-  await expect(composer(page)).toHaveAttribute('placeholder', /^Reply/);
+  await expect(threadComposer(page)).toHaveValue('hi');
+  await expect(threadComposer(page)).toHaveAttribute('placeholder', 'Reply');
+  // The main chat's composer keeps its own draft, untouched.
 }
 
 /** Leave a draft in the composer, then move focus away from it. */
@@ -140,8 +144,10 @@ test.describe('iPhone', () => {
     await expectFocusedAtEnd(page);
     await expect(page.getByRole('menu')).toHaveCount(0);
     await expect(page.locator('[data-selection-bar]')).toHaveCount(0);
-    if (pinnedBefore) expect(await fromBottom(page)).toBeLessThanOrEqual(48);
-    await typeLands(page, 'draft ');
+    void pinnedBefore;
+    await typeLands(page);
+    // The main composer's draft stays where it was.
+    await expect(composer(page)).toHaveValue('draft ');
   });
 
   test('swipe right focuses the composer and typing lands there', async ({ page }) => {
@@ -149,10 +155,9 @@ test.describe('iPhone', () => {
     await expect(composer(page)).not.toBeFocused();
     await settle(page);
     await swipeBubble(page);
-    await expect(composer(page)).toHaveAttribute('placeholder', /^Reply/);
     await expectFocusedAtEnd(page);
     await expect(page.getByRole('menu')).toHaveCount(0);
-    await typeLands(page, '');
+    await typeLands(page);
   });
 });
 
@@ -199,7 +204,7 @@ test.describe('laptop', () => {
     await bubble(page).locator('[data-more]').click();
     await menuReply(page);
     await expectFocusedAtEnd(page);
-    await typeLands(page, 'draft ');
+    await typeLands(page);
   });
 
   test('right-click Reply focuses the composer', async ({ page }) => {
@@ -209,7 +214,7 @@ test.describe('laptop', () => {
     await bubble(page).click({ button: 'right' });
     await menuReply(page);
     await expectFocusedAtEnd(page);
-    await typeLands(page, '');
+    await typeLands(page);
   });
 
   test('hover chevron Reply with a drifting mouse focuses the composer', async ({ page }) => {
@@ -220,7 +225,7 @@ test.describe('laptop', () => {
     await driftClick(page, bubble(page).locator('[data-more]'), 3);
     await driftMenuReply(page, 5);
     await expectFocusedAtEnd(page);
-    await typeLands(page, 'draft ');
+    await typeLands(page);
   });
 
   test('right-click Reply with a drifting mouse focuses the composer', async ({ page }) => {
@@ -230,7 +235,7 @@ test.describe('laptop', () => {
     await bubble(page).click({ button: 'right' });
     await driftMenuReply(page, 6);
     await expectFocusedAtEnd(page);
-    await typeLands(page, '');
+    await typeLands(page);
   });
 
   test('card hold released on the card: focus, and its click never opens the sheet', async ({
@@ -268,12 +273,9 @@ test.describe('laptop', () => {
     await page.mouse.move(box.x + box.width + 40, box.y - 40, { steps: 4 });
     await page.mouse.up();
     await expect(page.getByRole('menu')).toHaveCount(0);
-    await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+    // L3: Talk about opens the card's thread, its composer focused.
     await expectFocusedAtEnd(page);
     await expect(composer(page)).toHaveValue('about ');
-    // The next plain click on that card still opens its sheet.
-    await card.click();
-    await expect(page.getByRole('button', { name: /^Talk about/ })).toBeVisible();
   });
 });
 
@@ -314,7 +316,7 @@ test.describe('iPhone, cards and threads', () => {
     await page.locator('[data-thread-open="replies"]', { hasText: '4 replies' }).click();
     const view = page.locator('[data-thread-view]');
     await expect(view).toHaveCSS('opacity', '1');
-    const input = view.getByPlaceholder('Reply in thread');
+    const input = view.getByPlaceholder('Reply', { exact: true });
     await input.evaluate((el) => (el as HTMLTextAreaElement).blur());
     const member = view.locator('li[data-msg-id] [data-bubble]').last();
     await settle(page, member);

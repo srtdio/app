@@ -291,6 +291,8 @@ test('S4 edit a sent list: the box shows the raw prefixes, Save edit renders a l
   await expect(bubble.locator('[data-msg-body] ol > li')).toHaveText(['Alpha', 'Beta']);
 
   await openMessageMenu(page, bubble.locator('[data-bubble]').first());
+  // L10: edit sits on the More actions page.
+  await page.locator('[data-menu-item="more-actions"]').click();
   await page.locator('[data-menu-item="edit"]').click();
   // Edit puts the stored text back: the raw prefixes, never the drawn list.
   await expect(field).toHaveValue('1. Alpha\n2. Beta');
