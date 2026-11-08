@@ -426,7 +426,8 @@ describe('ui rules: one focus line', () => {
     '%s carries the one focus line (lit-focus outline)',
     (rel) => {
       const src = bySrc(rel);
-      expect(src).toContain('focus-visible:lit-focus');
+      // Chip draws it on its visible face (CHIP_HIT [&:focus-visible>span]:lit-focus).
+      expect(src).toMatch(/focus-visible(>span\])?:lit-focus/);
       expect(src).not.toContain('focus-visible:ring-');
     },
   );

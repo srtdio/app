@@ -16,7 +16,9 @@ describe('Help quick links', () => {
     const links = [...html.matchAll(/(<a [^>]*>)<span data-chip-face="" class="([^"]*)">([^<]*)</g)]
       .filter((m) => (m[1] ?? '').includes('data-help-quick-link=""'))
       .map((m) => ({
-        hit: /class="([^"]*)"/.exec(m[1] ?? '')?.[1] ?? '',
+        hit: (/class="([^"]*)"/.exec(m[1] ?? '')?.[1] ?? '')
+          .replace(/&amp;/g, '&')
+          .replace(/&gt;/g, '>'),
         face: m[2] ?? '',
         label: m[3],
       }));

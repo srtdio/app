@@ -302,7 +302,9 @@ describe('outline rules', () => {
   it('the shared controls carry the one focus line', () => {
     for (const rel of ['ui/Button.tsx', 'ui/IconButton.tsx', 'ui/Chip.tsx']) {
       const src = FILES.find((f) => f.rel === rel)?.src ?? '';
-      expect(src, rel).toContain('focus-visible:lit-focus');
+      // Chip draws it on its visible face ([&:focus-visible>span]:lit-focus, CHIP_HIT);
+      // its Clear pill is a ui/Button, which carries it.
+      expect(src, rel).toMatch(/focus-visible(>span\])?:lit-focus/);
     }
   });
 

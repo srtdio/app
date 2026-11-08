@@ -2521,9 +2521,8 @@ export function Comments({
   useLayoutEffect(() => {
     if (scrollEditorRef.current) {
       scrollEditorRef.current = false;
-      rootRef.current
-        ?.querySelector<HTMLElement>('[data-comment-editor]')
-        ?.scrollIntoView({ block: 'nearest' });
+      const editor = rootRef.current?.querySelector<HTMLElement>('[data-comment-editor]');
+      if (typeof editor?.scrollIntoView === 'function') editor.scrollIntoView({ block: 'nearest' });
     }
     const selector = revealSelector.current;
     if (selector === null) return;

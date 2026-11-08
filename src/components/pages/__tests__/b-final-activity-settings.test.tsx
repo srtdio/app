@@ -149,7 +149,7 @@ describe('Activity: the day line and the card with no trailing ⋯', () => {
     const head = page.slice(page.indexOf('data-activity-bucket-head=""'));
     expect(head).not.toContain('data-activity-mark-all');
     expect(page).toMatch(/<IconButton[\s\S]{0,120}?data-activity-mark-all=""/);
-    expect(page).toContain('useTopbarActions({ sort: sortNode, primary: markAllNode });');
+    expect(page).toContain('useTopbarActions({ primary: markAllNode });');
     expect(page).not.toContain('AvatarStack');
   });
 
