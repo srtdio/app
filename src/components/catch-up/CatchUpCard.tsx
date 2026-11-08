@@ -222,7 +222,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       data-catch-up-card={item.id}
       data-catch-up-kind={kind}
       {...props.gesture}
-      className="relative flex min-h-0 flex-1 touch-pan-y select-none flex-col overflow-hidden rounded-2xl border bg-panel"
+      className="lit-float relative flex min-h-0 flex-1 touch-pan-y select-none flex-col overflow-hidden rounded-2xl border bg-panel"
     >
       {props.typingRow ?? null}
       <div
