@@ -827,10 +827,10 @@ export async function withLinkCards(
 export { isSendKeydown };
 
 /**
- * Whether the composer's trailing control is the record-voice-note mic rather
- * than Send: only when attaching is possible and the composer is otherwise idle
- * and empty (no text, no pending attachments, no shared posts, not already
- * recording or processing a voice note).
+ * Whether the record-voice-note mic shows: beside Send in every state, typing
+ * included (8 Nov 2026), whenever attaching is possible and no voice note is
+ * being recorded or sent. Text, pending attachments and shared posts no longer
+ * hide it (the fields stay for every caller). Pure.
  */
 export function shouldShowMic(input: {
   hasUpload: boolean;
@@ -841,15 +841,7 @@ export function shouldShowMic(input: {
   recording: boolean;
   voiceBusy: boolean;
 }): boolean {
-  return (
-    input.hasUpload &&
-    !input.disabled &&
-    input.text.trim() === '' &&
-    input.attachmentCount === 0 &&
-    input.sharedPostCount === 0 &&
-    !input.recording &&
-    !input.voiceBusy
-  );
+  return input.hasUpload && !input.disabled && !input.recording && !input.voiceBusy;
 }
 
 /**
@@ -1102,8 +1094,6 @@ export function Composer(props: ComposerProps): ReactElement {
   // choice is not stored with the message (no field carries it), so the sent
   // bubble shows its card as usual.
   const [cardText, setCardText] = useState(restored.text);
-  // The attach tray is on screen: the bar takes lit-dock-joined under it.
-  const [trayShown, setTrayShown] = useState(false);
   const [dismissedCardUrl, setDismissedCardUrl] = useState<string | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => setCardText(text), DRAFT_CARD_DEBOUNCE_MS);
@@ -1801,7 +1791,8 @@ export function Composer(props: ComposerProps): ReactElement {
     text !== '' ||
     pending.length + library.length + sharedPosts.length + sharedBriefs.length > 0 ||
     editing !== undefined;
-  // The mic: a bare 36 key in the pill (phone) and in the laptop card while empty.
+  // The mic: a bare 36 key in the pill (phone) and beside Send in the card,
+  // typing included.
   const micKey = (
     <RowKey
       label="Record voice note"
@@ -1818,13 +1809,9 @@ export function Composer(props: ComposerProps): ReactElement {
         ref={formRef}
         onSubmit={submit}
         {...bottomAnchorProps}
-        className={cn(
-          'relative flex flex-col gap-2',
-          // The open tray keeps lit-dock; the bar under it joins without a seam.
-          trayShown
-            ? 'border-t bg-panel px-3 py-2 lit-dock-joined'
-            : 'border-t bg-panel px-3 py-2 lit-dock',
-        )}
+        // The + tray opens inside the writing box (its top), so the dock
+        // keeps one look.
+        className="relative flex flex-col gap-2 border-t bg-panel px-3 py-2 lit-dock"
       >
         {editing === undefined &&
         (pending.length > 0 ||
@@ -1923,8 +1910,9 @@ export function Composer(props: ComposerProps): ReactElement {
 
         {/* ui/WritingBox (chat mode): phone idle = the pill [+] Message [mic];
             focused or holding a draft = the card (text on top, + Aa emoji @ ...
-            send); laptop = the card always (mic while empty). The reply,
-            About, editing and Reply privately bars stack in its strip above. */}
+            mic send); laptop = the card always. The mic sits beside send in
+            every state. The reply, About, editing and Reply privately bars
+            stack in its strip above; the + tray opens as the box's top. */}
         <WritingBox
           mode="chat"
           laptop={laptopBox}
@@ -1934,6 +1922,7 @@ export function Composer(props: ComposerProps): ReactElement {
           onInsert={insertEmoji}
           expandTitle={props.expandTitle}
           pillEnd={showMic ? micKey : undefined}
+          mic={showMic ? micKey : undefined}
           overlay={pickers}
           strip={
             <>
@@ -2006,7 +1995,6 @@ export function Composer(props: ComposerProps): ReactElement {
                 draft={draftEnabled}
                 {...(props.tasks !== undefined ? { tasks: { unseen: props.tasks.unseen } } : {})}
                 plan={planEnabled}
-                onShownChange={setTrayShown}
                 onPick={(id) => {
                   // A voice note on its way: the tray opens nothing.
                   if (voiceBusy) return;
@@ -2098,8 +2086,6 @@ export function Composer(props: ComposerProps): ReactElement {
               >
                 <IconMic size={ICON_SIZE.control} />
               </Button>
-            ) : showMic && laptopBox ? (
-              micKey
             ) : (
               <RowSend
                 label={editing !== undefined ? 'Save edit' : 'Send'}

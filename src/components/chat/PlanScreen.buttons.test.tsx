@@ -59,7 +59,8 @@ describe('Plan screen buttons (design system)', () => {
     expect(item).not.toContain('rounded-full border px-3 text-md font-medium');
     expect(item).not.toContain('rounded-md px-2 text-lg font-medium text-accent');
     expect(item).toMatch(/variant="success"\s+data-plan-approve=""/);
-    expect(item).toMatch(/shape="round"[\s\S]*?data-plan-comment-send=/);
+    // The comment send is the writing box row's own key (ui/WritingBox RowSend).
+    expect(item).toMatch(/<RowSend[\s\S]*?data-plan-comment-send=/);
     const compose = read('PlanComposeScreen.tsx');
     expect(compose).not.toContain('rounded-xl border border-dashed');
     expect(compose).not.toContain('min-h-[50px]');

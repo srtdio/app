@@ -13,7 +13,7 @@ Grant hardening: TRUNCATE, TRIGGER, REFERENCES and MAINTAIN are revoked from ano
 
 1. Identity and access: users, user_private, brand_agency_requests, workspaces, workspace_members, workspace_client_domains, workspace_role_permissions, workspace_settings, workspace_onboarding, platform_operators
 2. Content: workspace_buckets, posts, post_versions, post_annotations
-3. Discussion: comments, comment_reactions
+3. Discussion: comments, comment_tasks, comment_reactions
 4. Briefs: briefs
 5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
@@ -290,6 +290,7 @@ Two primitives: Comments (here) and Chat (section 7). Both are recorded in Postg
 | resolution_note | text | nullable, 1 to 500 chars (comments_resolution_note_len_check); trimmed note stored by comment_resolve on a real open-to-resolved transition, cleared on reopen |
 | legacy_author_name | text | nullable, 1 to 120, frozen original author name for migrated v1 comments |
 | legacy_author_email | text | nullable, 3 to 320, original author email, used to reclaim authorship when that person later joins with the same email |
+| task_state | text | nullable, CHECK assigned / done. Set by comment_task_create ('assigned') and kept in step with the linked chat task by the chat_tasks_comment_sync trigger (done -> 'done', reopened -> 'assigned', task deleted -> null). Readable by every member who reads the comment (clients included); the task link itself is agency-only (comment_tasks) |
 | edited_at / deleted_at | timestamptz | nullable |
 | created_at | timestamptz | default now() |
 
@@ -310,6 +311,29 @@ Doctrine for client feedback on posts, layered on the comments table (applied vi
 - Edit clears the tick: comment_edit on a checkpoint enforces the word cap and clears resolved_at, resolved_by and resolution_note in the same statement. Normal comments are unchanged.
 - Ready ping is gated on a clean ledger: post_ready_notify(p_post_id, p_trace_id) requires an active owner/admin/agency caller (else forbidden_role) and stage 'review' (else invalid_stage); any unresolved checkpoint raises checkpoints_open. On success it writes one 'post_ready' inbox entry (tier 'urgent', payload checkpoints=total) per active client member except the caller. A zero-checkpoint ping is allowed.
 - Constraint fix (migration 20260717120000_widen_inbox_event_type_check.sql): inbox_entries_event_type_check is re-created to also admit 'checkpoints_added' and 'post_ready' (the full section 8 list plus these two). Before this, the constraint listed only the original section 8 values, so both procs failed at the inbox insert whenever there was a recipient and the whole transaction rolled back (no checkpoint ever committed on live). The value set is now the single source of truth INBOX_EVENT_TYPES (@srtdio/schemas), asserted equal to the live constraint by tests/comments/event-type-constraint.test.ts. The ephemeral test stacks pick the widening up from the migration (the former local-only patch in tests/comments/setup.ts has been removed). Apply to live via MCP to close the incident.
+
+### comment_tasks
+
+Comment to task link (20261108090100_comment_tasks.sql). One task per comment.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| comment_id | uuid | PK, FK comments.id ON DELETE CASCADE |
+| task_id | uuid | NOT NULL, UNIQUE, FK chat_tasks.id ON DELETE CASCADE |
+| workspace_id | uuid | NOT NULL, FK workspaces.id ON DELETE CASCADE |
+| channel_id | text | NOT NULL, FK chat_channels.channel_id ON DELETE CASCADE, the chat that holds the task |
+| assignee_user_id | uuid | nullable, FK auth.users.id ON DELETE SET NULL; the DM peer, or the creator for a Personal notes task; null for a group |
+| group_name | text | nullable, the group's name when the chat is a group |
+| created_by | uuid | nullable, FK auth.users.id ON DELETE SET NULL |
+| created_at | timestamptz | default now() |
+
+Indexes: comment_tasks_channel_id_idx (channel_id), comment_tasks_workspace_id_idx (workspace_id).
+
+RLS enabled. comment_tasks_select_agency (SELECT to authenticated): active owner/admin/agency member of workspace_id. No write policies; grants: authenticated SELECT only (anon none). Clients read no rows, so an embed on comments returns empty for them.
+
+comment_task_sync() trigger function (SECURITY DEFINER, search_path '', no EXECUTE grants), fired by chat_tasks_comment_sync AFTER UPDATE OF status, deleted_at ON chat_tasks FOR EACH ROW: a soft-deleted task clears comments.task_state and deletes its link row; a status change sets task_state 'done' or 'assigned'. Finishing a task never resolves the comment.
+
+comment_task_create(p_comment_id uuid, p_channel_id text, p_title text, p_priority smallint, p_due_on date, p_trace_id uuid) RETURNS jsonb {task_id, batch_id}, SECURITY DEFINER (search_path ''), EXECUTE to authenticated only. Requires auth and trace_id; the comment must be a live post or brief comment ('comment not found'); caller an active owner/admin/agency member ('not allowed'); the chat in the same workspace ('chat not found'); no existing link ('task_exists'). Creates the task through chat_task_save_batch (side agency, priority default 1), so the caller must be a member of the chat ('not a member of this chat'). Writes the link row (assignee from the DM pair or notes owner, group_name for a group) and sets comments.task_state = 'assigned'.
 
 ### comment_reactions
 

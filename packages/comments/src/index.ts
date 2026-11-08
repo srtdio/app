@@ -66,8 +66,53 @@ export { editComment, EditCommentSchema, type EditCommentInput } from './edit';
 export { deleteComment, DeleteCommentSchema, type DeleteCommentInput } from './delete';
 export { resolveComment, ResolveCommentSchema, type ResolveCommentInput } from './resolve';
 
-/** A persisted comment row, exactly as stored. */
-export type CommentRow = Database['public']['Tables']['comments']['Row'];
+/**
+ * The comment's chat task link (comment_tasks), embedded in the SAME comments
+ * read. RLS lets only owner / admin / agency see it, so a client always reads
+ * null; task_state (on the row) is what everyone sees.
+ */
+export interface CommentTaskEmbed {
+  task_id: string;
+  channel_id: string;
+  assignee_user_id: string | null;
+  group_name: string | null;
+}
+
+/**
+ * A persisted comment row as the panel reads it: the stored columns, plus the
+ * optional comment_tasks embed (absent on rows built locally or read without it).
+ */
+export type CommentRow = Database['public']['Tables']['comments']['Row'] & {
+  comment_tasks?: CommentTaskEmbed | null;
+};
+
+/**
+ * The one comments select: every column, and the task link in the same request
+ * (comment_tasks.comment_id is its primary key, so PostgREST embeds one object
+ * or null). No extra request on the comment paint path.
+ */
+export const COMMENT_SELECT = '*, comment_tasks(task_id, channel_id, assignee_user_id, group_name)';
+
+/** The embed as one object or null, whatever shape the read gave (object, one-row array, none). Pure. */
+export function commentTaskEmbed(value: unknown): CommentTaskEmbed | null {
+  const one: unknown = Array.isArray(value) ? value[0] : value;
+  if (one === null || typeof one !== 'object') return null;
+  const r = one as Record<string, unknown>;
+  if (typeof r.task_id !== 'string' || typeof r.channel_id !== 'string') return null;
+  return {
+    task_id: r.task_id,
+    channel_id: r.channel_id,
+    assignee_user_id: typeof r.assignee_user_id === 'string' ? r.assignee_user_id : null,
+    group_name: typeof r.group_name === 'string' ? r.group_name : null,
+  };
+}
+
+/** Rows from a COMMENT_SELECT read with the embed normalized (object or null). Pure. */
+export function withTaskEmbeds(
+  rows: readonly (Database['public']['Tables']['comments']['Row'] & { comment_tasks?: unknown })[],
+): CommentRow[] {
+  return rows.map((row) => ({ ...row, comment_tasks: commentTaskEmbed(row.comment_tasks) }));
+}
 
 /** The two entity kinds a comment may anchor to in the MVP. */
 export type CommentEntityType = 'post' | 'brief';
@@ -237,7 +282,7 @@ export async function listComments(
 
   let query = client
     .from('comments')
-    .select('*')
+    .select(COMMENT_SELECT)
     .eq('workspace_id', input.workspace_id)
     .eq('entity_type', input.entity_type)
     .eq('entity_id', input.entity_id);
@@ -252,7 +297,7 @@ export async function listComments(
     .range(start, start + PAGE_SIZE - 1);
 
   if (error) return { ok: false, error: transportError(error.message) };
-  return { ok: true, data: data ?? [] };
+  return { ok: true, data: withTaskEmbeds(data ?? []) };
 }
 
 export interface GetCommentsByIdsInput {
@@ -274,13 +319,13 @@ export async function getCommentsByIds(
   if (input.ids.length === 0) return { ok: true, data: [] };
   const { data, error } = await client
     .from('comments')
-    .select('*')
+    .select(COMMENT_SELECT)
     .eq('workspace_id', input.workspace_id)
     .eq('entity_type', input.entity_type)
     .eq('entity_id', input.entity_id)
     .in('id', [...input.ids]);
   if (error) return { ok: false, error: transportError(error.message) };
-  return { ok: true, data: data ?? [] };
+  return { ok: true, data: withTaskEmbeds(data ?? []) };
 }
 
 // ---------------------------------------------------------------------------

@@ -155,6 +155,7 @@ function row(id: string, body: string, extra: Partial<CommentRow> = {}): Comment
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -248,8 +249,9 @@ describe('writes update in place; the refetch is silent', () => {
     await mount();
     expect(skeletonShown()).toBe(false);
 
-    const reply = Array.from(rowEl('p-1')?.querySelectorAll('button') ?? []).find(
-      (b) => b.textContent?.trim() === 'Reply' && !b.hasAttribute('data-reply-to-reply'),
+    // The point's own Reply on its action bar.
+    const reply = rowEl('p-1')?.querySelector<HTMLButtonElement>(
+      '[data-comment-row="root"] [data-bar-action="reply"]',
     );
     act(() => reply?.click());
     await settle();
@@ -287,7 +289,6 @@ describe('writes update in place; the refetch is silent', () => {
     h.editComment.mockResolvedValue({ ok: true, data: 'c-1' });
     await mount();
 
-    act(() => button('Comment actions')?.click());
     act(() => button('Edit')?.click());
     const box = host?.querySelector<HTMLTextAreaElement>(
       'textarea[aria-label="Edit comment body"]',
@@ -326,7 +327,6 @@ describe('writes update in place; the refetch is silent', () => {
     h.deleteComment.mockResolvedValue({ ok: true, data: 'c-1' });
     await mount();
 
-    act(() => button('Comment actions')?.click());
     act(() => button('Delete')?.click());
     expect(h.actions).toHaveLength(1);
 
@@ -363,7 +363,6 @@ describe('writes update in place; the refetch is silent', () => {
     h.firstRows = [row('c-1', 'old body')];
     h.editComment.mockResolvedValue({ ok: true, data: 'c-1' });
     await mount();
-    act(() => button('Comment actions')?.click());
     act(() => button('Edit')?.click());
     holdRefetch();
     act(() => button('Save')?.click());

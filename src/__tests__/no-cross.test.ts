@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 // Exit (design lock, D4; decision F 7 Nov): "<" for anything opening over the
 // app; X (IconX) only to cancel an upload (ui/UploadRing), remove an attached
-// file (ui/PendingChip) or clear a typed query; plus the writing box's format
-// row close (ui/WritingBox, approved 8 Nov 2026). The bin deletes; "Clear"
-// clears or dismisses. No cross icon or cross glyph may appear in any other
+// file (ui/PendingChip) or clear a typed query. The writing box's format row
+// has no X (8 Nov 2026: its Aa key closes the row it opened). The bin deletes;
+// "Clear" clears or dismisses. No cross icon or cross glyph may appear in any other
 // app source file under src. Test files are skipped: they assert on rendered
 // markup, not author it. Allowlist: X_ALLOWED (IconX only, by file). The
 // one carve-out is by form, not by file: the heavy multiplication emoji in its
@@ -33,8 +33,6 @@ export const X_ALLOWED: readonly string[] = [
   'components/ui/icons.tsx',
   'components/ui/UploadRing.tsx',
   'components/ui/PendingChip.tsx',
-  // The Aa format row's "Close formatting" X (Slack composer, approved 8 Nov 2026).
-  'components/ui/WritingBox.tsx',
 ];
 
 function sourceFiles(dir: string): string[] {

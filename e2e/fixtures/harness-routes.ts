@@ -1256,6 +1256,62 @@ const RPC: Record<string, RpcHandler> = {
     if (invalid.length > 0) throw new HarnessRpcError('invalid_mention', invalid.join(','));
     return INDUCTION_RPC.comment_create?.(args, tables) ?? null;
   },
+  // A comment's To-do, as the live proc behaves: agency roles only, one task
+  // per comment, the task through the chat's one save batch, the link row and
+  // task_state written. The comment row carries its embed (comment_tasks) so
+  // the next comments read returns it, as PostgREST's embed does.
+  comment_task_create: (args, tables) => {
+    const comment = (tables.comments ?? []).find(
+      (c) => c.id === args.p_comment_id && c.deleted_at === null,
+    );
+    if (comment === undefined) throw new HarnessRpcError('comment not found');
+    if (!AGENCY_ROLES.includes(roleOf(tables, ME))) throw new HarnessRpcError('not allowed');
+    const channelId = String(args.p_channel_id);
+    const channel = (tables.chat_channels ?? []).find((c) => c.channel_id === channelId);
+    if (channel === undefined) throw new HarnessRpcError('chat not found');
+    const links = (tables.comment_tasks ??= []);
+    if (links.some((l) => l.comment_id === comment.id)) throw new HarnessRpcError('task_exists');
+    const saved = TASK_RPC.chat_task_save_batch?.(
+      {
+        p_channel_id: channelId,
+        p_batch: {
+          creates: [
+            {
+              title: String(args.p_title ?? ''),
+              side: 'agency',
+              priority: typeof args.p_priority === 'number' ? args.p_priority : 1,
+              due_on: args.p_due_on ?? null,
+            },
+          ],
+        },
+      },
+      tables,
+    ) as { batch_id: string | null; created_ids: string[] } | undefined;
+    const taskId = saved?.created_ids[0];
+    if (taskId === undefined) throw new HarnessRpcError('task not created');
+    const assignee =
+      channel.channel_type === 'dm'
+        ? channel.dm_user_a === ME
+          ? channel.dm_user_b
+          : channel.dm_user_a
+        : channel.channel_type === 'notes'
+          ? ME
+          : null;
+    const groupName =
+      channel.channel_type === 'group'
+        ? ((tables.groups ?? []).find((g) => g.id === channel.entity_id)?.name ?? null)
+        : null;
+    const link = {
+      task_id: taskId,
+      channel_id: channelId,
+      assignee_user_id: assignee ?? null,
+      group_name: groupName,
+    };
+    links.push({ comment_id: comment.id, workspace_id: WORKSPACE_ID, created_by: ME, ...link });
+    comment.task_state = 'assigned';
+    comment.comment_tasks = link;
+    return { task_id: taskId, batch_id: saved?.batch_id ?? null };
+  },
   // The chat open's one call (chat-open-bundle.ts).
   chat_open_bundle: (args, tables) =>
     chatOpenBundle(args, tables, (code) => new HarnessRpcError(code)),

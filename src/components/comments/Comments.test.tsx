@@ -24,7 +24,6 @@ import {
   buildBatchArgs,
   buildCreateInput,
   buildThreads,
-  checkpointBox,
   CHECKPOINT_BOX_LABEL,
   checkpointProgressText,
   checkpointReplySeed,
@@ -40,7 +39,6 @@ import {
   mergeCheckpoints,
   parseBatchRows,
   pointActions,
-  pointMenuMode,
   pointEditedMarker,
   pointWordCount,
   POINT_WORD_CAP,
@@ -61,8 +59,7 @@ import {
   onPhotoLabel,
   foldedPointText,
 } from '@/components/comments/Comments';
-import { copyText } from '@/lib/clipboard';
-import type { PointMenuMode } from '@/components/comments/Comments';
+import { commentBar } from '@/lib/comment-tasks';
 import { PAGE_SIZE } from '@srtdio/comments';
 import type { Client } from '@srtdio/comments';
 import { friendlyPointFreezeError, tickCircle } from '@/components/pages/pcs/checkpoint-controls';
@@ -147,6 +144,7 @@ function row(partial: Partial<CommentRow> & { id: string }): CommentRow {
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws',
@@ -484,32 +482,8 @@ describe('checkpoint state + feed controls', () => {
     expect(retargetDraft('the logo', '', b)).toBe(`${b}the logo`);
   });
 
-  it('labels the agency checkbox "Resolve" (one tap, no note)', () => {
+  it('names the agency\'s one-tap Resolve "Resolve" (no note)', () => {
     expect(CHECKPOINT_BOX_LABEL).toBe('Resolve');
-  });
-
-  it('draws the checkbox from tokens only: empty, hollow tick, filled tick', () => {
-    const cls = (checked: boolean, confirmed: boolean): string =>
-      elements(checkpointBox(checked, confirmed))
-        .map((el) => (el.props as { className?: string }).className ?? '')
-        .join(' ');
-    const tick = (checked: boolean, confirmed: boolean): string =>
-      (checkpointBox(checked, confirmed).props as { 'data-tick': string })['data-tick'];
-    expect(tick(false, false)).toBe('open');
-    expect(tick(true, false)).toBe('hollow');
-    expect(tick(true, true)).toBe('filled');
-    expect(cls(false, false)).toContain('border-border-strong');
-    // Unchecked, the tick keeps its space hidden; it shows at once (never a fade).
-    expect(cls(false, false)).toContain('invisible');
-    expect(cls(true, true)).not.toContain('invisible');
-    for (const all of [cls(false, false), cls(true, false), cls(true, true)]) {
-      expect(all).not.toMatch(/opacity|transition|duration-/);
-    }
-    expect(cls(true, true)).toContain('bg-good-solid');
-    expect(cls(true, false)).toContain('border-good');
-    for (const all of [cls(false, false), cls(true, false), cls(true, true)]) {
-      expect(all).not.toMatch(/#[0-9a-f]{3,6}\b|rgba\(|\bdark:|translate-x/i);
-    }
   });
 
   it('reads the chips row progress as "{n} of {m} resolved"', () => {
@@ -871,17 +845,15 @@ describe('client checkpoint batch (comment_batch_create wiring)', () => {
   });
 });
 
-describe('copy comment text', () => {
-  it('offers Copy on any comment (author-independent), edit/delete author-only', () => {
+describe('comment actions and the plain text', () => {
+  it('edit/delete are author-only (Copy is gone from comments)', () => {
     const others = row({ id: 'o', author_user_id: UUID_B });
     expect(commentActions(others, UUID_A, false)).toEqual({
-      canCopy: true,
       canEdit: false,
       canDelete: false,
     });
     const mine = row({ id: 'm', author_user_id: UUID_A });
     expect(commentActions(mine, UUID_A, false)).toEqual({
-      canCopy: true,
       canEdit: true,
       canDelete: true,
     });
@@ -890,7 +862,6 @@ describe('copy comment text', () => {
   it('offers no actions on a tombstone', () => {
     const deleted = row({ id: 'd', deleted_at: '2026-01-05T00:00:00.000Z' });
     expect(commentActions(deleted, UUID_A, true)).toEqual({
-      canCopy: false,
       canEdit: false,
       canDelete: false,
     });
@@ -903,21 +874,10 @@ describe('copy comment text', () => {
     expect(commentCopyText(`plain text`, () => null)).toBe('plain text');
   });
 
-  it('writes the comment body to the clipboard and never throws', async () => {
-    const writeText = vi.fn(async () => undefined);
-    vi.stubGlobal('navigator', { clipboard: { writeText } });
-    await expect(copyText('hello body')).resolves.toBe(true);
-    expect(writeText).toHaveBeenCalledWith('hello body');
-
-    vi.stubGlobal('navigator', {
-      clipboard: {
-        writeText: async () => {
-          throw new Error('denied');
-        },
-      },
-    });
-    await expect(copyText('x')).resolves.toBe(false);
-    vi.unstubAllGlobals();
+  it('the plain text (mentions as @Name) seeds a To-do title', () => {
+    expect(commentCopyText(`ask @[${UUID_A}]`, (id) => (id === UUID_A ? 'ada' : null))).toBe(
+      'ask @ada',
+    );
   });
 });
 
@@ -932,7 +892,6 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
   it('shows Edit and Delete on an own point in working state (open, unconfirmed)', () => {
     const working = point({ resolved_at: null, accepted_at: null, closed_at: null });
     expect(pointActions(working, UUID_A, false)).toEqual({
-      canCopy: true,
       canEdit: true,
       canDelete: true,
     });
@@ -945,7 +904,6 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
       closed_at: null,
     });
     expect(pointActions(ready, UUID_A, false)).toEqual({
-      canCopy: true,
       canEdit: true,
       canDelete: true,
     });
@@ -955,7 +913,6 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
     const confirmed = point({ accepted_at: ACCEPTED, closed_at: null });
     expect(isPointFrozen(confirmed)).toBe(true);
     expect(pointActions(confirmed, UUID_A, false)).toEqual({
-      canCopy: true,
       canEdit: false,
       canDelete: false,
     });
@@ -965,7 +922,6 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
     const locked = point({ accepted_at: null, closed_at: CLOSED });
     expect(isPointFrozen(locked)).toBe(true);
     expect(pointActions(locked, UUID_A, false)).toEqual({
-      canCopy: true,
       canEdit: false,
       canDelete: false,
     });
@@ -974,7 +930,6 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
   it("hides Edit and Delete on another member's point, keeping Copy", () => {
     const theirs = point({ author_user_id: UUID_B, accepted_at: null, closed_at: null });
     expect(pointActions(theirs, UUID_A, false)).toEqual({
-      canCopy: true,
       canEdit: false,
       canDelete: false,
     });
@@ -983,7 +938,6 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
   it('offers no actions on a tombstoned point', () => {
     const dead = point({ deleted_at: '2026-01-05T00:00:00.000Z' });
     expect(pointActions(dead, UUID_A, true)).toEqual({
-      canCopy: false,
       canEdit: false,
       canDelete: false,
     });
@@ -1075,54 +1029,49 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
   });
 });
 
-describe('pointMenuMode (kebab menu vs direct copy button vs nothing)', () => {
+describe("a point's bar: Edit and Delete for its author until frozen", () => {
   const FROZEN = '2026-02-02T00:00:00.000Z';
 
   function point(partial: Partial<CommentRow>): CommentRow {
     return row({ id: 'p', ledger_seq: 1, author_user_id: UUID_A, ...partial });
   }
 
-  it('returns the full menu when the viewer can edit or delete (author, live point)', () => {
+  function barFor(actions: { canEdit: boolean; canDelete: boolean }) {
+    return commentBar({
+      canReply: true,
+      resolve: null,
+      viewerIsAgency: true,
+      hasTask: false,
+      ...actions,
+    });
+  }
+
+  it('the author of a live point gets Edit and Delete', () => {
     const live = point({ accepted_at: null, closed_at: null });
-    expect(pointMenuMode(pointActions(live, UUID_A, false))).toBe('menu');
+    const bar = barFor(pointActions(live, UUID_A, false));
+    expect(bar.edit).toBe(true);
+    expect(bar.delete).toBe(true);
   });
 
-  it('returns a direct copy for a non-author on a live point (copy only, no menu)', () => {
+  it('someone else on a live point gets neither', () => {
     const theirs = point({ author_user_id: UUID_B, accepted_at: null, closed_at: null });
-    expect(pointMenuMode(pointActions(theirs, UUID_A, false))).toBe('copy');
+    const bar = barFor(pointActions(theirs, UUID_A, false));
+    expect(bar.edit).toBe(false);
+    expect(bar.delete).toBe(false);
   });
 
-  it('returns a direct copy for the author of a frozen point (not an author check)', () => {
+  it('the author of a frozen point loses Edit and Delete (not an author check)', () => {
     const frozen = point({ accepted_at: FROZEN, closed_at: null });
-    // Confirmed against its own author: copy stays, edit/delete gone.
-    expect(pointMenuMode(pointActions(frozen, UUID_A, false))).toBe('copy');
+    const bar = barFor(pointActions(frozen, UUID_A, false));
+    expect(bar.edit).toBe(false);
+    expect(bar.delete).toBe(false);
+    // Reply stays on every live point.
+    expect(bar.reply).toBe(true);
   });
 
-  it('returns nothing on a tombstone', () => {
+  it('a tombstone offers nothing of its own', () => {
     const dead = point({ deleted_at: '2026-01-05T00:00:00.000Z' });
-    expect(pointMenuMode(pointActions(dead, UUID_A, true))).toBe('none');
-  });
-
-  it('a copy-only viewer gets only the row\'s "Copy" and no "Checkpoint actions" trigger; an author gets "Checkpoint actions"', () => {
-    // Copy lives in every live row's action row; the header kebab ("Checkpoint
-    // actions") is drawn only in 'menu' mode. Assert the header control the
-    // render branch selects for each viewer.
-    const CONTROL_LABEL: Record<PointMenuMode, string | null> = {
-      none: null,
-      copy: null,
-      menu: 'Checkpoint actions',
-    };
-    const frozenOwn = point({ accepted_at: FROZEN, closed_at: null });
-    const copyMode = pointMenuMode(pointActions(frozenOwn, UUID_A, false));
-    expect(copyMode).toBe('copy');
-    expect(pointActions(frozenOwn, UUID_A, false).canCopy).toBe(true);
-    expect(CONTROL_LABEL[copyMode]).toBeNull();
-    expect(CONTROL_LABEL[copyMode]).not.toBe('Checkpoint actions');
-
-    const liveOwn = point({ accepted_at: null, closed_at: null });
-    const menuMode = pointMenuMode(pointActions(liveOwn, UUID_A, false));
-    expect(menuMode).toBe('menu');
-    expect(CONTROL_LABEL[menuMode]).toBe('Checkpoint actions');
+    expect(pointActions(dead, UUID_A, true)).toEqual({ canEdit: false, canDelete: false });
   });
 });
 

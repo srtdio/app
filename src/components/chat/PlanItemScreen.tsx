@@ -25,7 +25,8 @@
 // as a chat thread (PlanItemThread). @ tags the workspace's people (chat's
 // picker above the box; members load on focus or the first "@", from the held
 // cache), never me, and only the agency side on a creators-only note or a plan
-// not shared with the client. A comment appends at once and keeps its text on failure. One read
+// not shared with the client. A comment appends at once with chat's clock
+// and the box clears; a failure leaves it as "Not sent" with Retry. One read
 // per table per open, bounded at 5s; the body paints once it settles. The
 // phone page is a modal dialog: focus moves in and returns on close
 // (PlanPage). A concept lists its Files first (each tile opens the image
@@ -34,7 +35,8 @@
 // Date and Approvers, then Comments. A post item reads its comments only, in
 // parallel with the embedded post (never before it), and lists them under
 // "Plan notes" below the post (nothing when there are none). The comment box
-// is the shared Textarea (1 to 4 lines): Enter sends on a fine pointer,
+// is the shared Textarea (1 to 4 lines) in ui/WritingBox comment mode (the
+// chat composer's box, send in its row): Enter sends on a fine pointer,
 // Shift+Enter (and Return on touch) adds a line; while the @ picker is open
 // Enter or Tab picks. Tokens only.
 // A bank idea (no plan: opened with an item and no bundle, /plan/bank) reads
@@ -113,14 +115,13 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Textarea } from '@/components/ui/Textarea';
-import { WritingBox } from '@/components/ui/WritingBox';
+import { RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { useToast } from '@/components/ui/toast';
 import type { ViewerKind } from '@/components/ui/FileViewer';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
 import { Bone, DUR_SLOW_MS } from '@/lib/motion';
 import {
   ICON_SIZE,
-  IconArrowUp,
   IconCheck,
   IconChevronRight,
   IconEdit,
@@ -128,6 +129,7 @@ import {
   IconEyeOff,
   IconLink,
   IconPlus,
+  IconSend,
   IconTrash,
 } from '@/components/ui/icons';
 import { Tag, isTagDot } from '@/components/ui/Tag';
@@ -159,6 +161,7 @@ import {
   planPickerRows,
   taggableMembers,
   usePlanMentionMembers,
+  type PlanCommentLinkTarget,
   type PlanReplyPrivatelyTarget,
   type ShownComment,
 } from '@/components/chat/PlanItemThread';
@@ -175,7 +178,6 @@ import { renderMessageBody } from '@/components/chat/message-body';
 import { postRoute } from '@/components/chat/post-card';
 import {
   CHANGE_LINKED_POST_LABEL,
-  COMMENT_FAILED,
   DRAFT_NOT_READY,
   LINK_POST_LABEL,
   MOVE_FAILED,
@@ -648,8 +650,6 @@ export function PlanItemScreen(props: {
   const [planBusy, setPlanBusy] = useState(false);
   const [text, setText] = useState('');
   const [pending, setPending] = useState<ShownComment[]>([]);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
   // "Ask changes" opened the composer: Send records the note, then the review.
   const [askingChanges, setAskingChanges] = useState(false);
   // @ tags: the picked people (display "@handle" in the box, a token on send),
@@ -707,7 +707,6 @@ export function PlanItemScreen(props: {
     setText('');
     setPicks([]);
     setPending([]);
-    setSendError(null);
     setAskingChanges(false);
     setEditOpen(false);
     setConceptMenuOpen(false);
@@ -733,7 +732,6 @@ export function PlanItemScreen(props: {
     setText('');
     setPicks([]);
     setPending([]);
-    setSendError(null);
     setAskingChanges(false);
     setActionError(null);
     setConfirmOpen(false);
@@ -771,6 +769,11 @@ export function PlanItemScreen(props: {
   const replyPrivately = useMemo<PlanReplyPrivatelyTarget | null>(
     () => (bank ? null : { planId: bundle.plan.id, itemId: item.id, whereLabel: title }),
     [bank, bundle.plan.id, item.id, title],
+  );
+  // A comment's Copy link: the item with ?comment= (the bank path for a bank idea).
+  const commentLink = useMemo<PlanCommentLinkTarget>(
+    () => ({ planId: bank ? null : bundle.plan.id, itemId: item.id }),
+    [bank, bundle.plan.id, item.id],
   );
   const description = item.kind === 'concept' ? (item.description ?? '') : '';
 
@@ -958,26 +961,38 @@ export function PlanItemScreen(props: {
     return [...recorded, ...pending.filter((p) => !ids.has(p.id))];
   }, [read, pending, me]);
 
-  /** One comment write; true when it landed on this item. */
-  const sendComment = async (body: string): Promise<boolean> => {
+  /**
+   * One comment write, chat's way: the row shows at once with the clock and
+   * the box clears in the same tap; a failure leaves the row in place as "Not
+   * sent" with Retry (chat's FailedActions). True when it landed on this item.
+   * `retryId` re-sends that failed row (same local id, same body).
+   */
+  const sendComment = async (body: string, retryId?: string): Promise<boolean> => {
     const vis: CommentVisibility = 'everyone';
-    const localId = `local-${Date.now()}`;
+    // A fresh id per send: the box never waits, so two sends can share a millisecond.
+    const localId = retryId ?? `local-${generateTraceId()}`;
     const forItem = item.id;
-    setSending(true);
-    setSendError(null);
-    setPending((prev) => [
-      ...prev,
-      {
-        id: localId,
-        authorUserId: me,
-        mine: true,
-        authorName: 'You',
-        body,
-        visibility: vis,
-        createdAt: new Date().toISOString(),
-        pending: true,
-      },
-    ]);
+    const row: ShownComment = {
+      id: localId,
+      authorUserId: me,
+      mine: true,
+      authorName: 'You',
+      body,
+      visibility: vis,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+    setPending((prev) =>
+      retryId !== undefined ? prev.map((p) => (p.id === retryId ? row : p)) : [...prev, row],
+    );
+    // The draft as typed, put back if the server refuses a tag.
+    const draft = { text, picks };
+    if (retryId === undefined) {
+      // The box clears in the same tap (chat's send); it keeps focus.
+      setText('');
+      setPicks([]);
+      commentRef.current?.focus();
+    }
     setScrollToId(localId);
     const traceId = generateTraceId();
     const result = await planItemCommentCreate(supabase, {
@@ -986,7 +1001,6 @@ export function PlanItemScreen(props: {
       p_visibility: vis,
       p_trace_id: traceId,
     });
-    setSending(false);
     if (!stillOn(forItem)) {
       if (result.ok) planChanged();
       return false;
@@ -997,24 +1011,42 @@ export function PlanItemScreen(props: {
         item_id: item.id,
         error: result.error.message,
       });
-      setPending((prev) => prev.filter((p) => p.id !== localId));
-      // A tag the server refused (an approver on a creators-only note): one
-      // toast, the draft stays as typed.
-      if (isInvalidMention(result.error.message)) toast.show({ title: MENTION_TEAM_NOTE });
-      else setSendError(COMMENT_FAILED);
+      if (isInvalidMention(result.error.message)) {
+        // A tag the server refused (an approver on a creators-only note): one
+        // toast, the row goes and the draft comes back as typed.
+        setPending((prev) => prev.filter((p) => p.id !== localId));
+        if (retryId === undefined) {
+          setText((prev) => (prev === '' ? draft.text : prev));
+          setPicks((prev) => (prev.length === 0 ? draft.picks : prev));
+        }
+        toast.show({ title: MENTION_TEAM_NOTE });
+        return false;
+      }
+      setPending((prev) =>
+        prev.map((p) => (p.id === localId ? { ...p, pending: false, failed: true } : p)),
+      );
       return false;
     }
-    setText('');
-    setPicks([]);
     setScrollToId(result.data);
-    // The box keeps focus after a send (it shrinks back to one line).
-    commentRef.current?.focus();
     setPending((prev) =>
       prev.map((p) => (p.id === localId ? { ...p, id: result.data, pending: false } : p)),
     );
     reload();
     planChanged();
     return true;
+  };
+  /** A failed comment's Retry: the same body again, on the same row. */
+  const retryComment = (id: string): void => {
+    const failed = pending.find((p) => p.id === id && p.failed === true);
+    if (failed !== undefined) void sendComment(failed.body, id);
+  };
+  /** A failed comment's Delete: it never left the device, so it just goes. */
+  const discardComment = (id: string): void => {
+    setPending((prev) => prev.filter((p) => p.id !== id));
+  };
+  /** A comment's Reply (swipe right, the menu's Reply): the box takes focus in the same tap. */
+  const focusCommentBox = (): void => {
+    commentRef.current?.focus();
   };
   // @ tags. Only the agency side can be tagged on a creators-only note or a
   // plan not shared with the client; never me. The picker opens on an "@" run
@@ -1057,7 +1089,6 @@ export function PlanItemScreen(props: {
     setText(next.text);
     setCaret(next.caret);
     setMentionActive(0);
-    setSendError(null);
     const el = commentRef.current;
     if (el !== null) {
       requestAnimationFrame(() => {
@@ -1097,7 +1128,7 @@ export function PlanItemScreen(props: {
   };
   const send = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
-    if (sending || busy || blocked.length > 0) return;
+    if (busy || blocked.length > 0) return;
     const body = commentBody();
     const steps = askChangesSteps(body, askingChanges);
     if (steps.length === 0) return;
@@ -1714,27 +1745,6 @@ export function PlanItemScreen(props: {
               className="relative flex flex-col gap-2"
               aria-label="Add a comment"
             >
-              {mentionRows.length > 0 || picker.hiddenApprovers ? (
-                <div
-                  data-mention-anchor=""
-                  className="absolute inset-x-0 bottom-full z-sticky mb-2 flex flex-col gap-1"
-                >
-                  <MentionPicker
-                    members={mentionRows}
-                    active={activeRow}
-                    onPick={pickMention}
-                    listId={mentionListId}
-                  />
-                  {picker.hiddenApprovers ? (
-                    <p
-                      data-plan-mention-note=""
-                      className="rounded-lg border bg-panel px-3 py-2 text-sm text-fg-3 lit-overlay"
-                    >
-                      {MENTION_TEAM_NOTE}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
               {askingChanges ? (
                 <div
                   data-plan-ask-hint=""
@@ -1753,68 +1763,80 @@ export function PlanItemScreen(props: {
                   </Button>
                 </div>
               ) : null}
-              {sendError !== null ? (
-                <p role="alert" className="text-md text-bad">
-                  {sendError}
-                </p>
-              ) : null}
               {actionError !== null && askingChanges ? (
                 <p role="alert" className="text-md text-bad">
                   {actionError}
                 </p>
               ) : null}
-              <div className="flex items-end gap-2">
-                {/* ui/WritingBox (field mode): a plain field at rest; focused,
-                    the Aa row, Emoji and @ (types "@", which opens the
-                    mention list above) sit inside its bottom edge. */}
-                <WritingBox
-                  mode="field"
-                  className="min-w-0 flex-1"
-                  field={() => commentRef.current}
-                  hasText={text !== ''}
-                  mention
-                  expandTitle="Comment"
-                  input={
-                    <Textarea
-                      formatting
-                      ref={commentRef}
-                      compact
-                      rows={1}
-                      value={text}
-                      onChange={(e) => {
-                        setText(e.target.value);
-                        setSendError(null);
-                        trackCaret(e.target);
-                        if (e.target.value.includes('@')) mentionPeople.load();
-                      }}
-                      onFocus={mentionPeople.load}
-                      onSelect={(e) => trackCaret(e.currentTarget)}
-                      onKeyDown={commentKeyDown}
-                      data-plan-comment-input=""
-                      aria-label="Comment"
-                      {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
-                      autoComplete="off"
-                      enterKeyHint={coarse ? 'enter' : 'send'}
-                      maxLength={5000}
-                      placeholder={askingChanges ? ASK_CHANGES_PLACEHOLDER : COMMENT_PLACEHOLDER}
-                      style={{ maxHeight: COMMENT_BOX_MAX_PX }}
-                    />
-                  }
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  shape="round"
-                  aria-label={askingChanges ? ASK_CHANGES_SEND : 'Send comment'}
-                  data-plan-comment-send={askingChanges ? 'changes' : 'comment'}
-                  disabled={
-                    (text.trim() === '' && !askingChanges) || sending || busy || blocked.length > 0
-                  }
-                  className="shrink-0"
-                >
-                  <IconArrowUp size={ICON_SIZE.control} />
-                </Button>
-              </div>
+              {/* ui/WritingBox (comment mode), the chat composer's box: the
+                  card always, the Aa row, Emoji and @ (types "@", which opens
+                  the mention list above) while focused or holding text, send
+                  in the row. No "+": plan comments carry no files. */}
+              <WritingBox
+                mode="comment"
+                className="min-w-0"
+                field={() => commentRef.current}
+                hasText={text !== ''}
+                mention
+                expandTitle="Comment"
+                overlay={
+                  mentionRows.length > 0 || picker.hiddenApprovers ? (
+                    <div
+                      data-mention-anchor=""
+                      className="absolute inset-x-0 bottom-full z-sticky mb-2 flex flex-col gap-1"
+                    >
+                      <MentionPicker
+                        members={mentionRows}
+                        active={activeRow}
+                        onPick={pickMention}
+                        listId={mentionListId}
+                      />
+                      {picker.hiddenApprovers ? (
+                        <p
+                          data-plan-mention-note=""
+                          className="rounded-lg border bg-panel px-3 py-2 text-sm text-fg-3 lit-overlay"
+                        >
+                          {MENTION_TEAM_NOTE}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : undefined
+                }
+                input={
+                  <Textarea
+                    formatting
+                    ref={commentRef}
+                    compact
+                    rows={1}
+                    value={text}
+                    onChange={(e) => {
+                      setText(e.target.value);
+                      trackCaret(e.target);
+                      if (e.target.value.includes('@')) mentionPeople.load();
+                    }}
+                    onFocus={mentionPeople.load}
+                    onSelect={(e) => trackCaret(e.currentTarget)}
+                    onKeyDown={commentKeyDown}
+                    data-plan-comment-input=""
+                    aria-label="Comment"
+                    {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
+                    autoComplete="off"
+                    enterKeyHint={coarse ? 'enter' : 'send'}
+                    maxLength={5000}
+                    placeholder={askingChanges ? ASK_CHANGES_PLACEHOLDER : COMMENT_PLACEHOLDER}
+                    style={{ maxHeight: COMMENT_BOX_MAX_PX }}
+                  />
+                }
+                send={
+                  <RowSend
+                    type="submit"
+                    label={askingChanges ? ASK_CHANGES_SEND : 'Send comment'}
+                    data-plan-comment-send={askingChanges ? 'changes' : 'comment'}
+                    icon={<IconSend size={ICON_SIZE.control} />}
+                    disabled={(text.trim() === '' && !askingChanges) || busy || blocked.length > 0}
+                  />
+                }
+              />
               {blocked.length > 0 ? (
                 <p data-plan-mention-blocked="" role="status" className="text-sm text-warn">
                   {MENTION_TEAM_NOTE}
@@ -1852,6 +1874,10 @@ export function PlanItemScreen(props: {
               workspaceId={workspaceId}
               me={me}
               replyPrivately={replyPrivately}
+              linkTo={commentLink}
+              onRetry={retryComment}
+              onDiscard={discardComment}
+              {...(askingChanges ? { onReply: focusCommentBox } : {})}
             />
             {removeButton}
           </>
@@ -1992,6 +2018,10 @@ export function PlanItemScreen(props: {
                   me={me}
                   highlightedId={highlighted}
                   replyPrivately={replyPrivately}
+                  linkTo={commentLink}
+                  onReply={focusCommentBox}
+                  onRetry={retryComment}
+                  onDiscard={discardComment}
                 />
               )}
             </section>
@@ -2403,6 +2433,11 @@ function PlanNotes(props: {
   workspaceId: string | null;
   me: string | null;
   replyPrivately: PlanReplyPrivatelyTarget | null;
+  linkTo: PlanCommentLinkTarget;
+  /** Reply focuses the note box; absent while the box is closed. */
+  onReply?: () => void;
+  onRetry: (id: string) => void;
+  onDiscard: (id: string) => void;
 }): ReactElement | null {
   if (props.notes.length === 0) return null;
   return (
@@ -2417,6 +2452,10 @@ function PlanNotes(props: {
         workspaceId={props.workspaceId}
         me={props.me}
         replyPrivately={props.replyPrivately}
+        linkTo={props.linkTo}
+        onRetry={props.onRetry}
+        onDiscard={props.onDiscard}
+        {...(props.onReply !== undefined ? { onReply: props.onReply } : {})}
       />
     </section>
   );

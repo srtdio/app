@@ -10,6 +10,7 @@
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
 import { abortable } from '@/lib/chat-reads';
+import { privateReplyHref } from '@/lib/chat/private-reply';
 import { formatDate, formatDateTime } from '@/lib/time';
 
 type Functions = Database['public']['Functions'];
@@ -49,6 +50,25 @@ export interface ChatTask {
   dueOn: string | null;
   /** When it was ticked done (a moment); null while to do (and on rows done before 5 Nov with no stamp). */
   doneAt: string | null;
+  /**
+   * The post or brief comment this task was made from (comment_tasks, read
+   * with the list); null or absent: none, or not visible to this viewer
+   * (comment_tasks RLS shows clients nothing).
+   */
+  source?: TaskCommentSource | null;
+}
+
+/** A comment a task was made from: where the comment lives and its id. */
+export interface TaskCommentSource {
+  commentId: string;
+  entityType: 'post' | 'brief';
+  entityId: string;
+}
+
+/** The source line under a task row: its words and the comment deep link. */
+export interface TaskSourceLink {
+  text: string;
+  href: string;
 }
 
 /** One change-log row. */
@@ -115,8 +135,67 @@ function asDueOn(value: unknown): string | null {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
+/**
+ * The comment a task came from, read off the list read's embed
+ * `comment_tasks(comment_id, comments(entity_type, entity_id))`. comment_tasks
+ * is one to one with chat_tasks, so PostgREST answers an object or null (an
+ * array is taken too, first item). Only post and brief comments link; anything
+ * else, a hidden comment (null) or a malformed value is null. Pure.
+ */
+export function taskSourceOf(embed: unknown): TaskCommentSource | null {
+  const link: unknown = Array.isArray(embed) ? embed[0] : embed;
+  if (link === null || typeof link !== 'object') return null;
+  const l = link as Record<string, unknown>;
+  const commentId = l.comment_id;
+  const commentRaw: unknown = Array.isArray(l.comments) ? l.comments[0] : l.comments;
+  if (typeof commentId !== 'string' || commentId === '') return null;
+  if (commentRaw === null || typeof commentRaw !== 'object') return null;
+  const c = commentRaw as Record<string, unknown>;
+  const entityType = c.entity_type;
+  const entityId = c.entity_id;
+  if (entityType !== 'post' && entityType !== 'brief') return null;
+  if (typeof entityId !== 'string' || entityId === '') return null;
+  return { commentId, entityType, entityId };
+}
+
+/** The key a source's post or brief title is held under. Pure. */
+export function sourceTitleKey(source: Pick<TaskCommentSource, 'entityType' | 'entityId'>): string {
+  return `${source.entityType}:${source.entityId}`;
+}
+
+/**
+ * The source line's words: `From a comment on "<title>"` (straight quotes);
+ * an empty title reads "a post" / "a brief". Pure.
+ */
+export function taskSourceText(entityType: TaskCommentSource['entityType'], title: string): string {
+  const name = title.trim();
+  return name === '' ? `From a comment on a ${entityType}` : `From a comment on "${name}"`;
+}
+
+/**
+ * The source line for a task: its words and the comment deep link (the same
+ * /posts/:id?comment= or /briefs/:id?comment= link Reply privately opens).
+ * Null with no source or before its title is known (the line fills in when
+ * the title arrives; until then the row reserves nothing). Pure.
+ */
+export function taskSourceLink(
+  source: TaskCommentSource | null | undefined,
+  titles: ReadonlyMap<string, string>,
+): TaskSourceLink | null {
+  if (source == null) return null;
+  const title = titles.get(sourceTitleKey(source));
+  if (title === undefined) return null;
+  const href = privateReplyHref({
+    kind: 'comment',
+    entityType: source.entityType,
+    entityId: source.entityId,
+    commentId: source.commentId,
+  });
+  return href === null ? null : { text: taskSourceText(source.entityType, title), href };
+}
+
 /** Map a row; an impossible row (CHECKs forbid it) is skipped. Pure. */
-export function rowToTask(row: TaskRow): ChatTask | null {
+export function rowToTask(row: TaskRow & { comment_tasks?: unknown }): ChatTask | null {
   const side = asSide(row.side);
   const priority = asPriority(row.priority);
   if (side === null || priority === null) return null;
@@ -134,6 +213,7 @@ export function rowToTask(row: TaskRow): ChatTask | null {
     deletedAt: row.deleted_at ?? null,
     dueOn: asDueOn(row.due_on),
     doneAt: row.done_at ?? null,
+    source: taskSourceOf(row.comment_tasks),
   };
 }
 
@@ -1082,6 +1162,15 @@ export function shareSnapshot(input: {
 
 const TASK_COLUMNS =
   'id, channel_id, workspace_id, number, title, side, status, priority, due_on, done_at, created_by, created_at, updated_at, deleted_at';
+/**
+ * The list read's columns plus the comment each task came from, embedded
+ * through comment_tasks.task_id -> chat_tasks.id (one to one) and on to the
+ * comment's entity (comments.entity_type / entity_id are polymorphic, so the
+ * post or brief title is read by id afterwards, readSourceTitles). RLS on
+ * comment_tasks shows clients nothing: their embed is null.
+ */
+export const TASK_LIST_SELECT =
+  `${TASK_COLUMNS}, comment_tasks(comment_id, comments(entity_type, entity_id))` as const;
 const EVENT_COLUMNS =
   'id, task_id, channel_id, workspace_id, actor_user_id, kind, old_value, new_value, created_at, batch_id';
 
@@ -1102,16 +1191,78 @@ export async function readChannelTasks(
     const res = await abortable(
       client
         .from('chat_tasks')
-        .select(TASK_COLUMNS)
+        .select(TASK_LIST_SELECT)
         .eq('channel_id', channelId)
         .is('deleted_at', null),
       signal,
     );
     if (res.error) return fail(`readChannelTasks: ${res.error.message}`);
-    const rows = (res.data ?? []) as TaskRow[];
+    const rows = (res.data ?? []) as unknown as (TaskRow & { comment_tasks?: unknown })[];
     return { ok: true, data: rows.flatMap((r) => rowToTask(r) ?? []) };
   } catch (error) {
     return fail(`readChannelTasks: ${String(error)}`);
+  }
+}
+
+/** The post and brief ids a list's sources name that `known` lacks (deduped). Pure. */
+export function missingSourceIds(
+  tasks: readonly Pick<ChatTask, 'source'>[],
+  known: (key: string) => boolean,
+): { postIds: string[]; briefIds: string[] } {
+  const posts = new Set<string>();
+  const briefs = new Set<string>();
+  for (const t of tasks) {
+    const s = t.source;
+    if (s == null || known(sourceTitleKey(s))) continue;
+    (s.entityType === 'post' ? posts : briefs).add(s.entityId);
+  }
+  return { postIds: [...posts], briefIds: [...briefs] };
+}
+
+/**
+ * The titles of the posts and briefs task sources name: two IN reads of
+ * id, title in parallel (RLS decides what this viewer may see; a row it hides
+ * simply has no title, so its line never shows). Keys are sourceTitleKey.
+ * A failed read fails the whole answer (the caller may ask again).
+ */
+export async function readSourceTitles(
+  client: Client,
+  ids: { postIds: readonly string[]; briefIds: readonly string[] },
+  signal?: AbortSignal,
+): Promise<Result<Map<string, string>>> {
+  try {
+    const [posts, briefs] = await Promise.all([
+      ids.postIds.length > 0
+        ? abortable(
+            client
+              .from('posts')
+              .select('id, title')
+              .in('id', [...ids.postIds]),
+            signal,
+          )
+        : Promise.resolve(null),
+      ids.briefIds.length > 0
+        ? abortable(
+            client
+              .from('briefs')
+              .select('id, title')
+              .in('id', [...ids.briefIds]),
+            signal,
+          )
+        : Promise.resolve(null),
+    ]);
+    if (posts?.error) return fail(`readSourceTitles: ${posts.error.message}`);
+    if (briefs?.error) return fail(`readSourceTitles: ${briefs.error.message}`);
+    const out = new Map<string, string>();
+    for (const r of (posts?.data ?? []) as { id: string; title: string }[]) {
+      out.set(sourceTitleKey({ entityType: 'post', entityId: r.id }), r.title);
+    }
+    for (const r of (briefs?.data ?? []) as { id: string; title: string }[]) {
+      out.set(sourceTitleKey({ entityType: 'brief', entityId: r.id }), r.title);
+    }
+    return { ok: true, data: out };
+  } catch (error) {
+    return fail(`readSourceTitles: ${String(error)}`);
   }
 }
 

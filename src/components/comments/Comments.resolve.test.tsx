@@ -125,6 +125,7 @@ function row(id: string, body: string, extra: Partial<CommentRow> = {}): Comment
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -158,11 +159,6 @@ async function mount(onCountsChange?: (c: CommentCounts) => void): Promise<void>
   await settle();
 }
 
-function buttonByText(label: string): HTMLButtonElement | undefined {
-  return Array.from(host?.querySelectorAll('button') ?? []).find(
-    (b) => b.textContent?.trim() === label,
-  );
-}
 function buttonByAria(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find(
     (b) => b.getAttribute('aria-label') === label,
@@ -246,7 +242,7 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
     await mount(counts);
     expect(lifted()).toEqual({ open: 1, resolved: 0 });
 
-    act(() => buttonByText('Resolve')?.click());
+    act(() => buttonByAria('Resolve')?.click());
 
     // Instant (optimistic) and no extra step of any kind.
     expectNoNoteStep();
@@ -279,7 +275,9 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
 
     const tap = buttonByAria('Resolve checkpoint 1');
     expect(tap).toBeDefined();
-    expect(tap?.textContent).toBe('Resolve');
+    // The bar's icon-only Resolve: the circle with a tick, named by its label.
+    expect(tap?.textContent).toBe('');
+    expect(tap?.closest('[data-comment-bar]')).toBeTruthy();
     act(() => tap?.click());
 
     expectNoNoteStep();
@@ -311,7 +309,7 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
     resolveSpy.mockResolvedValue({ ok: false, error: { code: 'unknown', message: 'boom' } });
     await mount();
 
-    act(() => buttonByText('Resolve')?.click());
+    act(() => buttonByAria('Resolve')?.click());
     await settle();
 
     expect(lifted()).toEqual({ open: 1, resolved: 0 });

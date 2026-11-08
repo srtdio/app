@@ -39,7 +39,6 @@ describe('copyText', () => {
 // (PaintLog keeps its own "Select below" fallback state).
 describe('copy call sites', () => {
   const sites = [
-    'src/components/comments/Comments.tsx',
     'src/components/pages/PostDetailPage.tsx',
     'src/components/chat/MessageThread.tsx',
     'src/components/pages/assets/AssetActionSheet.tsx',

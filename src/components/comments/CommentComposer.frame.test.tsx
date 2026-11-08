@@ -107,21 +107,21 @@ describe('CommentComposer on ui/WritingBox', () => {
     expect(box?.getAttribute('data-mode')).toBe('comment');
   });
 
-  it('holding a draft: the card, text on top, then + Aa Emoji ... the round Send', async () => {
+  it('holding a draft: the card, text on top, then + Aa Emoji @ ... the round Send', async () => {
     mount();
     await settle();
     expect(q('[data-writing-box]')?.dataset.shape).toBe('card');
     expect(q('[data-writing-field] [contenteditable="true"]')).not.toBeNull();
-    expect(rowOrder()).toEqual(['Add attachment', 'Aa', 'Emoji', 'send:Post']);
-    // No @ without members, no mic, no paper clip.
-    expect(byLabel('Mention')).toBeNull();
+    // @ always (the people list opens above the box, as in chat); no mic, no
+    // paper clip.
+    expect(rowOrder()).toEqual(['Add attachment', 'Aa', 'Emoji', 'Mention', 'send:Post']);
     expect(byLabel('Record voice note')).toBeNull();
     expect(byLabel('Attach a file')).toBeNull();
     // The + is ComposerTray's compact key (its 36 grey circle).
     expect(byLabel('Add attachment')?.hasAttribute('data-plus')).toBe(true);
   });
 
-  it('Send is RowSend: solid ink when sendable, grey when not', async () => {
+  it('Send is RowSend: solid ink, sendable or not (nothing to send: no tap)', async () => {
     mount();
     await settle();
     const send = byLabel('Post');
@@ -135,7 +135,8 @@ describe('CommentComposer on ui/WritingBox', () => {
     await settle();
     const empty = byLabel('Post');
     expect(empty?.disabled).toBe(true);
-    expect(empty?.querySelector('span')?.className).toContain('bg-panel-3');
+    expect(empty?.querySelector('span')?.className).toContain('bg-accent');
+    expect(empty?.querySelector('span')?.className).not.toContain('bg-panel-3');
   });
 
   it('at rest (empty, unfocused): the text line with its + and Send; focus shows the row', async () => {
@@ -163,7 +164,8 @@ describe('CommentComposer on ui/WritingBox', () => {
     expect(editor?.className).not.toContain('lit-well');
     expect(editor?.className).not.toContain('focus:lit-focus');
     expect(editor?.getAttribute('aria-label')).toBe('Comment body');
-    expect(q('[data-writing-frame]')?.className).toContain('focus-within:lit-focus');
+    // The focus line draws inside the edge, so no parent can cut it.
+    expect(q('[data-writing-frame]')?.className).toContain('focus-within:lit-focus-inset');
   });
 
   it('keeps its hint and the guide anchor on Send', async () => {

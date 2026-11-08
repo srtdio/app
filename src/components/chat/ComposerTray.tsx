@@ -12,10 +12,19 @@
 // list since this device last looked). Draft is live only for an agency-side viewer in a
 // chat with no client, Plan only for an agency-side viewer: otherwise (or while
 // either is unknown) they render faded and disabled from the first frame. Tokens only, so light and dark stay at parity.
+//
+// Inside ui/WritingBox (compact, every + there is: chat, comments, replies,
+// checkpoint slots) the tray is the top of that same box: drawn into the box's
+// tray slot (ui/writing-tray.ts), inside its one outline, on its bg-panel-2
+// fill, no shadow, in flow (the thread above lifts; nothing is covered), one
+// column per tile and 20 icons (ICON_SIZE.control). The box holds open/closed,
+// so the + moving from the pill into the card keeps its tray.
 
 import { mark } from '@/lib/perf-marks';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ComponentType, ReactElement } from 'react';
+import { WritingTrayContext, trayColumnsClass } from '@/components/ui/writing-tray';
 import {
   ICON_SIZE,
   IconAssets,
@@ -182,7 +191,13 @@ export function ComposerTray(props: {
    */
   compact?: boolean;
 }): ReactElement {
-  const [open, setOpen] = useState(false);
+  // In a writing box the box holds open / closed (the + can move between its
+  // pill and its card); elsewhere the tray keeps its own.
+  const box = useContext(WritingTrayContext);
+  const boxed = box !== null && props.compact === true;
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = boxed ? box.open : ownOpen;
+  const setOpen = boxed ? box.setOpen : setOwnOpen;
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   // Kept mounted through the exit: painted at rest, the slide laid over it.
@@ -207,7 +222,10 @@ export function ComposerTray(props: {
     if (!open) return;
     function onPointer(event: Event): void {
       const root = rootRef.current;
-      if (root !== null && !root.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      // The boxed tray is drawn in the box's slot, outside the + itself.
+      const inTray = tray.ref.current?.contains(target) === true;
+      if (root !== null && !root.contains(target) && !inTray) setOpen(false);
     }
     function onKey(event: KeyboardEvent): void {
       if (event.key !== 'Escape') return;
@@ -221,7 +239,9 @@ export function ComposerTray(props: {
       document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+    // tray.ref is a stable ref object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, setOpen]);
 
   const allTiles = trayTiles(props.layout, {
     notes: props.notes === true,
@@ -245,7 +265,7 @@ export function ComposerTray(props: {
         aria-label={open ? 'Close attachments' : 'Add attachment'}
         aria-expanded={open}
         aria-controls={trayId}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(!open)}
         className={
           props.compact === true ? 'w-9 min-w-9 items-stretch py-1 hover:bg-transparent' : undefined
         }
@@ -267,7 +287,33 @@ export function ComposerTray(props: {
           <IconPlus size={ICON_SIZE.control} />
         </span>
       </Button>
-      {tray.rendered ? (
+      {tray.rendered && boxed && box.slot !== null
+        ? createPortal(
+            // The top of the writing box: its fill, its outline, a hairline
+            // under the tiles; no shadow.
+            <div
+              ref={tray.ref}
+              id={trayId}
+              role="group"
+              aria-label="Attach"
+              data-tray=""
+              data-tray-boxed=""
+              data-induction={only === undefined ? INDUCTION_KEYS.chatAttachTray : undefined}
+              className="border-b pb-2 pt-2"
+            >
+              <TrayGrid
+                boxed
+                tiles={tiles}
+                onPick={(id) => {
+                  setOpen(false);
+                  props.onPick(id);
+                }}
+              />
+            </div>,
+            box.slot,
+          )
+        : null}
+      {tray.rendered && !boxed ? (
         <div
           ref={tray.ref}
           id={trayId}
@@ -291,17 +337,24 @@ export function ComposerTray(props: {
 }
 
 /**
- * The tray's tile grid, 4 columns (8 tiles: two rows of 4; 7 in notes). A
- * disabled tile takes fg-3 ink (never a fade), carries the disabled attribute and aria-disabled,
- * says why in its name, and never calls onPick.
+ * The tray's tile grid, 4 columns (8 tiles: two rows of 4; 7 in notes); in a
+ * writing box (`boxed`) one row, a column per tile, 20 icons on a flat
+ * hairline circle. A disabled tile takes fg-3 ink (never a fade), carries the
+ * disabled attribute and aria-disabled, says why in its name, and never calls
+ * onPick.
  */
 export function TrayGrid(props: {
   tiles: readonly TrayTile[];
   onPick: (id: TrayTileId) => void;
+  boxed?: boolean;
 }): ReactElement {
   const tiles = props.tiles;
+  const boxed = props.boxed === true;
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div
+      data-tray-cols={boxed ? tiles.length : undefined}
+      className={cn('grid gap-2', boxed ? trayColumnsClass(tiles.length) : 'grid-cols-4')}
+    >
       {tiles.map((tile) => (
         <PressableRow
           key={tile.id}
@@ -319,8 +372,13 @@ export function TrayGrid(props: {
           }}
           className="flex h-18 min-w-11 flex-col items-center justify-center gap-2 text-fg-2 hover:text-fg"
         >
-          <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg lit-btn-secondary">
-            <tile.Icon size={ICON_SIZE.tray} />
+          <span
+            className={cn(
+              'relative flex h-11 w-11 items-center justify-center rounded-full text-fg',
+              boxed ? 'border bg-panel' : 'bg-panel-2 lit-btn-secondary',
+            )}
+          >
+            <tile.Icon size={boxed ? ICON_SIZE.control : ICON_SIZE.tray} />
             {tile.dot === true ? (
               <span
                 aria-hidden="true"

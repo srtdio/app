@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 const SURFACES: readonly { file: string; what: string }[] = [
   { file: 'chat/MessageThread.tsx', what: 'group sender photo + name, bubble @mentions' },
+  { file: 'chat/MessageBubble.tsx', what: 'the row sender photo + name (moved from the thread)' },
   { file: 'chat/ChatConnected.tsx', what: 'bubble @mention tap opens the card' },
   { file: 'chat/GroupInfoSheet.tsx', what: 'group members photo + name' },
   { file: 'chat/ReadingLayer.tsx', what: 'read by / reactions rows' },

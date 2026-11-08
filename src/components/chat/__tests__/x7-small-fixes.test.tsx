@@ -46,7 +46,7 @@ describe('X7 FT44: reaction badge name', () => {
         { emoji: '❤️', count: 1 },
       ]),
     ).toBe('Reactions: 👍 2, ❤️ 1. 3 in total. Show who reacted');
-    expect(source('../MessageThread.tsx')).toContain(
+    expect(source('../MessageThread.tsx') + source('../MessageBubble.tsx')).toContain(
       '<ReactionBadge label={reactionBadgeLabel(message.reactions)}',
     );
   });
@@ -73,7 +73,7 @@ describe('X7 FT45: status ticker targets', () => {
 
 describe('X7 FT46: group header', () => {
   it('no Info icon (the identity tap opens Group info); no Starred button', () => {
-    const thread = source('../MessageThread.tsx');
+    const thread = source('../MessageThread.tsx') + source('../MessageBubble.tsx');
     expect(thread).not.toContain('<IconButton label="Group info"');
     expect(thread).not.toContain('Starred');
   });

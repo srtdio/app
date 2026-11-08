@@ -92,9 +92,9 @@ describe('isSendKeydown', () => {
 });
 
 // The trailing composer control swaps between the record-voice-note mic and the
-// Send button. The mic shows only when attaching is possible and the composer is
-// empty and idle; any text, attachment, shared post, active recording, or
-// in-flight voice send falls back to Send.
+// Send button. The mic sits beside Send whenever attaching is possible (8 Nov
+// 2026: typing included); only an active recording or an in-flight voice send
+// hides it.
 describe('shouldShowMic', () => {
   const idle = {
     hasUpload: true,
@@ -110,16 +110,17 @@ describe('shouldShowMic', () => {
     expect(shouldShowMic(idle)).toBe(true);
   });
 
-  it('hides the mic when there is text', () => {
-    expect(shouldShowMic({ ...idle, text: 'hello' })).toBe(false);
+  it('keeps the mic beside send while typing', () => {
+    expect(shouldShowMic({ ...idle, text: 'hello' })).toBe(true);
   });
 
-  it('hides the mic when an attachment is pending', () => {
-    expect(shouldShowMic({ ...idle, attachmentCount: 1 })).toBe(false);
+  it('keeps the mic with an attachment pending or a post shared', () => {
+    expect(shouldShowMic({ ...idle, attachmentCount: 1 })).toBe(true);
+    expect(shouldShowMic({ ...idle, sharedPostCount: 1 })).toBe(true);
   });
 
-  it('hides the mic when a post is shared', () => {
-    expect(shouldShowMic({ ...idle, sharedPostCount: 1 })).toBe(false);
+  it('hides the mic when the composer is disabled', () => {
+    expect(shouldShowMic({ ...idle, disabled: true })).toBe(false);
   });
 
   it('hides the mic while recording', () => {

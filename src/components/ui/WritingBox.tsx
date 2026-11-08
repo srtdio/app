@@ -10,19 +10,33 @@
 //            inside its bottom edge (no +, no send, no X).
 //   caption  emoji and a plain "@" only; no formatting of any kind.
 //
-// The card's bottom row: + , Aa, emoji, @ ... send. Aa swaps the row for the
-// format row: X (Close formatting), Bold, Italic, Underline, Strike, Link,
-// Numbered list, Bullet list, Quote ... send. A button is "on" (panel-3 fill)
-// while the caret or selection sits inside that style.
+// The card's bottom row: + , Aa, emoji, @ ... mic, send. The mic sits beside
+// send in every state, typing included. Aa swaps the row for the format row:
+// Aa (on: pressed again it closes the row; no X), Bold, Italic, Underline,
+// Strike, Link, Numbered list, Bullet list, Quote ... mic, send. A key is "on"
+// (the ink outline, lit-selected, never a fill) while the caret or selection
+// sits inside that style. Formatting is WYSIWYG (ui/Textarea and
+// comments/MentionInput hide the markers, src/lib/format-live.ts).
+//
+// The + tray (chat/ComposerTray) opens as the top of this same box: one
+// outline around tray and text, the same fill, in flow (the thread above
+// lifts, nothing is covered). The tray reaches its slot through
+// WritingTrayContext (ui/writing-tray.ts).
 //
 // Expand (every mode): a quiet IconExpand top-right while focused or holding
-// text. Phone: the same box becomes a full-screen editor (the field never
-// remounts, so the text, caret, reply bars and attachments stay); laptop: the
-// box grows in place. IconCollapse or Esc returns it; Send closes it.
+// text. Phone: the same box becomes a full-screen editor pinned to the top of
+// the visible screen, its row on the keyboard (the field never remounts, so
+// the text, caret, reply bars and attachments stay); laptop: the box grows in
+// place. One collapse key (the editor's top bar) or Esc returns it; Send
+// closes it.
+//
+// Focused, the box keeps itself above the on-screen keyboard (the caret line
+// with it) after each size change.
 //
 // Speed: pure render at mount. The emoji sheet and Add link sheet load on the
-// first tap (React.lazy); the keyboard inset is read only while expanded on a
-// phone; selectionchange is listened to only while the format row is open.
+// first tap (React.lazy); the visual viewport is read only while expanded on
+// a phone or focused; selectionchange is listened to only while the format
+// row is open.
 
 import {
   Suspense,
@@ -30,6 +44,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -51,7 +66,6 @@ import {
   IconSmile,
   IconStrike,
   IconUnderline,
-  IconX,
 } from '@/components/ui/icons';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { textRole } from '@/components/ui/Text';
@@ -68,7 +82,7 @@ import {
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
-import { useKeyboardInset } from '@/lib/use-keyboard-inset';
+import { WritingTrayContext, type WritingTray } from '@/components/ui/writing-tray';
 
 const EmojiSheet = lazy(() => import('@/components/ui/EmojiSheet'));
 const AddLinkSheet = lazy(() => import('@/components/ui/AddLinkSheet'));
@@ -94,6 +108,61 @@ export const FORMAT_KEYS: readonly {
   { action: 'ul', label: 'Bullet list', icon: (p) => <IconListBullet {...p} /> },
   { action: 'quote', label: 'Quote', icon: (p) => <IconQuote {...p} /> },
 ];
+
+/** Room left between a revealed box and the keyboard (px, the 12 step). */
+const REVEAL_GAP_PX = 12;
+
+/**
+ * The visible band of the screen while `active` (the phone editor): its top
+ * (the layout viewport can sit scrolled under an iOS keyboard) and how far
+ * the keyboard covers the bottom. Read from visualViewport only while active;
+ * zeros otherwise, so nothing is read at mount.
+ */
+export function visibleBandOf(
+  innerHeight: number,
+  vv: { height: number; offsetTop: number } | null | undefined,
+): { top: number; bottom: number } {
+  if (vv === null || vv === undefined) return { top: 0, bottom: 0 };
+  const top = Math.max(0, Math.round(vv.offsetTop));
+  const bottom = Math.round(innerHeight - vv.height - vv.offsetTop);
+  // Sub-pixel and browser-bar jitter is not a keyboard.
+  return { top, bottom: bottom > 40 ? bottom : 0 };
+}
+
+function useVisibleBand(active: boolean): { top: number; bottom: number } {
+  const [band, setBand] = useState({ top: 0, bottom: 0 });
+  // Before paint on opening, as the keyboard inset was: the editor never
+  // shows one frame under the keyboard.
+  useLayoutEffect(() => {
+    if (!active || typeof window === 'undefined') {
+      setBand({ top: 0, bottom: 0 });
+      return undefined;
+    }
+    const vv = window.visualViewport ?? null;
+    const update = (): void => setBand(visibleBandOf(window.innerHeight, vv));
+    update();
+    if (vv === null) return undefined;
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, [active]);
+  return band;
+}
+
+/** Scroll the box's nearest scrolling ancestor (else the page) down by `dy`. */
+function scrollUpBy(el: HTMLElement, dy: number): void {
+  for (let at = el.parentElement; at !== null; at = at.parentElement) {
+    const oy = window.getComputedStyle(at).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && at.scrollHeight > at.clientHeight) {
+      at.scrollTop += dy;
+      return;
+    }
+  }
+  window.scrollBy(0, dy);
+}
 
 /** Keep the field focused (and the keyboard up) when a row key is pressed. */
 function keepFocus(e: PointerEvent | MouseEvent): void {
@@ -142,7 +211,13 @@ export function RowKey({
         className={cn(
           'flex w-full items-center justify-center rounded-full',
           MOVE_CLASS.tint,
-          solid ? 'bg-accent text-accent-fg' : on ? 'bg-panel-3 text-fg' : 'text-fg-2 lit-hover',
+          // On: the ink outline (lit-selected), never a fill. The 1px edge is
+          // there at rest too (transparent), so nothing moves.
+          solid
+            ? 'bg-accent text-accent-fg'
+            : on
+              ? 'border lit-selected'
+              : 'border border-transparent text-fg-2 lit-hover',
         )}
       >
         {children}
@@ -152,8 +227,9 @@ export function RowKey({
 }
 
 /**
- * The card's send: a 36 circle (44 tall hit), grey while there is nothing to
- * send, solid ink when sendable; busy keeps its place with the turning arc.
+ * The card's send: a 36 circle (44 tall hit), solid ink always (nothing to
+ * send: it takes no tap, and stays ink); busy keeps its place with the
+ * turning arc.
  */
 export function RowSend({
   label,
@@ -193,7 +269,7 @@ export function RowSend({
         className={cn(
           'grid w-full place-items-center rounded-full',
           MOVE_CLASS.tint,
-          disabled && !busy ? 'bg-panel-3 text-fg-3' : 'bg-accent text-accent-fg',
+          'bg-accent text-accent-fg',
         )}
       >
         {busy ? (
@@ -234,6 +310,11 @@ export interface WritingBoxProps {
   /** Chat on a phone: the idle pill's trailing mic. */
   pillEnd?: ReactNode;
   /**
+   * The mic key: beside send in every state (typing included), and the idle
+   * pill's trailing key when no pillEnd is given.
+   */
+  mic?: ReactNode;
+  /**
    * Lists that open over the text (chat's @ and # pickers, positioned
    * absolute bottom-full): anchored above the box at rest, above the row
    * inside the full-screen phone editor.
@@ -268,6 +349,7 @@ export function WritingBox(props: WritingBoxProps) {
     leading,
     send,
     pillEnd,
+    mic,
     overlay,
     mention = false,
     onInsert,
@@ -305,7 +387,15 @@ export function WritingBox(props: WritingBoxProps) {
   const [linkLoaded, setLinkLoaded] = useState(false);
   const formatting = mode !== 'caption';
   const phoneExpanded = expanded && !laptop;
-  const inset = useKeyboardInset(phoneExpanded);
+  const band = useVisibleBand(phoneExpanded);
+  // The + tray: open here (so the + can move between pill and card and keep
+  // it), drawn by ComposerTray into the slot at the top of the box.
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [traySlot, setTraySlot] = useState<HTMLDivElement | null>(null);
+  const tray = useMemo<WritingTray>(
+    () => ({ open: trayOpen, setOpen: setTrayOpen, slot: traySlot }),
+    [trayOpen, traySlot],
+  );
 
   const refreshOn = useCallback((): void => {
     const el = field();
@@ -315,29 +405,40 @@ export function WritingBox(props: WritingBoxProps) {
 
   // Focus grows the box (its row of keys appears under the text) and so does
   // a new line: the browser only reveals the caret, so the row could sit under
-  // a bottom bar or the screen edge. While focused, each size change brings the
-  // whole box into view on the next frame (nearest: no move when it already
-  // shows; scroll-mb keeps it above the post page's decision bar). A box taller
-  // than half the screen is left to the caret (Expand is for long text). A
-  // scroll after paint, never a hold on the tap.
+  // a bottom bar, the screen edge or the on-screen keyboard. While focused,
+  // each size change (and each keyboard move) brings the whole box into view
+  // on the next frame (nearest: no move when it already shows; scroll-mb keeps
+  // it above the post page's decision bar). The layout viewport does not
+  // shrink for an iOS keyboard, so the box is then lifted by whatever the
+  // visible band still leaves under the keyboard: the whole box, or for a box
+  // taller than half the band, its bottom row (the caret line sits over it).
+  // A scroll after paint, never a hold on the tap.
   useEffect(() => {
     if (!focused || phoneExpanded) return undefined;
     const el = rootRef.current;
     if (el === null || typeof el.scrollIntoView !== 'function') return undefined;
+    const vv = typeof window !== 'undefined' ? (window.visualViewport ?? null) : null;
     let raf = 0;
     const reveal = (): void => {
       window.cancelAnimationFrame(raf);
       raf = window.requestAnimationFrame(() => {
-        if (el.getBoundingClientRect().height > window.innerHeight / 2) return;
-        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const top = vv?.offsetTop ?? 0;
+        const bottom = vv !== null ? vv.offsetTop + vv.height : window.innerHeight;
+        if (el.getBoundingClientRect().height <= (bottom - top) / 2) {
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+        const over = el.getBoundingClientRect().bottom - bottom + REVEAL_GAP_PX;
+        if (over > 0) scrollUpBy(el, over);
       });
     };
     reveal();
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(reveal) : null;
     ro?.observe(el);
+    vv?.addEventListener('resize', reveal);
     return () => {
       window.cancelAnimationFrame(raf);
       ro?.disconnect();
+      vv?.removeEventListener('resize', reveal);
     };
   }, [focused, phoneExpanded]);
 
@@ -495,7 +596,7 @@ export function WritingBox(props: WritingBoxProps) {
   const shape: 'pill' | 'line' | 'card' | 'field' =
     mode === 'field' || mode === 'caption'
       ? 'field'
-      : expanded || formatOpen || focused || hasText || state.kind !== 'idle'
+      : expanded || formatOpen || focused || hasText || trayOpen || state.kind !== 'idle'
         ? 'card'
         : mode === 'chat' && !laptop
           ? 'pill'
@@ -504,7 +605,9 @@ export function WritingBox(props: WritingBoxProps) {
             : 'line';
   const rowShown =
     shape === 'card' || (shape === 'field' && (focused || expanded || emojiOpen || link !== null));
-  const showExpand = shape !== 'pill' && (focused || hasText || expanded);
+  // One collapse sign: the phone editor's top bar has it, so the in-box key
+  // hides there.
+  const showExpand = shape !== 'pill' && !phoneExpanded && (focused || hasText || expanded);
 
   const emojiKey = (
     <RowKey
@@ -530,9 +633,10 @@ export function WritingBox(props: WritingBoxProps) {
       aria-label="Format"
       className="flex min-w-0 flex-1 items-center overflow-x-auto"
     >
+      {/* Aa closes its own row (on while open): no X. */}
       {shape === 'card' ? (
-        <RowKey label="Close formatting" solid onPress={() => setFormatOpen(false)}>
-          <IconX size={ICON_SIZE.inline} />
+        <RowKey label="Aa" on data-row-key="aa" onPress={() => setFormatOpen(false)}>
+          <span className={textRole('label')}>Aa</span>
         </RowKey>
       ) : null}
       {FORMAT_KEYS.map((k) => (
@@ -578,14 +682,23 @@ export function WritingBox(props: WritingBoxProps) {
       </div>
     ) : null;
 
+  // The trailing keys: the mic beside send, in every state (typing too).
+  const trailing =
+    send !== undefined || (mic !== undefined && mic !== null) ? (
+      <span data-row-trailing="" className="flex shrink-0 items-center">
+        {mic}
+        {send !== undefined ? (
+          <span className="flex shrink-0" onClickCapture={onSendCapture}>
+            {send}
+          </span>
+        ) : null}
+      </span>
+    ) : null;
+
   const row = rowShown ? (
     <div data-writing-row="" className="flex min-h-11 min-w-0 items-center gap-2">
       {shape === 'field' ? fieldRow : formatOpen ? formatRow : actionRow}
-      {shape === 'card' && send !== undefined ? (
-        <span className="flex shrink-0" onClickCapture={onSendCapture}>
-          {send}
-        </span>
-      ) : null}
+      {shape === 'card' ? trailing : null}
     </div>
   ) : null;
 
@@ -604,14 +717,21 @@ export function WritingBox(props: WritingBoxProps) {
   ) : null;
 
   // overflow-x-clip: nothing inside (a long word, a chip, a key) can make the
-  // box wider than its place; its own focus line still draws outside it.
+  // box wider than its place. The card's focus line (and the open tray's)
+  // draws just inside its edge (lit-focus-inset), so no parent's edge or
+  // overflow can cut it on the left or right: one continuous ink line around
+  // the tray and the text.
   const frameClass = cn(
     'flex min-w-0 max-w-full overflow-x-clip border bg-panel-2',
     BOX_OWNS_FIELD,
     shape === 'pill' && 'min-h-11 items-center gap-2 rounded-full pl-1 pr-1',
     shape === 'line' &&
       cn('min-h-11 items-end gap-2 rounded-2xl pr-1', leading != null ? 'pl-1' : 'pl-3'),
-    shape === 'card' && 'flex-col rounded-2xl px-3 py-1 focus-within:lit-focus',
+    shape === 'card' &&
+      cn(
+        'flex-col rounded-2xl px-3 py-1 focus-within:lit-focus-inset',
+        trayOpen && 'lit-focus-inset',
+      ),
     shape === 'field' &&
       cn(
         'lit-well flex-col rounded-lg px-3 focus-within:lit-focus',
@@ -669,6 +789,8 @@ export function WritingBox(props: WritingBoxProps) {
       onKeyUp={formatOpen ? refreshOn : undefined}
       onMouseUp={formatOpen ? refreshOn : undefined}
     >
+      {/* The + tray's slot: the top of this same box (ComposerTray draws into it). */}
+      <div ref={setTraySlot} data-writing-tray-slot="" className="min-w-0 empty:hidden" />
       {/* The + at rest: the chat pill and the comment line keep it beside the field. */}
       {shape === 'pill' || shape === 'line' ? leading : null}
       <div
@@ -680,89 +802,92 @@ export function WritingBox(props: WritingBoxProps) {
         </div>
         {expandKey}
       </div>
-      {shape === 'pill' ? pillEnd : null}
-      {shape === 'line' && send !== undefined ? (
-        <span className="flex shrink-0" onClickCapture={onSendCapture}>
-          {send}
-        </span>
-      ) : null}
+      {shape === 'pill' ? (pillEnd ?? mic) : null}
+      {shape === 'line' ? trailing : null}
+      {/* A comment's @ list (MentionInput) hangs here: on the box at rest, above
+          the row in the phone editor, exactly where chat's pickers sit. */}
+      <div data-writing-list-slot="" className={phoneExpanded ? 'relative' : 'contents'} />
       {overlayInEditor}
       {row}
     </div>
   );
 
   const content = (
-    <div
-      ref={rootRef}
-      data-writing-box=""
-      data-mode={mode}
-      data-shape={shape}
-      data-expanded={expanded ? (laptop ? 'laptop' : 'phone') : undefined}
-      data-composer=""
-      data-composer-state={state.kind}
-      onKeyDownCapture={onKeyDownCapture}
-      className={cn(
-        // contain inline-size: the box always takes its container's width and
-        // never sizes the page to its rows (the Aa row is wider than a phone:
-        // it scrolls inside the box instead of pushing the chat off screen).
-        'flex w-full min-w-0 max-w-full flex-col gap-2 [contain:inline-size]',
-        // Revealed clear of a bottom bar the page names (the post page's phone
-        // decision bar sets --focus-inset-bottom), like a linked comment row.
-        'scroll-mb-[calc(var(--focus-inset-bottom,0px)+0.75rem)]',
-        !phoneExpanded && 'relative',
-        phoneExpanded && 'fixed inset-x-0 top-0 z-sheet bg-panel px-3 pb-2 lit-overlay',
-        className,
-      )}
-      style={phoneExpanded ? { bottom: inset } : undefined}
-    >
-      {phoneExpanded ? null : overlay}
-      {phoneExpanded ? (
-        <div data-expanded-bar="" className="wb-safe-top flex min-h-11 items-center gap-2">
-          <RowKey label="Collapse" onPress={() => setExpanded(false)}>
-            <IconCollapse size={ICON_SIZE.control} />
-          </RowKey>
-          <span className={textRole('title', 'min-w-0 flex-1 truncate')}>{expandTitle}</span>
-        </div>
-      ) : null}
-      {strip !== undefined && strip !== null ? (
-        <div data-composer-strip="" className="flex min-w-0 flex-col gap-2 empty:hidden">
-          {strip}
-        </div>
-      ) : null}
-      {box}
-      {/* The sheets are portalled, but React events still bubble through the
-          box's own tree: the Add link sheet's submit must never reach the chat
-          composer's <form> (it would send the half-written message). */}
-      <div data-writing-sheets="" className="contents" onSubmit={(e) => e.stopPropagation()}>
-        {emojiLoaded ? (
-          <Suspense fallback={null}>
-            <EmojiSheet
-              open={emojiOpen}
-              closeOnPick={!laptop}
-              onClose={() => setEmojiOpen(false)}
-              onPick={(emoji) => insert(emoji)}
-            />
-          </Suspense>
+    <WritingTrayContext.Provider value={tray}>
+      <div
+        ref={rootRef}
+        data-writing-box=""
+        data-mode={mode}
+        data-shape={shape}
+        data-expanded={expanded ? (laptop ? 'laptop' : 'phone') : undefined}
+        data-composer=""
+        data-composer-state={state.kind}
+        onKeyDownCapture={onKeyDownCapture}
+        className={cn(
+          // contain inline-size: the box always takes its container's width and
+          // never sizes the page to its rows (the Aa row is wider than a phone:
+          // it scrolls inside the box instead of pushing the chat off screen).
+          'flex w-full min-w-0 max-w-full flex-col gap-2 [contain:inline-size]',
+          // Revealed clear of a bottom bar the page names (the post page's phone
+          // decision bar sets --focus-inset-bottom), like a linked comment row.
+          'scroll-mb-[calc(var(--focus-inset-bottom,0px)+0.75rem)]',
+          !phoneExpanded && 'relative',
+          // The phone editor: pinned to the top of the visible screen, its row
+          // on the keyboard.
+          phoneExpanded && 'fixed inset-x-0 z-sheet bg-panel px-3 pb-2 lit-overlay',
+          className,
+        )}
+        style={phoneExpanded ? { top: band.top, bottom: band.bottom } : undefined}
+      >
+        {phoneExpanded ? null : overlay}
+        {phoneExpanded ? (
+          <div data-expanded-bar="" className="wb-safe-top flex min-h-11 items-center gap-2">
+            <RowKey label="Collapse" onPress={() => setExpanded(false)}>
+              <IconCollapse size={ICON_SIZE.control} />
+            </RowKey>
+            <span className={textRole('title', 'min-w-0 flex-1 truncate')}>{expandTitle}</span>
+          </div>
         ) : null}
-        {linkLoaded ? (
-          <Suspense fallback={null}>
-            <AddLinkSheet
-              open={link !== null}
-              initialText={link?.text ?? ''}
-              onCancel={() => setLink(null)}
-              onSave={(markup) => {
-                const el = field();
-                const at = link;
-                setLink(null);
-                if (el === null || at === null) return;
-                restoreSelection(el, at.start, at.end);
-                insertText(el, markup);
-              }}
-            />
-          </Suspense>
+        {strip !== undefined && strip !== null ? (
+          <div data-composer-strip="" className="flex min-w-0 flex-col gap-2 empty:hidden">
+            {strip}
+          </div>
         ) : null}
+        {box}
+        {/* The sheets are portalled, but React events still bubble through the
+            box's own tree: the Add link sheet's submit must never reach the chat
+            composer's <form> (it would send the half-written message). */}
+        <div data-writing-sheets="" className="contents" onSubmit={(e) => e.stopPropagation()}>
+          {emojiLoaded ? (
+            <Suspense fallback={null}>
+              <EmojiSheet
+                open={emojiOpen}
+                closeOnPick={!laptop}
+                onClose={() => setEmojiOpen(false)}
+                onPick={(emoji) => insert(emoji)}
+              />
+            </Suspense>
+          ) : null}
+          {linkLoaded ? (
+            <Suspense fallback={null}>
+              <AddLinkSheet
+                open={link !== null}
+                initialText={link?.text ?? ''}
+                onCancel={() => setLink(null)}
+                onSave={(markup) => {
+                  const el = field();
+                  const at = link;
+                  setLink(null);
+                  if (el === null || at === null) return;
+                  restoreSelection(el, at.start, at.end);
+                  insertText(el, markup);
+                }}
+              />
+            </Suspense>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </WritingTrayContext.Provider>
   );
   return (
     <>

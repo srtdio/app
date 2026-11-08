@@ -190,7 +190,7 @@ describe('L3: the replies row', () => {
 
 describe('L4: the thread screen', () => {
   it('composer hint "Reply", no Also send to chat, a plain thread titled "Thread" over the chat name', () => {
-    const src = read('../MessageThread.tsx');
+    const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).toContain("const THREAD_REPLY_PLACEHOLDER = 'Reply';");
     expect(src).not.toContain('Also send to chat');
     expect(src).toContain("viewPost?.title ?? 'Thread'");
@@ -341,7 +341,7 @@ describe('L13: Copy link', () => {
   });
 
   it('a jump to a thread reply opens its thread with the reply highlighted', () => {
-    const src = read('../MessageThread.tsx');
+    const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).toContain('const mainJump = jumpIsReply ? null : jumpRequest;');
     expect(src).toContain('openThread(threadRootOf(jumpTarget));');
   });
@@ -349,13 +349,13 @@ describe('L13: Copy link', () => {
 
 describe('L11 / L14 wiring', () => {
   it('Reply (sheet, swipe right, right-click) opens the thread with its composer focused', () => {
-    const src = read('../MessageThread.tsx');
+    const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).toContain('openThreadRef.current(threadRootOf(message), true);');
     expect(src).toContain('const onSwipeReply = useStableCallback(props.onReply);');
   });
 
   it('Mark unread routes main-chat messages and thread replies to their procs', () => {
-    const src = read('../MessageThread.tsx');
+    const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).toContain(
       'markChatUnread({ client: supabase, channelId, messageId: message.id, traceId })',
     );

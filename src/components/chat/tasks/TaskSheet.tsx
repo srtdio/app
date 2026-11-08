@@ -24,6 +24,10 @@
 // Pick a date (the shared calendar in a sheet; never before today), No date,
 // Delete. The add row takes a day (Today, Tomorrow, No date, or a picked
 // day) and the sheet moves to the chip the new task lands on.
+// A task made from a post or brief comment shows `From a comment on "<title>"`
+// under its title (useChatTasks sources); a tap sends what is unsaved and opens
+// that comment. A bell or search link (?task=) opens the sheet on the task's
+// chip and scrolls that row to the centre with the arrival tint (glowTarget).
 // Back, swipe down, a tap outside, Esc or System Back save what is left first,
 // then close; a failed save keeps the sheet open with Retry. Laptop: Cmd/Ctrl+S
 // saves at once.
@@ -814,6 +818,12 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
     onPickDate: () => setPick({ current: dueOn, set: (day) => setDay(key, day) }),
   });
 
+  // A source line leaves the chat for the comment: what is unsaved goes out
+  // first (the Save's write starts now and lands after the sheet is gone).
+  const flushBeforeLeave = (): void => {
+    if (pending && !saving) save();
+  };
+
   const renderEntry = (e: Entry): ReactElement => {
     if (e.kind === 'new') {
       const { c } = e;
@@ -859,6 +869,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         notice={rowNotice(task.id)}
         dateLine={rowDateLine(shown, calendar)}
         menu={rowMenu(task.id, shown.dueOn)}
+        source={tasks.sources.get(task.id) ?? null}
+        onBeforeOpenSource={flushBeforeLeave}
         onToggle={() => edit(task, { status: shown.status === 'done' ? 'todo' : 'done' })}
         onTitle={(title) => edit(task, { title })}
         onPriority={(priority) => edit(task, { priority })}

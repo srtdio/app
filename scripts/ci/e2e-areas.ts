@@ -127,6 +127,7 @@ export const AREAS: Area[] = [
       'notifications',
       'plan-desktop',
       'plan-draft-open',
+      'plan-thread-chat',
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
@@ -137,7 +138,8 @@ export const AREAS: Area[] = [
     name: 'plan-tab',
     entries: ['src/components/pages/PlanTabPage.tsx', 'src/components/pages/PlanPage.tsx'],
     routed: true,
-    specs: ['plan-desktop', 'plan-draft-open', 'plan-tab'].map(t),
+    // plan-thread-chat: plan item comments on chat's bubble, swipe and menu.
+    specs: ['plan-desktop', 'plan-draft-open', 'plan-tab', 'plan-thread-chat'].map(t),
   },
   {
     name: 'pipeline',
@@ -190,6 +192,8 @@ export const AREAS: Area[] = [
       'post-delete-undo',
       // Swipe right = Reply, left = Delete on a post comment (swipe-reply core).
       'post-comment-swipe',
+      // The comment bar's To-do: New task sheet, comment_task_create, tag.
+      'comment-to-task',
       'post-open-media-cover',
     ].map(t),
   },

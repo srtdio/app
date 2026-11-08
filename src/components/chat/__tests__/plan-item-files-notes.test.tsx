@@ -330,17 +330,16 @@ describe('the comment box (U10)', () => {
     expect($('[data-plan-comment-hint]')).toBeNull();
   });
 
-  it('sits in a ui/WritingBox field-mode box: Aa row, Emoji and @ while focused; send stays beside it', async () => {
+  it("sits in ui/WritingBox comment mode (the chat composer's box): Aa, Emoji, @ and send in its row", async () => {
     await mount(CONCEPT);
     const area = $<HTMLTextAreaElement>('[data-plan-comment-input]') as HTMLTextAreaElement;
     const box = area.closest<HTMLElement>('[data-writing-box]');
-    expect(box?.dataset.mode).toBe('field');
-    expect(box?.querySelector('[aria-label="Bold"]')).toBeNull();
+    expect(box?.dataset.mode).toBe('comment');
     await act(async () => area.focus());
-    expect(box?.querySelector('[aria-label="Bold"]')).not.toBeNull();
     expect(box?.querySelector('[aria-label="Emoji"]')).not.toBeNull();
     expect(box?.querySelector('[aria-label="Mention"]')).not.toBeNull();
-    expect(box?.querySelector('[data-plan-comment-send]')).toBeNull();
-    expect($('[data-plan-comment-send]')).not.toBeNull();
+    // Send is the row's own key (ui/WritingBox RowSend), inside the box.
+    const send = box?.querySelector<HTMLButtonElement>('[data-plan-comment-send]');
+    expect(send?.hasAttribute('data-row-send')).toBe(true);
   });
 });

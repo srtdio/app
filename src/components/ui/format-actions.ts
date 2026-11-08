@@ -10,10 +10,17 @@
 // +Shift+8 bullet list, +Shift+9 quote, Cmd/Ctrl+K link (WritingBox opens the
 // Add link sheet).
 //
+// A live box (ui/Textarea with formatting, comments/MentionInput: markers
+// held hidden, src/lib/format-live.ts) registers itself; every edit here then
+// goes through its replace (the hidden markers stay right), and a format key
+// pressed with no selection holds that style for the next typed text instead
+// of typing an empty marker pair.
+//
 // Nothing here adds a listener: the box's own key and select events call in.
 
 import { useCallback } from 'react';
 import type { KeyboardEvent } from 'react';
+import { decodeMarkers, liveFieldOf, type LiveFieldApi } from '@/lib/format-live';
 import {
   continueBlock,
   linePrefix,
@@ -101,6 +108,11 @@ export function applyToTextarea(el: HTMLTextAreaElement, style: FormatStyle): bo
   const end = el.selectionEnd;
   if (start === end) return false;
   const t = toggleFormat(el.value, start, end, style);
+  const live = liveFieldOf(el);
+  if (live !== undefined) {
+    live.replace(t.from, t.to, t.insert, t.selStart, t.selEnd);
+    return true;
+  }
   el.focus({ preventScroll: true });
   el.setSelectionRange(t.from, t.to);
   if (!execInsert(t.insert)) {
@@ -144,7 +156,8 @@ function piecesOf(root: HTMLElement): { pieces: Piece[]; text: string } {
       return;
     }
     if (el.tagName === 'BR') {
-      text += '\n';
+      // A live editor's trailing <br> only holds the last empty line open.
+      if (el.dataset?.trail === undefined) text += '\n';
       return;
     }
     if ((el.tagName === 'DIV' || el.tagName === 'P') && text !== '' && !text.endsWith('\n')) {
@@ -153,7 +166,8 @@ function piecesOf(root: HTMLElement): { pieces: Piece[]; text: string } {
     el.childNodes.forEach(walk);
   };
   root.childNodes.forEach(walk);
-  return { pieces, text };
+  // Hidden markers (a live box) read as their characters: same length.
+  return { pieces, text: decodeMarkers(text) };
 }
 
 function offsetOf(root: HTMLElement, pieces: Piece[], node: Node, offset: number): number {
@@ -213,6 +227,11 @@ export function applyToEditable(root: HTMLElement, style: FormatStyle): boolean 
   const end = offsetOf(root, pieces, range.endContainer, range.endOffset);
   if (start >= end) return false;
   const t = toggleFormat(text, start, end, style);
+  const live = liveFieldOf(root);
+  if (live !== undefined) {
+    live.replace(t.from, t.to, t.insert, t.selStart, t.selEnd);
+    return true;
+  }
   const m = t.marker.length;
   root.focus({ preventScroll: true });
   // The end edge first, so the start offsets stay valid.
@@ -261,6 +280,11 @@ export function fieldSelection(el: Field): { text: string; start: number; end: n
 
 /** Splice a textarea through the editing stack (one Undo step). */
 function spliceTextarea(el: HTMLTextAreaElement, edit: TextEdit): void {
+  const live = liveFieldOf(el);
+  if (live !== undefined) {
+    liveSplice(live, edit);
+    return;
+  }
   el.focus({ preventScroll: true });
   if (edit.from !== edit.to || edit.insert !== '') {
     el.setSelectionRange(edit.from, edit.to);
@@ -272,6 +296,11 @@ function spliceTextarea(el: HTMLTextAreaElement, edit: TextEdit): void {
     }
   }
   el.setSelectionRange(edit.selStart, edit.selEnd);
+}
+
+/** One edit on a live box, through its own rules. */
+function liveSplice(live: LiveFieldApi, edit: TextEdit): void {
+  live.replace(edit.from, edit.to, edit.insert, edit.selStart, edit.selEnd);
 }
 
 function execDeleteOk(): boolean {
@@ -320,7 +349,9 @@ function spliceEditablePrefixes(root: HTMLElement, text: string, edit: TextEdit)
 export function applyBlock(el: Field, kind: BlockKind): boolean {
   const { text, start, end } = fieldSelection(el);
   const edit = toggleBlock(text, start, end, kind);
-  if (isTextarea(el)) spliceTextarea(el, edit);
+  const live = liveFieldOf(el);
+  if (live !== undefined) liveSplice(live, edit);
+  else if (isTextarea(el)) spliceTextarea(el, edit);
   else spliceEditablePrefixes(el, text, edit);
   return true;
 }
@@ -334,15 +365,18 @@ export function restoreSelection(el: Field, start: number, end: number): void {
 
 /** Insert text at the box's caret, replacing the selection. */
 export function insertText(el: Field, insert: string): void {
-  if (isTextarea(el)) {
+  const live = liveFieldOf(el);
+  if (isTextarea(el) || live !== undefined) {
     const { start, end } = fieldSelection(el);
-    spliceTextarea(el, {
+    const edit = {
       from: start,
       to: end,
       insert,
       selStart: start + insert.length,
       selEnd: start + insert.length,
-    });
+    };
+    if (live !== undefined) liveSplice(live, edit);
+    else if (isTextarea(el)) spliceTextarea(el, edit);
     return;
   }
   el.focus({ preventScroll: true });
@@ -367,7 +401,9 @@ export function applyContinue(el: Field): boolean {
   if (start !== end) return false;
   const edit = continueBlock(text, start);
   if (edit === null) return false;
-  if (isTextarea(el)) spliceTextarea(el, edit);
+  const live = liveFieldOf(el);
+  if (live !== undefined) liveSplice(live, edit);
+  else if (isTextarea(el)) spliceTextarea(el, edit);
   else {
     el.focus({ preventScroll: true });
     if (selectOffsets(el, edit.from, edit.to)) {
@@ -383,6 +419,13 @@ export function applyContinue(el: Field): boolean {
 export function applyAction(el: Field, action: Exclude<FormatAction, 'link'>): boolean {
   if (isBlockKind(action)) return applyBlock(el, action);
   if (applyFormat(el, action)) return true;
+  // No selection in a live box: the style waits for the next typed text
+  // (markers never show, so an empty pair would be invisible and stuck).
+  const live = liveFieldOf(el);
+  if (live !== undefined) {
+    live.togglePending(action);
+    return true;
+  }
   // No selection: the marker pair goes in at the caret, the caret between.
   const marker = STYLE_MARKER[action];
   if (isTextarea(el)) {
@@ -407,6 +450,11 @@ export function activeActions(el: Field): Set<FormatAction> {
   const nl = text.indexOf('\n', start);
   const kind = linePrefix(text.slice(from, nl === -1 ? text.length : nl))?.kind;
   if (kind !== undefined) on.add(kind);
+  // A live box's held styles (a format key with no selection) read as on.
+  for (const style of liveFieldOf(el)?.pending() ?? []) {
+    if (on.has(style)) on.delete(style);
+    else on.add(style);
+  }
   return on;
 }
 
@@ -444,7 +492,9 @@ export function useFormatKeys(
       }
       const action = shortcutAction(e);
       if (action === null || action === 'link') return false;
-      if (!isBlockKind(action) && !hasSelection(el)) return false;
+      if (!isBlockKind(action) && !hasSelection(el) && liveFieldOf(el) === undefined) {
+        return false;
+      }
       e.preventDefault();
       applyAction(el, action);
       return true;

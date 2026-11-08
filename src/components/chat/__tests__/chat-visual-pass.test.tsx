@@ -24,7 +24,7 @@ const read = (rel: string): string =>
 
 describe('chat visual pass', () => {
   it('times and dates are mono: bubble time, day pill, list time', () => {
-    expect(read('../MessageThread.tsx')).toMatch(
+    expect(read('../MessageThread.tsx') + read('../MessageBubble.tsx')).toMatch(
       /<span aria-hidden="true" className="font-mono">\s*\{meta\.time\}/,
     );
     expect(DATE_PILL_TYPE.touch).toContain('font-mono');
@@ -75,7 +75,7 @@ describe('chat visual pass', () => {
     expect(laptop).toContain(HOLD_TIP_TEXT_LAPTOP);
     expect(HOLD_TIP_TEXT_LAPTOP).toBe('Tip: right-click a message to reply, copy or delete.');
     expect(HOLD_TIP_TEXT_LAPTOP).not.toContain('—');
-    expect(read('../MessageThread.tsx')).toMatch(
+    expect(read('../MessageThread.tsx') + read('../MessageBubble.tsx')).toMatch(
       /<ThreadHoldTip\s+userId=\{props\.currentUserId \?\? ''\}\s+layout=\{layout\}\s+empty=\{props\.messages\.length === 0\}/,
     );
     const tip = read('../ThreadHoldTip.tsx');

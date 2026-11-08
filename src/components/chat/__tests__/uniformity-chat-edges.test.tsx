@@ -45,7 +45,7 @@ function over(top: readonly number[], alpha: number, under: readonly number[]): 
 describe('11c own-bubble post card', () => {
   // L1 (8 Nov 2026): no own bubble, so no own-bubble restyle of cards.
   it('the own-bubble restyle is gone from the chat row', () => {
-    const src = read('../MessageThread.tsx');
+    const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).not.toContain('OWN_BUBBLE_CONTENT');
     expect(src).not.toContain('bg-bubble-own');
   });
@@ -128,7 +128,9 @@ describe('11f "1 selected" on the 16px edge', () => {
       expect(classes(count.props.className)).toContain('pl-2');
     }
     expect(read('../ChatInfoTabs.tsx')).toContain('<SelectionHeader');
-    expect(read('../MessageThread.tsx')).toContain('<SelectionHeader');
+    expect(read('../MessageThread.tsx') + read('../MessageBubble.tsx')).toContain(
+      '<SelectionHeader',
+    );
   });
 });
 
@@ -166,7 +168,7 @@ describe('8 motion tokens in the thread', () => {
     const swipe = read('../../../lib/motion/swipe.ts');
     expect(swipe).toContain('`${DUR_SLOW_MS}ms var(--ease-enter)`');
     expect(swipe).not.toContain('SWIPE_SPRING_MS');
-    const src = read('../MessageThread.tsx');
+    const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).toContain('paintSwipe');
     expect(src).not.toContain('SWIPE_SPRING_MS');
     expect(src).not.toMatch(/ms ease-out|duration-\[\d+ms\]|duration-\d+\b|ease-enter/);

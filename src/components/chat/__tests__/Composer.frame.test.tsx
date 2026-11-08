@@ -205,10 +205,12 @@ describe('chat Composer on ui/Composer', () => {
     expect(html.indexOf('Cancel editing')).toBeLessThan(html.indexOf('data-composer-row'));
   });
 
-  it('the mic is a bare row key (pill on a phone, laptop card while empty); send is RowSend', () => {
+  it('the mic is a bare row key beside send in every state (typing too); send is RowSend', () => {
     expect(SRC).toMatch(/<RowKey\s+label="Record voice note"/);
     expect(FRAME).toContain('pillEnd={showMic ? micKey : undefined}');
-    expect(FRAME).toContain('showMic && laptopBox ? (');
+    expect(FRAME).toContain('mic={showMic ? micKey : undefined}');
+    // The mic never takes send's place any more.
+    expect(FRAME).not.toContain('showMic && laptopBox ? (');
   });
 
   it('the hint is "Message", "Reply" while replying; "Edit message" while editing', () => {
@@ -222,7 +224,8 @@ describe('chat Composer on ui/Composer', () => {
     expect(FRAME).toContain('data-induction={INDUCTION_KEYS.chatHash}');
     expect(SRC).toContain('data-induction={INDUCTION_KEYS.chatMic}');
     expect(FRAME).not.toContain('data-schedule-chevron');
-    expect(FRAME).toContain('onShownChange={setTrayShown}');
+    // The + tray opens inside the box: the dock never switches to a joined look.
+    expect(FRAME).not.toContain('lit-dock-joined');
     expect(FRAME).toContain('formatting');
     expect(FRAME).toContain('compact');
     expect(FRAME).toContain('listEnter={false}');

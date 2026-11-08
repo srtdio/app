@@ -602,6 +602,40 @@ export function IconAlarmClock(props: IconProps) {
   return <Hero icon={BellAlertIcon} {...props} />;
 }
 
+/**
+ * Resolve a comment thread or checkpoint (the comment action bar): an open
+ * circle whose tick runs out of it. Kept apart from IconCheckCircle (select
+ * mode, a closed circle) so each concept keeps its own drawing. Hand-drawn:
+ * Heroicons has no open check circle. Paths from Lucide circle-check-big, ISC
+ * licence, Copyright (c) Lucide Contributors.
+ */
+export function IconResolve(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+      <path d="m9 11 3 3L22 4" />
+    </Svg>
+  );
+}
+
+/**
+ * Make a comment into a to-do (the comment action bar's To-do): a list whose
+ * rows carry ticks. Kept apart from IconTaskSquare (the chat task list itself).
+ * Hand-drawn: Heroicons has no list-with-ticks. Paths from Lucide list-checks,
+ * ISC licence, Copyright (c) Lucide Contributors.
+ */
+export function IconTodo(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m3 17 2 2 4-4" />
+      <path d="m3 7 2 2 4-4" />
+      <path d="M13 6h8" />
+      <path d="M13 12h8" />
+      <path d="M13 18h8" />
+    </Svg>
+  );
+}
+
 /** The chat task list: a rounded square with a tick. Hand-drawn: Heroicons has no checkbox-square. */
 export function IconTaskSquare(props: IconProps) {
   return (

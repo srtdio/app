@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 // ui/WritingBox: the chat pill on a phone, the card on focus / with text, the
-// Aa row swap (X back), caption mode with no Aa row, field mode rows on focus,
-// expand / collapse keeping the same field (no remount).
+// Aa row swap (Aa closes it, no X), caption mode with no Aa row, field mode
+// rows on focus, expand / collapse keeping the same field (no remount), one
+// collapse key, the mic beside send, the ink outline on an "on" key, the +
+// tray as the top of the box.
 import { act, useRef, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -78,14 +80,14 @@ describe('WritingBox chat mode', () => {
     expect(byLabel(host, 'Message')).toBe(area);
   });
 
-  it('Aa swaps the row for the format row; Close formatting brings it back', () => {
+  it('Aa swaps the row for the format row; Aa (on) closes it, no X', () => {
     const host = mount(<Harness mode="chat" initial="hi" />);
     act(() => byLabel(host, 'Aa')?.click());
     const labels = [...host.querySelectorAll('[data-format-row] [aria-label]')].map((b) =>
       b.getAttribute('aria-label'),
     );
     expect(labels).toEqual([
-      'Close formatting',
+      'Aa',
       'Bold',
       'Italic',
       'Underline',
@@ -96,8 +98,31 @@ describe('WritingBox chat mode', () => {
       'Quote',
     ]);
     expect(q(host, '[data-testid="send"]')).not.toBeNull();
-    act(() => byLabel(host, 'Close formatting')?.click());
+    expect(byLabel(host, 'Close formatting')).toBeNull();
+    const aa = q(host, '[data-format-row] [data-row-key="aa"]');
+    expect(aa?.getAttribute('aria-pressed')).toBe('true');
+    act(() => aa?.click());
     expect(q(host, '[data-format-row]')).toBeNull();
+    // Back on the action row, Aa reads off again.
+    expect(byLabel(host, 'Aa')?.getAttribute('aria-pressed')).toBeNull();
+  });
+
+  it('a format key that is on draws the ink outline (lit-selected), never a fill', () => {
+    const host = mount(<Harness mode="chat" initial="*hi* there" />);
+    const area = byLabel(host, 'Message') as HTMLTextAreaElement;
+    act(() => {
+      area.focus();
+      area.setSelectionRange(2, 2);
+    });
+    act(() => byLabel(host, 'Aa')?.click());
+    const bold = byLabel(host, 'Bold');
+    const face = bold?.querySelector('span');
+    expect(bold?.getAttribute('aria-pressed')).toBe('true');
+    expect(face?.className).toContain('lit-selected');
+    expect(face?.className).not.toContain('bg-panel-3');
+    const italic = byLabel(host, 'Italic')?.querySelector('span');
+    expect(italic?.className).not.toContain('lit-selected');
+    expect(italic?.className).toContain('border-transparent');
   });
 
   it('laptop: the card always, even empty', () => {
@@ -163,6 +188,9 @@ describe('WritingBox expand', () => {
     expect(document.body.textContent).toContain('Caption');
     // The same field node (never remounted), text kept.
     expect(document.querySelector('[aria-label="Message"]')).toBe(area);
+    // One collapse sign while expanded (the editor's bar), never a second in the box.
+    expect(document.querySelectorAll('[aria-label="Collapse"]')).toHaveLength(1);
+    expect(document.querySelector('[aria-label="Expand"]')).toBeNull();
     act(() => (document.querySelectorAll('[aria-label="Collapse"]')[0] as HTMLElement).click());
     const back = q(host, '[data-writing-box]');
     expect(back).not.toBeNull();
@@ -341,5 +369,121 @@ describe('WritingBox expand icon', () => {
     expect(expand).toContain('d="M5 19 19 5"');
     expect(expand.match(/<path/g)).toHaveLength(3);
     expect(renderToStaticMarkup(<IconCollapse size={20} />).match(/<path/g)).toHaveLength(4);
+  });
+});
+
+describe('WritingBox mic beside send', () => {
+  function MicHarness(props: { laptop: boolean }): ReactElement {
+    const ref = useRef<HTMLTextAreaElement | null>(null);
+    const [text, setText] = useState('');
+    return (
+      <WritingBox
+        mode="chat"
+        laptop={props.laptop}
+        field={() => ref.current}
+        hasText={text !== ''}
+        mic={<span data-testid="mic">mic</span>}
+        send={<span data-testid="send">send</span>}
+        input={
+          <textarea
+            ref={ref}
+            aria-label="Message"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        }
+      />
+    );
+  }
+
+  function typeInto(area: HTMLTextAreaElement, value: string): void {
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    act(() => {
+      set?.call(area, value);
+      area.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  it('laptop: the mic sits right before send, empty and while typing', () => {
+    const host = mount(<MicHarness laptop />);
+    const order = (): string[] =>
+      [...host.querySelectorAll('[data-row-trailing] [data-testid]')].map(
+        (el) => el.getAttribute('data-testid') ?? '',
+      );
+    expect(order()).toEqual(['mic', 'send']);
+    typeInto(byLabel(host, 'Message') as HTMLTextAreaElement, 'On it');
+    expect(order()).toEqual(['mic', 'send']);
+  });
+
+  it('phone: the idle pill shows the mic; typing shows the card with mic and send', () => {
+    const host = mount(<MicHarness laptop={false} />);
+    expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('pill');
+    expect(q(host, '[data-testid="mic"]')).not.toBeNull();
+    typeInto(byLabel(host, 'Message') as HTMLTextAreaElement, 'On it');
+    expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('card');
+    expect(q(host, '[data-row-trailing] [data-testid="mic"]')).not.toBeNull();
+    expect(q(host, '[data-row-trailing] [data-testid="send"]')).not.toBeNull();
+  });
+});
+
+describe('WritingBox send', () => {
+  it('RowSend stays ink with nothing to send (no tap), and when sendable', async () => {
+    const { RowSend } = await import('@/components/ui/WritingBox');
+    const host = mount(
+      <div>
+        <RowSend label="Send" disabled icon={<span />} />
+        <RowSend label="Post" disabled={false} icon={<span />} />
+      </div>,
+    );
+    for (const label of ['Send', 'Post']) {
+      const face = byLabel(host, label)?.querySelector('span');
+      expect(face?.className).toContain('bg-accent');
+      expect(face?.className).not.toContain('bg-panel-3');
+    }
+    expect((byLabel(host, 'Send') as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('WritingBox + tray', () => {
+  it('the tray opens as the top of the same box: one outline, in flow, a column per tile', async () => {
+    const { ComposerTray } = await import('@/components/chat/ComposerTray');
+    const ref = { current: null as HTMLTextAreaElement | null };
+    const host = mount(
+      <WritingBox
+        mode="comment"
+        laptop
+        field={() => ref.current}
+        hasText={false}
+        leading={
+          <ComposerTray
+            compact
+            layout="laptop"
+            only={{ tiles: ['photos', 'file', 'assets'], trayId: 't1' }}
+            onPick={() => undefined}
+          />
+        }
+        send={<span>send</span>}
+        input={<textarea ref={ref} aria-label="Message" />}
+      />,
+    );
+    act(() => byLabel(host, 'Add attachment')?.click());
+    const frame = q(host, '[data-writing-frame]');
+    const tray = q(host, '[data-tray]');
+    expect(tray).not.toBeNull();
+    // Inside the box's own frame (its outline and fill), at the top, in flow.
+    expect(tray?.closest('[data-writing-tray-slot]')?.parentElement).toBe(frame);
+    expect(frame?.firstElementChild).toBe(tray?.closest('[data-writing-tray-slot]'));
+    expect(tray?.className).not.toContain('absolute');
+    expect(tray?.className).not.toMatch(/\blit-dock\b|shadow/);
+    expect(frame?.className).toContain('lit-focus-inset');
+    expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('card');
+    // One column per tile (3), 20 icons.
+    const grid = tray?.querySelector('[data-tray-cols]');
+    expect(grid?.getAttribute('data-tray-cols')).toBe('3');
+    expect(grid?.className).toContain('grid-cols-3');
+    expect(tray?.querySelector('svg')?.getAttribute('width')).toBe('20');
+    // Closing takes it away again.
+    act(() => byLabel(host, 'Close attachments')?.click());
+    expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('line');
   });
 });

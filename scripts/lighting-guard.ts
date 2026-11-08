@@ -105,6 +105,29 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
       why: 'The inert "marks never read" ticker slot retired with Mark as.',
     },
   },
+  'src/components/chat/PlanItemThread.tsx': {
+    'lit-bubble-own': {
+      count: 1,
+      why: "Plan comments are drawn by chat's MessageBubble (L1: no own bubble fill), not a hand-built one.",
+    },
+    'lit-bubble-other': {
+      count: 2,
+      why: "Plan comments are drawn by chat's MessageBubble; its bubbleClass carries the bubble look.",
+    },
+    'lit-pill': { count: 1, why: "The hand-built day line is chat's DayPill (lit-pill there)." },
+    'lit-tint': {
+      count: 1,
+      why: "Mention pills are chat's mention names (renderBodyWithMentions), no tint pill.",
+    },
+    'lit-focus': {
+      count: 1,
+      why: "The deep-link mark is chat's jump tint (tintTarget, lit-selected), not a focus line.",
+    },
+    'lit-avatar': {
+      count: 1,
+      why: "The author photo is drawn by chat's MessageBubble (its <Avatar> counts there).",
+    },
+  },
   'src/components/chat/StatusDrawer.tsx': {
     'lit-card-muted': { count: 1, why: "The mark row's stamp confirm retired with Mark as." },
   },

@@ -8,18 +8,17 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import {
-  COMMENT_ACTIONS_ROW_CLASS,
-  ROW_ACTION_CLASS,
-  ROW_ACTION_STATIC_CLASS,
-} from '@/components/comments/Comments';
+import { ROW_ACTION_CLASS } from '@/components/comments/Comments';
+import { COMMENT_BAR_CLASS } from '@/components/comments/CommentActionBar';
 import { buttonClass } from '@/components/ui/Button';
 
-// Button system regression: every comment row action (Reply, Resolve, Confirm,
-// View earlier replies) is a ghost <Button>: a 44 hit (44 tall, 44 wide
-// minimum, 8px radius) with the visible word at meta size (12 / 500).
+// Button system regression. The text row action left (View earlier replies) is
+// a ghost <Button>: a 44 hit (44 tall, 44 wide minimum, 8px radius) with the
+// visible word at meta size (12 / 500). Every per-comment action sits on the
+// comment's action bar (8 Nov 2026): IconButtons (44 boxes) in a 36 pill.
 
 const SRC = readFileSync(fileURLToPath(new URL('./Comments.tsx', import.meta.url)), 'utf8');
+const BAR = readFileSync(fileURLToPath(new URL('./CommentActionBar.tsx', import.meta.url)), 'utf8');
 
 function tokens(cls: string): string[] {
   return cls.split(/\s+/).filter(Boolean);
@@ -37,21 +36,31 @@ describe('Comments row actions', () => {
     }
   });
 
-  it('the passive "Open" word matches the button box', () => {
-    const t = tokens(ROW_ACTION_STATIC_CLASS);
-    for (const want of ['h-11', 'min-h-11', 'min-w-11', 'text-sm', 'font-medium']) {
+  it('the action bar is a 36 pill, hairline framed, riding half above the row', () => {
+    const t = tokens(COMMENT_BAR_CLASS);
+    for (const want of [
+      'flex',
+      'h-9',
+      'items-center',
+      '-translate-y-1/2',
+      'border',
+      'rounded-lg',
+    ]) {
       expect(t).toContain(want);
     }
+    for (const bad of ['shadow', 'shadow-sm', 'backdrop-blur']) expect(t).not.toContain(bad);
   });
 
-  it('the action line is one flex line of 44 boxes', () => {
-    const t = tokens(COMMENT_ACTIONS_ROW_CLASS);
-    for (const want of ['flex', 'items-center']) expect(t).toContain(want);
+  it('every bar control is a 44 IconButton (no raw buttons, no hover reveal)', () => {
+    expect(BAR).not.toMatch(/<button\b/);
+    expect(BAR.match(/<IconButton\b/g)?.length).toBe(5);
+    expect(BAR).not.toMatch(/group-hover|hover:opacity|opacity-0/);
   });
 
   it('row actions and filters are Buttons, not raw buttons with their own recipe', () => {
-    expect(SRC).toContain('className={ROW_ACTION_CLASS}');
+    expect(SRC).toContain('cn(ROW_ACTION_CLASS,');
     expect(SRC).toContain("variant={filter === value ? 'secondary' : 'ghost'}");
     expect(SRC).not.toMatch(/<Button[^>]*size="(sm|md|lg)"/);
+    expect(SRC).toContain('<CommentActionBar');
   });
 });

@@ -5505,6 +5505,68 @@ export type Database = {
           },
         ]
       }
+      comment_tasks: {
+        Row: {
+          assignee_user_id: string | null
+          channel_id: string
+          comment_id: string
+          created_at: string
+          created_by: string | null
+          group_name: string | null
+          task_id: string
+          workspace_id: string
+        }
+        Insert: {
+          assignee_user_id?: string | null
+          channel_id: string
+          comment_id: string
+          created_at?: string
+          created_by?: string | null
+          group_name?: string | null
+          task_id: string
+          workspace_id: string
+        }
+        Update: {
+          assignee_user_id?: string | null
+          channel_id?: string
+          comment_id?: string
+          created_at?: string
+          created_by?: string | null
+          group_name?: string | null
+          task_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_tasks_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "comment_tasks_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: true
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: true
+            referencedRelation: "chat_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           accepted_at: string | null
@@ -5534,6 +5596,7 @@ export type Database = {
           resolved_version_id: string | null
           sent_back_at: string | null
           sent_back_by: string | null
+          task_state: string | null
           unaccepted_at: string | null
           unaccepted_by: string | null
           workspace_id: string
@@ -5566,6 +5629,7 @@ export type Database = {
           resolved_version_id?: string | null
           sent_back_at?: string | null
           sent_back_by?: string | null
+          task_state?: string | null
           unaccepted_at?: string | null
           unaccepted_by?: string | null
           workspace_id: string
@@ -5598,6 +5662,7 @@ export type Database = {
           resolved_version_id?: string | null
           sent_back_at?: string | null
           sent_back_by?: string | null
+          task_state?: string | null
           unaccepted_at?: string | null
           unaccepted_by?: string | null
           workspace_id?: string
@@ -10376,6 +10441,17 @@ export type Database = {
       comment_soft_delete: {
         Args: { p_comment_id: string; p_trace_id: string }
         Returns: string
+      }
+      comment_task_create: {
+        Args: {
+          p_channel_id: string
+          p_comment_id: string
+          p_due_on: string
+          p_priority: number
+          p_title: string
+          p_trace_id: string
+        }
+        Returns: Json
       }
       dm_channel_ensure: {
         Args: {
