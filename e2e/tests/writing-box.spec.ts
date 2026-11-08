@@ -417,9 +417,7 @@ test('S7 phone: the idle pill shows the mic', async ({ page }) => {
   expectClean(network);
 });
 
-test('S7 laptop: the card shows the mic while empty, Send once typed @desktop', async ({
-  page,
-}) => {
+test('S7 laptop: the mic sits beside Send, empty and while typing @desktop', async ({ page }) => {
   test.skip(isPhone(page), 'laptop only');
   const network = await installHarnessNetwork(page);
   await openChat(page, PEER_NAME);
@@ -427,11 +425,12 @@ test('S7 laptop: the card shows the mic while empty, Send once typed @desktop', 
   const field = chatField(page);
   await expect(box).toHaveAttribute('data-shape', 'card');
   await expect(key(box, 'Record voice note')).toBeVisible();
-  await expect(box.locator('[data-row-send]')).toHaveCount(0);
+  // Send stays ink and in place while there is nothing to send.
+  await expect(box.locator('[data-row-send]')).toBeDisabled();
   await field.click();
   await field.fill('On it');
   await expect(box.locator('[data-row-send]')).toBeEnabled();
-  await expect(key(box, 'Record voice note')).toHaveCount(0);
+  await expect(key(box, 'Record voice note')).toBeVisible();
   await field.fill('');
   await expect(key(box, 'Record voice note')).toBeVisible();
   expectClean(network);

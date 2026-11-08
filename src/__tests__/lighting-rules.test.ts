@@ -213,13 +213,16 @@ describe('lighting rules', () => {
     expect(own).toContain('border-top-color: transparent');
   });
 
-  it('the composer bar takes lit-dock-joined only while the tray shows; the tray keeps lit-dock', () => {
+  it('the + tray is the top of the writing box: no shadow of its own; the bar keeps one lit-dock', () => {
     const composer = src('chat/Composer.tsx');
-    expect(composer).toMatch(/trayShown\s*\?\s*'[^']*lit-dock-joined'\s*:\s*'[^']*lit-dock'/);
-    expect(composer).toContain('onShownChange={setTrayShown}');
-    expect(src('chat/ComposerTray.tsx')).toMatch(
-      /data-tray=""[\s\S]*?className="[^"]*\blit-dock\b(?!-)/,
-    );
+    // 8 Nov 2026: the tray opens inside the box, so the bar never joins.
+    expect(composer).not.toContain('lit-dock-joined');
+    expect(composer).toContain('border-t bg-panel px-3 py-2 lit-dock');
+    const tray = src('chat/ComposerTray.tsx');
+    // The boxed tray: a hairline under the tiles, the box's fill, no light.
+    expect(tray).toMatch(/data-tray-boxed=""[\s\S]*?className="border-b pb-2 pt-2"/);
+    // Outside a writing box the floating tray keeps lit-dock.
+    expect(tray).toMatch(/data-tray=""[\s\S]*?className="[^"]*\blit-dock\b(?!-)/);
   });
 
   it('the old shadow tokens are gone; the spotlight stays', () => {

@@ -88,7 +88,7 @@ import { PostRefChip, type PostRefPost } from '@/components/chat/PostRefChip';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
 import { SharedIdeaCards } from '@/components/chat/PlanItemCard';
-import { SelectCheckbox } from '@/components/chat/SelectionBar';
+import { SelectCheckbox } from '@/components/chat/SelectCheckbox';
 import { quoteMedia, ReplyQuoteBox } from '@/components/chat/ReplyQuote';
 import {
   privateReplyHeader,
@@ -1287,7 +1287,6 @@ function withRailPhoto(
  * MessageRow wrapper and passed in via `press`, so the unit test can call this
  * directly. All colours are design tokens, so light and dark stay at parity.
  */
-
 export function MessageBubble(props: {
   message: ThreadMessage;
   /** Notes only: a saved copy's "Saved from" line replaces "Forwarded". */

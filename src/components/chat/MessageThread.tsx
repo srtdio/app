@@ -1239,7 +1239,9 @@ export function initialJumpDue(input: {
   return input.messageId !== null && !input.done && !input.bodyLoading;
 }
 
+/** The own-row mention-of-me look: the same as a peer's since L1 (MessageBubble.tsx). */
 export const MENTION_ME_OWN = MENTION_ME_PEER;
+
 /**
  * A group bubble's sender photo and name open the inline message card with
  * that message as its source (the card's context line and the quote its send

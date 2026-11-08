@@ -53,7 +53,7 @@ import { Thumbnail } from '@/components/media/Thumbnail';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { VoiceNote } from '@/components/chat/VoiceNote';
 import { SettleLanding } from '@/components/chat/SettleLanding';
-import { SelectCheckbox } from '@/components/chat/SelectionBar';
+import { SelectCheckbox } from '@/components/chat/SelectCheckbox';
 import { DeleteSheet } from '@/components/chat/DeleteSheet';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RESULT_LABEL, noCallout, searchRetryRow } from '@/components/chat/SearchResults';

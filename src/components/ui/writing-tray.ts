@@ -17,20 +17,30 @@ export interface WritingTray {
 
 export const WritingTrayContext = createContext<WritingTray | null>(null);
 
-/** Grid columns for a tray of `count` tiles: one row, one column per tile. Pure. */
+const COLS = ['grid-cols-1', 'grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4'] as const;
+const MD_COLS = [
+  'md:grid-cols-1',
+  'md:grid-cols-1',
+  'md:grid-cols-2',
+  'md:grid-cols-3',
+  'md:grid-cols-4',
+  'md:grid-cols-5',
+  'md:grid-cols-6',
+  'md:grid-cols-7',
+  'md:grid-cols-8',
+  'md:grid-cols-9',
+  'md:grid-cols-10',
+] as const;
+
+/**
+ * Grid columns for a tray of `count` tiles: a column per tile (3 tiles: 3
+ * columns, never an empty fourth). A phone fits four 44 tiles across, so a
+ * longer tray (chat's 7 or 8) wraps at four there and takes one row from md
+ * up. Pure.
+ */
 export function trayColumnsClass(count: number): string {
-  const cols = [
-    'grid-cols-1',
-    'grid-cols-1',
-    'grid-cols-2',
-    'grid-cols-3',
-    'grid-cols-4',
-    'grid-cols-5',
-    'grid-cols-6',
-    'grid-cols-7',
-    'grid-cols-8',
-    'grid-cols-9',
-    'grid-cols-10',
-  ];
-  return cols[Math.min(Math.max(count, 0), cols.length - 1)] ?? 'grid-cols-4';
+  const n = Math.max(1, Math.round(count));
+  const base = COLS[Math.min(n, COLS.length - 1)] ?? 'grid-cols-4';
+  const wide = MD_COLS[Math.min(n, MD_COLS.length - 1)] ?? 'md:grid-cols-4';
+  return `${base} ${wide}`;
 }

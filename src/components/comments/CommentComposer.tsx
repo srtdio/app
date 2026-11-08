@@ -350,16 +350,20 @@ export function CommentComposer({
   }
 
   return (
-    // relative: the "+" tray sits above the composer, across its width.
-    <div className="relative flex flex-col gap-2">
+    // Full content width (the reply box too): never narrower than its place,
+    // never clipped. The "+" tray opens as the top of the writing box.
+    <div className="relative flex w-full min-w-0 flex-col gap-2">
       {/* ui/WritingBox (comment mode): the card always; focused or holding a
-          draft, the row under the text: + , Aa, emoji, @ ... the round Send. */}
+          draft, the row under the text: + , Aa, emoji, @ ... the round Send.
+          Formatting shows live, markers hidden (MentionInput). */}
       <WritingBox
         mode="comment"
         field={() => editorRef.current?.element() ?? null}
         onInsert={(text) => editorRef.current?.insertText(text)}
         hasText={trimmed !== '' || chipCount > 0}
-        mention={members.length > 0}
+        // "@" always: it types "@", and the people list opens above the box
+        // (chat's list), the same as chat.
+        mention
         expandTitle={expandTitle}
         state={submitting ? { kind: 'sending' } : { kind: 'idle' }}
         leading={

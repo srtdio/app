@@ -4998,8 +4998,9 @@ SCREENS.push(
     },
   },
   {
-    // Aa: the format row in place of the action row (Close formatting, Bold,
-    // Italic, Underline, Strike, Link, Numbered list, Bullet list, Quote ... send).
+    // Aa: the format row in place of the action row (Aa on, which closes it;
+    // Bold, Italic, Underline, Strike, Link, Numbered list, Bullet list,
+    // Quote ... mic, send). No X.
     name: 'chat-box-format-row',
     seed: creator,
     hold: true,
@@ -5009,7 +5010,7 @@ SCREENS.push(
       await tap([boxKey(chatBox(page), 'Aa')], 'Aa');
       const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
       await waitFor([row], 'format row');
-      await waitFor([boxKey(row, 'Close formatting')], 'Close formatting');
+      await waitFor([row.locator('[data-row-key="aa"][aria-pressed="true"]')], 'Aa on');
       await expect(chatBox(page).locator('[data-action-row]')).toHaveCount(0);
       await page.mouse.move(0, 0);
     },
