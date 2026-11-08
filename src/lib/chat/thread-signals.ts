@@ -41,6 +41,22 @@ export function toThreadForMe(row: ThreadForMeRow): ThreadForMe {
 }
 
 /**
+ * Threads launched 8 Nov 2026 (the schema day). Before it every reply showed in the main chat,
+ * where reading the chat read it, and no thread read point exists for it: a
+ * thread whose newest reply is older than the launch starts read, so no chat
+ * opens onto the Threads sheet for history.
+ */
+export const THREADS_SINCE_MS = Date.parse('2026-11-08T00:00:00Z');
+
+/** A thread whose newest reply predates the launch reads as read. Pure. */
+export function readBeforeLaunch(thread: ThreadForMe): ThreadForMe {
+  const at = Date.parse(thread.lastReplyAt);
+  return thread.unread && !Number.isNaN(at) && at < THREADS_SINCE_MS
+    ? { ...thread, unread: false }
+    : thread;
+}
+
+/**
  * The threads I am in for a chat: one call, started in parallel with the first
  * history page (never awaited before the first paint). 5s timeout.
  */
@@ -55,7 +71,10 @@ export function loadThreadsForMe(
       signal,
     );
     if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
-    return { ok: true, data: ((data ?? []) as ThreadForMeRow[]).map(toThreadForMe) };
+    return {
+      ok: true,
+      data: ((data ?? []) as ThreadForMeRow[]).map(toThreadForMe).map(readBeforeLaunch),
+    };
   });
 }
 

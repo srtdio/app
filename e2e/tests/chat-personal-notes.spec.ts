@@ -227,7 +227,7 @@ for (const photo of [true, false]) {
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
     // The notes row is ui/ListCard's person slot at 48 in Cozy (ui/Avatar 'card'):
-    // the user's own photo, round; their initials (no image) without one.
+    // the user's own photo, a rounded square (L2); their initials (no image) without one.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
     // Polled: the photo landing re-renders the row for a frame, when a single
@@ -238,7 +238,8 @@ for (const photo of [true, false]) {
     };
     await expect.poll(size).toBe('48x48');
     const tileAvatar = tile.locator('[data-avatar-role="card"]');
-    await expect(tileAvatar).toHaveClass(/rounded-full/);
+    // L2: people are rounded squares like groups.
+    await expect(tileAvatar).toHaveClass(/rounded-lg/);
     await expect(tile.locator('img')).toHaveCount(photo ? 1 : 0);
 
     await tile.click();

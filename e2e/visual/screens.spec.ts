@@ -44,6 +44,7 @@ import {
   WORKSPACE_ID,
   civilPlus,
   mondayOf,
+  MAYA_NAME,
 } from '../fixtures/chat-data';
 import {
   AUDIT_BRIEF_ID,
@@ -1276,6 +1277,51 @@ const SCREENS: Screen[] = [
     seed: creator,
     url: '/chat',
     steps: openDmMessageMenu,
+  },
+  {
+    // L10: the sheet's second page ("<" More actions).
+    name: 'message-action-menu-more',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDmMessageMenu(page);
+      await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
+      await waitFor([page.locator('[data-menu-page="more"]')], 'More actions page');
+    },
+  },
+  {
+    // L1: the group chat, everyone on the left, square photos, name + time lines.
+    name: 'chat-group-work',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, GROUP_NAME);
+      await threadStill(page);
+    },
+  },
+  {
+    // L3: a root's replies row in the main chat (a post-card thread).
+    name: 'chat-replies-row',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await waitFor([page.locator('[data-replies-row]').first()], 'replies row');
+    },
+  },
+  {
+    // L4: the thread screen (post-card title), root, "N replies", replies.
+    name: 'chat-thread-screen',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button')],
+        'replies row',
+      );
+      await waitFor([page.locator('[data-thread-separator]')], 'thread screen');
+    },
   },
   {
     name: 'new-chat-sheet',

@@ -1506,7 +1506,15 @@ const RPC: Record<string, RpcHandler> = {
           .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
         const last = own[own.length - 1] as Row;
         const root = all.find((m) => m.id === rootId);
-        const read = reads.find((r) => r.root_message_id === rootId && r.user_id === ME);
+        // Fixture rule: with no thread read row, my chat cursor stands in (the
+        // fixture world's chats are read up to it); specs seed
+        // chat_thread_reads rows to make a thread unread or read.
+        const cursor = (tables.chat_read_cursors ?? []).find(
+          (c) => c.channel_id === args.p_channel_id && c.user_id === ME,
+        );
+        const read =
+          reads.find((r) => r.root_message_id === rootId && r.user_id === ME) ??
+          (cursor !== undefined ? { last_read_at: cursor.last_read_at } : undefined);
         const inIt =
           root?.sender_user_id === ME ||
           (root !== undefined && mentions(root)) ||
