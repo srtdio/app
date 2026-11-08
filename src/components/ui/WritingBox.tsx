@@ -131,7 +131,9 @@ export function visibleBandOf(
 
 function useVisibleBand(active: boolean): { top: number; bottom: number } {
   const [band, setBand] = useState({ top: 0, bottom: 0 });
-  useEffect(() => {
+  // Before paint on opening, as the keyboard inset was: the editor never
+  // shows one frame under the keyboard.
+  useLayoutEffect(() => {
     if (!active || typeof window === 'undefined') {
       setBand({ top: 0, bottom: 0 });
       return undefined;

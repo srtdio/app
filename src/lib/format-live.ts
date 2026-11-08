@@ -26,23 +26,23 @@ import { parseFormatRuns, STYLE_MARKER, type FormatStyle } from '@srtdio/comment
 
 /** The hidden code point for each marker character. */
 export const HIDDEN_MARKER: Readonly<Record<string, string>> = {
-  '*': '⁡',
-  _: '⁢',
-  '~': '⁣',
-  '+': '⁤',
-  '`': '⁠',
+  '*': '\u2061',
+  _: '\u2062',
+  '~': '\u2063',
+  '+': '\u2064',
+  '`': '\u2060',
 };
 
 const SHOWN_MARKER: Readonly<Record<string, string>> = {
-  '⁡': '*',
-  '⁢': '_',
-  '⁣': '~',
-  '⁤': '+',
-  '⁠': '`',
+  '\u2061': '*',
+  '\u2062': '_',
+  '\u2063': '~',
+  '\u2064': '+',
+  '\u2060': '`',
 };
 
-const HIDDEN_ANY = /[⁠-⁤]/;
-const HIDDEN_ALL = /[⁠-⁤]/g;
+const HIDDEN_ANY = /[\u2060-\u2064]/;
+const HIDDEN_ALL = /[\u2060-\u2064]/g;
 
 /** Whether `ch` is a hidden marker. Pure. */
 export function isHiddenMarker(ch: string | undefined): boolean {

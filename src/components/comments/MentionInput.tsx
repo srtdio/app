@@ -799,7 +799,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     }
     // Chips read as one object character, so a chip just before the caret
     // never reads as an open "@" run.
-    const before = held.current.slice(0, sel.start).replace(TOKEN_SPLIT_ALL, '￼');
+    const before = held.current.slice(0, sel.start).replace(TOKEN_SPLIT_ALL, '\ufffc');
     setQuery(activeMentionQuery(stripHiddenMarkers(before)));
     setHighlight(0);
   }

@@ -175,7 +175,7 @@ export function mirrorNodes(value: string): ReactNode[] {
     at += line.length;
   });
   // A trailing newline needs a glyph after it to take its line.
-  nodes.push('​');
+  nodes.push('\u200b');
   return nodes;
 }
 
