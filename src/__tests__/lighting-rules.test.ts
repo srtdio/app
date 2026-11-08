@@ -73,11 +73,6 @@ const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
     'the tick glyph inside the checkpoint box (an icon, not copy), full when marked',
   ],
   [
-    'chat/PlanItemThread.tsx',
-    "c.pending && 'opacity-70'",
-    'a pending (clock) bubble: the whole bubble waits, matching the chat thread pending look; not disabled copy',
-  ],
-  [
     'chat/VoiceNote.tsx',
     "'opacity-[.45]'",
     'the play glyph of a voice note that cannot play yet (an icon, not copy); the thread shows Not sent per message',

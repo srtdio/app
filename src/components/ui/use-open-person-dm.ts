@@ -22,7 +22,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 const NO_ROSTER: readonly ChannelSummary[] = [];
 
 /** The chat list outside a ChatStoreProvider (isolated tests) is empty: every open ensures. */
-function useRosterSafe(): readonly ChannelSummary[] {
+export function useRosterSafe(): readonly ChannelSummary[] {
   try {
     return useChatStore().roster;
   } catch {
@@ -82,5 +82,39 @@ export function useOpenPersonDm(): (userId: string, options?: OpenPersonDmOption
       );
     },
     [me, workspaceId, roster, navigate, toast],
+  );
+}
+
+/**
+ * The same route as useOpenPersonDm, without navigating: my DM's channel id
+ * with a person (the cached one at once, else startDmChannel), or null when it
+ * cannot be had. Me resolves to my notes id (the caller ensures notes). Never
+ * throws. Used where a write needs the DM's id (a comment's To-do).
+ */
+export function useResolvePersonDm(): (userId: string) => Promise<string | null> {
+  const roster = useRosterSafe();
+  const me = useMeSafe();
+  const workspaceId = useWorkspaceIdSafe();
+  return useCallback(
+    async (userId: string): Promise<string | null> => {
+      const route = personDmRoute({ userId, me, workspaceId, roster });
+      if (route.kind === 'open') return route.channelId;
+      if (route.kind === 'none' || workspaceId === null) return null;
+      const traceId = generateTraceId();
+      let channelId: string | null = null;
+      const failure = await startDmChannel(
+        supabase,
+        { workspaceId, peerUserId: userId, traceId },
+        (id) => {
+          channelId = id;
+        },
+      ).catch((error: unknown) => ({ message: String(error) }));
+      if (failure !== null) {
+        logger.warn('person: dm resolve failed', { trace_id: traceId, error: failure.message });
+        return null;
+      }
+      return channelId;
+    },
+    [me, workspaceId, roster],
   );
 }

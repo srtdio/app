@@ -114,6 +114,7 @@ function row(id: string, body: string, overrides: Partial<CommentRow> = {}): Com
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -235,11 +236,11 @@ describe('Comments swipe', () => {
     expect(composerUnder('c-own')).toBeTruthy();
     await swipe('c-other', 120);
     expect(composerUnder('c-other')).toBeTruthy();
-    // The row's Reply now reads Cancel, exactly as after a tap on Reply.
-    const replyWord = document.querySelector(
+    // The row's bar Reply now reads open, exactly as after a tap on Reply.
+    const replyKey = document.querySelector(
       `[id="${commentDomId('c-other')}"] [data-comment-row="root"] [data-row-action="reply"]`,
     );
-    expect(replyWord?.textContent).toBe('Cancel');
+    expect(replyKey?.getAttribute('aria-expanded')).toBe('true');
     expect(actions).toHaveLength(0);
   });
 

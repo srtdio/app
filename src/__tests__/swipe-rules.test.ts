@@ -13,6 +13,7 @@ describe('swipe rules', () => {
     'components/chat/MessageThread.tsx',
     'components/chat/tasks/TaskRow.tsx',
     'components/comments/Comments.tsx',
+    'components/chat/PlanItemThread.tsx',
   ])('%s swipes through the one core', (rel) => {
     expect(read(rel)).toContain("from '@/lib/chat/swipe-reply'");
     expect(read(rel)).toContain('createSwipeReplyController(');
@@ -21,6 +22,7 @@ describe('swipe rules', () => {
   it('messages and comments swipe both ways; tasks swipe left only', () => {
     expect(read('components/chat/MessageThread.tsx')).toMatch(/direction:\s*'both'/);
     expect(read('components/comments/Comments.tsx')).toMatch(/direction:\s*'both'/);
+    expect(read('components/chat/PlanItemThread.tsx')).toMatch(/direction:\s*'both'/);
     expect(read('components/chat/tasks/TaskRow.tsx')).toMatch(/direction:\s*'left'/);
   });
 

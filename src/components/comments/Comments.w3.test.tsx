@@ -108,6 +108,7 @@ function row(id: string, body: string): CommentRow {
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -154,7 +155,7 @@ describe('Comments W3', () => {
     await mount();
     expect(host?.textContent).toContain('doomed body');
 
-    act(() => button('Comment actions')?.click());
+    // Delete sits right on the comment's action bar (no ⋯ menu).
     act(() => button('Delete')?.click());
 
     expect(host?.textContent).not.toContain('doomed body');

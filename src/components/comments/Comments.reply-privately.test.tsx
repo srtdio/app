@@ -5,11 +5,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommentRow, CommentResult } from '@srtdio/comments';
 
-// Reply privately on post and brief comments: an icon on the action line
-// (7 Nov 2026), and a tap on the author's photo or name, both open the person
-// card's inline message with the comment as its source (no navigation), only
-// on someone else's comment with a known current author (never mine, a legacy
-// author or a former member).
+// Reply privately is dropped from post and brief comments (comment action bar,
+// 8 Nov 2026): no icon on any row, and a tap on the author's photo or name
+// opens the plain person card, never with the comment as a source. The bar
+// carries Reply, Resolve and To-do on someone else's comment.
 
 type ListResult = CommentResult<CommentRow[]>;
 
@@ -124,6 +123,7 @@ function row(
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -151,11 +151,11 @@ function rowEl(id: string): HTMLElement | null {
   return host?.querySelector(`#comment-${id}`) ?? null;
 }
 
-function actionWords(id: string): string[] {
-  const actions = rowEl(id)?.querySelector('[data-comment-actions]');
-  // Icon-only actions (Reply privately, Copy) read by their accessible name.
-  return Array.from(actions?.querySelectorAll('button') ?? []).map(
-    (b) => b.textContent?.trim() || (b.getAttribute('aria-label') ?? ''),
+function barWords(id: string): string[] {
+  // The root row's own bar (not its replies'): icon buttons read by their names.
+  const bar = rowEl(id)?.querySelector('[data-comment-row="root"] [data-comment-bar]');
+  return Array.from(bar?.querySelectorAll('button') ?? []).map(
+    (b) => b.getAttribute('aria-label') ?? '',
   );
 }
 
@@ -181,42 +181,20 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('Reply privately on comments', () => {
-  const QUOTE = {
-    kind: 'comment',
-    sourceId: 'c-other',
-    authorUserId: OTHER,
-    authorName: 'Omar Other',
-    excerpt: 'Can @mia check the hook?',
-    whereLabel: 'Spring launch',
-    link: { kind: 'comment', entityType: 'brief', entityId: 'brief-1', commentId: 'c-other' },
-  };
-
-  it("someone else's row carries the Reply privately icon after Reply, before Copy", async () => {
+describe('Reply privately is gone from comments', () => {
+  it("someone else's row: the bar is Reply, Resolve, To-do (agency), no Reply privately, no Copy", async () => {
     await mount();
-    expect(actionWords('c-other')).toEqual(['Resolve', 'Reply', REPLY_PRIVATELY, 'Copy']);
+    expect(barWords('c-other')).toEqual(['Reply', 'Resolve', 'To-do']);
+    expect(barWords('c-other')).not.toContain(REPLY_PRIVATELY);
   });
 
-  it('my own row, a former member and a legacy author get no Reply privately icon', async () => {
+  it('no row anywhere carries a Reply privately control', async () => {
     await mount();
-    for (const id of ['c-mine', 'c-gone', 'c-legacy']) {
-      expect(rowEl(id)?.querySelector('[data-row-action="reply-privately"]') ?? null).toBeNull();
-    }
+    expect(host?.querySelector('[data-row-action="reply-privately"]') ?? null).toBeNull();
+    expect(host?.textContent ?? '').not.toContain(REPLY_PRIVATELY);
   });
 
-  it('the icon opens the inline message card with the comment as its source', async () => {
-    await mount();
-    const icon = rowEl('c-other')?.querySelector<HTMLElement>(
-      '[data-row-action="reply-privately"]',
-    );
-    expect(icon).not.toBeNull();
-    act(() => icon?.click());
-    const request = personCardSnapshot();
-    expect(request?.userId).toBe(OTHER);
-    expect(request?.source).toEqual(QUOTE);
-  });
-
-  it('a tap on the author opens the inline message card with the comment as its source', async () => {
+  it('a tap on the author opens the person card with no comment source', async () => {
     await mount();
     const trigger = rowEl('c-other')?.querySelector<HTMLElement>(
       `[data-person-trigger="${OTHER}"]`,
@@ -227,7 +205,7 @@ describe('Reply privately on comments', () => {
     expect(request?.userId).toBe(OTHER);
     expect(request?.view).toBe('card');
     expect(request?.trigger).toBe(trigger);
-    expect(request?.source).toEqual(QUOTE);
+    expect(request?.source ?? null).toBeNull();
   });
 
   it('my own comment and a former member open the card with no source', async () => {
@@ -242,5 +220,10 @@ describe('Reply privately on comments', () => {
       act(() => trigger.click());
       expect(personCardSnapshot()?.source ?? null).toBeNull();
     }
+  });
+
+  it('works outside a router too (no navigation hook needed to paint)', async () => {
+    await mount(false);
+    expect(rowEl('c-other')).not.toBeNull();
   });
 });

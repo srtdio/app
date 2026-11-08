@@ -396,8 +396,11 @@ test('S6 a plan item comment: a mention chip inside a bullet', async ({ page }) 
   await expect
     .poll(() => String(lastArgs(network, 'plan_item_comment_create')?.p_body ?? ''))
     .toMatch(/^- /);
-  const posted = item.locator('[data-plan-comment-bubble]', { hasText: 'can you check the hook?' });
-  await expect(posted.locator(`ul > li [data-plan-mention="${COLLEAGUE_A}"]`)).toBeVisible();
+  // The plan thread is chat's own bubble (MessageBubble) with chat's mention names.
+  const posted = item.locator('[data-plan-comment-id] [data-bubble]', {
+    hasText: 'can you check the hook?',
+  });
+  await expect(posted.locator(`ul > li [data-mention="${COLLEAGUE_A}"]`)).toBeVisible();
   await expect(posted).not.toContainText('- ');
   expectClean(network);
 });

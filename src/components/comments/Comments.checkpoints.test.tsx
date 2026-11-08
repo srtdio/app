@@ -8,11 +8,13 @@ import type { ToastOptions } from '@/components/ui/toast/types';
 // Checkpoints in the post comments panel (locked design, 7 Nov 2026):
 // - the author shows ONCE per group ("{n} checkpoints · {time}"), then a
 //   numbered list; the number circle is the only state;
-// - an agency member resolves an open point in ONE tap (checkbox + "Resolve",
+// - an agency member resolves an open point in ONE tap (the bar's Resolve,
 //   no note, no Send back), Undo for 4s; the point then folds to one line at
 //   the bottom ("{n} · {first line}", ⌄ opens it inline); numbers never change;
-// - a client sees "Open" on their own open point and Confirm on a resolved,
-//   unconfirmed one, never Resolve;
+// - a client gets Confirm on a resolved, unconfirmed point, never Resolve; the
+//   circle alone says a point is open;
+// - every row's actions sit on its bar (8 Nov 2026): Reply, Resolve, To-do,
+//   Edit, | Delete; no line under the body, no Copy, no role label;
 // - everyone can reply inside a checkpoint, clients included; a reply to a
 //   reply posts to the checkpoint root with the @Name of the person replied to;
 // - replies fold to the latest ("View {n} earlier replies").
@@ -146,6 +148,7 @@ function row(id: string, body: string, extra: Partial<CommentRow> = {}): Comment
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -187,10 +190,12 @@ function byAria(label: string): HTMLButtonElement | undefined {
 function rowEl(id: string): HTMLElement | null {
   return host?.querySelector(`#comment-${id}`) ?? null;
 }
-/** The checkpoint row's own Reply (not a reply's, not the composer's submit). */
+/** The checkpoint row's own Reply on its bar (not a reply's, not the composer's submit). */
 function checkpointReply(id: string): HTMLButtonElement | undefined {
-  return Array.from(rowEl(id)?.querySelectorAll('button') ?? []).find(
-    (b) => b.textContent?.trim() === 'Reply' && !b.hasAttribute('data-reply-to-reply'),
+  return (
+    rowEl(id)?.querySelector<HTMLButtonElement>(
+      '[data-comment-row="root"] [data-comment-bar] [data-bar-action="reply"]',
+    ) ?? undefined
   );
 }
 /** The open reply composer's submit: the round Send named "Reply" (the last such button). */
@@ -225,19 +230,20 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('checkpoint checkbox', () => {
-  it('resolves in one tap: checkbox + "Resolve", no note, Undo for 4s, then folds', async () => {
+describe('checkpoint Resolve on the bar', () => {
+  it('resolves in one tap: the bar\'s Resolve, no note, Undo for 4s, then folds', async () => {
     checkpointRows.current = [checkpoint('p-1', 1)];
     await mount(false);
 
     const box = byAria('Resolve checkpoint 1');
     expect(box).toBeDefined();
-    expect(box?.getAttribute('role')).toBe('checkbox');
-    expect(box?.getAttribute('aria-checked')).toBe('false');
+    expect(box?.closest('[data-comment-bar]')).toBeTruthy();
+    expect(box?.hasAttribute('data-checkpoint-box')).toBe(true);
     expect(box?.className).toContain('min-h-11');
     expect(box?.className).toContain('min-w-11');
-    expect(box?.textContent).toBe('Resolve');
-    expect(box?.querySelector('[data-tick]')?.getAttribute('data-tick')).toBe('open');
+    // Icon only (the circle with a tick); its name is the accessible label.
+    expect(box?.textContent).toBe('');
+    expect(box?.querySelector('svg')).toBeTruthy();
 
     act(() => box?.click());
 
@@ -288,12 +294,20 @@ describe('checkpoint checkbox', () => {
     expect(host?.textContent ?? '').not.toContain('Send back');
   });
 
-  it('a client sees "Open" on their own open point, nothing on an agency one', async () => {
+  it('a client on their own open point: the circle says open; Reply, Edit, Delete, never Resolve or To-do', async () => {
     viewer.id = CLIENT;
     checkpointRows.current = [checkpoint('p-1', 1, { author_user_id: CLIENT })];
     await mount(true);
-    expect(rowEl('p-1')?.querySelector('[data-checkpoint-open]')?.textContent).toBe('Open');
+    expect(
+      rowEl('p-1')
+        ?.querySelector('[data-checkpoint-circle]')
+        ?.getAttribute('data-checkpoint-circle'),
+    ).toBe('open');
     expect(byAria('Resolve checkpoint 1')).toBeUndefined();
+    const bar = rowEl('p-1')?.querySelector('[data-comment-row="root"] [data-comment-bar]');
+    expect(
+      Array.from(bar?.querySelectorAll('button') ?? []).map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Reply', 'Edit', 'Delete']);
   });
 });
 
@@ -460,51 +474,62 @@ describe('replies inside a checkpoint', () => {
 });
 
 describe('one row template for checkpoints and comments', () => {
-  function actionWords(rowId: string): string[] {
-    const actions = rowEl(rowId)?.querySelector('[data-comment-actions]');
-    return (
-      Array.from(actions?.children ?? [])
-        .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-open'))
-        // Icon-only actions (Reply privately, Copy) read by their accessible name.
-        .map((el) => el.textContent?.trim() || (el.getAttribute('aria-label') ?? ''))
+  function barWords(rowId: string): string[] {
+    const bar = rowEl(rowId)?.querySelector('[data-comment-row="root"] [data-comment-bar]');
+    return Array.from(bar?.querySelectorAll('button') ?? []).map(
+      (el) => el.getAttribute('aria-label') ?? '',
     );
   }
 
-  it('a point and a plain comment share the body and one action line', async () => {
-    checkpointRows.current = [checkpoint('p-1', 2)];
-    pageRows.current = [row('c-1', 'plain note', { created_at: '2026-01-03T00:00:00.000Z' })];
+  it('a point and a plain comment share the body and one action bar', async () => {
+    checkpointRows.current = [checkpoint('p-1', 2, { author_user_id: OTHER })];
+    pageRows.current = [
+      row('c-1', 'plain note', { author_user_id: OTHER, created_at: '2026-01-03T00:00:00.000Z' }),
+    ];
     await mount(false);
 
     for (const id of ['p-1', 'c-1']) {
       const el = rowEl(id);
       expect(el?.querySelector('[data-comment-row="root"]')).toBeTruthy();
-      // The time leads the action line, meta role (mono, tabular).
-      const time = el?.querySelector('[data-comment-actions] > [data-comment-time]');
-      expect(time).toBeTruthy();
-      expect(time?.className).toContain('font-mono');
-      expect(time?.className).toContain('text-sm');
-      // Every control a 44 hit with small visible type.
-      for (const control of Array.from(
-        el?.querySelectorAll('[data-comment-actions] > button') ?? [],
-      )) {
+      // No line under the body any more.
+      expect(el?.querySelector('[data-comment-actions]')).toBeNull();
+      // Every bar control a 44 icon box with no visible word.
+      for (const control of Array.from(el?.querySelectorAll('[data-comment-bar] button') ?? [])) {
         expect(control.className).toContain('h-11');
         expect(control.className).toContain('min-w-11');
+        expect(control.textContent).toBe('');
       }
-      const copy = el?.querySelector('[data-comment-actions] [data-row-action="copy"]');
-      expect(copy?.textContent).toBe('');
-      expect(copy?.querySelector('svg')).toBeTruthy();
+      expect(el?.querySelector('[data-row-action="copy"]')).toBeNull();
     }
-    // A plain root has its header (name + role); a point shows its author on the group.
-    expect(rowEl('c-1')?.querySelector('[data-comment-header] [data-comment-role]')).toBeTruthy();
+    // A plain root's header: name and time (meta role: mono, tabular); no role label.
+    const header = rowEl('c-1')?.querySelector('[data-comment-header]');
+    expect(header?.querySelector('[data-comment-author]')).toBeTruthy();
+    const time = header?.querySelector('[data-comment-time]');
+    expect(time?.className).toContain('font-mono');
+    expect(time?.className).toContain('text-sm');
+    expect(rowEl('c-1')?.textContent ?? '').not.toMatch(/Agency|Creator|Approver/);
+    // A point shows its author on the group: its head line holds only the bar.
     expect(rowEl('p-1')?.querySelector('[data-comment-header]')).toBeNull();
+    expect(rowEl('p-1')?.querySelector('[data-point-head] [data-comment-bar]')).toBeTruthy();
     // The point's number is its circle, never a "#2".
     expect(rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.textContent).toBe('2');
     expect(rowEl('p-1')?.textContent ?? '').not.toContain('#2');
 
-    expect(actionWords('p-1')).toEqual(['Resolve', 'Reply', 'Copy']);
-    expect(actionWords('c-1')).toEqual(['Resolve', 'Reply', 'Copy']);
+    // Agency viewer, someone else's rows: Reply, Resolve, To-do.
+    expect(barWords('p-1')).toEqual(['Reply', 'Resolve checkpoint 2', 'To-do']);
+    expect(barWords('c-1')).toEqual(['Reply', 'Resolve', 'To-do']);
     // No card per thread.
     expect(rowEl('c-1')?.className).not.toContain('lit-card-muted');
+  });
+
+  it("the viewer's own rows add Edit, the hairline and Delete, in that order", async () => {
+    pageRows.current = [row('c-1', 'mine')];
+    await mount(false);
+    expect(barWords('c-1')).toEqual(['Reply', 'Resolve', 'To-do', 'Edit', 'Delete']);
+    const bar = rowEl('c-1')?.querySelector('[data-comment-bar]');
+    const divider = bar?.querySelector('[data-bar-divider]');
+    expect(divider).toBeTruthy();
+    expect(divider?.nextElementSibling?.getAttribute('aria-label')).toBe('Delete');
   });
 
   it('a client gets no Resolve on a plain thread', async () => {
@@ -531,9 +556,10 @@ describe('one row template for checkpoints and comments', () => {
     const header = reply?.querySelector('[data-comment-header]');
     expect(header?.querySelector('[data-comment-author]')).toBeTruthy();
     expect(header?.className).toContain('items-center');
-    // The time sits in the action line, not the header.
-    expect(header?.querySelector('[data-comment-time]')).toBeNull();
-    expect(reply?.querySelector('[data-comment-actions] [data-comment-time]')).toBeTruthy();
+    // Avatar, name and time at the top left; the bar at the trailing end.
+    expect(header?.querySelector('[data-comment-time]')).toBeTruthy();
+    expect(header?.querySelector('[data-comment-bar]')).toBeTruthy();
+    expect(reply?.querySelector('[data-comment-actions]')).toBeNull();
     const list = rowEl('r-1')?.closest('[data-replies]');
     expect(list?.innerHTML ?? '').not.toContain('border-l');
     expect(list?.className ?? '').not.toContain('pl-4');
@@ -634,79 +660,17 @@ describe('folded replies', () => {
     });
     await settle();
     expect(rowEl('p-1')?.querySelector('[data-point-fold]')).toBeNull();
-    expect(rowEl('p-1')?.querySelector('[data-comment-actions]')).toBeTruthy();
+    expect(rowEl('p-1')?.querySelector('[data-comment-bar]')).toBeTruthy();
   });
 });
 
-describe('the Copy icon on a comment row', () => {
-  const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
-
-  beforeEach(() => {
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText },
-      configurable: true,
-    });
-    writeText.mockReset();
-    writeText.mockImplementation(async () => undefined);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  function copyButton(id: string): HTMLButtonElement | null {
-    return rowEl(id)?.querySelector<HTMLButtonElement>('[data-row-action="copy"]') ?? null;
-  }
-
-  it('tapping Copy shows the tick, then reverts to the clipboard after 2000 ms', async () => {
-    pageRows.current = [row('c-1', 'plain note')];
+describe('no Copy on a comment row (comment action bar, 8 Nov 2026)', () => {
+  it('neither a point nor a plain comment offers Copy', async () => {
+    checkpointRows.current = [checkpoint('p-1', 1)];
+    pageRows.current = [row('c-1', 'plain note', { created_at: '2026-01-03T00:00:00.000Z' })];
     await mount(false);
-    const before = copyButton('c-1');
-    expect(before?.getAttribute('aria-label')).toBe('Copy');
-    expect(before?.hasAttribute('data-copied')).toBe(false);
-    const clipboardIcon = before?.innerHTML ?? '';
-
-    vi.useFakeTimers();
-    await act(async () => {
-      copyButton('c-1')?.click();
-    });
-    await settle();
-    expect(writeText).toHaveBeenCalledWith('plain note');
-    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(true);
-    expect(copyButton('c-1')?.innerHTML).not.toBe(clipboardIcon);
-    // The status is visually hidden: no visible "Copied" text in the row.
-    const status = rowEl('c-1')?.querySelector('[role="status"]');
-    expect(status?.textContent).toBe('Copied');
-    expect(status?.className).toContain('sr-only');
-    expect(copyButton('c-1')?.getAttribute('aria-label')).toBe('Copy');
-
-    act(() => {
-      vi.advanceTimersByTime(1999);
-    });
-    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(true);
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(false);
-    expect(copyButton('c-1')?.innerHTML).toBe(clipboardIcon);
-    expect(rowEl('c-1')?.querySelector('[role="status"]')).toBeNull();
-  });
-
-  it('a failed copy shows the error toast and no tick or inline text', async () => {
-    writeText.mockImplementation(async () => {
-      throw new Error('denied');
-    });
-    pageRows.current = [row('c-1', 'plain note')];
-    await mount(false);
-    const before = toasts.length;
-    await act(async () => {
-      copyButton('c-1')?.click();
-    });
-    await settle();
-    expect(toasts.slice(before)).toContainEqual(
-      expect.objectContaining({ title: "Couldn't copy", tone: 'error' }),
-    );
-    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(false);
-    expect(rowEl('c-1')?.querySelector('[role="status"]')).toBeNull();
+    expect(host?.querySelector('[data-row-action="copy"]')).toBeNull();
+    expect(byAria('Copy')).toBeUndefined();
+    expect(host?.querySelector('[role="status"]')).toBeNull();
   });
 });

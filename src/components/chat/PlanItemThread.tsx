@@ -1,52 +1,68 @@
-// A plan item's comments as a chat thread, with Sorted chat's look: others on
-// the left under their avatar, the viewer's own on the right in bubble-own.
-// Consecutive comments from one author within PLAN_RUN_GAP_MS are one run: the
-// name and role sit over its first bubble, the time under its last. A day line
-// ("Today", "Yesterday", "Tue 3 Nov", chat's dayPillLabel) goes between days.
-// Creators-only comments are warn-soft with the warn line and a lock label.
-// Mention tokens render as pills (names from the shared registry, never a raw
-// token). Also the @ helpers the comment box uses: who can be tagged (never me;
+// A plan item's comments as a chat thread, drawn by chat's own parts so plan
+// items, concepts, bank ideas and a post item's Plan notes look, feel and work
+// exactly like a chat thread (CLAUDE.md "Work chat (Slack way)"): chat's
+// grouping (same sender within 5 min, a day pill between days), chat's
+// MessageBubble per comment (everyone on the left, no bubbles, square photo 32
+// + name + clock time on a group head), chat's swipe core (right = Reply; left
+// rubber-bands: plan comments have no delete), chat's long-press / right-click
+// MessageActionMenu, a clock while pending and "Not sent" + Retry on a failed
+// own send, chat's @mention names. Creators-only notes carry a lock line.
+// Also the @ helpers the comment box uses: who can be tagged (never me;
 // agency side only on a creators-only note or a plan not shared with the
 // client), and which tagged people a creators-only note blocks.
 //
 // Pure helpers carry the logic; the components only draw. No reads: author
-// roles and photos come from the members this session already holds
+// names and photos come from the members this session already holds
 // (peekWorkspaceMembers), never a request on paint. Tokens only.
 
-import { Fragment, useEffect, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
-import { Avatar } from '@/components/ui/Avatar';
-import { PersonTrigger } from '@/components/ui/PersonTrigger';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactElement } from 'react';
+import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { ICON_SIZE, IconLock } from '@/components/ui/icons';
-import { dayPillLabel } from '@/components/chat/day-separators';
+import { tintTarget } from '@/components/ui/SearchHighlight';
+import { useToast } from '@/components/ui/toast';
+import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
+import { cancelPendingLongPressesWithin, useLongPress } from '@/components/ui/useLongPress';
+import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
+import { MessageActionMenu } from '@/components/chat/MessageActionMenu';
 import {
-  BUBBLE_PAD,
-  BUBBLE_SHAPE,
-  DATE_PILL_TYPE,
-  sized,
-  useChatLayout,
-} from '@/components/chat/chat-type';
-import { renderBodyLinks, renderRich } from '@/components/chat/message-body';
+  DayPill,
+  MessageBubble,
+  createRowHold,
+  isLinkTarget,
+  paintRowSwipe,
+  profileNameOf,
+  rowSwipeCanTrigger,
+  threadRows,
+  type BubbleMentions,
+  type BubblePointerHandlers,
+  type BubbleSwipe,
+  type RowHold,
+} from '@/components/chat/MessageThread';
+import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { TEAM_ONLY_LABEL } from '@/components/chat/plan-card';
-import { roleLabel } from '@/components/pages/settings/members-data';
+import type { ChatProfile } from '@/lib/chat-reads';
+import { setPrivateReplyDraft } from '@/lib/chat/drafts';
 import { startChatMembers } from '@/lib/chat/open-members';
 import {
-  ALL_MENTION,
   filterMentionMembers,
+  isFormerMember,
   mentionIds,
   personAvatar,
-  personMentionLabel,
   rememberMentionNames,
-  splitMentions,
+  resolveMentionText,
+  resolvePersonMentionText,
   type MentionMember,
 } from '@/lib/chat/mentions';
 import type { CommentVisibility, PlanAudience } from '@/lib/chat/plans';
-import { cn } from '@/lib/cn';
-import { civilDay, formatTime } from '@/lib/time';
-import { isFormerMember, resolvePersonMentionText } from '@/lib/chat/mentions';
-import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-privately';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
+import { createSwipeReplyController, type SwipeReplyController } from '@/lib/chat/swipe-reply';
+import { SENDER_GROUP_MS, breaksRun, type ThreadMessage } from '@/lib/chat/thread';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { planItemFocusHref } from '@/lib/focus-target';
+import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-privately';
 import { supabase } from '@/lib/supabase';
+import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
 
 /** A comment shown in the thread: a recorded row, or a pending own one. */
@@ -62,6 +78,10 @@ export interface ShownComment {
   pending: boolean;
   /** authorName is the author's real name (their name read answered), not a fallback. */
   authorKnown?: boolean;
+  /** A pending own comment whose write failed: "Not sent" + Retry (chat's look). */
+  failed?: boolean;
+  /** A failed write the server refused for good: shown with Delete only, never Retry. */
+  refusal?: string;
 }
 
 /** Where a plan comment's Reply privately points: the plan, the item, its title. */
@@ -103,8 +123,8 @@ function authorLeft(
   return !held.rows.some((r) => r.user_id === userId && r.active === true && r.removed_at === null);
 }
 
-/** Comments this close together from one author are one run. */
-export const PLAN_RUN_GAP_MS = 5 * 60 * 1000;
+/** Comments this close together from one author are one run: chat's own group gap. */
+export const PLAN_RUN_GAP_MS = SENDER_GROUP_MS;
 
 /** The roles on the agency side (Creators); everyone else is an approver. */
 const AGENCY_ROLES = new Set(['owner', 'admin', 'agency']);
@@ -118,56 +138,42 @@ export type PlanThreadRow =
   | { kind: 'day'; key: string; label: string }
   | { kind: 'comment'; comment: ShownComment; head: boolean; tail: boolean };
 
-function timeOf(c: Pick<ShownComment, 'createdAt'>): number {
-  const t = Date.parse(c.createdAt);
-  return Number.isFinite(t) ? t : 0;
-}
-
-/** Whether `next` starts a new run after `prev`: another author, or a 5 min gap. Pure. */
+/** Whether `next` starts a new run after `prev`: chat's breaksRun (author, 5 min gap). Pure. */
 export function breaksPlanRun(
   prev: Pick<ShownComment, 'authorUserId' | 'mine' | 'createdAt'> | undefined,
   next: Pick<ShownComment, 'authorUserId' | 'mine' | 'createdAt'>,
 ): boolean {
-  if (prev === undefined) return true;
-  if (prev.mine !== next.mine) return true;
-  if (!prev.mine && prev.authorUserId !== next.authorUserId) return true;
-  const a = timeOf(prev);
-  const b = timeOf(next);
-  if (a === 0 || b === 0) return false;
-  return b - a >= PLAN_RUN_GAP_MS;
+  return breaksRun(prev === undefined ? undefined : runOf(prev), runOf(next));
+}
+
+/** The fields chat's breaksRun reads, from a comment. Pure. */
+function runOf(
+  c: Pick<ShownComment, 'authorUserId' | 'mine' | 'createdAt'>,
+): Pick<ThreadMessage, 'mine' | 'senderUserId' | 'time'> {
+  const t = Date.parse(c.createdAt);
+  return { mine: c.mine, senderUserId: c.authorUserId, time: Number.isFinite(t) ? t : 0 };
 }
 
 /**
- * The thread's rows in order: a day line before the first comment and before
- * every comment on a new calendar day (device zone), then each comment with
- * head (first of its run) and tail (last of its run). A day line ends a run.
- * `timeZone` is for tests. Pure.
+ * The thread's rows in order, from chat's own threadRows: a day pill before
+ * the first comment and before every comment on a new calendar day (device
+ * zone), then each comment with head (first of its run) and tail (last of its
+ * run). A day pill ends a run. `timeZone` is for tests. Pure.
  */
 export function planThreadRows(
   comments: readonly ShownComment[],
   nowMs: number,
   timeZone?: string,
 ): PlanThreadRow[] {
-  const days = comments.map((c) => (timeOf(c) > 0 ? civilDay(timeOf(c), timeZone) : null));
+  const byId = new Map(comments.map((c) => [c.id, c]));
   const rows: PlanThreadRow[] = [];
-  let current: string | null = null;
-  comments.forEach((comment, i) => {
-    const day = days[i] ?? null;
-    const newDay = day !== null && day !== current;
-    if (newDay) {
-      current = day;
-      rows.push({ kind: 'day', key: `day-${day}`, label: dayPillLabel(day, nowMs, timeZone) });
-    }
-    const next = comments[i + 1];
-    const nextDay = days[i + 1] ?? null;
-    const nextNewDay = next !== undefined && nextDay !== null && nextDay !== current;
-    rows.push({
-      kind: 'comment',
-      comment,
-      head: newDay || breaksPlanRun(comments[i - 1], comment),
-      tail: next === undefined || nextNewDay || breaksPlanRun(comment, next),
-    });
-  });
+  for (const row of threadRows(comments.map(planCommentMessage), nowMs, timeZone)) {
+    if (row.kind === 'day') rows.push(row);
+    if (row.kind !== 'message') continue;
+    const comment = byId.get(row.message.id);
+    if (comment === undefined) continue;
+    rows.push({ kind: 'comment', comment, head: row.head, tail: row.tail });
+  }
   return rows;
 }
 
@@ -306,218 +312,369 @@ export function usePlanMentionMembers(
   return { members, load: () => setAsked(true) };
 }
 
-/** A body with Slack blocks and WhatsApp formatting outermost, then its
- *  mention tokens as pills and chat's links in each styled segment. */
-function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): ReactNode[] {
-  return renderRich(body, (text) => mentionNodes(text, ownTone, workspaceId));
+/** Chat's empty reactions, one array for every comment (rows never re-allocate it). */
+const NO_REACTIONS: ThreadMessage['reactions'] = [];
+const NO_IDS: string[] = [];
+
+/**
+ * A plan comment as a chat ThreadMessage, so chat's own bubble draws it: a
+ * recorded row is 'sent', a pending own one 'sending' (the clock), a failed
+ * own one 'failed' ("Not sent" + Retry, or its refusal with Delete only).
+ * Plan comments carry no files, cards, quotes or reactions. Pure.
+ */
+export function planCommentMessage(c: ShownComment): ThreadMessage {
+  const time = Date.parse(c.createdAt);
+  return {
+    id: c.id,
+    senderUserId: c.authorUserId,
+    body: c.body,
+    createdAt: c.createdAt,
+    time: Number.isFinite(time) ? time : 0,
+    provisionalTime: c.pending,
+    mine: c.mine,
+    attachments: [],
+    sharedPostIds: NO_IDS,
+    sharedBriefIds: NO_IDS,
+    reply: null,
+    state: c.failed === true ? 'failed' : c.pending ? 'sending' : 'sent',
+    status: 'sent',
+    reactions: NO_REACTIONS,
+    ...(c.failed === true && c.refusal !== undefined ? { refusal: c.refusal } : {}),
+  };
 }
 
-/** One styled segment: mention tokens as pills; the text between keeps chat's links. */
-function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null): ReactNode[] {
-  return splitMentions(text).map((segment, i) => {
-    if (segment.kind === 'text') {
-      return <Fragment key={`part-${i}`}>{renderBodyLinks(segment.text, ownTone)}</Fragment>;
-    }
-    const label = personMentionLabel(workspaceId, segment.userId);
-    if (label === null) return null;
-    const pill = (
-      <span
-        data-plan-mention={segment.userId}
-        className={cn(
-          'shrink-0 whitespace-nowrap rounded-full px-2 font-medium lit-tint',
-          ownTone ? 'bg-accent-fg/[0.22] text-accent-fg' : 'bg-accent-soft text-accent',
-        )}
-      >
-        {label}
-      </span>
-    );
-    // "@all" names no one; every person's pill opens the person card.
-    if (segment.userId.toLowerCase() === ALL_MENTION)
-      return <Fragment key={`part-${i}`}>{pill}</Fragment>;
-    return (
-      <PersonTrigger
-        key={`part-${i}`}
-        userId={segment.userId}
-        {...(isFormerMember(workspaceId, segment.userId) ? { former: true } : {})}
-      >
-        {pill}
-      </PersonTrigger>
-    );
-  });
+/**
+ * The profiles chat's bubble reads (name, photo, @handle): the members this
+ * session already holds, then each author whose real name the comment read
+ * answered (photo from the mention registry). An author with no known name is
+ * left out, so the bubble names them as chat does and the person card opens
+ * without a name. No read. Pure.
+ */
+export function planCommentProfiles(
+  comments: readonly ShownComment[],
+  held: Pick<WorkspaceMembersData, 'profiles'> | null,
+  workspaceId: string | null,
+): Map<string, ChatProfile> {
+  const out = new Map<string, ChatProfile>(held?.profiles ?? []);
+  for (const c of comments) {
+    const id = c.authorUserId;
+    if (id === null || out.has(id) || c.authorKnown !== true) continue;
+    out.set(id, {
+      userId: id,
+      displayName: c.authorName,
+      avatarUrl: personAvatar(workspaceId, id),
+    });
+  }
+  return out;
 }
 
-/** The author's role label from the held members; null when not held. */
-function authorRole(held: WorkspaceMembersData | null, userId: string | null): string | null {
-  if (held === null || userId === null) return null;
-  const row = held.rows.find((r) => r.user_id === userId && r.active === true);
-  return row !== undefined ? roleLabel(row.role) : null;
+/** What the long-press menu offers on one comment (chat's rules, minus what plans lack). Pure. */
+export function planCommentMenu(input: {
+  comment: Pick<ShownComment, 'body' | 'pending' | 'failed' | 'mine'>;
+  canReply: boolean;
+  canLink: boolean;
+  replyPrivately: boolean;
+}): {
+  reply: boolean;
+  copy: boolean;
+  copyLink: boolean;
+  replyPrivately: boolean;
+  discard: boolean;
+} {
+  const recorded = !input.comment.pending && input.comment.failed !== true;
+  return {
+    reply: input.canReply && recorded,
+    copy: input.comment.body.trim() !== '',
+    copyLink: input.canLink && recorded,
+    replyPrivately: input.replyPrivately && recorded,
+    discard: input.comment.mine && input.comment.failed === true,
+  };
 }
 
-/** One day line between comments (chat's day pill look). No motion. */
-function PlanDayLine(props: { label: string }): ReactElement {
-  const layout = useChatLayout();
+/** The "Creators only" line inside a creators-only note's bubble. */
+function TeamOnlyLine(): ReactElement {
   return (
-    <li role="separator" aria-label={props.label} data-plan-day="" className="flex justify-center">
-      <span
-        className={cn(
-          'mb-2 mt-2 self-center rounded-full border border-border bg-panel-2 px-3 py-1 text-fg-3 lit-pill',
-          sized(DATE_PILL_TYPE, layout),
-        )}
-      >
-        {props.label}
-      </span>
-    </li>
+    <span
+      data-plan-comment-team=""
+      className="mb-1 inline-flex items-center gap-1 text-sm text-warn"
+    >
+      <IconLock size={ICON_SIZE.inline} />
+      {TEAM_ONLY_LABEL}
+    </span>
   );
 }
 
-/** One comment bubble with its run's name line (others) and time (the run's last). */
-function PlanBubble(props: {
-  row: Extract<PlanThreadRow, { kind: 'comment' }>;
+/** Where Copy link points: the plan (null for a bank idea) and the item. */
+export interface PlanCommentLinkTarget {
+  planId: string | null;
+  itemId: string;
+}
+
+/** One open long-press menu: the comment and the bubble's rect. */
+interface OpenMenu {
+  comment: ShownComment;
+  anchor: DOMRect | null;
+}
+
+/**
+ * One comment row: chat's MessageRow wiring on chat's MessageBubble. Swipe
+ * right replies (the one swipe core); a left swipe rubber-bands (plan
+ * comments cannot be deleted, so nothing fires). A hold (touch) or right-click
+ * (laptop), Enter / Space / Shift+F10, or the laptop chevron opens the menu.
+ * Pending and failed rows never swipe (chat's rule).
+ */
+function PlanCommentRow(props: {
+  comment: ShownComment;
+  message: ThreadMessage;
+  head: boolean;
+  tail: boolean;
+  afterLabel: boolean;
+  profiles: Map<string, ChatProfile>;
   workspaceId: string | null;
-  held: WorkspaceMembersData | null;
-  highlighted: boolean;
   me: string | null;
-  replyPrivately: PlanReplyPrivatelyTarget | null;
+  layout: ChatLayout;
+  highlighted: boolean;
+  hoverMenu: boolean;
+  coarsePointer: boolean;
+  reducedMotion: boolean;
+  personSource: (message: ThreadMessage) => PrivateReplyDraft | null;
+  mentions: BubbleMentions;
+  onOpenMenu: (comment: ShownComment, anchor: DOMRect | null) => void;
+  onReply: (() => void) | undefined;
+  onRetry: ((id: string) => void) | undefined;
+  onDiscard: ((id: string) => void) | undefined;
 }): ReactElement {
-  const layout = useChatLayout();
-  const { comment: c, head, tail } = props.row;
-  const target = props.replyPrivately;
-  const authorUserId = c.authorUserId;
-  const replyTo =
-    target !== null &&
-    authorUserId !== null &&
-    showPlanReplyPrivately(c, props.me, authorLeft(props.held, props.workspaceId, authorUserId))
-      ? { target, authorUserId }
-      : null;
-  const team = c.visibility === 'team';
-  const mine = c.mine;
-  // White text on bubble-own; a creators-only note keeps the warn look (ink text).
-  const ownTone = mine && !team;
-  const role = mine ? null : authorRole(props.held, c.authorUserId);
-  const avatarSrc =
-    c.authorUserId !== null
-      ? (props.held?.profiles.get(c.authorUserId)?.avatarUrl ??
-        personAvatar(props.workspaceId, c.authorUserId))
-      : null;
-  // The author's photo and name open the person card (a pending own comment
-  // and an author with no id have nothing to open).
-  const authorId = !mine && !c.pending ? authorUserId : null;
-  // Reply privately: a tap on the author opens the card with this comment as its source.
-  const quote =
-    replyTo !== null
-      ? (): PrivateReplyDraft =>
-          planCommentPrivateReplyDraft({
-            commentId: c.id,
-            authorUserId: replyTo.authorUserId,
-            authorName: c.authorName,
-            excerpt: resolvePersonMentionText(c.body, props.workspaceId),
-            whereLabel: replyTo.target.whereLabel,
-            planId: replyTo.target.planId,
-            itemId: replyTo.target.itemId,
-          })
-      : null;
-  const asAuthor = (node: ReactElement, display: 'inline' | 'block'): ReactElement =>
-    authorId !== null ? (
-      <PersonTrigger
-        userId={authorId}
-        name={c.authorKnown === true ? c.authorName : null}
-        avatarUrl={avatarSrc}
-        former={authorLeft(props.held, props.workspaceId, authorId)}
-        display={display}
-        {...(quote !== null ? { source: quote } : {})}
-      >
-        {node}
-      </PersonTrigger>
-    ) : (
-      node
-    );
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const iconRef = useRef<HTMLSpanElement>(null);
+  const deleteIconRef = useRef<HTMLSpanElement>(null);
+  const rowRef = useRef<HTMLLIElement>(null);
+  const swipeIconShownRef = useRef(true);
+  const latest = useRef(props);
+  latest.current = props;
+  const bubbleRect = (): DOMRect | null => bubbleRef.current?.getBoundingClientRect() ?? null;
+  const swipeRef = useRef<SwipeReplyController | null>(null);
+  const { handlers, consumeClickSuppression, cancel, clearClickSuppression } = useLongPress(
+    () => rowHold.hold(),
+    { ignoreMouse: true },
+  );
+  const open = (anchor: DOMRect | null): void => {
+    clearClickSuppression();
+    latest.current.onOpenMenu(latest.current.comment, anchor);
+  };
+  const rowHoldRef = useRef<RowHold | null>(null);
+  rowHoldRef.current ??= createRowHold({
+    selection: () => undefined,
+    coarse: () => latest.current.coarsePointer,
+    openMenu: () => open(bubbleRect()),
+    cancelTimer: () => cancel(),
+    cancelSwipe: () => swipeRef.current?.cancel(),
+    swiping: () => swipeRef.current?.swiping() === true,
+  });
+  const rowHold = rowHoldRef.current;
+  swipeRef.current ??= createSwipeReplyController({
+    direction: 'both',
+    onReply: () => latest.current.onReply?.(),
+    canTrigger: (side) => {
+      // Right replies where a Reply is wired; left never fires (no delete for plan comments).
+      const ok =
+        side === 'right' &&
+        latest.current.onReply !== undefined &&
+        rowSwipeCanTrigger(side, latest.current.message, undefined);
+      swipeIconShownRef.current = ok;
+      return ok;
+    },
+    onFrame: (frame) =>
+      paintRowSwipe(
+        bubbleRef.current,
+        iconRef.current,
+        deleteIconRef.current,
+        frame,
+        swipeIconShownRef.current,
+      ),
+    onStart: (pointerId) => {
+      cancel();
+      const scope = rowRef.current ?? bubbleRef.current;
+      if (scope !== null) cancelPendingLongPressesWithin(scope);
+      window.getSelection()?.removeAllRanges();
+      if (pointerId === undefined) return;
+      try {
+        scope?.setPointerCapture(pointerId);
+      } catch {
+        // The pointer is already gone; the gesture ends on its own.
+      }
+    },
+    enabled: () => latest.current.message.state === 'sent',
+    reducedMotion: () => latest.current.reducedMotion,
+  });
+  const swipe = swipeRef.current;
+  useEffect(() => () => swipe.dispose(), [swipe]);
+  // A deep link's arrival: chat's jump tint on the row (after paint, no read on paint).
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!props.highlighted || row === null) return;
+    return tintTarget(row);
+  }, [props.highlighted]);
+  const pointer: BubblePointerHandlers = {
+    onPointerDown: (e) => {
+      rowHold.pointerDown();
+      if (!isLinkTarget(e.target)) handlers.onPointerDown(e);
+    },
+    onPointerMove: (e) => handlers.onPointerMove(e),
+    onPointerUp: () => handlers.onPointerUp(),
+    onPointerCancel: () => handlers.onPointerCancel(),
+  };
+  const rowSwipeRef = useRef<BubbleSwipe | null>(null);
+  rowSwipeRef.current ??= {
+    iconRef,
+    deleteIconRef,
+    handlers: {
+      onPointerDown: (e) => swipe.handlers.onPointerDown(e),
+      onPointerMove: (e) => swipe.handlers.onPointerMove(e),
+      onPointerUp: (e) => swipe.handlers.onPointerUp(e),
+      onPointerCancel: () => swipe.handlers.onPointerCancel(),
+    },
+    consumeClick: () => swipe.consumeClickSuppression(),
+  };
+  const c = props.comment;
   return (
-    <li
-      data-plan-comment-id={c.id}
-      data-plan-comment={c.visibility}
-      data-plan-comment-side={mine ? 'own' : 'other'}
-      {...(head ? { 'data-plan-run-head': '' } : {})}
-      {...(tail ? { 'data-plan-run-tail': '' } : {})}
-      {...(props.highlighted ? { 'data-plan-comment-highlight': '' } : {})}
-      className={cn('flex gap-2', mine ? 'justify-end' : 'justify-start', head ? 'mt-2' : 'mt-1')}
-    >
-      {!mine ? (
-        <span className="w-8 shrink-0">
-          {head
-            ? asAuthor(
-                <Avatar
-                  name={c.authorName}
-                  role="header"
-                  {...(avatarSrc !== null ? { src: avatarSrc } : {})}
-                />,
-                'block',
-              )
-            : null}
-        </span>
-      ) : null}
-      <div
-        className={cn(
-          'flex min-w-0 flex-col gap-1',
-          mine ? 'items-end' : 'items-start',
-          'max-w-[80%]',
-        )}
-      >
-        {!mine && head ? (
-          <span data-plan-comment-author="" className="truncate text-base font-medium text-fg-2">
-            {asAuthor(<>{c.authorName}</>, 'inline')}
-            {role !== null ? ` · ${role}` : null}
-          </span>
-        ) : null}
-        <div
-          data-plan-comment-bubble=""
-          // The own bubble: the outline family draws in on-bubble ink here.
-          data-own={mine && !team ? '' : undefined}
-          className={cn(
-            'flex min-w-0 flex-col gap-1',
-            sized(BUBBLE_SHAPE, layout),
-            sized(BUBBLE_PAD, layout),
-            team
-              ? // bg-none: the warn fill shows through the bubble's lit gradient.
-                'border border-warn-line bg-warn-soft bg-none text-fg lit-bubble-other'
-              : mine
-                ? 'bg-bubble-own text-accent-fg lit-bubble-own'
-                : 'bg-panel-2 text-fg lit-bubble-other',
-            c.pending && 'opacity-70',
-            // The jump-to mark: the focus line (on-bubble ink on my own bubble).
-            props.highlighted && 'lit-focus',
-          )}
-        >
-          {team ? (
-            <span
-              data-plan-comment-team=""
-              className="inline-flex items-center gap-1 text-sm text-warn"
-            >
-              <IconLock size={ICON_SIZE.inline} />
-              {TEAM_ONLY_LABEL}
-            </span>
-          ) : null}
-          <div
-            className={cn(
-              'whitespace-pre-wrap break-words text-base',
-              ownTone ? 'text-accent-fg' : 'text-fg',
-            )}
-          >
-            {bodyNodes(c.body, ownTone, props.workspaceId)}
-          </div>
-        </div>
-        {tail ? (
-          <time dateTime={c.createdAt} className="px-1 font-mono text-sm tabular-nums text-fg-3">
-            {formatTime(c.createdAt)}
-          </time>
-        ) : null}
-      </div>
-    </li>
+    <MessageBubble
+      message={props.message}
+      profiles={props.profiles}
+      cache={sharedCardPresignCache()}
+      presignEnabled={PRESIGN_ENABLED}
+      showTicks={false}
+      isGroup
+      head={props.head}
+      tail={props.tail}
+      afterLabel={props.afterLabel}
+      layout={props.layout}
+      viewerUserId={props.me ?? undefined}
+      mentions={props.mentions}
+      workspaceId={props.workspaceId}
+      personSource={props.personSource}
+      bubbleRef={bubbleRef}
+      rowRef={rowRef}
+      swipe={rowSwipeRef.current}
+      rowData={{
+        'data-plan-comment-id': c.id,
+        'data-plan-comment': c.visibility,
+        'data-plan-comment-side': c.mine ? 'own' : 'other',
+        'data-plan-run-head': props.head ? '' : undefined,
+        'data-plan-run-tail': props.tail ? '' : undefined,
+        'data-plan-comment-highlight': props.highlighted ? '' : undefined,
+      }}
+      {...(c.visibility === 'team' ? { topLine: <TeamOnlyLine /> } : {})}
+      press={{
+        handlers: pointer,
+        onContextMenu: rowHold.contextMenu,
+        consumeClick: () => {
+          const held = consumeClickSuppression();
+          const swiped = swipe.consumeClickSuppression();
+          return held || swiped;
+        },
+        coarse: props.coarsePointer,
+        onKeyOpen: () => open(bubbleRect()),
+        ...(props.hoverMenu ? { onMore: () => open(bubbleRect()) } : {}),
+      }}
+      {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
+      {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
+      onBadgeClick={() => open(bubbleRect())}
+    />
   );
 }
 
 /**
- * The comments as a thread. `held` is the session's members (role and photo
- * per author), read synchronously, never fetched here.
+ * The open comment's long-press menu: chat's MessageActionMenu with the rows
+ * a plan comment has (Reply, Copy link, Copy text, Reply privately, and a
+ * failed own send's Delete). No reactions, Forward, Tasks, Mark unread, Edit
+ * or Delete: plan comments store none of those. Mounted only while open, so
+ * its hooks never run on paint.
+ */
+function PlanCommentMenu(props: {
+  menu: OpenMenu;
+  me: string | null;
+  workspaceId: string | null;
+  profiles: Map<string, ChatProfile>;
+  held: WorkspaceMembersData | null;
+  replyPrivately: PlanReplyPrivatelyTarget | null;
+  linkTo: PlanCommentLinkTarget | null;
+  onReply: (() => void) | undefined;
+  onDiscard: ((id: string) => void) | undefined;
+  onClose: () => void;
+}): ReactElement {
+  const toast = useToast();
+  const openDm = useOpenPersonDm();
+  const c = props.menu.comment;
+  const authorId = c.authorUserId;
+  const draft =
+    props.replyPrivately !== null &&
+    authorId !== null &&
+    showPlanReplyPrivately(c, props.me, authorLeft(props.held, props.workspaceId, authorId))
+      ? planCommentPrivateReplyDraft({
+          commentId: c.id,
+          authorUserId: authorId,
+          authorName: c.authorName,
+          excerpt: resolvePersonMentionText(c.body, props.workspaceId),
+          whereLabel: props.replyPrivately.whereLabel,
+          planId: props.replyPrivately.planId,
+          itemId: props.replyPrivately.itemId,
+        })
+      : null;
+  const offer = planCommentMenu({
+    comment: c,
+    canReply: props.onReply !== undefined,
+    canLink: props.linkTo !== null,
+    replyPrivately: draft !== null,
+  });
+  const nameOf = profileNameOf(props.profiles, props.workspaceId);
+  return (
+    <MessageActionMenu
+      open
+      onClose={props.onClose}
+      anchor={props.menu.anchor}
+      mine={c.mine}
+      currentReaction={null}
+      canReact={false}
+      canCopy={offer.copy}
+      onCopy={() => {
+        void copyText(resolveMentionText(c.body, nameOf)).then((ok) =>
+          toast.show({ title: ok ? 'Message copied' : COPY_FAILED }),
+        );
+      }}
+      onReact={() => undefined}
+      onReply={() => {
+        if (offer.reply) props.onReply?.();
+      }}
+      canCopyLink={offer.copyLink}
+      onCopyLink={() => {
+        const to = props.linkTo;
+        if (to === null) return;
+        const href = planItemFocusHref({ planId: to.planId, itemId: to.itemId, commentId: c.id });
+        void copyText(`${window.location.origin}${href}`).then((ok) =>
+          toast.show({ title: ok ? 'Link copied' : COPY_FAILED }),
+        );
+      }}
+      canReplyPrivately={offer.replyPrivately}
+      replyPrivatelyName={c.authorName}
+      onReplyPrivately={() => {
+        if (draft === null || authorId === null) return;
+        openDm(authorId, { beforeOpen: (channelId) => setPrivateReplyDraft(channelId, draft) });
+      }}
+      canDelete={offer.discard && props.onDiscard !== undefined}
+      failedSend={offer.discard}
+      onDelete={() => props.onDiscard?.(c.id)}
+    />
+  );
+}
+
+/**
+ * The comments as a chat thread, drawn by chat's own parts: chat's grouping
+ * (threadRows: same sender within 5 min, a day pill between days), chat's
+ * MessageBubble per comment (everyone on the left, square photo 32 + name +
+ * clock time on a group head), chat's swipe (right = Reply), long-press /
+ * right-click MessageActionMenu, clock while pending and "Not sent" + Retry
+ * on a failed own send, and chat's @mention names. `held` is the session's
+ * members, read synchronously, never fetched here.
  */
 export function PlanItemThread(props: {
   comments: readonly ShownComment[];
@@ -526,29 +683,108 @@ export function PlanItemThread(props: {
   highlightedId?: string | null;
   /** Offer Reply privately on others' comments, pointing here. Absent: never. */
   replyPrivately?: PlanReplyPrivatelyTarget | null;
+  /** Reply (swipe right, the menu's Reply): focus the box. Absent: no Reply. */
+  onReply?: () => void;
+  /** A failed own comment's Retry; absent: no Retry. */
+  onRetry?: (id: string) => void;
+  /** A failed own comment's Delete (it never left the device); absent: none. */
+  onDiscard?: (id: string) => void;
+  /** Where Copy link points; absent: no Copy link. */
+  linkTo?: PlanCommentLinkTarget | null;
 }): ReactElement {
+  const layout = useChatLayout();
+  const hoverMenu = useHoverPointer();
+  const coarsePointer = useCoarsePointer();
+  const reducedMotion = usePrefersReducedMotion();
+  const [menu, setMenu] = useState<OpenMenu | null>(null);
   const held =
     props.me !== null && props.workspaceId !== null
       ? peekWorkspaceMembers(props.me, props.workspaceId)
       : null;
+  const profiles = planCommentProfiles(props.comments, held, props.workspaceId);
   const rows = planThreadRows(props.comments, Date.now());
+  const latest = useRef({ props, held });
+  latest.current = { props, held };
+  // Stable for the thread's life (they read the latest props at tap time).
+  const personSource = useRef((message: ThreadMessage): PrivateReplyDraft | null => {
+    const { props: p, held: h } = latest.current;
+    const target = p.replyPrivately ?? null;
+    const c = p.comments.find((x) => x.id === message.id);
+    const authorId = c?.authorUserId ?? null;
+    if (c === undefined || target === null || authorId === null) return null;
+    if (!showPlanReplyPrivately(c, p.me, authorLeft(h, p.workspaceId, authorId))) return null;
+    return planCommentPrivateReplyDraft({
+      commentId: c.id,
+      authorUserId: authorId,
+      authorName: c.authorName,
+      excerpt: resolvePersonMentionText(c.body, p.workspaceId),
+      whereLabel: target.whereLabel,
+      planId: target.planId,
+      itemId: target.itemId,
+    });
+  }).current;
+  // A mention tap opens the one person card, anchored to the tapped name.
+  const mentions = useRef<BubbleMentions>({
+    peerUserId: null,
+    onOpen: (hint, el) => openPersonCardFrom(el, hint),
+  }).current;
+  const openMenu = useRef((comment: ShownComment, anchor: DOMRect | null): void => {
+    setMenu({ comment, anchor });
+  }).current;
+  // Reply focuses the box inside the tap; the menu closes after (runMenuItem).
+  const onReply = props.onReply;
+  let afterLabel = false;
   return (
-    <ol data-plan-thread="" className="flex flex-col">
-      {rows.map((row) =>
-        row.kind === 'day' ? (
-          <PlanDayLine key={row.key} label={row.label} />
-        ) : (
-          <PlanBubble
-            key={row.comment.id}
-            row={row}
-            workspaceId={props.workspaceId}
-            held={held}
-            highlighted={props.highlightedId === row.comment.id}
-            me={props.me}
-            replyPrivately={props.replyPrivately ?? null}
-          />
-        ),
-      )}
-    </ol>
+    <>
+      <ul data-plan-thread="" className="-mx-4 flex flex-col">
+        {rows.map((row) => {
+          if (row.kind === 'day') {
+            afterLabel = true;
+            return <DayPill key={row.key} label={row.label} layout={layout} />;
+          }
+          const comment = row.comment;
+          const under = afterLabel;
+          afterLabel = false;
+          return (
+            <PlanCommentRow
+              key={comment.id}
+              comment={comment}
+              message={planCommentMessage(comment)}
+              head={row.head}
+              tail={row.tail}
+              afterLabel={under}
+              profiles={profiles}
+              workspaceId={props.workspaceId}
+              me={props.me}
+              layout={layout}
+              highlighted={props.highlightedId === comment.id}
+              hoverMenu={hoverMenu}
+              coarsePointer={coarsePointer}
+              reducedMotion={reducedMotion}
+              personSource={personSource}
+              mentions={mentions}
+              onOpenMenu={openMenu}
+              onReply={onReply}
+              onRetry={props.onRetry}
+              onDiscard={props.onDiscard}
+            />
+          );
+        })}
+      </ul>
+      {menu !== null ? (
+        <PlanCommentMenu
+          menu={menu}
+          me={props.me}
+          workspaceId={props.workspaceId}
+          profiles={profiles}
+          held={held}
+          replyPrivately={props.replyPrivately ?? null}
+          linkTo={props.linkTo ?? null}
+          onReply={onReply}
+          onDiscard={props.onDiscard}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
+    </>
   );
 }

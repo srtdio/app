@@ -37,15 +37,7 @@ import {
   FOCUS_READ_RETRY_MS,
   useFocusTarget,
 } from '@/lib/focus-target';
-import {
-  IconCheck,
-  IconChevronDown,
-  IconCopy,
-  IconEdit,
-  IconReply,
-  IconTrash,
-  ICON_SIZE,
-} from '@/components/ui/icons';
+import { IconChevronDown, IconReply, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { cancelPendingLongPressesWithin } from '@/components/ui/useLongPress';
 import {
   createSwipeReplyController,
@@ -59,7 +51,13 @@ import {
   checkpointCircleState,
   type CheckpointCircleState,
 } from '@/components/comments/CheckpointCircle';
-import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
+import {
+  CommentActionBar,
+  CommentTaskTag,
+  REOPEN_LABEL,
+  type ResolveHook,
+} from '@/components/comments/CommentActionBar';
+import { CommentTaskSheet } from '@/components/comments/CommentTaskSheet';
 import {
   commentViewerTitle,
   fetchCommentFiles,
@@ -67,14 +65,11 @@ import {
   toCommentFileAttachments,
   type CommentFile,
 } from '@/components/comments/comment-files';
-import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { LoadError } from '@/components/ui/LoadError';
-import { roleLabel } from '@/components/pages/settings/members-data';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
 import { Bone, GlideItem, itemIn, itemOut, motionOff, paintSwipe } from '@/lib/motion';
-import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useUndoableAction } from '@/lib/use-undoable-action';
@@ -90,6 +85,7 @@ import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import {
+  COMMENT_SELECT,
   createComment,
   deleteComment,
   editComment,
@@ -99,12 +95,14 @@ import {
   parseMentions,
   resolveComment,
   stripFormat,
+  withTaskEmbeds,
   PAGE_SIZE,
 } from '@srtdio/comments';
 import type {
   Client,
   CommentEntityType,
   CommentRow,
+  CommentTaskEmbed,
   CreateCommentInput,
   Result,
 } from '@srtdio/comments';
@@ -134,9 +132,14 @@ import {
   type MentionPick,
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
-import { isFormerMember } from '@/lib/chat/mentions';
-import { canReplyPrivately, commentPrivateReplyDraft } from '@/lib/reply-privately';
-import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
+import {
+  commentBar,
+  commentTaskTag,
+  isAgencyRole,
+  resolveSlot,
+  taskTitleFrom,
+  type ResolveSlot,
+} from '@/lib/comment-tasks';
 
 /**
  * A mention as it reads in a comment: "@username", or "@Former member" for
@@ -146,12 +149,7 @@ import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 function mentionDisplay(name: string | null): string {
   return name === null ? '' : `@${name}`;
 }
-import {
-  buildResolveArgs,
-  friendlyPointFreezeError,
-  RESOLVED_FILL_CLASS,
-  RESOLVED_HOLLOW_CLASS,
-} from '@/components/pages/pcs/checkpoint-controls';
+import { buildResolveArgs, friendlyPointFreezeError } from '@/components/pages/pcs/checkpoint-controls';
 
 /** One caption_span annotation as it reads on a comment row. Optional surface:
  *  posts pass it, briefs never do, so the chips are post-only by construction. */
@@ -219,8 +217,8 @@ interface CommentsProps {
    */
   postStage?: string;
   /**
-   * The post or brief title the page already holds: Reply privately's where
-   * label on the DM quote. Absent reads as no where label.
+   * The post or brief title the page already holds: the writing boxes'
+   * expanded title. Absent reads as this section's own heading.
    */
   whereLabel?: string;
 }
@@ -295,43 +293,16 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
 }
 
 /**
- * Layout added to every text row action (Resolve, Confirm, Reply, View earlier
- * replies). Each is a ghost <Button>: a 44 tall, 44 wide minimum hit, with the
- * visible word at meta size (12) so the line reads small. Hover is the
- * primitive's lit-hover overlay. Reply privately and Copy are 44x44
- * IconButtons with the same overlay.
+ * Layout added to the text row actions left (View earlier replies): a ghost
+ * <Button>, a 44 tall, 44 wide minimum hit, with the visible word at meta size
+ * so the line reads small. Every per-comment action lives on the comment's
+ * action bar (CommentActionBar): Reply, Resolve, To-do, Edit, Delete.
  */
 export const ROW_ACTION_CLASS = 'min-w-11 px-2 text-sm';
 
-/** A passive word in the action line ("Open" on a client's own open point): the
- *  same box, height and padding as a row-action Button, without hover or focus. */
-export const ROW_ACTION_STATIC_CLASS =
-  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 px-2 text-sm font-medium';
-
-/**
- * Extra classes for the icon-only row actions (Reply privately, Copy): none,
- * their hover is IconButton's own lit-hover overlay.
- */
-export const ROW_ICON_ACTION_CLASS = '';
-
-/**
- * The one action line under every body: time, Resolve or Confirm, Reply, Reply
- * privately, Copy, then the author's ⋯ at the trailing edge. The 44 boxes sit
- * edge to edge (their own 8px side padding is the gap), which keeps the line
- * whole at 375 px; only a long time ("Yesterday") plus every control may wrap
- * the tail, never past the screen edge. -ml-2 lines the time's ink up with the
- * body text above it.
- */
-export const COMMENT_ACTIONS_ROW_CLASS = '-ml-2 flex flex-wrap items-center';
-
-/** The time at the head of every action line: formatAgo, meta role (mono, tabular). */
-export const ROW_TIME_CLASS = 'shrink-0 whitespace-nowrap px-2';
-
-/** The word beside the agency's checkpoint checkbox: one tap resolves. */
+/** Resolve's accessible name on a thread's action bar: one tap resolves. */
 export const CHECKPOINT_BOX_LABEL = 'Resolve';
 
-/** The client's word on their own open point (no Resolve for clients). */
-export const CHECKPOINT_OPEN_LABEL = 'Open';
 
 /** The fold control over a thread's older replies. Pure. */
 export function earlierRepliesLabel(count: number): string {
@@ -752,7 +723,8 @@ export function renderReplyList(
     </li>
   );
   return (
-    <div data-replies="" className="mt-1 flex flex-col">
+    // Each reply keeps 24 above it for its action bar (half above the row).
+    <div data-replies="" className="mt-6 flex flex-col">
       {hidden > 0 && fold !== undefined ? (
         <Button
           type="button"
@@ -766,11 +738,11 @@ export function renderReplyList(
         </Button>
       ) : null}
       {earlier.length > 0 ? (
-        <ul data-replies-earlier={fold?.rootId ?? ''} className="flex flex-col gap-2">
+        <ul data-replies-earlier={fold?.rootId ?? ''} className="flex flex-col gap-6">
           {earlier.map(item)}
         </ul>
       ) : null}
-      <ul className={cn('flex flex-col gap-2', earlier.length > 0 ? 'mt-2' : '')}>
+      <ul className={cn('flex flex-col gap-6', earlier.length > 0 || hidden > 0 ? 'mt-6' : '')}>
         {latest.map(item)}
       </ul>
     </div>
@@ -891,37 +863,6 @@ export function showCheckpointConfirm(
   return isClient && state === 'resolved' && !confirmed;
 }
 
-/**
- * The Resolve checkbox (the visible 16px box, at the action line's meta size;
- * the caller supplies the 44px
- * hit area). Unticked: an empty box on the panel. Ticked: the shared resolved
- * treatment, filled once the approver has confirmed, hollow (good outline and
- * tick, no fill) while it waits for the Confirm. Tokens only, so light and dark
- * parity is automatic. The tick shows at once (never a fade).
- */
-export function checkpointBox(checked: boolean, confirmed: boolean): ReactElement {
-  return (
-    <span
-      aria-hidden
-      data-tick={checked ? (confirmed ? 'filled' : 'hollow') : 'open'}
-      className={cn(
-        'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border',
-        checked
-          ? confirmed
-            ? RESOLVED_FILL_CLASS
-            : RESOLVED_HOLLOW_CLASS
-          : 'border-border-strong bg-panel text-good lit-well',
-      )}
-    >
-      {/* The tick shows at once when checked (never a fade); unchecked it
-          keeps its space, hidden. */}
-      <span className={checked ? undefined : 'invisible'}>
-        <IconCheck size={ICON_SIZE.inline} />
-      </span>
-    </span>
-  );
-}
-
 /** The person a checkpoint reply is aimed at: the checkpoint's author (Reply on
  *  the checkpoint) or a reply's author (Reply on a reply). */
 export type ReplyTarget = Pick<CommentRow, 'author_user_id' | 'legacy_author_name'>;
@@ -973,10 +914,9 @@ export function mergeCheckpoints(
   return merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-/** Which row actions a comment offers. Copy is harmless and shown on every live
- *  comment; edit / delete stay author-only; a tombstone offers nothing. */
+/** Which author-only actions a comment offers on its bar: Edit and Delete stay
+ *  the author's; a tombstone offers nothing. */
 export interface CommentActions {
-  canCopy: boolean;
   canEdit: boolean;
   canDelete: boolean;
 }
@@ -986,21 +926,9 @@ export function commentActions(
   currentUserId: string | null,
   tombstone: boolean,
 ): CommentActions {
-  if (tombstone) return { canCopy: false, canEdit: false, canDelete: false };
+  if (tombstone) return { canEdit: false, canDelete: false };
   const mine = canModifyComment(comment, currentUserId);
-  return { canCopy: true, canEdit: mine, canDelete: mine };
-}
-
-/** Which row-action control a point offers. 'menu' when edit or delete is
- *  available (the full kebab popover); else 'copy' when only copy remains (a
- *  direct copy button, no overflow menu for a single item); else 'none'. This is
- *  deliberately not an author check: a frozen point returns canCopy true with
- *  canEdit/canDelete false even for its own author, so it gets the direct copy
- *  button too. */
-export type PointMenuMode = 'none' | 'copy' | 'menu';
-export function pointMenuMode(actions: CommentActions): PointMenuMode {
-  if (actions.canEdit || actions.canDelete) return 'menu';
-  return actions.canCopy ? 'copy' : 'none';
+  return { canEdit: mine, canDelete: mine };
 }
 
 /** The server caps a ledger point body at 50 whitespace-separated words; the
@@ -1024,7 +952,7 @@ export function isPointFrozen(point: Pick<CommentRow, 'accepted_at' | 'closed_at
 
 /** Row actions for a ledger point: the ordinary authorship gate (commentActions ->
  *  canModifyComment), with Edit and Delete additionally withheld once the point is
- *  frozen. Copy stays available in every state; replies are unaffected. */
+ *  frozen. Replies are unaffected. */
 export function pointActions(
   point: Pick<
     CommentRow,
@@ -1034,7 +962,7 @@ export function pointActions(
   tombstone: boolean,
 ): CommentActions {
   const base = commentActions(point, currentUserId, tombstone);
-  if (isPointFrozen(point)) return { canCopy: base.canCopy, canEdit: false, canDelete: false };
+  if (isPointFrozen(point)) return { canEdit: false, canDelete: false };
   return base;
 }
 
@@ -1187,9 +1115,11 @@ export function localCommentRow(params: {
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: params.workspaceId,
+    comment_tasks: null,
   };
 }
 
@@ -1297,7 +1227,7 @@ export async function fetchCheckpoints(
 ): Promise<CommentRow[]> {
   const { data, error } = await client
     .from('comments')
-    .select('*')
+    .select(COMMENT_SELECT)
     .eq('workspace_id', workspaceId)
     .eq('entity_type', 'post')
     .eq('entity_id', entityId)
@@ -1305,26 +1235,44 @@ export async function fetchCheckpoints(
     .is('parent_comment_id', null)
     .order('created_at', { ascending: false });
   if (error || data === null) return [];
-  return data;
+  return withTaskEmbeds(data);
+}
+
+/** A row's Reply on its action bar. */
+interface RowReply {
+  onReply: () => void;
+  /** The row's reply composer is open (the root's Reply then closes it). */
+  open?: boolean;
+  /** The onboarding guide's anchor on the Reply it teaches. */
+  induction?: string | undefined;
+  /** A reply's Reply (aims at that reply's author). */
+  toReply?: boolean;
+}
+
+/** A row's Resolve slot on its action bar. */
+interface RowResolve {
+  slot: ResolveSlot;
+  label: string;
+  hook: ResolveHook;
+  busy?: boolean;
+  onResolve: () => void;
 }
 
 /** What one row on the shared row template shows besides the comment itself. */
 interface RowOptions {
   /** A reply: avatar 20 and name on one line, on the root's text column. */
   reply: boolean;
-  /** A checkpoint point: its author shows once on the group, so no header. */
+  /** A checkpoint point: its author shows once on the group, so no name line. */
   point: boolean;
   /** The fixed left column (44 wide): the root's avatar or the point's circle. */
   lead: ReactNode;
-  /** The ⋯ menu's accessible name (only drawn when Edit or Delete is open). */
-  menuLabel: string;
   actions: CommentActions;
   /** A resolved row's body reads in fg-2. */
   muted?: boolean;
-  /** After the time in the action line: Resolve, Confirm, "Open" or Reopen. */
-  leading?: ReactNode;
-  /** The row's Reply, after the leading control. */
-  replyButton?: ReactNode;
+  /** The bar's Reply; null when the row offers none. */
+  replyAction: RowReply | null;
+  /** The bar's Resolve slot; absent where resolving is not allowed. */
+  resolve?: RowResolve;
   /** Under the row on the text column: replies and the reply composer. */
   below?: ReactNode;
   /** The checkpoint's circle state, so its caption quote circle matches. */
@@ -1335,6 +1283,21 @@ interface RowOptions {
 
 /** One thread (or checkpoint group) in the list: hairlines between, no card. */
 export const THREAD_ITEM_CLASS = 'py-3';
+
+/**
+ * A plain thread's item: its root sits right on the top hairline so the root's
+ * action bar rides ON that line, half above it; the 24 under every item is the
+ * room the next item's bar takes (its 44 hit runs 22 above the line), so a bar
+ * never covers the comment above, a title or a time.
+ */
+export const THREAD_BAR_ITEM_CLASS = 'pb-6';
+
+/** An item whose first line carries no bar (a tombstone, a checkpoint group's
+ *  author line): its own 12 above, and the same 24 under for the next bar. */
+export const THREAD_TOMBSTONE_ITEM_CLASS = 'pt-3 pb-6';
+
+/** The list keeps the same 24 above its first item, for that item's bar. */
+export const THREAD_LIST_BAR_CLASS = 'pt-6';
 
 /** The list inside the one comments card: threads split by hairlines. */
 export const THREAD_LIST_CLASS = 'flex flex-col divide-y divide-border';
@@ -1359,15 +1322,15 @@ const SWIPE_ICON_CLASS =
 
 /**
  * One comment or reply row on touch: swipe right = its Reply, swipe left = its
- * Delete (only where the row's ⋯ offers Delete; the same UndoStrip path), the
+ * Delete (only where the row's bar offers Delete; the same UndoStrip path), the
  * one core (src/lib/chat/swipe-reply.ts) in 'both' ways. A way with nothing to
  * do rubber-bands and never fires. A mouse never swipes (the core ignores it),
  * so laptop is unchanged. Vertical moves stay the list's (touch-pan-y); the
  * press is the row's own until it moves 8px sideways, so taps on links,
- * mentions, pins, photos and the ⋯ still land. No layout read per move: frames
- * are transforms painted by lib/motion. The wrapper clips sideways
- * (overflow-x-clip, widened by the 12 trailing pull so the ⋯ hit box is never
- * cut) so a slid row never makes anything scroll.
+ * mentions, pins, photos and the bar still land. No layout read per move:
+ * frames are transforms painted by lib/motion. The wrapper clips sideways only
+ * (overflow-x-clip, widened by 12 each side), so a slid row never makes
+ * anything scroll and the bar riding half above the row is never cut.
  */
 function CommentSwipeRow(props: {
   kind: 'root' | 'reply';
@@ -1599,7 +1562,10 @@ export function Comments({
   const [editSaving, setEditSaving] = useState(false);
   const editSavingRef = useRef(false);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  // The comment whose To-do sheet is up ("New task"); kept after close so the
+  // sheet's exit plays, and its title seeded once per open.
+  const [taskFor, setTaskFor] = useState<{ commentId: string; title: string } | null>(null);
+  const [taskOpen, setTaskOpen] = useState(false);
   // The thread root whose reopen request is in flight; null when idle. A one-tap
   // Resolve is optimistic and never waits.
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -1612,8 +1578,6 @@ export function Comments({
   // Per root: bumped on a retarget so the uncontrolled composer remounts with
   // the new seed (its draft rides through replyDrafts).
   const [composerEpochs, setComposerEpochs] = useState<Map<string, number>>(new Map());
-  // The comment whose per-row actions popover is open (kebab); null when closed.
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   // The open image lightbox: the clicked comment's image list + current index,
   // or null when closed. Images reuse the same PresignCache (a cache hit).
   const [lightbox, setLightbox] = useState<{
@@ -2370,16 +2334,19 @@ export function Comments({
     });
   }
 
-  async function handleCopy(comment: CommentRow): Promise<void> {
-    const ok = await copyText(commentCopyText(comment.body, handleOf));
-    if (!ok) {
-      toast?.show({ title: COPY_FAILED, tone: 'error' });
-      return;
-    }
-    setCopiedId(comment.id);
-    window.setTimeout(() => {
-      setCopiedId((current) => (current === comment.id ? null : current));
-    }, 2000);
+  // The To-do landed: the comment paints its tag at once from what was sent
+  // (task_state and the link), then page zero reconciles silently.
+  function handleTaskCreated(commentId: string, link: CommentTaskEmbed): void {
+    patchRow(commentId, (row) => ({ ...row, task_state: 'assigned', comment_tasks: link }));
+    refreshInBackground();
+  }
+
+  function openTaskSheet(comment: CommentRow): void {
+    setTaskFor({
+      commentId: comment.id,
+      title: taskTitleFrom(commentCopyText(comment.body, handleOf)),
+    });
+    setTaskOpen(true);
   }
 
   function draftKey(commentId: string): string {
@@ -2600,69 +2567,14 @@ export function Comments({
     onCountsChange?.({ open: openCount, resolved: resolvedCount });
   }, [loading, loadError, openCount, resolvedCount, onCountsChange]);
 
-  // The author's workspace role label ("Creator", "Approver") from the same
-  // members read the mention picker uses; null until it loads or for someone gone.
-  function roleOf(userId: string): string | null {
-    const role = candidates.find((candidate) => candidate.id === userId)?.role;
-    return role === undefined || role === '' ? null : roleLabel(role);
-  }
-
-  // Copy for one row, own and others' alike: an icon-only IconButton
-  // (clipboard) whose accessible name stays "Copy". After a copy the icon is a
-  // tick for 2000 ms with a visually hidden "Copied" status; a failure is an
-  // error toast (as the caption copy on the post page), never inline text.
-  function copyControl(comment: CommentRow): ReactNode {
-    const copied = copiedId === comment.id;
-    return (
-      <>
-        <IconButton
-          type="button"
-          label="Copy"
-          data-row-action="copy"
-          data-copied={copied ? '' : undefined}
-          className={ROW_ICON_ACTION_CLASS}
-          onClick={() => void handleCopy(comment)}
-        >
-          {copied ? <IconCheck size={ICON_SIZE.inline} /> : <IconCopy size={ICON_SIZE.inline} />}
-        </IconButton>
-        {copied ? (
-          <span role="status" className="sr-only">
-            Copied
-          </span>
-        ) : null}
-      </>
-    );
-  }
-
-  // Reply privately: a tap on the author's photo or name opens the person
-  // card with this comment as its source (its context line and what its send
-  // carries), only on someone else's comment whose author is a known current
-  // member (canReplyPrivately). Built at tap time from what the row shows; no
-  // read; null when the comment offers no Reply privately.
-  function privateReplySource(
-    comment: CommentRow,
-    authorName: string,
-  ): (() => PrivateReplyDraft) | null {
-    const authorUserId = comment.author_user_id;
-    const show = canReplyPrivately({
-      authorUserId,
-      me: currentUserId,
-      authorName,
-      legacy: comment.legacy_author_name !== null,
-      former: authorName === FORMER_MEMBER || isFormerMember(workspaceId, authorUserId),
-    });
-    if (!show) return null;
-    return () =>
-      commentPrivateReplyDraft({
-        commentId: comment.id,
-        authorUserId,
-        authorName,
-        excerpt: commentCopyText(comment.body, handleOf),
-        whereLabel,
-        entityType,
-        entityId,
-      });
-  }
+  // The viewer's own workspace role from the members the page already holds
+  // (no read): agency side (owner, admin, agency) gets To-do and the task's
+  // name on its tag. False until the members land, so To-do never flashes in.
+  const viewerIsAgency = isAgencyRole(
+    currentUserId === null
+      ? null
+      : candidates.find((candidate) => candidate.id === currentUserId)?.role,
+  );
 
   function renderEditor(commentId: string): ReactNode {
     return (
@@ -2710,55 +2622,20 @@ export function Comments({
     );
   }
 
-  // The author-only Edit / Delete ⋯ in a row's header (ui/ActionMenu), or
-  // nothing. Every row closes the menu and calls the existing handler.
-  function rowMenu(comment: CommentRow, actions: CommentActions, label: string): ReactNode {
-    if (editingId === comment.id || pointMenuMode(actions) !== 'menu') return null;
-    const items: ActionMenuItem[] = [];
-    if (actions.canEdit) {
-      items.push({ id: 'edit', label: 'Edit', icon: IconEdit, onSelect: () => startEdit(comment) });
-    }
-    if (actions.canDelete) {
-      items.push({
-        id: 'delete',
-        label: 'Delete',
-        icon: IconTrash,
-        tone: 'danger',
-        onSelect: () => handleDelete(comment.id),
-      });
-    }
-    return (
-      // The trailing end of the action line (ActionMenuTrigger pulls the 44 box
-      // out so its glyph sits on the content edge).
-      <div className="relative ml-auto shrink-0">
-        <ActionMenu
-          title={label}
-          items={items}
-          open={menuOpenId === comment.id}
-          onOpenChange={(open) => setMenuOpenId(open ? comment.id : null)}
-          trigger={<ActionMenuTrigger label={label} aria-expanded={menuOpenId === comment.id} />}
-        />
-      </div>
-    );
-  }
-
   /**
    * Who wrote a row, as every row shows it: the name ('' only until the
-   * batched read answers; a gone person reads "Former member"), the photo, the
-   * role label, and a wrapper that makes a node open the person card (a legacy
-   * author has no user id: nothing to open).
+   * batched read answers; a gone person reads "Former member"), the photo, and
+   * a wrapper that makes a node open the person card (a legacy author has no
+   * user id: nothing to open). No role label anywhere.
    */
   function authorView(comment: CommentRow): {
     name: string;
     avatarUrl: string | null;
-    role: string | null;
     asPerson: (node: ReactNode, display: 'inline' | 'block', className?: string) => ReactNode;
   } {
     const name = comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? '';
     const avatarUrl = comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
-    const role = comment.legacy_author_name !== null ? null : roleOf(comment.author_user_id);
     const authorId = comment.legacy_author_name === null ? comment.author_user_id : null;
-    const source = authorId !== null ? privateReplySource(comment, name) : null;
     const asPerson = (node: ReactNode, display: 'inline' | 'block', className?: string) =>
       authorId !== null && name !== '' ? (
         <PersonTrigger
@@ -2766,7 +2643,6 @@ export function Comments({
           name={name}
           avatarUrl={avatarUrl ?? null}
           {...(name === FORMER_MEMBER ? { former: true } : {})}
-          {...(source !== null ? { source } : {})}
           display={display}
           {...(className !== undefined ? { className } : {})}
         >
@@ -2775,7 +2651,7 @@ export function Comments({
       ) : (
         node
       );
-    return { name, avatarUrl, role, asPerson };
+    return { name, avatarUrl, asPerson };
   }
 
   // An author's avatar at a role ('header' on roots and groups, 'inline' on replies).
@@ -2792,35 +2668,91 @@ export function Comments({
     );
   }
 
-  // Name + role on one line (role truncates first; the name is never cut).
-  function authorLine(view: ReturnType<typeof authorView>): ReactNode {
+  // The name on its own (the name is never cut).
+  function authorName(view: ReturnType<typeof authorView>): ReactNode {
+    return view.asPerson(
+      <span data-comment-author="" className="text-sm font-medium text-fg [overflow-wrap:anywhere]">
+        {view.name}
+      </span>,
+      'inline',
+    );
+  }
+
+  // The time after the name (formatAgo, meta: mono, tabular), then "edited ...".
+  function rowTime(comment: CommentRow, now: Date): ReactNode {
+    const edited = pointEditedMarker(comment.edited_at, now);
     return (
       <>
-        {view.asPerson(
-          <span
-            data-comment-author=""
-            className="text-sm font-medium text-fg [overflow-wrap:anywhere]"
-          >
-            {view.name}
-          </span>,
-          'inline',
-        )}
-        {view.role !== null ? (
-          <span data-comment-role="" className="min-w-0 truncate text-sm text-fg-3">
-            {view.role}
-          </span>
+        <Text
+          role="meta"
+          as="time"
+          dateTime={comment.created_at}
+          data-comment-time=""
+          className="shrink-0 whitespace-nowrap"
+        >
+          {formatAgo(comment.created_at, now)}
+        </Text>
+        {edited !== null ? (
+          <Text role="meta" data-comment-edited="" className="shrink-0 whitespace-nowrap">
+            {edited}
+          </Text>
         ) : null}
       </>
     );
+  }
+
+  // The row's action bar (CommentActionBar): Reply, Resolve, To-do, Edit, |
+  // Delete, each only where this viewer can do it. Nothing while editing.
+  function renderBar(comment: CommentRow, opts: RowOptions): ReactNode {
+    if (editingId === comment.id) return null;
+    const reply = opts.replyAction;
+    const resolve = opts.resolve;
+    const bar = commentBar({
+      canReply: reply !== null,
+      resolve: resolve?.slot ?? null,
+      viewerIsAgency,
+      hasTask: comment.task_state !== null && comment.task_state !== undefined,
+      canEdit: opts.actions.canEdit,
+      canDelete: opts.actions.canDelete,
+    });
+    return (
+      <CommentActionBar
+        bar={bar}
+        resolveLabel={resolve?.label ?? ''}
+        resolveHook={resolve?.hook ?? 'data-comment-resolve'}
+        resolveBusy={resolve?.busy === true}
+        replyOpen={reply?.open === true}
+        replyInduction={reply?.induction}
+        replyToReply={reply?.toReply === true}
+        onReply={() => reply?.onReply()}
+        onResolve={() => resolve?.onResolve()}
+        onTodo={() => openTaskSheet(comment)}
+        onEdit={() => startEdit(comment)}
+        onDelete={() => handleDelete(comment.id)}
+      />
+    );
+  }
+
+  // The one grey tag under a body once the comment has a task. Agency: who it
+  // went to, a tap opens that chat's Tasks on it; a client: the state only.
+  function renderTaskTag(comment: CommentRow): ReactNode {
+    const tag = commentTaskTag({
+      state: comment.task_state,
+      link: comment.comment_tasks,
+      viewerIsAgency,
+      me: currentUserId,
+      nameOf,
+    });
+    return tag === null ? null : <CommentTaskTag tag={tag} />;
   }
 
   /**
    * The ONE row template for every item: plain roots, checkpoint points and
    * replies. A root sits beside its 44 lead column (avatar, or the point's
    * circle); a reply sits on the root's text column with avatar 20 + name on
-   * one line. Then the body, then ONE action line at meta size: time, the
-   * leading control (Resolve / Confirm / "Open" / Reopen), Reply, Reply
-   * privately, Copy, and the author's ⋯ at the trailing edge. Every hit is 44.
+   * one line. The head line: (avatar), name, time at the top left and the
+   * action bar at the trailing end, riding half above the row. Then the body
+   * and the task tag. No line under the body.
    */
   function renderRow(comment: CommentRow, opts: RowOptions): ReactNode {
     const view = authorView(comment);
@@ -2830,24 +2762,29 @@ export function Comments({
     // One link scan per row: the body's card link feeds both the text and the card.
     const cardUrl = firstExternalUrl(comment.body);
     const now = new Date(nowMs);
-    const edited = pointEditedMarker(comment.edited_at, now);
-    const privateReply = privateReplySource(comment, view.name);
 
-    const header = opts.point ? null : (
+    // A point's author shows once on its group: its head line holds only the
+    // edited marker and the bar.
+    const header = (
       <div
-        data-comment-header=""
-        className={cn('flex min-w-0 items-center gap-2', opts.reply ? 'min-h-5' : 'min-h-8')}
+        {...(opts.point ? { 'data-point-head': '' } : { 'data-comment-header': '' })}
+        className="flex min-w-0 items-center gap-2"
       >
         {opts.reply ? <span className="flex shrink-0">{authorAvatar(view, 'inline')}</span> : null}
-        {authorLine(view)}
+        {opts.point ? null : authorName(view)}
+        {opts.point ? null : rowTime(comment, now)}
+        {opts.point && comment.edited_at !== null ? (
+          <Text role="meta" data-comment-edited="" className="shrink-0 whitespace-nowrap">
+            {pointEditedMarker(comment.edited_at, now)}
+          </Text>
+        ) : null}
+        <span className="min-w-0 flex-1" />
+        {renderBar(comment, opts)}
       </div>
     );
 
-    // Swipe left = the ⋯'s Delete, only where the ⋯ offers it (same path).
-    const swipeDelete =
-      !editing && pointMenuMode(opts.actions) === 'menu' && opts.actions.canDelete
-        ? () => handleDelete(comment.id)
-        : null;
+    // Swipe left = the bar's Delete, only where the bar offers it (same path).
+    const swipeDelete = !editing && opts.actions.canDelete ? () => handleDelete(comment.id) : null;
 
     // The row slides on its own; the replies and the reply composer under a
     // root sit beside it (same text column, the lead column kept empty), so a
@@ -2867,7 +2804,7 @@ export function Comments({
             {editing ? (
               renderEditor(comment.id)
             ) : (
-              <div className={opts.point ? 'pt-1' : 'mt-1'}>
+              <div>
                 {annotationChip(
                   comment.id,
                   annotationsByCommentId?.[comment.id],
@@ -2901,33 +2838,9 @@ export function Comments({
                     }}
                   />
                 ) : null}
+                {renderTaskTag(comment)}
               </div>
             )}
-
-            {/* One action line at meta size, on the text column. */}
-            {!editing ? (
-              <div data-comment-actions="" className={COMMENT_ACTIONS_ROW_CLASS}>
-                <Text
-                  role="meta"
-                  as="time"
-                  dateTime={comment.created_at}
-                  data-comment-time=""
-                  className={ROW_TIME_CLASS}
-                >
-                  {formatAgo(comment.created_at, now)}
-                </Text>
-                {edited !== null ? (
-                  <Text role="meta" className="shrink-0 whitespace-nowrap pr-2">
-                    {edited}
-                  </Text>
-                ) : null}
-                {opts.leading}
-                {opts.replyButton}
-                {privateReply !== null ? <ReplyPrivatelyButton draft={privateReply} /> : null}
-                {opts.actions.canCopy ? copyControl(comment) : null}
-                {rowMenu(comment, opts.actions, opts.menuLabel)}
-              </div>
-            ) : null}
 
             {rowError !== null && rowError.id === comment.id ? (
               <ErrorNote className="mt-2">{rowError.message}</ErrorNote>
@@ -2944,28 +2857,20 @@ export function Comments({
     );
   }
 
-  // A root's Reply (Cancel while its composer is open). The guide's anchor rides
-  // on the comment the onboarding guide teaches replying on.
-  function rootReplyButton(comment: CommentRow): ReactNode {
-    return (
-      <Button
-        type="button"
-        data-row-action="reply"
-        variant="ghost"
-        className={ROW_ACTION_CLASS}
-        data-induction={
-          comment.id === guideReplyCommentId ? INDUCTION_KEYS.postCommentReply : undefined
-        }
-        onClick={() => onReplyButton(comment)}
-      >
-        {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
-      </Button>
-    );
+  // A root's Reply (its composer toggles; with typed text the tap asks
+  // "Discard reply?"). The guide's anchor rides on the comment the onboarding
+  // guide teaches replying on.
+  function rootReply(comment: CommentRow): RowReply {
+    return {
+      onReply: () => onReplyButton(comment),
+      open: replyOpen.has(comment.id),
+      induction: comment.id === guideReplyCommentId ? INDUCTION_KEYS.postCommentReply : undefined,
+    };
   }
 
   // A root's swipe right: its Reply. While its composer is already open the
-  // button reads Cancel, so the swipe has nothing to add and rubber-bands
-  // (it never closes or discards a draft).
+  // swipe has nothing to add and rubber-bands (it never closes or discards a
+  // draft).
   function rootSwipeReply(comment: CommentRow): (() => void) | null {
     return replyOpen.has(comment.id) ? null : () => onReplyButton(comment);
   }
@@ -2979,21 +2884,8 @@ export function Comments({
       reply: true,
       point: false,
       lead: null,
-      menuLabel: 'Comment actions',
       actions: commentActions(reply, currentUserId, false),
-      replyButton:
-        onReply !== undefined ? (
-          <Button
-            type="button"
-            data-row-action="reply"
-            data-reply-to-reply=""
-            variant="ghost"
-            className={ROW_ACTION_CLASS}
-            onClick={onReply}
-          >
-            Reply
-          </Button>
-        ) : null,
+      replyAction: onReply !== undefined ? { onReply, toReply: true } : null,
       swipeReply: onReply ?? null,
     });
   }
@@ -3037,44 +2929,51 @@ export function Comments({
     );
   }
 
-  // The agency's one-tap Resolve: a small checkbox + "Resolve" (no note, no
-  // sheet, no confirm; Undo lives in the bottom strip).
-  function resolveButton(
-    comment: CommentRow,
-    label: string,
-    dataAttr: 'box' | 'thread',
-  ): ReactNode {
-    return (
-      <Button
-        type="button"
-        role="checkbox"
-        aria-checked={false}
-        aria-label={label}
-        {...(dataAttr === 'box' ? { 'data-checkpoint-box': '' } : { 'data-comment-resolve': '' })}
-        onClick={() => handleOneTapResolve(comment)}
-        // axis: background-color on hover only; the tick shows at once.
-        variant="ghost"
-        className={ROW_ACTION_CLASS}
-      >
-        {checkpointBox(false, false)}
-        <span>{CHECKPOINT_BOX_LABEL}</span>
-      </Button>
-    );
+  // A plain thread's Resolve slot: the one-tap Resolve (Undo in the bottom
+  // strip), or Reopen once resolved; clients get none on posts (resolveSlot).
+  function threadResolve(comment: CommentRow): RowResolve | undefined {
+    const slot = resolveSlot({
+      reply: false,
+      point: false,
+      isClient,
+      resolved: comment.resolved_at !== null,
+      confirmed: false,
+    });
+    if (slot === 'resolve') {
+      return {
+        slot,
+        label: CHECKPOINT_BOX_LABEL,
+        hook: 'data-comment-resolve',
+        onResolve: () => handleOneTapResolve(comment),
+      };
+    }
+    if (slot === 'reopen') {
+      return {
+        slot,
+        label: REOPEN_LABEL,
+        hook: 'data-comment-resolve',
+        busy: resolvingId === comment.id,
+        onResolve: () => void handleResolve(comment, false),
+      };
+    }
+    return undefined;
   }
 
-  // One plain one-level thread on the row template. Its leading control is the
-  // agency's one-tap Resolve (Reopen once resolved); clients get none.
+  // One plain one-level thread on the row template: the root rides on the
+  // item's top hairline so its bar sits ON that line.
   function renderThreadItem({ comment, replies, tombstone }: ThreadRoot): ReactNode {
     // Thread-level resolved state lives on the root comment. A tombstone
     // root cannot be resolved/reopened (the proc rejects a deleted comment).
-    const isResolved = comment.resolved_at !== null;
-    const isResolving = resolvingId === comment.id;
+    const resolve = threadResolve(comment);
     return (
       <GlideItem
         as="li"
         key={comment.id}
         id={commentDomId(comment.id)}
-        className={cn(THREAD_ITEM_CLASS, COMMENT_ROW_SCROLL_CLASS)}
+        className={cn(
+          tombstone ? THREAD_TOMBSTONE_ITEM_CLASS : THREAD_BAR_ITEM_CLASS,
+          COMMENT_ROW_SCROLL_CLASS,
+        )}
       >
         {tombstone
           ? renderTombstone(comment, replies)
@@ -3082,24 +2981,10 @@ export function Comments({
               reply: false,
               point: false,
               lead: authorAvatar(authorView(comment), 'header'),
-              menuLabel: 'Comment actions',
               actions: commentActions(comment, currentUserId, false),
-              muted: isResolved,
-              leading: isClient ? null : isResolved ? (
-                <Button
-                  type="button"
-                  data-comment-resolve=""
-                  variant="ghost"
-                  className={ROW_ACTION_CLASS}
-                  busy={isResolving}
-                  onClick={() => void handleResolve(comment, false)}
-                >
-                  Reopen
-                </Button>
-              ) : (
-                resolveButton(comment, 'Resolve', 'thread')
-              ),
-              replyButton: rootReplyButton(comment),
+              muted: comment.resolved_at !== null,
+              replyAction: rootReply(comment),
+              ...(resolve !== undefined ? { resolve } : {}),
               swipeReply: rootSwipeReply(comment),
               below: renderThreadBelow(comment, replies, false, true),
             })}
@@ -3107,40 +2992,37 @@ export function Comments({
     );
   }
 
-  // A checkpoint's leading control in the action line. Agency, open point:
-  // the one-tap checkbox + "Resolve". Client: "Open" on their own open point,
-  // the one-tap Confirm on a resolved point they have not confirmed. The
-  // circle in the lead column carries the state; nothing else repeats it.
-  function checkpointLeading(comment: CommentRow): ReactNode {
+  // A checkpoint's Resolve slot. Agency, open point: the one-tap Resolve.
+  // Client: the one-tap Confirm on a resolved point they have not confirmed.
+  // The circle in the lead column carries the state; nothing else repeats it.
+  function pointResolve(comment: CommentRow): RowResolve | undefined {
     const seq = comment.ledger_seq ?? 0;
     const state = checkpointState(comment);
     const confirmed = checkpointConfirmed(comment);
-    if (tickInteractive(state, isClient)) {
-      return resolveButton(comment, `Resolve checkpoint ${seq}`, 'box');
+    const slot = resolveSlot({
+      reply: false,
+      point: true,
+      isClient,
+      resolved: state === 'resolved',
+      confirmed,
+    });
+    if (slot === 'resolve' && tickInteractive(state, isClient)) {
+      return {
+        slot,
+        label: `Resolve checkpoint ${seq}`,
+        hook: 'data-checkpoint-box',
+        onResolve: () => handleOneTapResolve(comment),
+      };
     }
-    if (showCheckpointConfirm(state, isClient, confirmed)) {
-      return (
-        <Button
-          type="button"
-          aria-label={`Confirm checkpoint ${seq}`}
-          data-checkpoint-confirm=""
-          onClick={() => handleConfirm(comment)}
-          // axis: background-color on hover only.
-          variant="ghost"
-          className={cn(ROW_ACTION_CLASS, 'text-good hover:text-good')}
-        >
-          Confirm
-        </Button>
-      );
+    if (slot === 'confirm' && showCheckpointConfirm(state, isClient, confirmed)) {
+      return {
+        slot,
+        label: `Confirm checkpoint ${seq}`,
+        hook: 'data-checkpoint-confirm',
+        onResolve: () => handleConfirm(comment),
+      };
     }
-    if (isClient && state === 'open' && comment.author_user_id === currentUserId) {
-      return (
-        <span data-checkpoint-open="" className={cn(ROW_ACTION_STATIC_CLASS, 'text-fg-2')}>
-          {CHECKPOINT_OPEN_LABEL}
-        </span>
-      );
-    }
-    return null;
+    return undefined;
   }
 
   // One numbered point inside a checkpoint group. Open (or opened) points show
@@ -3190,6 +3072,7 @@ export function Comments({
         </PressableRow>
       );
     }
+    const resolve = pointResolve(comment);
     return renderRow(comment, {
       reply: false,
       point: true,
@@ -3212,22 +3095,21 @@ export function Comments({
           </span>
         ),
       circle,
-      menuLabel: 'Checkpoint actions',
       // Author-only edit/delete, hidden once the point is frozen (confirmed or
-      // locked); Copy stays on every live point. The proc re-checks auth.uid().
+      // locked). The proc re-checks auth.uid().
       actions: pointActions(comment, currentUserId, false),
       muted: resolved,
-      leading: checkpointLeading(comment),
-      replyButton: rootReplyButton(comment),
+      replyAction: rootReply(comment),
+      ...(resolve !== undefined ? { resolve } : {}),
       swipeReply: rootSwipeReply(comment),
       below: renderThreadBelow(comment, replies, false, true),
     });
   }
 
   // Consecutive checkpoints from one author: the author ONCE (avatar, name,
-  // role, "{n} checkpoints · {time}"), then the numbered list. Everyone,
-  // clients included, can reply on a point or on any reply inside it (the
-  // reply posts to the point).
+  // "{n} checkpoints · {time}"), then the numbered list. Everyone, clients
+  // included, can reply on a point or on any reply inside it (the reply posts
+  // to the point). Each point keeps 24 above it for its bar.
   function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
@@ -3238,18 +3120,18 @@ export function Comments({
         as="li"
         key={`batch-${group.authorId}-${first.id}`}
         data-checkpoint-group=""
-        className={THREAD_ITEM_CLASS}
+        className={THREAD_TOMBSTONE_ITEM_CLASS}
       >
         <div data-group-header="" className="flex min-w-0 items-center gap-2">
           <span className={LEAD_COLUMN_CLASS}>{authorAvatar(view, 'header')}</span>
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-2">{authorLine(view)}</div>
+            <div className="flex min-w-0 items-center gap-2">{authorName(view)}</div>
             <Text role="meta" as="p" data-group-meta="">
               {checkpointGroupMeta(group.threads.length, formatAgo(latest, new Date(nowMs)))}
             </Text>
           </div>
         </div>
-        <ol className="mt-2 flex flex-col gap-2">
+        <ol className="mt-6 flex flex-col gap-6">
           {group.threads.map((thread) => (
             <li
               key={thread.comment.id}
@@ -3348,7 +3230,10 @@ export function Comments({
           {emptyListText(entityType, threads.length === 0 ? 'all' : 'open')}
         </div>
       ) : (
-        <ul data-comments-list="" className={cn(THREAD_LIST_CLASS, ownCard ? OWN_CARD_CLASS : '')}>
+        <ul
+          data-comments-list=""
+          className={cn(THREAD_LIST_CLASS, THREAD_LIST_BAR_CLASS, ownCard ? OWN_CARD_CLASS : '')}
+        >
           {groups.map((group) =>
             group.kind === 'batch' ? renderBatchItem(group) : renderThreadItem(group.thread),
           )}
@@ -3412,6 +3297,22 @@ export function Comments({
             setRootEpoch((n) => n + 1);
           }}
           onCancel={() => setRootDiscardAsk(false)}
+        />
+      ) : null}
+
+      {taskFor !== null ? (
+        <CommentTaskSheet
+          key={taskFor.commentId}
+          open={taskOpen}
+          onClose={() => setTaskOpen(false)}
+          workspaceId={workspaceId}
+          commentId={taskFor.commentId}
+          initialTitle={taskFor.title}
+          me={currentUserId}
+          candidates={candidates}
+          newTrace={newTrace}
+          onCreated={(link) => handleTaskCreated(taskFor.commentId, link)}
+          onExists={refreshInBackground}
         />
       ) : null}
 

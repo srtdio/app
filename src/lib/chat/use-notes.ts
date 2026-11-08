@@ -22,6 +22,14 @@ const notesEnsurer: NotesEnsurer = createNotesEnsurer((workspaceId) =>
   ensureNotesChannel(supabase, { workspaceId }),
 );
 
+/**
+ * Ensure my notes channel outside Chat home (a comment's To-do for Me), sharing
+ * this session's one ensure (no second call once Chat home ran it). Never throws.
+ */
+export function ensureSessionNotes(workspaceId: string, userId: string): Promise<Result<string>> {
+  return notesEnsurer.ensure(workspaceId, userId);
+}
+
 interface UseNotes {
   summary: ChannelSummary;
   /** Where this workspace's ensure stands (the open thread waits on 'pending'). */

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-// Plan item: conversational comments, @ tagging, header menu. The thread reads
-// like chat (own right in bubble-own, others left with their avatar and
-// "name · role", 5 min runs, day lines, creators-only notes in warn tones,
-// mention pills); Remove from plan lives only in the concept's More menu; the
+// Plan item: conversational comments, @ tagging, header menu. The thread is
+// drawn by chat's own parts (MessageBubble: everyone on the left, a group head
+// = square photo + name + clock time, chat's 5 min runs and day pills, a
+// "Creators only" line on creators-only notes, chat's @mention names, clock
+// while pending, "Not sent" + Retry on a failure); Remove from plan lives
+// only in the concept's More menu; the
 // box tags people through chat's picker (never me; agency side only on a
 // creators-only note or a plan not shared with the client), sends @[id]
 // tokens, holds Send while a creators-only note tags an approver, and toasts
@@ -95,6 +97,9 @@ import {
   isInvalidMention,
   mentionKeyAction,
   mentionsRestricted,
+  planCommentMenu,
+  planCommentMessage,
+  planCommentProfiles,
   planPickerRows,
   planThreadRows,
   type ShownComment,
@@ -185,55 +190,68 @@ describe('grouping and day lines', () => {
 // Rendered thread: alignment, team style, pills
 // ---------------------------------------------------------------------------
 
-describe('the thread looks like chat', () => {
+describe('the thread is drawn by chat', () => {
   beforeEach(() => {
     resetMentionNames();
     env.members = null;
   });
 
-  it('own comments sit right in bubble-own with white (accent-fg) text; others left with an avatar and name', () => {
-    const html = renderToStaticMarkup(
-      <PlanItemThread
-        comments={[
-          shown({ id: 'o', body: 'From Asha' }),
-          shown({ id: 'm', mine: true, authorUserId: ME, authorName: 'You', body: 'Mine' }),
-        ]}
-        workspaceId="ws"
-        me={ME}
-      />,
+  const host = (html: string): HTMLElement => {
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    return el;
+  };
+
+  it("chat's rows: everyone on the left, a head carries the name + time line, the ids stay on the row", () => {
+    const el = host(
+      renderToStaticMarkup(
+        <PlanItemThread
+          comments={[
+            shown({ id: 'o', body: 'From Asha', authorKnown: true }),
+            shown({ id: 'm', mine: true, authorUserId: ME, authorName: 'You', body: 'Mine' }),
+          ]}
+          workspaceId="ws"
+          me={ME}
+        />,
+      ),
     );
-    const host = document.createElement('div');
-    host.innerHTML = html;
-    const other = host.querySelector('[data-plan-comment-id="o"]') as HTMLElement;
-    const own = host.querySelector('[data-plan-comment-id="m"]') as HTMLElement;
+    const other = el.querySelector('[data-plan-comment-id="o"]') as HTMLElement;
+    const own = el.querySelector('[data-plan-comment-id="m"]') as HTMLElement;
+    // Chat's own row (MessageBubble) with the plan hooks on it.
+    expect(other.hasAttribute('data-msg-id')).toBe(true);
     expect(other.getAttribute('data-plan-comment-side')).toBe('other');
-    expect(other.className).toContain('justify-start');
-    expect(other.querySelector('[data-plan-comment-author]')?.textContent).toBe('Asha');
     expect(own.getAttribute('data-plan-comment-side')).toBe('own');
-    expect(own.className).toContain('justify-end');
-    expect(own.innerHTML).toContain('bg-bubble-own text-accent-fg');
-    expect(own.querySelector('[data-plan-comment-author]')).toBeNull();
-    expect(html).not.toContain('text-white');
+    expect(other.querySelector('[data-sender-name]')?.textContent).toBe('Asha');
+    expect(other.querySelector('[data-sender-time]')).not.toBeNull();
+    // L1: no right-aligned own bubble, no bubble-own fill.
+    expect(own.className).not.toContain('justify-end');
+    expect(own.innerHTML).not.toContain('bg-bubble-own');
+    expect(own.querySelector('[data-sender-name]')).not.toBeNull();
+    expect(el.innerHTML).not.toContain('text-white');
   });
 
-  it('the name line carries the role when the session holds the members', () => {
-    env.members = {
-      loading: false,
-      error: null,
-      rows: [{ user_id: ASHA, active: true, removed_at: null, role: 'agency' }],
-      profiles: new Map(),
-      options: [],
-    };
-    const html = renderToStaticMarkup(
-      <PlanItemThread comments={[shown({ id: 'o' })]} workspaceId="ws" me={ME} />,
+  it("chat's grouping: one author within 5 min shares one head; a day pill sits above", () => {
+    const el = host(
+      renderToStaticMarkup(
+        <PlanItemThread
+          comments={[
+            shown({ id: 'a', createdAt: '2026-11-02T09:00:00Z' }),
+            shown({ id: 'b', createdAt: '2026-11-02T09:03:00Z' }),
+          ]}
+          workspaceId="ws"
+          me={ME}
+        />,
+      ),
     );
-    // The name sits in its person-card trigger; the role follows it.
-    expect(html).toMatch(
-      /data-plan-comment-author=""[^>]*><span[^>]*data-person-trigger[^>]*>Asha<\/span> · /,
-    );
+    expect(el.querySelectorAll('[data-sender-line]')).toHaveLength(1);
+    const a = el.querySelector('[data-plan-comment-id="a"]');
+    const b = el.querySelector('[data-plan-comment-id="b"]');
+    expect(a?.hasAttribute('data-plan-run-head')).toBe(true);
+    expect(b?.hasAttribute('data-plan-run-head')).toBe(false);
+    expect(el.querySelector('li[role="separator"]')).not.toBeNull();
   });
 
-  it('a creators-only note is warn-soft with the warn line, a lock and "Creators only"', () => {
+  it('a creators-only note carries the lock and "Creators only" inside its bubble', () => {
     const html = renderToStaticMarkup(
       <PlanItemThread
         comments={[shown({ id: 't', visibility: 'team', mine: true, authorUserId: ME })]}
@@ -241,13 +259,12 @@ describe('the thread looks like chat', () => {
         me={ME}
       />,
     );
-    expect(html).toContain('bg-warn-soft');
-    expect(html).toContain('border-warn-line');
     expect(html).toMatch(/data-plan-comment-team=""[^>]*>[\s\S]*?<svg[\s\S]*?Creators only/);
+    expect(html).toContain('data-plan-comment="team"');
     expect(html).not.toContain('bg-bubble-own');
   });
 
-  it('tags are pills: accent on others, a white 22% pill on your own', () => {
+  it("tags render as chat's mention names, never a raw token", () => {
     rememberMentionNames('ws', [{ userId: CLIENT, displayName: 'Cli', username: 'cli' }]);
     const body = `hi @[${CLIENT}]`;
     const html = renderToStaticMarkup(
@@ -260,9 +277,85 @@ describe('the thread looks like chat', () => {
         me={ME}
       />,
     );
-    expect(html).toMatch(/class="[^"]*bg-accent-soft text-accent"[^>]*>@cli</);
-    expect(html).toMatch(/class="[^"]*bg-accent-fg\/\[0\.22\] text-accent-fg"[^>]*>@cli</);
+    expect(html).toContain(`data-mention="${CLIENT}"`);
+    expect(html).toContain('@cli');
     expect(html).not.toContain(`@[${CLIENT}]`);
+  });
+
+  it('a pending comment shows the clock; a failed one "Not sent" with Retry and Delete', () => {
+    const html = renderToStaticMarkup(
+      <PlanItemThread
+        comments={[
+          shown({ id: 'p', mine: true, authorUserId: ME, pending: true }),
+          shown({ id: 'f', mine: true, authorUserId: ME, failed: true, body: 'Oops' }),
+        ]}
+        workspaceId="ws"
+        me={ME}
+        onRetry={() => undefined}
+        onDiscard={() => undefined}
+      />,
+    );
+    const el = host(html);
+    const pendingRow = el.querySelector('[data-plan-comment-id="p"]');
+    expect(pendingRow?.getAttribute('data-state')).toBe('sending');
+    const failed = el.querySelector('[data-plan-comment-id="f"]') as HTMLElement;
+    expect(failed.getAttribute('data-state')).toBe('failed');
+    expect(failed.textContent).toContain('Not sent');
+    expect(failed.querySelector('[data-failed-line-retry]')).not.toBeNull();
+    expect(failed.querySelector('[data-failed-delete]')).not.toBeNull();
+  });
+});
+
+describe('planCommentMessage and planCommentMenu', () => {
+  it('maps a comment onto a chat message: sent, sending or failed; no files, quotes or reactions', () => {
+    expect(planCommentMessage(shown({})).state).toBe('sent');
+    expect(planCommentMessage(shown({ pending: true })).state).toBe('sending');
+    const failed = planCommentMessage(shown({ failed: true, refusal: 'No' }));
+    expect(failed.state).toBe('failed');
+    expect(failed.refusal).toBe('No');
+    const m = planCommentMessage(shown({}));
+    expect(m.attachments).toEqual([]);
+    expect(m.reply).toBeNull();
+    expect(m.reactions).toEqual([]);
+    expect(m.senderUserId).toBe(ASHA);
+  });
+
+  it('the menu offers Reply, Copy link and Reply privately on recorded comments only; Delete on a failed own one', () => {
+    const base = { canReply: true, canLink: true, replyPrivately: true };
+    expect(planCommentMenu({ ...base, comment: shown({}) })).toEqual({
+      reply: true,
+      copy: true,
+      copyLink: true,
+      replyPrivately: true,
+      discard: false,
+    });
+    expect(planCommentMenu({ ...base, comment: shown({ pending: true }) })).toEqual({
+      reply: false,
+      copy: true,
+      copyLink: false,
+      replyPrivately: false,
+      discard: false,
+    });
+    const failedOwn = planCommentMenu({ ...base, comment: shown({ mine: true, failed: true }) });
+    expect(failedOwn.discard).toBe(true);
+    expect(planCommentMenu({ ...base, canReply: false, comment: shown({}) }).reply).toBe(false);
+  });
+
+  it('profiles: held members first, then authors whose name the read answered', () => {
+    const held = {
+      profiles: new Map([[ME, { userId: ME, displayName: 'Me', avatarUrl: null }]]),
+    };
+    const out = planCommentProfiles(
+      [
+        shown({ authorKnown: true }),
+        shown({ id: 'x', authorUserId: CLIENT, authorName: 'Member' }),
+      ],
+      held,
+      'ws',
+    );
+    expect(out.get(ME)?.displayName).toBe('Me');
+    expect(out.get(ASHA)?.displayName).toBe('Asha');
+    expect(out.has(CLIENT)).toBe(false);
   });
 });
 
@@ -339,6 +432,8 @@ describe('Remove from plan: only in the More menu', () => {
   });
 
   it('the concept body has no red button; the screen never imports the chat thread or composer', () => {
+    // The thread file draws with chat's MessageBubble; the screen itself stays clear of it.
+    expect(read('src/components/chat/PlanItemThread.tsx')).toContain('<MessageBubble');
     const src = read('src/components/chat/PlanItemScreen.tsx');
     const concept = src.slice(
       src.indexOf('data-plan-description-card'),
@@ -585,5 +680,25 @@ describe('@ tagging', () => {
     await settle();
     const row = $('[data-plan-comment-id="cm-new"]');
     expect(row?.getAttribute('data-plan-comment-side')).toBe('own');
+  });
+
+  it('a failed write keeps the row as "Not sent"; Retry sends the same body again', async () => {
+    env.comment.mockImplementationOnce(async () => ({ ok: false, error: { message: 'boom' } }));
+    await mount('agency');
+    box().focus();
+    await act(async () => type(box(), 'Try me'));
+    await act(async () => key(box(), { key: 'Enter' }));
+    await settle();
+    // Chat's send: the box cleared in the same tap; the row stays, failed.
+    expect(box().value).toBe('');
+    const failed = $('[data-plan-comment-side="own"][data-state="failed"]');
+    expect(failed?.textContent).toContain('Not sent');
+    expect(document.querySelector('[role="alert"]')?.textContent ?? '').not.toContain("Couldn't");
+    const retry = failed?.querySelector<HTMLButtonElement>('[data-failed-line-retry]');
+    await act(async () => retry?.click());
+    await settle();
+    expect(env.comment).toHaveBeenCalledTimes(2);
+    expect((env.comment.mock.calls[1]?.[1] as { p_body: string }).p_body).toBe('Try me');
+    expect($('[data-plan-comment-id="cm-new"]')?.getAttribute('data-state')).toBe('sent');
   });
 });

@@ -71,7 +71,8 @@ describe('format rules', () => {
     expect(modes('components/pages/CreateBriefSheet.tsx')).toEqual(['field', 'field', 'field']);
     expect(modes('components/chat/ConceptSheet.tsx')).toEqual(['field']);
     expect(modes('components/pages/plan-tab/BankAddSheet.tsx')).toEqual(['field']);
-    expect(modes('components/chat/PlanItemScreen.tsx')).toEqual(['field']);
+    // The plan comment box is the chat composer's box: comment mode, send in its row.
+    expect(modes('components/chat/PlanItemScreen.tsx')).toEqual(['comment']);
   });
 
   it('the comment composer MentionInput formats', () => {
@@ -90,7 +91,8 @@ describe('format rules', () => {
     // Blocks (lists, quotes) are the outer layer: whole bodies go through renderRich.
     expect(read('components/chat/message-body.tsx')).toContain('parseBlocks(body)');
     expect(read('components/chat/MessageThread.tsx')).toContain('renderRich(body');
-    expect(read('components/chat/PlanItemThread.tsx')).toContain('renderRich(body');
+    // Plan comments are drawn by chat's own bubble (MessageThread's renderRich above).
+    expect(read('components/chat/PlanItemThread.tsx')).toContain('<MessageBubble');
     expect(read('components/comments/Comments.tsx')).toMatch(/renderRich\(\s*body/);
     expect(read('components/pages/BriefDetailPage.tsx')).toMatch(/renderRich\(\s*brief\.objective/);
     expect(read('components/pages/BriefDetailPage.tsx')).toMatch(

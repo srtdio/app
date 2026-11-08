@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Type roles on the Plan item screen: the screen header and the item title
 // (15/20, 600), the Comments section label (12, 600, uppercase, .06em, fg-2),
-// a comment's author as the card title (14, 500), its body (14, fg) and the
-// meta lines (12, fg-3; the clock in sans tabular figures, not mono). Reads
-// are stubbed; nothing touches a database.
+// and the comments in chat's own type (chat's MessageBubble: the sender name
+// and clock time of chat's group head, chat's bubble body), the subtitle meta
+// (sm, fg-3). Reads are stubbed; nothing touches a database.
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -57,6 +57,7 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
 }));
 
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
+import { SENDER_NAME_TYPE, SENDER_TIME_TYPE } from '@/components/chat/chat-type';
 import { ToastProvider } from '@/components/ui/toast';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 
@@ -164,14 +165,12 @@ describe('Plan item screen type roles', () => {
     );
   });
 
-  it('card title and body: the comment author is base/500, its body base fg', async () => {
+  it("comments use chat's type: the group head's name and time, chat's bubble body", async () => {
     await mount();
-    const author = byText('span', 'Asha');
-    expect(classes(author)).toEqual(expect.arrayContaining(['text-base', 'font-medium']));
-    expect(classes(author)).not.toContain('font-semibold');
-    const body = byText('div.whitespace-pre-wrap', 'Looks good to me');
-    expect(classes(body)).toEqual(expect.arrayContaining(['text-base', 'text-fg']));
-    expect(classes(body)).not.toContain('text-lg');
+    const author = byText('[data-sender-name]', 'Asha');
+    expect(classes(author)).toEqual(expect.arrayContaining(SENDER_NAME_TYPE.split(' ')));
+    const body = byText('[data-msg-body]', 'Looks good to me');
+    expect(classes(body)).toContain('whitespace-pre-wrap');
     const description = byText('[data-plan-description]', 'A walk through the plant.');
     expect(classes(description)).toEqual(expect.arrayContaining(['text-base', 'text-fg-2']));
   });
@@ -182,10 +181,9 @@ describe('Plan item screen type roles', () => {
     const subtitle = document.querySelector('[data-plan-page-subtitle]')?.parentElement ?? null;
     expect(subtitle).not.toBeNull();
     expect(classes(subtitle as Element)).toEqual(expect.arrayContaining(['text-sm', 'text-fg-3']));
-    const time = document.querySelector('time');
+    // The comment's clock time is chat's group head time (mono, tabular).
+    const time = document.querySelector('[data-sender-time]');
     expect(time).not.toBeNull();
-    expect(classes(time as Element)).toEqual(
-      expect.arrayContaining(['text-sm', 'text-fg-3', 'font-mono', 'tabular-nums']),
-    );
+    expect(classes(time as Element)).toEqual(expect.arrayContaining(SENDER_TIME_TYPE.split(' ')));
   });
 });

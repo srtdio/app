@@ -80,6 +80,7 @@ function row(id: string, resolvedAt: string | null): CommentRow {
     resolved_at: resolvedAt,
     resolved_by: null,
     trace_id: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -166,12 +167,13 @@ describe('caption quote inside the comment (item 3)', () => {
     expect(text(tree)).toContain('old copy');
   });
 
-  it('the quote renders above the body; the header carries the role, the action line the time', () => {
+  it('the quote renders above the body; the header carries name and time, no role label', () => {
     const quote = SRC.indexOf('{annotationChip(');
     const body = SRC.indexOf("{comment.body.trim() !== '' ? (");
     expect(quote).toBeGreaterThan(-1);
     expect(quote).toBeLessThan(body);
-    expect(SRC).toContain('data-comment-role=""');
+    expect(SRC).not.toContain('data-comment-role');
+    expect(SRC).not.toContain('roleLabel');
     expect(SRC).toContain('formatAgo(comment.created_at, now)');
     // The retired long formatter (split so the src/** guard scan stays clean).
     expect(SRC).not.toContain('format' + 'When');
@@ -192,25 +194,23 @@ describe('section title, empty states and the top pill', () => {
   });
 });
 
-describe('action row and composer (items 3, 4)', () => {
-  it('Resolve/Reopen, Reply and Copy are on the action line; the ⋯ holds only Edit / Delete', () => {
-    expect(SRC).toContain('{opts.actions.canCopy ? copyControl(comment) : null}');
-    // Busy shows on the button (Button busy); the label never swaps.
-    expect(SRC).toContain('busy={isResolving}');
-    expect(SRC).toContain('Reopen');
-    expect(SRC).toContain("resolveButton(comment, 'Resolve', 'thread')");
-    // Copy is icon-only: clipboard, a tick for 2000 ms after a copy, failure as a toast.
-    expect(SRC).toContain('<IconCopy size={ICON_SIZE.inline} />');
-    expect(SRC).toContain("toast?.show({ title: COPY_FAILED, tone: 'error' })");
-    expect(SRC).not.toContain("{copyFailed ? COPY_FAILED : 'Copied'}");
+describe('action bar and composer (items 3, 4; bar 8 Nov 2026)', () => {
+  it('Reply, Resolve / Reopen, To-do, Edit and Delete live on the bar; no Copy, no ⋯ menu', () => {
+    expect(SRC).toContain('<CommentActionBar');
+    // Reopen's busy rides on the bar button; the label never swaps.
+    expect(SRC).toContain('busy: resolvingId === comment.id');
+    expect(SRC).toContain('label: REOPEN_LABEL');
+    expect(SRC).toContain('label: CHECKPOINT_BOX_LABEL');
+    expect(SRC).not.toContain('IconCopy');
+    expect(SRC).not.toContain('COPY_FAILED');
+    expect(SRC).not.toContain('copyControl');
+    expect(SRC).not.toContain('ActionMenu');
     expect(SRC).not.toContain("'Comment copied'");
-    // No Copy row inside the popover any more.
-    expect(SRC).not.toContain('                    Copy text\n                  </button>');
   });
 
   it('the root composer reads "Write a comment" and sits after the list', () => {
     expect(SRC).toContain('placeholder="Write a comment"');
-    const list = SRC.indexOf('<ul data-comments-list=""');
+    const list = SRC.indexOf('data-comments-list=""');
     const composer = SRC.indexOf('<div data-comments-composer="">{composer}</div>');
     expect(list).toBeGreaterThan(-1);
     expect(composer).toBeGreaterThan(list);
