@@ -704,7 +704,6 @@ export function WritingBox(props: WritingBoxProps) {
           {k.icon({ size: ICON_SIZE.control })}
         </RowKey>
       ))}
-      {phoneFormat ? sendKey : null}
     </div>
   );
 
@@ -737,11 +736,14 @@ export function WritingBox(props: WritingBoxProps) {
       </div>
     ) : null;
 
-  // The trailing keys: the mic beside send, in every state (typing too).
+  // The trailing keys: the mic beside send, in every state (typing too). The
+  // phone format row hides the mic; send never moves (Send closes the row in
+  // its click capture, and a send remounted elsewhere would drop the submit).
+  const micShown = !(formatOpen && phoneFormat);
   const trailing =
-    send !== undefined || (mic !== undefined && mic !== null) ? (
+    send !== undefined || (micShown && mic !== undefined && mic !== null) ? (
       <span data-row-trailing="" className="flex shrink-0 items-center">
-        {mic}
+        {micShown ? mic : null}
         {sendKey}
       </span>
     ) : null;
@@ -749,7 +751,7 @@ export function WritingBox(props: WritingBoxProps) {
   const row = rowShown ? (
     <div data-writing-row="" className="flex min-h-11 min-w-0 items-center gap-2">
       {shape === 'field' ? fieldRow : formatOpen ? formatRow : actionRow}
-      {shape === 'card' && !(formatOpen && phoneFormat) ? trailing : null}
+      {shape === 'card' ? trailing : null}
     </div>
   ) : null;
 

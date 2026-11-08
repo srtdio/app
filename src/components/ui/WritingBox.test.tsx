@@ -546,9 +546,13 @@ describe('WritingBox phone format row', () => {
     expect(q(host, '[data-format-row] [data-row-key="aa"]')).toBeNull();
     expect(byLabel(host, 'Quote')).toBeNull();
     expect(q(host, '[data-testid="mic"]')).toBeNull();
-    // Send closes the row, the last key on the same line.
+    // Send stays in its one trailing slot (never remounted, so its submit
+    // lands) and closes the row; the keys spread between X and send.
     const row = q(host, '[data-format-row]');
-    expect(row?.lastElementChild?.querySelector('[data-testid="send"]')).not.toBeNull();
+    expect(row?.querySelector('[data-testid="send"]')).toBeNull();
+    expect(q(host, '[data-row-trailing] [data-testid="send"]')).not.toBeNull();
+    expect(q(host, '[data-row-trailing] [data-testid="mic"]')).toBeNull();
+    expect(row?.nextElementSibling?.hasAttribute('data-row-trailing')).toBe(true);
     expect(row?.className).toContain('justify-between');
     // X close closes the row; the mic is back beside send.
     act(() => byLabel(host, 'Close formatting')?.click());

@@ -120,12 +120,14 @@ test('phone: selecting text opens the format row; collapsing it closes the row',
   });
   await expect(row).toBeVisible();
   await expect(row.locator('[data-row-key="close"]')).toBeVisible();
-  await expect(chatBox(page).locator('[data-row-trailing]')).toHaveCount(0);
+  // The mic hides while the row is open; send keeps its slot.
+  await expect(chatBox(page).getByRole('button', { name: 'Record voice note' })).toHaveCount(0);
+  await expect(chatBox(page).locator('[data-row-trailing]')).toBeVisible();
   await box.evaluate((el: HTMLTextAreaElement) => {
     el.setSelectionRange(10, 10);
     document.dispatchEvent(new Event('selectionchange'));
   });
   await expect(row).toHaveCount(0);
   // The mic is back beside send.
-  await expect(chatBox(page).locator('[data-row-trailing]')).toBeVisible();
+  await expect(chatBox(page).getByRole('button', { name: 'Record voice note' })).toBeVisible();
 });

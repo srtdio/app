@@ -53,9 +53,12 @@ describe('format keys: on = glyph ink only; phone close matches send', () => {
     }
   });
 
-  it('the phone row drops Aa and Quote and keeps send last', () => {
+  it('the phone row drops Aa and Quote; send stays last in its one slot, the mic hides', () => {
     expect(SRC).toMatch(/phoneFormat\s*\?\s*FORMAT_KEYS\.filter\(\(k\) => k\.action !== 'quote'\)/);
-    expect(SRC).toMatch(/\{phoneFormat \? sendKey : null\}/);
+    // Send never moves into the format row (a remount would drop its submit).
+    expect(SRC).not.toMatch(/\{phoneFormat \? sendKey : null\}/);
+    expect(SRC).toContain('const micShown = !(formatOpen && phoneFormat);');
+    expect(SRC).toContain("{shape === 'card' ? trailing : null}");
   });
 
   it('onFaceClass reads the on branch and catches a tile', () => {
