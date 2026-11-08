@@ -37,16 +37,26 @@ export interface SentMessage extends CatchUpMessage {
 }
 
 /** A message's text with my own @name lit (MENTION_ME_PEER). */
+/** Each run with where it starts in the text: a stable key (runs never move). Pure. */
+function withOffsets<T extends { text: string }>(segs: readonly T[]): { seg: T; at: number }[] {
+  let at = 0;
+  return segs.map((seg) => {
+    const out = { seg, at };
+    at += seg.text.length;
+    return out;
+  });
+}
+
 function MessageText({ text, selfName }: { text: string; selfName: string | null }): ReactElement {
   return (
     <Text role="body" as="p" className="whitespace-pre-wrap break-words text-fg">
-      {segmentSelfMentions(text, selfName).map((seg, i) =>
+      {withOffsets(segmentSelfMentions(text, selfName)).map(({ seg, at }) =>
         seg.self ? (
-          <span key={i} data-catch-up-mention-me="" className={cn('rounded-sm', MENTION_ME_PEER)}>
+          <span key={at} data-catch-up-mention-me="" className={cn('rounded-sm', MENTION_ME_PEER)}>
             {seg.text}
           </span>
         ) : (
-          <span key={i}>{seg.text}</span>
+          <span key={at}>{seg.text}</span>
         ),
       )}
     </Text>
@@ -267,7 +277,7 @@ export function TypingCheck(props: { onPress: () => void }): ReactElement {
       onPointerDown={(event) => event.preventDefault()}
       onClick={props.onPress}
     >
-      <IconCheck size={ICON_SIZE.control} />
+      <IconCheck size={ICON_SIZE.nav} />
     </Button>
   );
 }

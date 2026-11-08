@@ -362,7 +362,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             onClick={hideKeyboard}
             className="rounded-full border"
           >
-            <IconChevronDown size={ICON_SIZE.control} />
+            <IconChevronDown size={ICON_SIZE.nav} />
           </IconButton>
         ) : (
           <span />
