@@ -286,7 +286,8 @@ describe('menu style', () => {
         onMore={() => {}}
       />,
     );
-    expect(html.match(/h-11 w-11 min-h-11 min-w-11[^"]*shrink-0/g)?.length).toBe(6);
+    // L10: six round cells, 48 visible (44 and up).
+    expect(html.match(/h-12 w-12 shrink-0 rounded-full/g)?.length).toBe(6);
     expect(html).toContain('px-2 py-2');
     expect(html).toContain('border-b border-border');
   });

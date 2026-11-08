@@ -273,18 +273,17 @@ function rootClass(root: ReactElement): string {
   return (root.props as { className?: string }).className ?? '';
 }
 
-describe('MessageBubble WhatsApp-style layout', () => {
-  it('renders own messages right-aligned with no avatar and no sender name', () => {
+describe('MessageBubble work-chat layout (L1)', () => {
+  it('renders own messages on the left with the own photo and name', () => {
     const root = renderBubble(makeMessage({ mine: true, senderUserId: 'me' }));
-    expect(rootClass(root)).toContain('flex-row-reverse');
-    expect(hasAvatar(root)).toBe(false);
-    expect(allText(root)).not.toContain('You');
+    expect(rootClass(root)).not.toContain('flex-row-reverse');
+    expect(hasAvatar(root)).toBe(true);
   });
 
-  it('renders a DM peer message with no avatar and no sender name', () => {
+  it('renders a DM peer head with the photo and the sender name', () => {
     const root = renderBubble(makeMessage({ mine: false }), { isGroup: false });
-    expect(hasAvatar(root)).toBe(false);
-    expect(allText(root)).not.toContain('Alice');
+    expect(hasAvatar(root)).toBe(true);
+    expect(allText(root)).toContain('Alice');
   });
 
   it('renders a group run head with the avatar and sender name', () => {
@@ -623,10 +622,9 @@ describe('in-bubble meta and ticks', () => {
     );
     expect(row).toMatch(/data-meta="row"[^>]*class="[^"]*flex justify-end/);
     expect(row).not.toContain('absolute');
+    // L1: a voice head draws no body meta (its time is on the name line).
     const voiceHtml = renderStrip(renderBubble(voice));
-    expect(voiceHtml.indexOf('data-meta="row"')).toBeGreaterThan(
-      voiceHtml.indexOf('data-bubble-content'),
-    );
+    expect(voiceHtml.indexOf('data-meta="row"')).toBe(-1);
     const pill = renderStrip(
       BubbleMetaView({
         meta: bubbleMeta(image, 'UTC', { showTicks: false }),
@@ -2352,9 +2350,9 @@ describe('tombstones, edited label and the neutral selection', () => {
       expect(html).toMatch(
         /data-tombstone-label=""[^>]*class="[^"]*min-w-0 truncate whitespace-nowrap italic/,
       );
+      // L1: a head tombstone draws no inline meta (the time is on the name line).
       const meta = /<span[^>]*data-meta="inline"[^>]*>/.exec(html)?.[0] ?? '';
-      expect(meta).toContain('static');
-      expect(meta).not.toContain('absolute');
+      expect(meta).toBe('');
       // L1: the time sits on the name line above the one grey line.
       expect(html.indexOf('data-sender-time')).toBeLessThan(html.indexOf('data-tombstone-label'));
       expect(html).toContain('data-tombstone');
