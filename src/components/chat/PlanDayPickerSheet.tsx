@@ -110,10 +110,7 @@ export function PlanDayTiles(props: {
                     {dayOfMonth(day)}
                   </span>
                   <span
-                    className={cn(
-                      'font-mono text-xs tabular-nums',
-                      on ? 'text-fg' : 'text-fg-2',
-                    )}
+                    className={cn('font-mono text-xs tabular-nums', on ? 'text-fg' : 'text-fg-2')}
                   >
                     {tileCaption(day, count)}
                   </span>

@@ -349,6 +349,7 @@ export function ConceptSheet(props: {
               </Button>
               <Button
                 variant="primary"
+                shape="pill"
                 data-plan-concept-save=""
                 busy={busy || waiting}
                 disabled={busy || !valid}

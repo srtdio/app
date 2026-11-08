@@ -820,6 +820,7 @@ export function BankPlanItSheets(props: {
             </Button>
             <Button
               variant="primary"
+              shape="pill"
               type="button"
               data-bank-plan-it-go=""
               busy={props.busy}
@@ -856,6 +857,7 @@ export function BankPlanItSheets(props: {
             </Button>
             <Button
               variant="primary"
+              shape="pill"
               type="button"
               data-bank-make-plan=""
               busy={props.busy}
@@ -908,6 +910,7 @@ export function BankPlanItSheets(props: {
             </Button>
             <Button
               variant="primary"
+              shape="pill"
               type="button"
               data-bank-shared-go=""
               busy={props.busy}
@@ -952,6 +955,7 @@ export function BankShowSheet(props: {
           </Button>
           <Button
             variant="primary"
+            shape="pill"
             type="button"
             data-bank-show-go=""
             onClick={() => {

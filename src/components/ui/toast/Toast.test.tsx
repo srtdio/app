@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button, ClearButton } from '@/components/ui/Button';
 import { Toast } from '@/components/ui/toast/Toast';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
@@ -70,22 +70,25 @@ describe('Toast', () => {
     expect(onDismiss).toHaveBeenCalledWith('1');
   });
 
-  it('dismiss is the shared ghost Button labelled "Clear", never an X', () => {
+  it('dismiss is the shared outlined Clear pill (ClearButton), never an X', () => {
     for (const tone of [undefined, 'success', 'error'] as const) {
       const tree = Toast({ toast: { ...base, ...(tone ? { tone } : {}) }, onDismiss: () => {} });
       const [dismiss] = findAll(tree, (el) => ariaLabel(el) === 'Dismiss notification');
-      expect(dismiss!.type).toBe(Button);
-      const props = dismiss!.props as { variant?: string; children?: ReactNode; className: string };
-      expect(props.variant).toBe('ghost');
-      expect(props.children).toBe('Clear');
-      if (tone === 'error') expect(props.className).toContain('text-accent-fg');
+      expect(dismiss!.type).toBe(ClearButton);
+      const props = dismiss!.props as { children?: ReactNode; faceClassName?: string };
+      // The label is ClearButton's own default "Clear".
+      expect(props.children).toBeUndefined();
+      if (tone === 'error') expect(props.faceClassName).toContain('text-accent-fg');
     }
   });
 
   it('does not render a press button when onPress is absent', () => {
     const tree = Toast({ toast: base, onDismiss: () => {} });
     // Only the dismiss Clear button is a button when the toast is not pressable.
-    const buttons = findAll(tree, (el) => el.type === 'button' || el.type === Button);
+    const buttons = findAll(
+      tree,
+      (el) => el.type === 'button' || el.type === Button || el.type === ClearButton,
+    );
     expect(buttons).toHaveLength(1);
     expect(ariaLabel(buttons[0]!)).toBe('Dismiss notification');
   });

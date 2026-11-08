@@ -119,7 +119,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Chips and single-choice picks: outline pill, density visible (36 Cozy) / 44 tap; rest border-strong + fg-2; picked = ink line + fg, no fill; counts fg-3.
 - Chips: every chip-like control (tabs, quick links, day tiles, post refs) uses Chip or the CHIP_* exports; no grey-filled pills. Guard: `src/__tests__/chips-flat-guard.test.ts`.
 - Sheet primary action: Button shape="pill", right-aligned, auto width (never full width, never left). Clear: outlined pill (ghost + pill + border-strong). Guard: `src/__tests__/sheet-pill-guard.test.ts`.
-- Format keys: on = glyph ink only, never a tile or ring. Phone format row: X close and send are matching filled circles; mic hides while it is open. Guard: `src/__tests__/format-keys-guard.test.ts`.
+- Format keys: on = glyph ink only, never a tile or ring. Phone format row: X close and send are matching filled circles; mic hides while it is open. Guard: `src/__tests__/format-keys.test.ts`.
 - Comment action bar never shares the author name's line: it rides the row's top hairline (absolute); name one line, truncates; "(edited)" ends the body. Guard: `src/__tests__/comment-header-guard.test.ts`.
 - Phone nav: centred, as wide as its tabs; 52 at rest (active tab panel-3 fill + label), 44 while scrolling down (labels hide, icons stay), grows on scroll up or at the top (useDockShrunk, MOVE_CLASS.dock); Chat circle shrinks with it, active = ink fill.
 - First page fills the screen: lists show useFillCount() rows (screen height / density row + 1, x laptop columns, 6..40), calculated once per app load, then load more by the same count.

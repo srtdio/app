@@ -2610,7 +2610,10 @@ export function Comments({
 
   function renderEditor(commentId: string): ReactNode {
     return (
-      <div data-comment-editor="" className={cn('mt-2 flex flex-col gap-2', COMMENT_ROW_SCROLL_CLASS)}>
+      <div
+        data-comment-editor=""
+        className={cn('mt-2 flex flex-col gap-2', COMMENT_ROW_SCROLL_CLASS)}
+      >
         {/* ui/WritingBox (comment mode) with no send: Save and Cancel stay
             under it; focused, the row shows Aa and emoji. */}
         <WritingBox
@@ -2765,7 +2768,11 @@ export function Comments({
   // The edited marker at the end of the body, on the last word's line: " (edited)"
   // on comments and replies; a point keeps its "edited <time>". Null when never edited.
   function editedMarker(comment: CommentRow, point: boolean, now: Date): ReactNode {
-    const marker = point ? pointEditedMarker(comment.edited_at, now) : comment.edited_at === null ? null : EDITED_MARKER;
+    const marker = point
+      ? pointEditedMarker(comment.edited_at, now)
+      : comment.edited_at === null
+        ? null
+        : EDITED_MARKER;
     if (marker === null) return null;
     return (
       <span data-comment-edited="" className="text-sm text-fg-3">

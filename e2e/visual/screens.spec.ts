@@ -2670,6 +2670,14 @@ function postComment(id: string, author: string, body: string, at: number): Row 
   };
 }
 
+/** ME's own comment on Monday carousel, edited half an hour after it was written. */
+function seedOwnEditedComment(network: HarnessNetwork): void {
+  (network.world.tables.comments ??= []).push({
+    ...postComment(ME_COMMENT_ID, ME, QUOTE_EXCERPT, NOW - 3_600_000),
+    edited_at: new Date(NOW - 1_800_000).toISOString(),
+  });
+}
+
 /** Priya's comment on Monday carousel: a tap on her name offers Reply privately. */
 function seedPeerComment(network: HarnessNetwork): void {
   (network.world.tables.comments ??= []).push(
@@ -5048,9 +5056,11 @@ SCREENS.push(
     },
   },
   {
-    // Aa: the format row in place of the action row (Aa on, which closes it;
-    // Bold, Italic, Underline, Strike, Link, Numbered list, Bullet list,
-    // Quote ... mic, send). No X.
+    // The format row in place of the action row, Bold on (flat finish, 8 Nov
+    // 2026). Phone: X close (a filled circle like send), Bold, Italic,
+    // Underline, Strike, Link, Numbered list, Bullet list, send; no mic, no
+    // Quote. Laptop: Aa on (which closes it) ... Quote. An on key is the glyph
+    // in ink only.
     name: 'chat-box-format-row',
     seed: creator,
     hold: true,
@@ -5060,7 +5070,10 @@ SCREENS.push(
       await tap([boxKey(chatBox(page), 'Aa')], 'Aa');
       const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
       await waitFor([row], 'format row');
-      await waitFor([row.locator('[data-row-key="aa"][aria-pressed="true"]')], 'Aa on');
+      const lead = isLaptop(page) ? '[data-row-key="aa"][aria-pressed="true"]' : '[data-row-key="close"]';
+      await waitFor([row.locator(lead)], isLaptop(page) ? 'Aa on' : 'Close formatting');
+      await tap([row.locator('[data-row-key="bold"]')], 'Bold');
+      await waitFor([row.locator('[data-row-key="bold"][aria-pressed="true"]')], 'Bold on');
       await expect(chatBox(page).locator('[data-action-row]')).toHaveCount(0);
       await page.mouse.move(0, 0);
     },
@@ -5197,6 +5210,41 @@ SCREENS.push(
       await page.keyboard.type('Can the hook land sooner?');
       await waitFor([box.locator('[data-writing-row]')], 'comment row');
       await waitFor([boxKey(box, 'Aa')], 'comment Aa');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // ME's own edited comment (flat finish, 8 Nov 2026): the action bar rides
+    // the row's top hairline, the name keeps one line, " (edited)" ends the body.
+    name: 'post-comment-edited',
+    seed: creator,
+    extra: seedOwnEditedComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const row = page.locator(`#comment-${ME_COMMENT_ID} [data-comment-row="root"]`);
+      await waitFor([row.locator('[data-comment-edited]')], '(edited)');
+      await expect(row.locator('[data-comment-bar]')).toHaveCSS('position', 'absolute');
+      await row.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // The same comment in its inline editor: Save and Cancel sit in view,
+    // above the post screen's bottom bar on phone.
+    name: 'post-comment-editing',
+    seed: creator,
+    extra: seedOwnEditedComment,
+    hold: true,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const comment = page.locator(`#comment-${ME_COMMENT_ID}`);
+      const row = comment.locator('[data-comment-row="root"]');
+      await row.scrollIntoViewIfNeeded();
+      await tap([row.locator('[data-comment-bar] [data-bar-action="edit"]')], 'Edit');
+      const save = comment.locator('[data-comment-editor]').getByRole('button', { name: 'Save' });
+      await waitFor([save], 'Save');
+      await expect(save).toBeInViewport({ ratio: 1 });
       await page.mouse.move(0, 0);
     },
   },

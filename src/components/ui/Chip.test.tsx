@@ -80,7 +80,7 @@ describe('Chip onClear', () => {
     expect(html).not.toContain('aria-hidden');
   });
 
-  it('set: a sibling ghost "Clear" Button labelled "Clear <label> filter", no X', () => {
+  it('set: a sibling outlined Clear pill labelled "Clear <label> filter", no X', () => {
     const html = renderToStaticMarkup(<Chip label="Photos" selected onClear={() => undefined} />);
     expect(html.startsWith('<span data-chip-clearable')).toBe(true);
     const buttons = html.match(/<button[^>]*>/g) ?? [];
@@ -90,10 +90,12 @@ describe('Chip onClear', () => {
     const clear = buttons[1] ?? '';
     expect(clear).toContain('aria-label="Clear Photos filter"');
     expect(clear).toContain('data-chip-clear');
-    // The shared ghost Button: 44 tall tap area, quiet ink.
+    // The shared ClearButton: 44 tall pill hit, a 36 outlined face inside.
     expect(clear).toContain('h-11 min-h-11 min-w-11');
-    expect(clear).toContain('lit-hover text-fg-2');
-    expect(html).toMatch(/>Clear<\/button><\/span>$/);
+    expect(clear).toContain('rounded-full');
+    expect(clear).toContain('data-clear-pill');
+    expect(html).toContain('h-9 items-center rounded-full border border-border-strong');
+    expect(html).toMatch(/>Clear<\/span><\/button><\/span>$/);
     expect(html).not.toContain('<svg');
     // The chip keeps its selected look, with no reserved glyph spacer.
     expect(html).toContain('border-fg text-fg');

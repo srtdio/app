@@ -29,8 +29,8 @@ async function expectSaved(field: Locator, text: string): Promise<void> {
 // comments, sheet fields and the post caption. Stories:
 //   S1 phone: tap the box, Aa, Numbered list, three lines, send: the bubble is
 //      an <ol> of three; the chat list preview starts "1. ".
-//   S2 phone: a quote, a [text](url) link through Add link, a bullet list: the
-//      bubble shows .fmt-quote, the <ul> and the link's text.
+//   S2 phone: no Quote on the phone row (laptop only); a [text](url) link
+//      through Add link, a bullet list: the bubble shows the <ul> and the link.
 //   S3 laptop: Cmd/Ctrl+B, Cmd/Ctrl+Shift+8, Cmd/Ctrl+K (Add link), the emoji
 //      search "fire", Enter sends.
 //   S4 edit a sent list: the box shows the raw prefixes, Save edit, a list again.
@@ -173,7 +173,7 @@ test('S1 phone: Aa, Numbered list, three lines, send: an <ol> of three, preview 
   expectClean(network);
 });
 
-test('S2 phone: a quote, Add link and a bullet list render as blocks in the bubble', async ({
+test('S2 phone: Add link and a bullet list render as blocks; no Quote on the phone row', async ({
   page,
 }) => {
   test.skip(!isPhone(page), 'phone only');
@@ -185,14 +185,8 @@ test('S2 phone: a quote, Add link and a bullet list render as blocks in the bubb
 
   await field.click();
   await key(box, 'Aa').click();
-  await key(box, 'Quote').click();
-  await expectSaved(field, '> ');
-  await page.keyboard.type('Can the hook land in 2 seconds?');
-  // Return continues the quote; Return on the empty "> " line ends it.
-  await page.keyboard.press('Enter');
-  await expectSaved(field, '> Can the hook land in 2 seconds?\n> ');
-  await page.keyboard.press('Enter');
-  await expectSaved(field, '> Can the hook land in 2 seconds?\n');
+  // Quote is laptop only (8 Nov 2026): the phone row ends Bullet list, send.
+  await expect(box.getByRole('button', { name: 'Quote', exact: true })).toHaveCount(0);
   await page.keyboard.type('Brief is ');
 
   // Link with nothing selected: Add link opens with both fields empty.
@@ -204,7 +198,7 @@ test('S2 phone: a quote, Add link and a bullet list render as blocks in the bubb
   await sheet.getByLabel('Link', { exact: true }).fill(TEXT_URL);
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(sheet).toBeHidden();
-  const withLink = `> Can the hook land in 2 seconds?\nBrief is [here](${TEXT_URL})`;
+  const withLink = `Brief is [here](${TEXT_URL})`;
   await expectSaved(field, withLink);
 
   await caretToEnd(field);
@@ -220,7 +214,6 @@ test('S2 phone: a quote, Add link and a bullet list render as blocks in the bubb
   const bubble = await sendFromBox(page);
   expect(lastArgs(network, 'chat_message_send')?.p_body).toBe(body);
   const shown = bubble.locator('[data-msg-body]');
-  await expect(shown.locator('.fmt-quote')).toHaveText('Can the hook land in 2 seconds?');
   await expect(shown.locator('ul > li')).toHaveText(['Lid lift', 'Logo']);
   await expect(shown.locator('[data-msg-link]')).toHaveText('here');
   await expect(shown).not.toContainText('](');

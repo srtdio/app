@@ -41,7 +41,7 @@ import { editFailureCopy } from '@/lib/chat/record';
 import { createOutboxSender, runSend, type SendOutcome } from '@/lib/chat/send-flow';
 import { canSendAttachmentMessage, type MessageAttachment } from '@/lib/chat/attachments';
 import { stripHashToken } from '@/lib/chat/post-refs';
-import { Button } from '@/components/ui/Button';
+import { ClearButton } from '@/components/ui/Button';
 import { getDraft, resetDrafts, setDraft } from '@/lib/chat/drafts';
 import { runEdit } from '@/lib/chat/delete-flow';
 import type { Client } from '@srtdio/rpc';
@@ -355,11 +355,10 @@ describe('About bar', () => {
     expect(html).toContain('aria-label="Close about"');
   });
 
-  it('its ghost "Clear" cancels (no X)', () => {
+  it('its outlined Clear pill cancels (no X)', () => {
     const onCancel = vi.fn();
-    const close = find(AboutBar({ post, onCancel }), (el) => el.type === Button);
-    expect((close?.props as { variant?: string }).variant).toBe('ghost');
-    expect((close?.props as { children?: ReactNode }).children).toBe('Clear');
+    const close = find(AboutBar({ post, onCancel }), (el) => el.type === ClearButton);
+    expect(close).not.toBeNull();
     (close?.props as { onClick: () => void }).onClick();
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
@@ -393,7 +392,7 @@ describe('About bar while its post loads (F14)', () => {
       const node = stack.pop();
       if (Array.isArray(node)) stack.push(...(node as ReactNode[]));
       else if (isValidElement(node)) {
-        if (node.type === Button) close = node;
+        if (node.type === ClearButton) close = node;
         else stack.push((node.props as { children?: ReactNode }).children);
       }
     }
@@ -403,7 +402,7 @@ describe('About bar while its post loads (F14)', () => {
 });
 
 describe('editing mode', () => {
-  it('the editing bar: warn rule, "Editing your message" over the old text, a ghost "Clear" that cancels', () => {
+  it('the editing bar: warn rule, "Editing your message" over the old text, an outlined Clear pill that cancels', () => {
     const html = renderToStaticMarkup(<EditingBar text="old words" onCancel={() => {}} />);
     expect(html).toContain('w-1 shrink-0 self-stretch rounded-full');
     expect(html).toContain('bg-warn');
@@ -419,7 +418,7 @@ describe('editing mode', () => {
       const node = stack.pop();
       if (Array.isArray(node)) stack.push(...(node as ReactNode[]));
       else if (isValidElement(node)) {
-        if (node.type === Button) close = node;
+        if (node.type === ClearButton) close = node;
         else {
           const props = node.props as { children?: ReactNode; trailing?: ReactNode };
           stack.push(props.children, props.trailing);

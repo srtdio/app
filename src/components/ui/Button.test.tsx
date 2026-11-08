@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
-import { Button, type ButtonVariant } from '@/components/ui/Button';
+import { Button, ClearButton, CLEAR_PILL_FACE, type ButtonVariant } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Chip } from '@/components/ui/Chip';
 
@@ -128,6 +128,40 @@ describe('Button design system', () => {
     expect(t).toContain('px-0');
     expect(t).not.toContain('rounded-lg');
     expect(t).not.toContain('px-4');
+  });
+
+  it('shape pill is the sheet primary: full radius, 24 side pad, the same 44 height, auto width', () => {
+    const t = tokens(classOf({ shape: 'pill', variant: 'primary' }));
+    expect(t).toContain('rounded-full');
+    expect(t).toContain('px-6');
+    expect(t).toContain('h-11');
+    expect(t).toContain('bg-accent');
+    expect(t).not.toContain('rounded-lg');
+    expect(t).not.toContain('px-4');
+    expect(t).not.toContain('w-full');
+    expect(t).not.toContain('w-11');
+  });
+
+  it('shape pill is additive: the default shape is unchanged', () => {
+    expect(tokens(classOf())).toContain('rounded-lg');
+    expect(tokens(classOf())).toContain('px-4');
+    for (const variant of VARIANTS) {
+      expect(tokens(classOf({ variant, shape: 'pill' }))).toContain('mv-press');
+    }
+  });
+
+  it('ClearButton is the outlined pill: ghost pill hit 44, a 36 border-strong face, fg-2 ink', () => {
+    const html = renderToStaticMarkup(<ClearButton aria-label="Clear it" onClick={() => {}} />);
+    const tag = /<button[^>]*>/.exec(html)?.[0] ?? '';
+    expect(tag).toContain('rounded-full');
+    expect(tag).toContain('h-11');
+    expect(tag).toContain('data-clear-pill');
+    expect(tag).toContain('lit-hover');
+    expect(tag).not.toContain('bg-accent');
+    expect(CLEAR_PILL_FACE).toContain('h-9');
+    expect(CLEAR_PILL_FACE).toContain('border-border-strong');
+    expect(CLEAR_PILL_FACE).toContain('text-fg-2');
+    expect(html).toContain('>Clear</span></button>');
   });
 
   it('danger and success fill with the solid tokens', () => {

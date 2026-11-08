@@ -236,8 +236,9 @@ describe('lighting rules', () => {
     expect(src('pages/pipeline/PipelineDateRangeCalendar.tsx')).toContain(
       "'bg-accent font-semibold text-accent-fg lit-pill'",
     );
+    // The plan day picker's tiles are flat chips (8 Nov 2026): the ink line, no fill.
     expect(src('chat/PlanDayPickerSheet.tsx')).toContain(
-      "'border-transparent bg-accent text-accent-fg hover:bg-accent lit-pill'",
+      "on ? 'border border-fg text-fg' : 'border border-border-strong text-fg-2'",
     );
     for (const rel of [
       'ui/DatePicker.tsx',

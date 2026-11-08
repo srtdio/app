@@ -26,7 +26,11 @@ describe('Tabs', () => {
 
   it('every tab is the shared Chip pill: active = ink line, others rest on border-strong, no fill', () => {
     const html = renderToStaticMarkup(<Tabs items={ITEMS} active="members" onChange={() => {}} />);
-    const faces = [...html.matchAll(/<button[^>]*aria-selected="(true|false)"[^>]*><span data-chip-face=""[^>]*class="([^"]*)"/g)];
+    const faces = [
+      ...html.matchAll(
+        /<button[^>]*aria-selected="(true|false)"[^>]*><span data-chip-face=""[^>]*class="([^"]*)"/g,
+      ),
+    ];
     expect(faces).toHaveLength(3);
     for (const [, on, cls] of faces) {
       expect(cls).toContain('rounded-full');

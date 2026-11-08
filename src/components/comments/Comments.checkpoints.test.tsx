@@ -678,3 +678,89 @@ describe('no Copy on a comment row (comment action bar, 8 Nov 2026)', () => {
     expect(host?.querySelector('[role="status"]')).toBeNull();
   });
 });
+
+describe('comment header, edited marker and filter (flat finish)', () => {
+  it('keeps the author name on one line with the bar off its line, absolute on the row', async () => {
+    pageRows.current = [row('c-1', 'mine')];
+    await mount(false);
+    const root = rowEl('c-1')?.querySelector<HTMLElement>('[data-comment-row="root"]');
+    const header = root?.querySelector<HTMLElement>('[data-comment-header]');
+    const author = header?.querySelector<HTMLElement>('[data-comment-author]');
+    expect(author?.className).toContain('whitespace-nowrap');
+    expect(author?.className).toContain('truncate');
+    expect(author?.className).toContain('min-w-0');
+    expect(author?.className).not.toContain('overflow-wrap');
+    expect(header?.querySelector('[data-comment-time]')?.className).toContain('shrink-0');
+    // No bar and no flex-1 spacer in the name's line.
+    expect(header?.querySelector('[data-comment-bar]')).toBeNull();
+    expect(header?.querySelector('.flex-1')).toBeNull();
+    const bar = root?.querySelector<HTMLElement>(':scope > [data-comment-bar]');
+    expect(bar).toBeTruthy();
+    for (const cls of ['absolute', 'right-0', 'top-0', '-translate-y-1/2']) {
+      expect(bar?.className).toContain(cls);
+    }
+    // Both columns sit 16 under the row's top edge, the bar's room.
+    expect(header?.parentElement?.className).toContain('mt-4');
+  });
+
+  it('ends an edited comment body in " (edited)", never in the header', async () => {
+    pageRows.current = [row('c-1', 'fixed the caption', { edited_at: '2026-01-01T01:00:00.000Z' })];
+    await mount(false);
+    const root = rowEl('c-1')?.querySelector<HTMLElement>('[data-comment-row="root"]');
+    expect(root?.querySelector('[data-comment-header] [data-comment-edited]')).toBeNull();
+    const marker = root?.querySelector<HTMLElement>('[data-comment-edited]');
+    expect(marker?.textContent).toBe(' (edited)');
+    expect(marker?.className).toContain('text-sm');
+    expect(marker?.className).toContain('text-fg-3');
+    // Same block as the body text, after its last word.
+    expect(marker?.parentElement?.textContent).toBe('fixed the caption (edited)');
+    expect(root?.textContent ?? '').not.toMatch(/edited \d/);
+  });
+
+  it('a point keeps its "edited <time>" marker, moved to the body end', async () => {
+    checkpointRows.current = [checkpoint('p-1', 1, { edited_at: '2026-01-01T01:00:00.000Z' })];
+    await mount(false);
+    const marker = rowEl('p-1')?.querySelector<HTMLElement>('[data-comment-edited]');
+    expect(marker?.textContent?.startsWith(' edited ')).toBe(true);
+    expect(marker?.parentElement?.textContent?.startsWith('checkpoint 1 edited ')).toBe(true);
+  });
+
+  it('the Open / All filter is two shared Chips, gap-2', async () => {
+    pageRows.current = [row('c-1', 'plain')];
+    await mount(false);
+    const group = host?.querySelector<HTMLElement>('[role="group"][aria-label="Show comments"]');
+    expect(group?.className).toContain('gap-2');
+    const faces = Array.from(group?.querySelectorAll<HTMLElement>('[data-chip-face]') ?? []);
+    expect(faces.map((face) => face.textContent)).toEqual(['Open', 'All']);
+    const pressed = Array.from(group?.querySelectorAll('button') ?? []).map((b) =>
+      b.getAttribute('aria-pressed'),
+    );
+    expect(pressed.filter((value) => value === 'true')).toHaveLength(1);
+    for (const face of faces) {
+      expect(face.className).toContain('rounded-full');
+      expect(face.className).not.toMatch(/\bbg-/);
+    }
+  });
+
+  it('phone: Edit scrolls the editor and its Save clear of the bottom bar', async () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      pageRows.current = [row('c-1', 'mine')];
+      await mount(false);
+      const edit = rowEl('c-1')?.querySelector<HTMLButtonElement>('[data-bar-action="edit"]');
+      act(() => edit?.click());
+      await settle();
+      const editor = rowEl('c-1')?.querySelector<HTMLElement>('[data-comment-editor]');
+      expect(editor).toBeTruthy();
+      expect(editor?.className).toContain('scroll-mb-[var(--focus-inset-bottom,0px)]');
+      expect(scrolled).toContain(editor);
+      expect(editor?.textContent ?? '').toContain('Save');
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+});
