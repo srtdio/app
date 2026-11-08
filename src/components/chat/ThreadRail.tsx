@@ -10,7 +10,8 @@
 // callout).
 
 import type { ReactElement } from 'react';
-import { ICON_SIZE, IconForward, IconMore, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
+import { ICON_SIZE, IconForward, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
+import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { textRole } from '@/components/ui/Text';
 import { CHAT_GUTTER, TRAILING_PULL } from '@/components/ui/layout';
@@ -265,14 +266,13 @@ export function RepliesSeparatorRow(props: {
           </IconButton>
         ) : null}
         {actions.onMore !== undefined ? (
-          <IconButton
+          <ActionMenuTrigger
             type="button"
+            edge="free"
             label={MORE_ACTIONS_LABEL}
             data-thread-root-action="more"
             onClick={actions.onMore}
-          >
-            <IconMore size={ICON_SIZE.control} />
-          </IconButton>
+          />
         ) : null}
       </span>
     </li>
