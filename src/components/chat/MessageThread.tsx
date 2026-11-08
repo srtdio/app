@@ -204,7 +204,7 @@ import {
   RailElbow,
   RailThrough,
   RailTick,
-  RepliesButtonRow,
+  RepliesRow,
   RepliesSeparatorRow,
   ThreadChipRow,
 } from '@/components/chat/ThreadRail';
@@ -322,7 +322,6 @@ import {
   hydrationDeadline,
   newestCardFor,
   parentIndexOf,
-  replyForSend,
   rowReady,
   type PageGate,
 } from '@/lib/chat/post-refs';
@@ -352,6 +351,20 @@ import {
 } from '@/lib/chat/thread-rail';
 import { loadThreadReplyCounts } from '@/lib/chat/history';
 import { threadViewRows, useThreadView } from '@/lib/chat/use-thread-view';
+import {
+  firstUnreadReply,
+  latestReplyLine,
+  loadThreadsForMe,
+  localThreadReadAt,
+  mainChatMessages,
+  rememberThreadRead,
+  repliesInfoByRoot,
+  repliesLabel,
+  setThreadRead,
+  threadRootOf,
+  withThreadRead,
+  type ThreadForMe,
+} from '@/lib/chat/thread-signals';
 import { applyEdit, applyReactionOp, markMessagesDeleted } from '@/lib/chat/thread';
 import { generateTraceId } from '@/lib/trace';
 import { supabase } from '@/lib/supabase';
@@ -1161,7 +1174,8 @@ export const SHARE_UNAVAILABLE_TOAST = errorText('share', null);
 const THREAD_OPEN_FAILED_TOAST = errorText('open this thread', null);
 
 /** The thread view composer's placeholder. */
-const THREAD_REPLY_PLACEHOLDER = 'Reply in thread';
+/** L4: the thread composer's hint. */
+const THREAD_REPLY_PLACEHOLDER = 'Reply';
 
 /**
  * The About reply a send may carry: only while the About bar shows its post.
@@ -3811,6 +3825,15 @@ export function listRailPlans(
   return railPlans(items, memberOf);
 }
 
+/** L3: one root's replies row as the main chat draws it (RepliesRow). */
+export interface RepliesRowData {
+  label: string;
+  repliers: { id: string; name: string; src?: string | undefined }[];
+  line: string;
+  unread: boolean;
+  onOpen: () => void;
+}
+
 /** The thread list's props (the chat's list and the thread view's list). */
 type ThreadBodyProps = Parameters<typeof ThreadBody>[0];
 
@@ -3877,6 +3900,11 @@ function ThreadBody(
     olderKey?: string;
     /** Card threads: the rail, chips and "N replies"; absent draws none. */
     threads?: ThreadBodyThreads;
+    /**
+     * L3: the main chat's replies row under a thread root (null: none). Absent
+     * in the thread screen, which shows its "N replies" separator instead.
+     */
+    repliesFor?: (message: ThreadMessage) => RepliesRowData | null;
     /** Menu "Transcribe" picked on a voice note; absent hides the row. */
     onTranscribe?: (message: ThreadMessage) => void;
     /**
@@ -4982,9 +5010,16 @@ function ThreadBody(
                       }),
                     }
                   : undefined;
+              // L4: the thread screen's root (any message, not only a card)
+              // heads the "N replies" separator; the main chat draws the
+              // replies row instead (repliesFor).
               const replies =
-                threads !== undefined && rootCard
+                threads !== undefined && viewRoot
                   ? replyCountLabel(threads.countOf(row.message.id))
+                  : null;
+              const repliesRow =
+                props.repliesFor !== undefined && props.selection === undefined
+                  ? props.repliesFor(row.message)
                   : null;
               const openThread = (rootId: string): void => threads?.onOpen(rootId);
               const id = row.message.id;
@@ -5089,15 +5124,14 @@ function ThreadBody(
                       selectingText={selectingTextId === row.message.id}
                     />
                   </ErrorBoundary>
-                  {replies !== null && !viewRoot ? (
-                    <RepliesButtonRow
-                      label={replies}
-                      mine={row.message.mine}
-                      isGroup={props.isGroup}
-                      shifted={rowRail !== undefined && rowRail.geometry.shift > 0}
-                      through={plan.continues}
+                  {repliesRow !== null ? (
+                    <RepliesRow
+                      label={repliesRow.label}
+                      repliers={repliesRow.repliers}
+                      line={repliesRow.line}
+                      unread={repliesRow.unread}
                       coarse={coarsePointer}
-                      onOpen={() => openThread(row.message.id)}
+                      onOpen={() => repliesRow.onOpen()}
                     />
                   ) : null}
                   {replies !== null && viewRoot ? (
@@ -5944,8 +5978,41 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const counts = countsRef.current;
   // The open card thread (full screen over the chat) and its reply draft.
   const threadView = useThreadView({ channelId, currentUserId: props.currentUserId ?? '' });
-  const [viewReply, setViewReply] = useState<DraftReply | null>(null);
+  const [, setViewReply] = useState<DraftReply | null>(null);
   const view = threadView.view;
+  // L3: a Reply opens the thread with its composer focused.
+  const [viewFocus, setViewFocus] = useState(false);
+  // L5/L6b: the threads I am in, one chat_threads_for_me call started with the
+  // chat (in parallel with the first history page, never awaited before the
+  // first paint); a later reply from someone else reads it again.
+  const [threadsForMe, setThreadsForMe] = useState<{
+    channelId: string;
+    rows: ThreadForMe[];
+  } | null>(null);
+  const latestReplyKey = useMemo(() => {
+    for (let i = props.messages.length - 1; i >= 0; i -= 1) {
+      const m = props.messages[i];
+      if (m !== undefined && typeof m.threadRootId === 'string' && !m.mine) return m.id;
+    }
+    return null;
+  }, [props.messages]);
+  useEffect(() => {
+    if (channelId === undefined || props.notes === true) return;
+    let live = true;
+    void loadThreadsForMe(supabase, channelId, generateTraceId()).then((result) => {
+      if (!live) return;
+      if (!result.ok) {
+        logger.warn('chat: threads for me read failed', { error: result.error.message });
+        return;
+      }
+      setThreadsForMe({ channelId, rows: result.data });
+    });
+    return () => {
+      live = false;
+    };
+  }, [channelId, props.notes, latestReplyKey]);
+  const myThreads =
+    threadsForMe !== null && threadsForMe.channelId === channelId ? threadsForMe.rows : null;
   // The view's replies the chat has not loaded (older than its pages).
   const viewOnly = useMemo(() => {
     if (view === null) return [];
@@ -6375,16 +6442,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // The composers' inputs: a Reply focuses them inside the user's own event.
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const viewComposerInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const handleReply = replyWithFocus(
-    () => composerInputRef.current,
-    (message: ThreadMessage) => {
-      const preview = replyPreview(message);
-      setReplyDraft({
-        authorName: senderName(message, props.profiles),
-        quote: { id: message.id, authorUserId: message.senderUserId, preview },
-      });
-    },
-  );
+  // L3/L14: Reply (sheet tile, swipe right, laptop right-click) opens that
+  // message's thread with its composer focused; no quote-reply in the main chat.
+  const handleReply = (message: ThreadMessage): void => {
+    openThreadRef.current(threadRootOf(message), true);
+  };
+  const openThreadRef = useRef<(rootId: string, focus?: boolean) => void>(() => undefined);
   // The quoted message became a tombstone: the reply chip loses its text and
   // reads the deleted label (the draft map is stripped by the store too).
   const replyQuoteId =
@@ -6624,7 +6687,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     onSearchRequestTaken?.();
   }, [searchRequest, bodyLoading, onSearchRequestTaken]);
   const gatedIndex = useMemo(() => parentIndexOf(onScreen), [onScreen]);
-  const shownMessages = onScreen;
+  // L3: thread replies never show in the main chat; its list, unread line,
+  // Seen and Read by read the top-level messages only.
+  const shownMessages = useMemo(() => mainChatMessages(onScreen), [onScreen]);
   // A bell task row: once the first page is on screen, the sheet opens on
   // that item (once per link; the caller then drops it).
   const initialTaskId = props.initialTaskId ?? null;
@@ -6658,7 +6723,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   }, [admitted, props.messages, taskCovers]);
   // Lines show for the rows on screen only: a held older page's lines come
   // with its rows, in the same commit.
-  const oldestShown = shownMessages[0];
+  const oldestShown = onScreen[0];
   const rowsHeld = oldestLoaded !== undefined && oldestLoaded.id !== oldestShown?.id;
   const olderPageHeld = rowsHeld && oldestShown !== undefined;
   const windowEvents = useMemo(
@@ -6855,9 +6920,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
    * Opens at 0 replies too (the root and the composer).
    */
   const openingRef = useRef(false);
-  const openThread = (rootId: string): void => {
+  const openThread = (rootId: string, focus = false): void => {
     if (openingRef.current) return;
     openingRef.current = true;
+    setViewFocus(focus);
     void threadView
       .open(rootId, props.messages)
       .catch(() => false)
@@ -6900,6 +6966,89 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         : actionable.find((m) => m.threadRootId === rootId)?.rootPostIds?.[0];
     return postId !== undefined ? (postRef(postId) ?? null) : null;
   };
+  openThreadRef.current = openThread;
+  // L3: each loaded root's replies row (one pass over the loaded rows; the
+  // unread dot from the threads-for-me read). No call per row.
+  const repliesInfo = useMemo(
+    () =>
+      repliesInfoByRoot(
+        actionable,
+        (rootId) => myThreads?.some((t) => t.rootId === rootId && t.unread) === true,
+      ),
+    [actionable, myThreads],
+  );
+  const profileNameFor = (userId: string | null): string =>
+    userId === null
+      ? 'Member'
+      : userId === props.currentUserId
+        ? (props.profiles.get(userId)?.displayName ?? 'You')
+        : (props.profiles.get(userId)?.displayName ?? 'Member');
+  const repliesFor = (message: ThreadMessage): RepliesRowData | null => {
+    const info = repliesInfo.get(message.id);
+    if (info === undefined || info.count === 0) return null;
+    return {
+      label: repliesLabel(info.count),
+      repliers: info.repliers.map((id) => {
+        const src = props.profiles.get(id)?.avatarUrl;
+        return { id, name: profileNameFor(id), ...(src != null ? { src } : {}) };
+      }),
+      line: latestReplyLine(info.last, profileNameFor(info.last?.senderUserId ?? null)),
+      unread: info.unread,
+      onOpen: () => openThread(message.id),
+    };
+  };
+  // L4/L7: the thread screen's "New" line, decided once as the thread opens
+  // (from the threads-for-me flag and this device's read point), then the
+  // thread is marked read to its newest reply (chat_thread_read_set).
+  const [viewNewLine, setViewNewLine] = useState<{ rootId: string; firstId: string | null } | null>(
+    null,
+  );
+  const viewRootKey = view?.rootId ?? null;
+  const viewReplies = viewParts?.replies;
+  useEffect(() => {
+    if (viewRootKey === null || viewReplies === undefined || channelId === undefined) return;
+    if (viewNewLine?.rootId !== viewRootKey) {
+      const unread = myThreads?.some((t) => t.rootId === viewRootKey && t.unread) === true;
+      setViewNewLine({
+        rootId: viewRootKey,
+        firstId: firstUnreadReply(viewReplies, { unread, readAt: localThreadReadAt(viewRootKey) }),
+      });
+    }
+    const newest = viewReplies[viewReplies.length - 1];
+    if (newest === undefined || newest.state !== 'sent') return;
+    rememberThreadRead(viewRootKey, newest.time);
+    setThreadsForMe((prev) =>
+      prev !== null ? { ...prev, rows: withThreadRead(prev.rows, viewRootKey) } : prev,
+    );
+    void setThreadRead({
+      client: supabase,
+      channelId,
+      rootId: viewRootKey,
+      messageId: newest.id,
+      traceId: generateTraceId(),
+    }).then((result) => {
+      if (!result.ok) logger.warn('chat: thread read set failed', { error: result.message });
+    });
+    // The newest reply id is the trigger: reading to the bottom marks it read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewRootKey, viewReplies?.[viewReplies.length - 1]?.id, channelId]);
+  const viewUnread: FirstUnread | null =
+    viewNewLine !== null && viewNewLine.rootId === viewRootKey && viewNewLine.firstId !== null
+      ? {
+          kind: 'loaded',
+          firstId: viewNewLine.firstId,
+          count: (viewReplies ?? []).filter(
+            (m, i, all) => i >= all.findIndex((r) => r.id === viewNewLine.firstId) && !m.mine,
+          ).length,
+        }
+      : null;
+  // L3: a Talk about (a post's card) opens that card's thread, never a quote bar.
+  useEffect(() => {
+    if (aboutDraft === null) return;
+    setAboutDraft(null);
+    openThread(aboutDraft.cardMessageId, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aboutDraft]);
   const mainThreads: ThreadBodyThreads = {
     memberOf,
     countOf,
@@ -6912,7 +7061,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const viewPostId =
     viewRoot !== undefined && isRootCard(viewRoot) ? viewRoot.sharedPostIds[0] : undefined;
   const viewPost = viewPostId !== undefined ? (postRef(viewPostId) ?? null) : null;
-  const viewTitle = viewPost?.title ?? 'Shared post';
+  // L4: a thread on a post card takes the post's title; every other thread
+  // is "Thread" with the chat's name as its second line. No naming step.
+  const viewTitle = viewPost?.title ?? 'Thread';
+  const viewSubtitle = viewPost === null ? props.title : undefined;
   // The view's count: the chat's own when it has the root loaded (or the
   // counts read's), else the view's rows once it has read them all.
   const viewCount = ((): number | null => {
@@ -6925,13 +7077,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const viewThreads: ThreadBodyThreads | undefined =
     view !== null
       ? {
-          // Every reply in the view is on its rail while the root is a live card.
-          memberOf: (message) =>
-            viewPostId !== undefined &&
-            message.id !== view.rootId &&
-            message.threadRootId === view.rootId
-              ? { rootId: view.rootId, postId: viewPostId }
-              : null,
+          // L3: no rail, chips or inline replies any more (post cards too).
+          memberOf: () => null,
           countOf: () => viewCount,
           postOf: threadPostOf,
           onOpen: openThread,
@@ -6939,29 +7086,22 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         }
       : undefined;
   /** Swipe or menu Reply inside the view: the reply bar names that member. */
-  const viewHandleReply = replyWithFocus(
-    () => viewComposerInputRef.current,
-    (message: ThreadMessage) => {
-      setViewReply({
-        authorName: senderName(message, props.profiles),
-        quote: {
-          id: message.id,
-          authorUserId: message.senderUserId,
-          preview: replyPreview(message),
-        },
-      });
-    },
-  );
+  // L3: inside a thread, Reply just focuses the composer (no nested threads).
+  const viewHandleReply = (): void => {
+    focusComposerInput(viewComposerInputRef.current);
+  };
   /** A send from the view replies to the root (or the member its reply bar names). */
   const viewSend: ComposerSend = (text, attachments, sharedPostIds, reply, sharedBriefIds) => {
     if (viewRoot === undefined) return;
-    const quote = reply ?? {
+    // L3: every thread reply records reply_to_message_id = the root (no
+    // nested threads); the server trigger keeps thread_root_message_id.
+    void reply;
+    const quote = {
       id: viewRoot.id,
       authorUserId: viewRoot.senderUserId,
       preview: replyPreview(viewRoot),
     };
-    const parent = viewMessages.find((m) => m.id === quote.id);
-    props.onSend(text, attachments, sharedPostIds, withThreadRoot(quote, parent), sharedBriefIds);
+    props.onSend(text, attachments, sharedPostIds, withThreadRoot(quote, viewRoot), sharedBriefIds);
   };
   // A reaction in the view also lands on the view's own copy of a row the chat has not loaded.
   const onToggleReaction = props.onToggleReaction;
@@ -6979,14 +7119,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           );
         }
       : undefined;
-  // The composer's send: the reply draft wins, else the About card while its
-  // bar shows the post; a one-post share (paperclip or pasted link) makes its
-  // new card the About, a several-post share leaves no About.
-  const aboutReply = aboutReplyFor(
-    aboutDraft,
-    aboutPost,
-    aboutDraft !== null ? messagesById.get(aboutDraft.cardMessageId) : undefined,
-  );
+  // The composer's send: always top level (L3). A one-post share (paperclip
+  // or pasted link) still waits for its card; a several-post share clears it.
   const composerSend: ComposerSend = (
     text,
     attachments,
@@ -7001,9 +7135,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       cardWait.clear();
       setAboutDraft(null);
     }
-    const quote = replyForSend(reply, aboutReply, sharedPostIds.length > 0);
-    // The root rides the send (optimistic row, live ext) when the parent is loaded.
-    const rooted = withThreadRoot(quote, quote !== null ? known.get(quote.id) : undefined);
+    // L3: the main chat never sends a quote reply (Reply opens the thread); a
+    // stored draft quote from before is dropped, so a send stays top level.
+    void reply;
+    const rooted = null;
     // Reply privately's quote rides as the sixth argument only when attached.
     if (privateReply !== undefined) {
       props.onSend(text, attachments, sharedPostIds, rooted, sharedBriefIds, privateReply);
@@ -7348,6 +7483,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           jumpRequest={jumpRequest}
           {...(props.onEnsureLoaded !== undefined ? { onEnsureLoaded: props.onEnsureLoaded } : {})}
           messages={shownMessages}
+          repliesFor={repliesFor}
           chipFor={chipFor}
           onTalkAbout={talkAbout}
           onTalkAboutFocus={() => focusComposerInput(composerInputRef.current)}
@@ -7420,15 +7556,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           onSend={composerSend}
           onTyping={props.onTyping}
           onCancelReply={() => setReplyDraft(null)}
-          {...(replyDraft !== null ? { reply: replyDraft } : {})}
-          {...(replyDraft !== null && replyDraft.deleted !== true
-            ? {
-                replyMedia: quoteMedia(props.messages.find((m) => m.id === replyDraft.quote.id)),
-                replyThumbSource: { cache: presignCache, presignEnabled },
-              }
-            : {})}
-          {...(aboutDraft !== null && !aboutGone ? { about: aboutPost ?? null } : {})}
-          {...(notes && replyDraft === null ? { placeholder: NOTES_PLACEHOLDER } : {})}
+          {/* L3: no quote strip in the main chat; Reply opens the thread. */}
+          {...(notes ? { placeholder: NOTES_PLACEHOLDER } : {})}
           {...(notes ? { notes: true } : {})}
           onCancelAbout={() => setAboutDraft(null)}
           {...(taskChannel !== null
@@ -7563,6 +7692,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         <ThreadViewFrame
           key={`thread:${view.rootId}`}
           title={viewTitle}
+          {...(viewSubtitle !== undefined ? { subtitle: viewSubtitle } : {})}
           selecting={selecting}
           onClosed={closeThread}
         >
@@ -7575,6 +7705,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             threads={viewThreads}
             loading={false}
             onReply={viewHandleReply}
+            reading={{ unread: viewUnread, seen: null, readBy: null }}
             loadingOlder={threadView.loadingOlder}
             hasMore={view.hasMore}
             onLoadOlder={threadView.loadOlder}
@@ -7586,17 +7717,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               key={`thread:${view.rootId}`}
               expandTitle={viewTitle}
               inputRef={viewComposerInputRef}
-              focusOnMount={finePointer}
+              focusOnMount={finePointer || viewFocus}
               onSend={viewSend}
               placeholder={THREAD_REPLY_PLACEHOLDER}
               onCancelReply={() => setViewReply(null)}
-              {...(viewReply !== null ? { reply: viewReply } : {})}
-              {...(viewReply !== null && viewReply.deleted !== true
-                ? {
-                    replyMedia: quoteMedia(viewMessages.find((m) => m.id === viewReply.quote.id)),
-                    replyThumbSource: { cache: presignCache, presignEnabled },
-                  }
-                : {})}
               {...composerShared(true)}
             />
           )}

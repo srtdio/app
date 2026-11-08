@@ -31,7 +31,7 @@ const NOTES_AVATAR_SIZE: Record<NotesAvatarRole, string> = {
  */
 type NotesAvatarShape = 'note' | 'round';
 
-function notesBox(role: NotesAvatarRole, _shape: NotesAvatarShape = 'note'): string {
+function notesBox(role: NotesAvatarRole): string {
   return cn(NOTES_AVATAR_SIZE[role], avatarShapeClass(role));
 }
 
@@ -149,7 +149,7 @@ export function notesAvatarView(input: {
 }): ReactElement {
   const usable = input.src !== null && input.src !== '' && !input.failed;
   const shown = usable && input.loaded;
-  const box = notesBox(input.role, input.shape);
+  const box = notesBox(input.role);
   const badge = NOTES_BADGE[input.role];
   return (
     <span

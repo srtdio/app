@@ -4,12 +4,12 @@ import { IconUser } from '@/components/ui/icons';
 
 /**
  * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
- * name in a meta line; 'header' (32) in a thread or detail header; 'row' (40)
+ * name in a meta line; 'stack' (24) in a chat replies row's repliers (L3); 'header' (32) in a thread or detail header; 'row' (40)
  * in a list row (members, search, pickers); 'card' (48, 40 in Compact density) as
  * a list row's picture (ui/ListCard; <html data-density> through CSS); 'profile' (72) on a profile or group info screen.
  * No other sizes.
  */
-export type AvatarRole = 'inline' | 'header' | 'row' | 'card' | 'profile';
+export type AvatarRole = 'inline' | 'stack' | 'header' | 'row' | 'card' | 'profile';
 
 /** Who the avatar stands for: people, groups and personal notes all draw the same rounded square. */
 type AvatarKind = 'person' | 'group' | 'note';
@@ -38,6 +38,7 @@ export function avatarLabel(name: string | undefined, online: boolean): string {
 /** The pixel size of each role (exported for tests and for layout that must line up with it). */
 export const AVATAR_PX: Record<AvatarRole, number> = {
   inline: 20,
+  stack: 24,
   header: 32,
   row: 40,
   // 48 in Cozy and Calm; Compact draws it 40 through the compact: variant (CARD_SIZE).
@@ -47,6 +48,7 @@ export const AVATAR_PX: Record<AvatarRole, number> = {
 
 const INITIALS_TYPE: Record<AvatarRole, string> = {
   inline: 'text-xs',
+  stack: 'text-xs',
   header: 'text-sm',
   row: 'text-base',
   card: 'text-base',

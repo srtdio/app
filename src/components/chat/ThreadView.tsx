@@ -1,6 +1,7 @@
 // The thread view's frame: full screen over the chat on the opaque canvas
 // token (no blur, no translucency), the 56px ui/HeaderBar with "Close thread"
-// (the back "<") on the left and the thread's post title on one line, then the
+// (the back "<") on the left and the thread's title (a card's title, else
+// "Thread" over the chat's name, L4), then the
 // thread's list and its composer (the caller's). Close and Escape (while the view has focus) close
 // it. Motion (docs/motion.md, push): on a phone the view enters from the
 // right (280 ms) and goes back the same way (240 ms); a drag from the left
@@ -45,6 +46,8 @@ export function escapeCloses(input: {
 
 export function ThreadViewFrame(props: {
   title: string;
+  /** L4: a plain thread's second line (the chat's name); a card thread has none. */
+  subtitle?: string | undefined;
   selecting: boolean;
   /** The close finished (after the push back): unmount the view. */
   onClosed: () => void;
@@ -148,6 +151,9 @@ export function ThreadViewFrame(props: {
         <HeaderBar
           compact
           title={<span data-thread-view-title="">{props.title}</span>}
+          {...(props.subtitle !== undefined
+            ? { subtitle: <span data-thread-view-subtitle="">{props.subtitle}</span> }
+            : {})}
           onBack={() => close()}
           backProps={{
             label: 'Close thread',
