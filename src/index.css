@@ -512,6 +512,14 @@
       min-height: 100%;
       min-height: 100svh;
     }
+    /* The page never pans sideways: a focused field (Safari reveals the caret)
+       or anything a little too wide clips at the screen edge instead of
+       shifting every row, the bars included. clip, not hidden: no scroll
+       container, so sticky headers keep pinning. */
+    html.scroll-page,
+    html.scroll-page body {
+      overflow-x: clip;
+    }
     html.scroll-page {
       /* The status bar strip the sticky Topbar (and a detail page's own
          header) covers, and the top a sticky section header pins to. */
@@ -776,6 +784,58 @@
     background-image: var(--lit-shine);
   }
 }
+/* WRITING BOX (ui/WritingBox, ui/Textarea live mirror): a quote line while
+   typing reads fg-2 with a 3px fg-3 bar painted over its own "> " prefix, so
+   no glyph moves. Tokens only; light and dark follow the --fg-* values. */
+@layer components {
+  .fmt-quote-live {
+    color: rgb(var(--fg-2-rgb));
+  }
+  .fmt-quote-mark {
+    color: transparent;
+    background-image: linear-gradient(to right, rgb(var(--fg-3-rgb)) 0 3px, transparent 3px);
+  }
+}
+
+/* WRITING BOX expand (ui/WritingBox): laptop grows in place (height only),
+   the phone editor fills the screen; the field's own cap lifts. svh only. */
+@layer components {
+  [data-expanded='laptop'] [data-writing-field] textarea {
+    min-height: 50svh;
+    max-height: none;
+  }
+  /* The phone editor: the field fills everything between the bar and the row
+     above the keyboard (its wrappers take the height, the textarea scrolls). */
+  [data-expanded='phone'] [data-writing-field] > div,
+  [data-expanded='phone'] [data-writing-field] > div > div {
+    height: 100%;
+  }
+  [data-expanded='phone'] [data-writing-field] textarea {
+    height: 100% !important;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+  [data-expanded] [data-writing-field] [contenteditable] {
+    min-height: 50svh;
+  }
+  [data-expanded='phone'] [data-writing-field] [contenteditable] {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  /* A comment's @ list inside the phone editor sits at the foot of the text,
+     just above the row (above the field would be under the top bar). */
+  [data-expanded='phone'] [data-writing-field] [data-mention-list] {
+    top: auto;
+    bottom: 0;
+    margin-bottom: 0;
+  }
+  .wb-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
 /* Outlines: one family, a crisp line from --sel-edge (ink in light, white in
    dark). No accent tint, no glow. In @layer utilities, at the end, so the line
    always beats a border-* / bg-* utility or a lit-* edge on the same element
@@ -826,5 +886,11 @@
   }
   [data-own] :is(.lit-card, .lit-card-muted, .lit-overlay) {
     --sel-edge: var(--field-line);
+  }
+  /* A saved-text quote ("> " lines, message-body renderRich): a 3px bar in the
+     text's own ink, faded, so it follows the own bubble's on-bubble ink and
+     both themes; the quoted text keeps full ink. */
+  .fmt-quote {
+    border-left: 3px solid color-mix(in srgb, currentColor 45%, transparent);
   }
 }

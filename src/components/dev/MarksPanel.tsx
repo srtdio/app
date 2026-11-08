@@ -14,6 +14,7 @@ import { formatMarks, paintLogOn } from '@/components/chat/PaintLog';
 import { copyText } from '@/lib/clipboard';
 import { useBottomInset } from '@/lib/bottom-inset';
 import { clearMarks, readMarks } from '@/lib/perf-marks';
+import { formatWidths, lastWidths, startWidthLog } from '@/lib/width-log';
 
 /** How often the list re-reads while open. */
 const MARKS_REFRESH_MS = 500;
@@ -28,21 +29,30 @@ export function MarksPanel(): ReactElement | null {
 
 function MarksStrip(): ReactElement {
   const [open, setOpen] = useState(false);
+  // The width log (src/lib/width-log.ts) reads the page a second after each
+  // focus; only while this panel exists (the paint log is on).
+  useEffect(() => {
+    startWidthLog();
+  }, []);
+  const [widths, setWidths] = useState(() => formatWidths(lastWidths()));
   const [marks, setMarks] = useState(() => readMarks({ firstOnly: true }));
   // Above every marked bottom bar (tab bar, composer), never over them.
   const inset = useBottomInset();
   useEffect(() => {
     if (!open) return;
     setMarks(readMarks({ firstOnly: true }));
-    const timer = window.setInterval(
-      () => setMarks(readMarks({ firstOnly: true })),
-      MARKS_REFRESH_MS,
-    );
+    setWidths(formatWidths(lastWidths()));
+    const timer = window.setInterval(() => {
+      setMarks(readMarks({ firstOnly: true }));
+      setWidths(formatWidths(lastWidths()));
+    }, MARKS_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [open]);
   // copyText wraps the clipboard in its own try/catch and never rejects; no toast.
   const onCopy = (): void => {
-    void copyText(formatMarks(readMarks({ firstOnly: true })));
+    void copyText(
+      `${formatWidths(lastWidths())}\n\n${formatMarks(readMarks({ firstOnly: true }))}`,
+    );
   };
   const onClear = (): void => {
     clearMarks();
@@ -83,6 +93,12 @@ function MarksStrip(): ReactElement {
           Hide
         </Button>
       </div>
+      <pre
+        data-marks-widths=""
+        className="shrink-0 whitespace-pre-wrap break-all border-b px-2 py-1 font-mono text-xs text-fg-2"
+      >
+        {widths}
+      </pre>
       <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1 font-mono text-xs tabular-nums">
         {marks.map((m) => (
           <li key={m.name} className="flex gap-2">

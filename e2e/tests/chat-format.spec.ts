@@ -2,12 +2,15 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { PEER_NAME } from '../fixtures/chat-data';
 
-// WhatsApp-style formatting: select a word in the chat composer, tap Bold on
-// the format strip, send; the bubble shows the word bold with no stars, and the
-// stored body keeps the markers (copy and edit show the raw text).
+// WhatsApp-style formatting through the writing box (ui/WritingBox): select a
+// word in the chat box, tap Aa, then Bold on the format row, send; the bubble
+// shows the word bold with no stars, and the stored body keeps the markers
+// (copy and edit show the raw text).
 // Linux WebKit approximates iOS WebKit (it never shows a keyboard); it is not iOS.
 
-const composer = (page: Page): Locator => page.locator('form textarea').first();
+const chatBox = (page: Page): Locator =>
+  page.locator('[data-writing-box][data-mode="chat"]').first();
+const composer = (page: Page): Locator => chatBox(page).locator('textarea').first();
 
 async function openDm(page: Page): Promise<void> {
   await installHarnessNetwork(page);
@@ -16,11 +19,30 @@ async function openDm(page: Page): Promise<void> {
   await composer(page).waitFor({ state: 'visible' });
 }
 
-test('select a word, tap Bold, send: the bubble shows it bold without stars', async ({ page }) => {
+test('select a word, tap Aa then Bold, send: the bubble shows it bold without stars', async ({
+  page,
+}) => {
   await openDm(page);
   const box = composer(page);
   await box.click();
   await box.fill('ship today');
+  await chatBox(page).getByRole('button', { name: 'Aa', exact: true }).click();
+  const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
+  await expect(row).toBeVisible();
+  const labels = await row
+    .getByRole('button')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
+  expect(labels).toEqual([
+    'Close formatting',
+    'Bold',
+    'Italic',
+    'Underline',
+    'Strike',
+    'Link',
+    'Numbered list',
+    'Bullet list',
+    'Quote',
+  ]);
   // Select "today".
   await box.evaluate((el: HTMLTextAreaElement) => {
     el.focus();
@@ -28,12 +50,9 @@ test('select a word, tap Bold, send: the bubble shows it bold without stars', as
     el.dispatchEvent(new Event('select', { bubbles: true }));
     document.dispatchEvent(new Event('selectionchange'));
   });
-  const strip = page.locator('[data-format-strip]');
-  await expect(strip).toBeVisible();
-  await expect(strip.getByRole('button')).toHaveText(['Bold', 'Italic', 'Strike', 'Underline']);
-  await strip.getByRole('button', { name: 'Bold', exact: true }).click();
+  await row.getByRole('button', { name: 'Bold', exact: true }).click();
   await expect(box).toHaveValue('ship *today*');
-  // The box kept focus (the strip never takes it).
+  // The box kept focus (the row keys never take it).
   expect(await box.evaluate((el) => document.activeElement === el)).toBe(true);
   // Live styling: the mirror draws the word, markers faded.
   await expect(page.locator('[data-format-mirror] span', { hasText: 'today' })).toBeVisible();
@@ -44,4 +63,6 @@ test('select a word, tap Bold, send: the bubble shows it bold without stars', as
   const bubble = page.locator('[data-msg-id]').last();
   await expect(bubble.locator('[data-msg-body] strong', { hasText: 'today' })).toBeVisible();
   await expect(bubble.locator('[data-msg-body]')).not.toContainText('*');
+  // Send closes the format row (Slack keeps neither it nor the expanded editor).
+  await expect(chatBox(page).getByRole('toolbar', { name: 'Format' })).toHaveCount(0);
 });

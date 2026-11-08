@@ -32,7 +32,10 @@ export {
   parseFormat,
   parseFormatRuns,
   stripFormat,
+  stripInline,
+  linkText,
   hasFormat,
+  MD_LINK_AT,
   toggleFormat,
   closingMarkerTail,
   FORMAT_MARKERS,
@@ -41,6 +44,22 @@ export {
   type FormatSegment,
   type FormatRun,
 } from './format';
+export {
+  parseBlocks,
+  hasBlocks,
+  linePrefix,
+  splitLinks,
+  normalizeLinkUrl,
+  linkMarkup,
+  toggleBlock,
+  continueBlock,
+  blockAt,
+  stylesAt,
+  type Block,
+  type BlockKind,
+  type LinkSegment,
+  type TextEdit,
+} from './blocks';
 export type { Client, DomainError, Result } from '@srtdio/rpc';
 
 export { editComment, EditCommentSchema, type EditCommentInput } from './edit';

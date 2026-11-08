@@ -1,7 +1,8 @@
-// The person card's inline composer: one rounded box with "Message <first
-// name>…", the first three quick reactions inside it on the right while it is
-// empty, and the accent round Send once there is text (reactions hide while
-// typing, like Instagram). One piece, used by the phone sheet and the laptop
+// The person card's inline composer: ui/WritingBox in comment mode with
+// "Message <first name>…", the first three quick reactions on the text line
+// on the right while it is empty, and the round Send (RowSend) in the row
+// once there is text (reactions hide while typing, like Instagram). Focused,
+// the row under the text holds Aa and emoji (no +, no @, no mic). One piece, used by the phone sheet and the laptop
 // popover alike. The text lives in the chat drafts store under the person
 // card's key (personDraftKey), so it survives closing and reopening the card
 // for the same person and source, until it is sent. It focuses itself in its
@@ -13,8 +14,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, Ref } from 'react';
-import { Button } from '@/components/ui/Button';
-import { ComposerFrame } from '@/components/ui/Composer';
+import { RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconSend } from '@/components/ui/icons';
 import { QUICK_REACTIONS } from '@/components/chat/MessageActionMenu';
@@ -101,11 +101,15 @@ export function PersonMessageInput(props: PersonMessageInputProps): ReactElement
         send(text);
       }}
     >
-      {/* ui/Composer: field, in-field reactions, then the round send (B1). */}
-      <ComposerFrame
-        flushEnd={controls.reactions}
+      {/* ui/WritingBox (comment mode): field and in-line reactions on the
+          text line; focused, the row: Aa, emoji ... the round Send. */}
+      <WritingBox
+        mode="comment"
+        field={() => ref.current}
+        hasText={text !== ''}
+        expandTitle={messagePlaceholder(props.firstName)}
         input={
-          <>
+          <span className="flex min-w-0 items-center">
             <textarea
               ref={setRefs}
               data-person-message-input=""
@@ -150,22 +154,19 @@ export function PersonMessageInput(props: PersonMessageInputProps): ReactElement
                 ))}
               </span>
             ) : null}
-          </>
+          </span>
         }
         send={
           controls.send ? (
-            <Button
+            <RowSend
               type="submit"
-              variant="primary"
-              shape="round"
-              aria-label="Send"
+              label="Send"
+              disabled={false}
               data-person-send=""
+              icon={<IconSend size={ICON_SIZE.control} />}
               onPointerDown={(event) => event.preventDefault()}
-              className="shrink-0"
-            >
-              <IconSend size={ICON_SIZE.control} />
-            </Button>
-          ) : null
+            />
+          ) : undefined
         }
       />
     </form>

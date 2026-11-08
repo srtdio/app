@@ -113,6 +113,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { useToast } from '@/components/ui/toast';
 import type { ViewerKind } from '@/components/ui/FileViewer';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
@@ -1763,30 +1764,42 @@ export function PlanItemScreen(props: {
                 </p>
               ) : null}
               <div className="flex items-end gap-2">
-                <Textarea
-                  formatting
-                  ref={commentRef}
-                  compact
-                  rows={1}
-                  value={text}
-                  onChange={(e) => {
-                    setText(e.target.value);
-                    setSendError(null);
-                    trackCaret(e.target);
-                    if (e.target.value.includes('@')) mentionPeople.load();
-                  }}
-                  onFocus={mentionPeople.load}
-                  onSelect={(e) => trackCaret(e.currentTarget)}
-                  onKeyDown={commentKeyDown}
-                  data-plan-comment-input=""
-                  aria-label="Comment"
-                  {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
-                  autoComplete="off"
-                  enterKeyHint={coarse ? 'enter' : 'send'}
-                  maxLength={5000}
-                  placeholder={askingChanges ? ASK_CHANGES_PLACEHOLDER : COMMENT_PLACEHOLDER}
-                  className={cn('min-w-0 flex-1', askingChanges ? 'border-border-strong' : null)}
-                  style={{ maxHeight: COMMENT_BOX_MAX_PX }}
+                {/* ui/WritingBox (field mode): a plain field at rest; focused,
+                    the Aa row, Emoji and @ (types "@", which opens the
+                    mention list above) sit inside its bottom edge. */}
+                <WritingBox
+                  mode="field"
+                  className="min-w-0 flex-1"
+                  field={() => commentRef.current}
+                  hasText={text !== ''}
+                  mention
+                  expandTitle="Comment"
+                  input={
+                    <Textarea
+                      formatting
+                      ref={commentRef}
+                      compact
+                      rows={1}
+                      value={text}
+                      onChange={(e) => {
+                        setText(e.target.value);
+                        setSendError(null);
+                        trackCaret(e.target);
+                        if (e.target.value.includes('@')) mentionPeople.load();
+                      }}
+                      onFocus={mentionPeople.load}
+                      onSelect={(e) => trackCaret(e.currentTarget)}
+                      onKeyDown={commentKeyDown}
+                      data-plan-comment-input=""
+                      aria-label="Comment"
+                      {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
+                      autoComplete="off"
+                      enterKeyHint={coarse ? 'enter' : 'send'}
+                      maxLength={5000}
+                      placeholder={askingChanges ? ASK_CHANGES_PLACEHOLDER : COMMENT_PLACEHOLDER}
+                      style={{ maxHeight: COMMENT_BOX_MAX_PX }}
+                    />
+                  }
                 />
                 <Button
                   type="submit"
@@ -1872,12 +1885,12 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
               {description !== '' ? (
-                <p
+                <div
                   data-plan-description=""
                   className="whitespace-pre-wrap break-words text-base text-fg-2"
                 >
                   {renderMessageBody(description, false)}
-                </p>
+                </div>
               ) : null}
               <ConceptLinkCard text={description} />
             </Card>

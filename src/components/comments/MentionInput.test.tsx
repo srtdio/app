@@ -297,3 +297,12 @@ describe('insertTextAtPoint (laptop emoji insert)', () => {
     expect(body(editor)).toBe('😀');
   });
 });
+
+describe('MentionInput list placement', () => {
+  it('inside a writing box (bare) the list opens above the field', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const src = readFileSync(fileURLToPath(new URL('./MentionInput.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain("bare ? 'bottom-full mb-2' : 'top-full mt-1'");
+  });
+});

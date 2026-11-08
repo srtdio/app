@@ -96,13 +96,13 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 ## Design and layout (locked 6 Nov 2026; guards in `src/__tests__`, eslint designRules, `scripts/design-ratchet.ts`)
 
 - Use a part or add a slot to it; never hand-build its frame or fork it. If no part fits, stop and ask.
-- Parts (src/components/ui): Text, layout.ts, Card, Row, Tile, ChatCard, Composer, HeaderBar, Toolbar, StatusDot, Sheet + SheetActions, ActionMenu + ActionMenuTrigger, Button / IconButton / PressableRow (44 tall), Chip (visible 32, hit 44), Tag, CountBadge, Avatar, PersonTrigger, NoResults, ErrorNote, SidePanel, PostPlaceholder.
+- Parts (src/components/ui): Text, layout.ts, Card, Row, Tile, ChatCard, Composer, WritingBox (+ EmojiSheet, AddLinkSheet), HeaderBar, Toolbar, StatusDot, Sheet + SheetActions, ActionMenu + ActionMenuTrigger, Button / IconButton / PressableRow (44 tall), Chip (visible 32, hit 44), Tag, CountBadge, Avatar, PersonTrigger, NoResults, ErrorNote, SidePanel, PostPlaceholder.
 - Type roles (ui/Text only): display (post title only), title (bar titles), heading, body, secondary, label, meta (mono, tabular), section. Max 3 roles per part. leading-_, tracking-_, text-[..] live only in ui/Text (lint error).
 - Values: tailwind.config.ts holds only the allowed scale (type xs..3xl + input; 4px spacing grid, 0.5/1.5/5/7 only on sizes; radius roles; border 1/2 + named cut-out/rail; named z layers base..top; named panel widths). New exception = named token + one-line comment. No [Npx], no z-[N].
 - Edges (L2): page 16 phone / 24 laptop (GUTTER), chat 12 (CHAT_GUTTER), sheets 16. Inside <= outside spacing.
 - Trailing rule: a trailing ⋮, chevron or X is a 44 box pulled out 12 (TRAILING_PULL) so its glyph sits on the content edge; leading back/close mirrors it (LEADING_PULL). Parts apply it, never call sites.
 - Lanes (ui/layout LANE\_\*): unread pill top centre, jump-to-latest bottom trailing above the composer, tip strip in flow above the composer; they never cover a title, a time or each other.
-- Exit: "<" for anything opening over the app; X (IconX) only to cancel an upload, remove an attached file, or clear a typed query. Bin to delete; "Clear" to clear or dismiss. One exit per panel. Guard: `src/__tests__/no-cross.test.ts`.
+- Exit: "<" for anything opening over the app; X (IconX) only to cancel an upload, remove an attached file, clear a typed query, or close the writing box format row. Bin to delete; "Clear" to clear or dismiss. One exit per panel. Guard: `src/__tests__/no-cross.test.ts`.
 - Top bar: search | sort | filled + | avatar via useTopbarActions; no search field on any screen; pickers search through CommandPalette pick mode.
 - Select: visible Select at the chip row end on every list + long-press; ui/SelectCheck is the only select circle.
 - Upload: ui/UploadRing on the item (X cancels) and ui/PendingChip for attached files; no bars, no % text.
@@ -121,7 +121,8 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - First page fills the screen: lists show useFillCount() rows (screen height / density row + 1, x laptop columns, 6..40), calculated once per app load, then load more by the same count.
 - Card dates are words only (time.ts): due "Today", "Tomorrow", "Fri", "12 Nov"; late "2d late" in the bad token; plans "Mon" ahead, "Live", then the end day. Never "Due", "Overdue", "Starts" on a card.
 - No ⋮ on a list card: long-press (phone) or right-click / Shift / Cmd-click (laptop) selects; actions live on the list's SelectBar (ui/SelectBar). Guard: `src/__tests__/list-card-guard.test.tsx`.
-- Text: fields are ui/Input or ui/Textarea; the format strip is ui/FormatStrip only. Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.
+- Text: fields are ui/Input or ui/Textarea; every multi-line writing box is ui/WritingBox (modes chat / comment / field / caption: Aa format row, emoji sheet, @, Reddit-style expand); no floating format strip. Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.
+- Composer rows: row keys are a 36 circle on a 44 tall hit, 36 apart (ui/WritingBox RowKey/RowSend, ComposerTray compact +); the only exception to 44x44. Guard: `src/__tests__/composer-row-keys.test.ts`.
 - Swipe: right = Reply, left = Delete on every message, comment and task row; one core (src/lib/chat/swipe-reply.ts); own and others' rows swipe the same.
 - Behaviour: hide what a person can't do; Delete = UndoStrip; ⋯ menus = ActionMenu (Open, Copy link, others, Delete last); decisions only via PostDecisionBar; phone vs laptop via useIsLaptop; svh/dvh only.
 - Speed: first paint from what the device holds; no new await, hold, gate or read on a paint or tap path; parts are pure render.

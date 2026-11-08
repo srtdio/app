@@ -21,6 +21,7 @@ import {
   COMMENT_POST_FAILED,
 } from '@/components/pages/pcs/CaptionAnnotationComposer';
 import { stageReasonConfirm } from '@/components/pages/pcs/stage-actions';
+import { WritingBox } from '@/components/ui/WritingBox';
 
 // W2 regressions. node environment, no DOM: hookless trees are walked, and the
 // wiring that lives inside hooks is pinned against the source.
@@ -41,9 +42,17 @@ function collect(node: ReactNode, out: ReactElement[]): void {
   if (node === null || typeof node !== 'object' || !('props' in node)) return;
   const el = node as ReactElement;
   out.push(el);
-  const p = el.props as { children?: ReactNode; footer?: ReactNode };
+  // input / send: ui/WritingBox's field and send slots.
+  const p = el.props as {
+    children?: ReactNode;
+    footer?: ReactNode;
+    input?: ReactNode;
+    send?: ReactNode;
+  };
   collect(p.children, out);
   collect(p.footer, out);
+  collect(p.input, out);
+  collect(p.send, out);
 }
 
 function walk(tree: ReactNode): ReactElement[] {
@@ -72,6 +81,11 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
       (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Reason (optional)',
     );
     expect(field).toBeDefined();
+    // The reason is ui/WritingBox in comment mode with no send (the footer keeps
+    // Cancel and Reject).
+    const box = els.find((el) => el.type === WritingBox);
+    expect((box?.props as { mode?: string } | undefined)?.mode).toBe('comment');
+    expect((box?.props as { send?: unknown } | undefined)?.send).toBeUndefined();
     const confirm = els.find(
       (el) => (el.props as { 'data-stage-confirm'?: string })['data-stage-confirm'] === '',
     )!;

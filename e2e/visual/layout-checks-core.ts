@@ -274,7 +274,8 @@ export interface LayoutViolation {
     | 'chip'
     | 'topbar'
     | 'chip-row'
-    | 'upload-bar';
+    | 'upload-bar'
+    | 'writing-box';
   message: string;
 }
 
@@ -733,6 +734,47 @@ export function uploadBarViolations(
   }
   for (const text of percentTexts) {
     if (/\d\s?%/.test(text)) out.push(`"${text}" shows a % figure on an upload`);
+  }
+  return out;
+}
+
+/** The writing box row's hit height (RowKey and RowSend: h-11). */
+export const WRITING_KEY_PX = 44;
+
+/** One writing box as measured: its frame, its row keys and its send. */
+export interface WritingBoxGeom {
+  label: string;
+  frame: Box;
+  /** Every shown row key ([data-composer-key]) and the send ([data-row-send]). */
+  keys: ReadonlyArray<{ label: string; box: Box }>;
+  /** The send's box, when the box shows one. */
+  send: Box | null;
+}
+
+/**
+ * Check 11: a writing box's row keys and send are 44 tall hits, and the send
+ * ends inside the box's frame (never past its right edge). Pure.
+ */
+export function writingBoxViolations(boxes: readonly WritingBoxGeom[]): string[] {
+  const out: string[] = [];
+  for (const box of boxes) {
+    for (const key of box.keys) {
+      if (Math.abs(key.box.height - WRITING_KEY_PX) > 0.5) {
+        out.push(
+          `${box.label} ${key.label} is ${Math.round(key.box.height * 10) / 10}px tall, ` +
+            `not ${WRITING_KEY_PX}`,
+        );
+      }
+    }
+    if (box.send !== null) {
+      const sendRight = box.send.x + box.send.width;
+      const frameRight = box.frame.x + box.frame.width;
+      if (sendRight > frameRight + 0.5) {
+        out.push(
+          `${box.label} send ends at ${Math.round(sendRight)}px, past the box (${Math.round(frameRight)}px)`,
+        );
+      }
+    }
   }
   return out;
 }

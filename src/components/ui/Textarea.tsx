@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { CSSProperties, ReactNode, TextareaHTMLAttributes } from 'react';
-import { parseFormatRuns, type FormatRun } from '@srtdio/comments';
-import { useFormatStrip } from '@/components/ui/FormatStrip';
+import { linePrefix, parseFormatRuns, type FormatRun } from '@srtdio/comments';
+import { useFormatKeys } from '@/components/ui/format-actions';
 import { cn } from '@/lib/cn';
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -20,10 +20,17 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   /**
    * Opt-in WhatsApp-style formatting (default off): live styling of
    * *bold* _italic_ ~strike~ +underline+ ```mono``` while typing (markers stay
-   * visible, faded), the format strip on a selection, and the Cmd/Ctrl
-   * shortcuts. Off, the box renders and behaves exactly as before.
+   * visible, faded), list and quote lines, and the Cmd/Ctrl shortcuts (the
+   * buttons live in ui/WritingBox's Aa row). Off, the box renders and behaves
+   * exactly as before.
    */
   formatting?: boolean;
+  /**
+   * With formatting: Return in a "1. " / "- " / "> " line continues it (an
+   * empty item ends it). Default true; the chat composer owns its Enter
+   * (send on a laptop) and continues lists itself, so it passes false.
+   */
+  listEnter?: boolean;
 }
 
 // Layout classes the caller meant for the box's slot in its parent; with
@@ -88,11 +95,9 @@ export function mirrorClass(run: FormatRun): string {
   );
 }
 
-/** The mirror's children for a value. Pure. */
-export function mirrorNodes(value: string): ReactNode[] {
-  // Each run is keyed by its character offset in the value (stable per value).
-  let at = 0;
-  const nodes: ReactNode[] = parseFormatRuns(value).map((run) => {
+function lineNodes(line: string, base: number): ReactNode[] {
+  let at = base;
+  return parseFormatRuns(line).map((run) => {
     const start = at;
     at += run.text.length;
     return run.kind === 'text' && run.styles.length === 0 ? (
@@ -102,6 +107,34 @@ export function mirrorNodes(value: string): ReactNode[] {
         {run.text}
       </span>
     );
+  });
+}
+
+/**
+ * The mirror's children for a value. Pure. Inline styles per line; a quote
+ * line ("> ") draws its text fg-2 with a 3px fg-3 bar painted over its own
+ * prefix (fmt-quote-live in src/index.css), so nothing moves.
+ */
+export function mirrorNodes(value: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let at = 0;
+  value.split('\n').forEach((line, idx) => {
+    if (idx > 0) {
+      nodes.push('\n');
+      at += 1;
+    }
+    const p = linePrefix(line);
+    if (p !== null && p.kind === 'quote') {
+      nodes.push(
+        <span key={`q${at}`} className="fmt-quote-live" data-quote-line="">
+          <span className="fmt-quote-mark">{line.slice(0, p.len)}</span>
+          {lineNodes(line.slice(p.len), at + p.len)}
+        </span>,
+      );
+    } else {
+      nodes.push(...lineNodes(line, at));
+    }
+    at += line.length;
   });
   // A trailing newline needs a glyph after it to take its line.
   nodes.push('\u200b');
@@ -115,6 +148,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     autoGrow: autoGrowProp = false,
     compact = false,
     formatting = false,
+    listEnter = true,
     style,
     value,
     onSelect,
@@ -137,7 +171,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     },
     [forwardedRef],
   );
-  const fmt = useFormatStrip(ref, formatting);
+  const formatKeys = useFormatKeys(ref, formatting, { listEnter });
   // The live mirror needs the text: a controlled string value.
   const live = formatting && typeof value === 'string';
 
@@ -241,16 +275,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           'caret-fg [-webkit-text-fill-color:transparent] placeholder:[-webkit-text-fill-color:currentColor]',
       )}
       style={{ ...autoGrowStyle, ...style }}
-      onSelect={(e) => {
-        fmt.onSelect(e);
-        onSelect?.(e);
-      }}
-      onBlur={(e) => {
-        fmt.onBlur();
-        onBlur?.(e);
-      }}
+      onSelect={onSelect}
+      onBlur={onBlur}
       onKeyDown={(e) => {
-        if (fmt.onKeyDown(e)) return;
+        if (formatKeys(e)) return;
         onKeyDown?.(e);
       }}
       onScroll={(e) => {
@@ -290,7 +318,6 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           {nodes}
         </div>
       ) : null}
-      {fmt.strip}
     </div>
   );
 });

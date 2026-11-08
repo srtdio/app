@@ -12,7 +12,7 @@ import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
-import { renderFormatted } from '@/components/chat/message-body';
+import { renderRich, withTextLinks } from '@/components/chat/message-body';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { STATUS_DOT_TONE, StatusDot, type StatusDotStage } from '@/components/ui/StatusDot';
@@ -886,17 +886,23 @@ export function BriefDetailPage({
 
           <section className="min-w-0">
             <div className={`${SECTION_LABEL} mb-1`}>Objective</div>
-            <p className="text-base whitespace-pre-wrap break-words text-fg">
-              {renderFormatted(brief.objective, (text) => [<Highlight key="h" text={text} />])}
-            </p>
+            <div className="text-base whitespace-pre-wrap break-words text-fg">
+              {renderRich(
+                brief.objective,
+                withTextLinks((text) => [<Highlight key="h" text={text} />]),
+              )}
+            </div>
           </section>
 
           {hasBrand ? (
             <section className="min-w-0">
               <div className={`${SECTION_LABEL} mb-1`}>Brand requirements</div>
-              <p className="text-base whitespace-pre-wrap break-words text-fg">
-                {renderFormatted(brief.brand_requirements ?? '', (text) => [text])}
-              </p>
+              <div className="text-base whitespace-pre-wrap break-words text-fg">
+                {renderRich(
+                  brief.brand_requirements ?? '',
+                  withTextLinks((text) => [text]),
+                )}
+              </div>
             </section>
           ) : null}
 

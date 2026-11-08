@@ -19,6 +19,7 @@ import type {
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
@@ -27,8 +28,8 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
 import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
-import { firstExternalUrl } from '@/lib/chat/message-links';
-import { renderFormatted } from '@/components/chat/message-body';
+import { currentOrigin, firstExternalUrl } from '@/lib/chat/message-links';
+import { renderRich, withTextLinks } from '@/components/chat/message-body';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import {
   FOCUS_FAILED_COPY,
@@ -608,9 +609,10 @@ function CommentLink(props: { url: string }): ReactNode {
 }
 
 /**
- * A comment body (or a brief's objective / brand requirements): WhatsApp
- * formatting outermost, then mentions, links and search marks inside each
- * styled segment. A body with no formatting renders exactly as before.
+ * A comment body (or a brief's objective / brand requirements): Slack blocks
+ * and WhatsApp formatting outermost, then [text](url) links, mentions, links
+ * and search marks inside each styled segment. A body with no formatting
+ * renders exactly as before.
  */
 export function renderCommentBody(
   body: string,
@@ -620,7 +622,10 @@ export function renderCommentBody(
 ): ReactNode[] {
   // One card slot across segments: the card's link is shown there, once.
   const card = { url: cardUrl };
-  return renderFormatted(body, (text) => commentRuns(text, nameOf, words, card));
+  return renderRich(
+    body,
+    withTextLinks((text) => commentRuns(text, nameOf, words, card), false, currentOrigin(), words),
+  );
 }
 
 function commentRuns(
@@ -1585,6 +1590,8 @@ export function Comments({
   const revealSelector = useRef<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
+  // The edit field, for its ui/WritingBox rows (Aa, emoji).
+  const editFieldRef = useRef<HTMLTextAreaElement | null>(null);
   // The edit box shows "@username"; these picks turn each back into its token on save.
   const [editPicks, setEditPicks] = useState<MentionPick[]>([]);
   // An edit Save in flight: the button shows busy, and a second tap (or Enter
@@ -2431,6 +2438,11 @@ export function Comments({
     toggleReply(id);
   }
 
+  // The writing boxes' expanded title: the post or brief title the page holds,
+  // else this section's own heading.
+  const expandTitle =
+    whereLabel !== '' ? whereLabel : entityType === 'post' ? CHECKPOINTS_TITLE : 'Comments';
+
   function renderReplyComposer(comment: CommentRow): ReactNode {
     const key = draftKey(comment.id);
     return (
@@ -2449,6 +2461,7 @@ export function Comments({
             ? { submitAnchor: INDUCTION_KEYS.postReplyPost }
             : {})}
           autoFocus
+          expandTitle={expandTitle}
           initialBody={replyDrafts.get(key) ?? replySeedFor(comment)}
           onBodyChange={(body) => replyDrafts.set(key, body)}
         />
@@ -2654,11 +2667,22 @@ export function Comments({
   function renderEditor(commentId: string): ReactNode {
     return (
       <div className="mt-2 flex flex-col gap-2">
-        <Textarea
-          formatting
-          value={editBody}
-          onChange={(event) => setEditBody(event.target.value)}
-          aria-label="Edit comment body"
+        {/* ui/WritingBox (comment mode) with no send: Save and Cancel stay
+            under it; focused, the row shows Aa and emoji. */}
+        <WritingBox
+          mode="comment"
+          field={() => editFieldRef.current}
+          hasText={editBody.trim() !== ''}
+          expandTitle={expandTitle}
+          input={
+            <Textarea
+              formatting
+              ref={editFieldRef}
+              value={editBody}
+              onChange={(event) => setEditBody(event.target.value)}
+              aria-label="Edit comment body"
+            />
+          }
         />
         <div className="flex items-center gap-2">
           <Button
@@ -2851,14 +2875,14 @@ export function Comments({
                   opts.circle,
                 )}
                 {comment.body.trim() !== '' ? (
-                  <p
+                  <div
                     className={cn(
                       'text-base whitespace-pre-wrap [overflow-wrap:anywhere]',
                       opts.muted === true ? 'text-fg-2' : 'text-fg',
                     )}
                   >
                     {renderCommentBody(comment.body, handleOf, searchWords, cardUrl)}
-                  </p>
+                  </div>
                 ) : null}
                 <CommentLinkCard body={comment.body} url={cardUrl} />
                 {attachments.length > 0 ? (
@@ -3250,6 +3274,7 @@ export function Comments({
         canAttach={canAttach}
         uploadFile={uploadFile}
         startSeq={maxLedgerSeq + 1}
+        expandTitle={expandTitle}
       />
     ) : (
       <CommentComposer
@@ -3260,6 +3285,7 @@ export function Comments({
         canAttach={canAttach}
         uploadFile={uploadFile}
         placeholder="Write a comment"
+        expandTitle={expandTitle}
         {...(rootDrafts.has(entityKey) ? { initialBody: rootDrafts.get(entityKey) ?? '' } : {})}
         onBodyChange={(body) => {
           rootDrafts.set(entityKey, body);

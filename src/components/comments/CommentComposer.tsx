@@ -1,5 +1,6 @@
-// The extracted comment composer: the chat composer's row (leading "+", field,
-// emoji, round Send), used by both the root composer and the per-thread reply
+// The extracted comment composer: ui/WritingBox in comment mode (the chat
+// card: text on top; + , Aa, emoji, @ on the left and the round Send on the
+// right while focused or holding a draft), used by both the root composer and the per-thread reply
 // composer (the reply passes a parentCommentId-bearing onSubmit). The "+" is
 // chat's ComposerTray limited to Photos, File and Assets. Photos and File
 // reuse the existing chat upload path verbatim (uploadFile -> asset-upload
@@ -15,9 +16,8 @@ import { mark } from '@/lib/perf-marks';
 import { linkTypedUsernames } from '@/lib/chat/mentions';
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { itemIn, useFreshKeys } from '@/lib/motion';
-import type { ReactElement } from 'react';
-import { Button } from '@/components/ui/Button';
-import { ComposerFrame } from '@/components/ui/Composer';
+import type { ReactElement, ReactNode } from 'react';
+import { RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
   PendingChip,
@@ -27,7 +27,6 @@ import {
 } from '@/components/ui/PendingChip';
 import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
-import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
 import type { MentionCandidate } from '@/lib/workspace-members';
 import { IconFile, IconSend, ICON_SIZE } from '@/components/ui/icons';
 import { ComposerTray, type TrayTileId } from '@/components/chat/ComposerTray';
@@ -84,6 +83,8 @@ interface CommentComposerProps {
   /** How many attachment chips the composer holds (any state), on each change,
    *  so a parent can guard Back while a draft holds files. */
   onAttachmentCountChange?: (count: number) => void;
+  /** The expanded editor's title (ui/WritingBox): the post, brief or idea title. */
+  expandTitle?: ReactNode;
 }
 
 export type PendingStatus =
@@ -191,6 +192,7 @@ export function CommentComposer({
   submitAnchor,
   onBodyChange,
   onAttachmentCountChange,
+  expandTitle,
 }: CommentComposerProps): ReactElement {
   const [body, setBody] = useState('');
   // The MentionInput is contentEditable and uncontrolled; clearing the draft
@@ -350,12 +352,20 @@ export function CommentComposer({
   return (
     // relative: the "+" tray sits above the composer, across its width.
     <div className="relative flex flex-col gap-2">
-      {/* ui/Composer: "+", field, emoji, then the round Send on one row (chat's row). */}
-      <ComposerFrame
+      {/* ui/WritingBox (comment mode): the card always; focused or holding a
+          draft, the row under the text: + , Aa, emoji, @ ... the round Send. */}
+      <WritingBox
+        mode="comment"
+        field={() => editorRef.current?.element() ?? null}
+        onInsert={(text) => editorRef.current?.insertText(text)}
+        hasText={trimmed !== '' || chipCount > 0}
+        mention={members.length > 0}
+        expandTitle={expandTitle}
         state={submitting ? { kind: 'sending' } : { kind: 'idle' }}
         leading={
           attachEnabled ? (
             <ComposerTray
+              compact
               layout={layout}
               only={{ tiles: COMMENT_TRAY_TILES, trayId }}
               onShownChange={warmAssetPicker}
@@ -379,26 +389,16 @@ export function CommentComposer({
             initialBody={initialBody}
           />
         }
-        side={
-          <CommentEmojiButton
-            disabled={submitting}
-            className={COMPOSER_SIDE}
-            onPick={(char) => editorRef.current?.insertText(char)}
-          />
-        }
         send={
-          <Button
-            variant="primary"
-            shape="round"
-            aria-label={submitLabel}
-            className="shrink-0"
+          <RowSend
+            type="button"
+            label={submitLabel}
+            icon={<IconSend size={ICON_SIZE.control} />}
             data-induction={submitAnchor}
             disabled={!canSubmit}
             busy={submitting}
             onClick={() => void submit()}
-          >
-            <IconSend size={ICON_SIZE.control} />
-          </Button>
+          />
         }
       />
 

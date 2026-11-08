@@ -72,15 +72,29 @@ describe('composer buttons', () => {
     expect(send).toContain('bg-accent');
   });
 
-  it('the composer source keeps mic and send round and primary', () => {
+  it('the composer source keeps mic and send round (ui/WritingBox row keys)', () => {
     const src = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
-    expect(src).toMatch(/variant="primary"\s+shape="round"\s+aria-label="Record voice note"/);
-    // Send stays round in every state (an edit save spins in place, ui/Composer).
-    expect(src).toMatch(/type="submit"\s+variant="primary"\s+shape="round"/);
+    // The mic is a bare round row key; send is the round RowSend (an edit save spins in place).
+    expect(src).toMatch(/<RowKey\s+label="Record voice note"/);
+    expect(src).toContain('<RowSend');
     // No schedule chevron: Send is one plain round button.
     expect(src).not.toContain('Schedule options');
     // The composer dock is lit, its neutral top border colour dropped.
     expect(src).toContain('border-t bg-panel px-3 py-2 lit-dock');
     expect(src).not.toMatch(/size="lg"/);
+  });
+});
+
+describe('ComposerTray compact (ui/WritingBox rows)', () => {
+  it('a 36 grey circle on a 44 tall hit; the plus still turns into the X', () => {
+    const html = renderToStaticMarkup(
+      <ComposerTray compact layout="touch" onPick={() => undefined} />,
+    );
+    expect(html).toContain('h-11');
+    expect(html).toContain('w-9 min-w-9');
+    expect(html).toContain('w-full items-center justify-center rounded-full');
+    expect(html).toContain('py-1');
+    expect(html).toContain('bg-panel-3 text-fg-2');
+    expect(html).toContain('aria-label="Add attachment"');
   });
 });

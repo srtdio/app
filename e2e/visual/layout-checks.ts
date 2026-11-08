@@ -25,6 +25,7 @@ import {
   underBarViolations,
   uploadBarViolations,
   wrapsPastOneLine,
+  writingBoxViolations,
   type Box,
   type ChipGeom,
   type ChipRowGeom,
@@ -36,6 +37,7 @@ import {
   type TopbarGeom,
   type TopbarSlotsAt,
   type UploadBarItem,
+  type WritingBoxGeom,
 } from './layout-checks-core';
 
 // Automatic layout checks on every visual screen (screens.spec.ts capture()
@@ -79,7 +81,9 @@ import {
 //     the density height visible (32 Compact, 36 Cozy, 40 Calm) in a 44 tap
 //     box (the chip rule above);
 //  10 upload screens (decision F, assertNoUploadBar): no visible progress bar
-//     and no % figure, only ui/UploadRing (its progressbar is sr-only) or Retry.
+//     and no % figure, only ui/UploadRing (its progressbar is sr-only) or Retry;
+//  11 writing box screens (ui/WritingBox, assertWritingBox): every row key and
+//     the send are 44 tall hits and the send ends inside the box.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
@@ -826,4 +830,55 @@ export async function assertNoUploadBar(page: Page, screenName: string): Promise
       message,
     })),
   );
+}
+
+/**
+ * Check 11: the writing box screens (ui/WritingBox: chat, comment, field,
+ * caption). Each shown box's row keys ([data-composer-key]) and send
+ * ([data-row-send]) are 44 tall hits and the send ends inside the frame
+ * ([data-writing-frame]).
+ */
+export async function assertWritingBox(page: Page, screenName: string): Promise<void> {
+  const boxes = await page.evaluate((): WritingBoxGeom[] => {
+    const toBox = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height });
+    const shown = (el: Element): boolean => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 1 || r.height <= 1) return false;
+      const s = getComputedStyle(el);
+      return s.display !== 'none' && s.visibility !== 'hidden';
+    };
+    const boxes: WritingBoxGeom[] = [];
+    for (const root of Array.from(document.querySelectorAll('[data-writing-box]'))) {
+      const frame = root.querySelector('[data-writing-frame]');
+      if (frame === null || !shown(frame)) continue;
+      const label = `[data-writing-box][data-mode="${root.getAttribute('data-mode') ?? ''}"]`;
+      const keys = Array.from(
+        frame.querySelectorAll('[data-writing-row] [data-composer-key], [data-row-send]'),
+      )
+        .filter(shown)
+        .map((el) => ({
+          label: `[aria-label="${el.getAttribute('aria-label') ?? ''}"]`,
+          box: toBox(el.getBoundingClientRect()),
+        }));
+      const send = frame.querySelector('[data-row-send]');
+      boxes.push({
+        label,
+        frame: toBox(frame.getBoundingClientRect()),
+        keys,
+        send: send !== null && shown(send) ? toBox(send.getBoundingClientRect()) : null,
+      });
+    }
+    return boxes;
+  });
+  const violations: LayoutViolation[] = writingBoxViolations(boxes).map((message) => ({
+    check: 'writing-box' as const,
+    message,
+  }));
+  if (boxes.length === 0) {
+    violations.push({
+      check: 'writing-box',
+      message: 'no [data-writing-box] on a writing box screen',
+    });
+  }
+  settleFindings(screenName, violations);
 }

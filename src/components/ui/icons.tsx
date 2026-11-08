@@ -11,8 +11,6 @@ import {
   ArrowUpTrayIcon,
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
-  ArrowsPointingInIcon,
-  ArrowsPointingOutIcon,
   ArrowsRightLeftIcon,
   ArrowsUpDownIcon,
   AtSymbolIcon,
@@ -20,6 +18,7 @@ import {
   Bars3BottomLeftIcon,
   BellAlertIcon,
   BookmarkIcon,
+  BriefcaseIcon,
   BuildingLibraryIcon,
   CalendarIcon,
   CalendarDaysIcon,
@@ -41,6 +40,8 @@ import {
   EyeSlashIcon,
   FaceSmileIcon,
   FilmIcon,
+  GiftIcon,
+  HeartIcon,
   InboxIcon,
   InboxStackIcon,
   InformationCircleIcon,
@@ -50,6 +51,7 @@ import {
   MicrophoneIcon,
   MinusIcon,
   MoonIcon,
+  MusicalNoteIcon,
   NoSymbolIcon,
   PaperAirplaneIcon,
   PaperClipIcon,
@@ -58,6 +60,12 @@ import {
   PencilSquareIcon,
   PhotoIcon,
   PlusIcon,
+  BoldIcon,
+  ItalicIcon,
+  UnderlineIcon,
+  StrikethroughIcon,
+  NumberedListIcon,
+  ListBulletIcon,
   QuestionMarkCircleIcon,
   RectangleStackIcon,
   Squares2X2Icon,
@@ -260,14 +268,70 @@ export function IconSort(props: IconProps) {
   return <Hero icon={ArrowsUpDownIcon} {...props} />;
 }
 
-/** Make a sheet fill the screen (the Tasks sheet's full screen). */
+/**
+ * Expand (the writing box's full-screen editor): one diagonal arrow, heads
+ * out at both corners (the common "open in full" glyph), never a four-arrow cross.
+ */
 export function IconExpand(props: IconProps) {
-  return <Hero icon={ArrowsPointingOutIcon} {...props} />;
+  return (
+    <Svg {...props}>
+      <path d="M5 19 19 5" />
+      <path d="M13 5h6v6" />
+      <path d="M11 19H5v-6" />
+    </Svg>
+  );
 }
 
-/** Return a full-screen sheet to its half height. */
+/** Collapse: the same diagonal, heads pointing in to the middle ("close full"). */
 export function IconCollapse(props: IconProps) {
-  return <Hero icon={ArrowsPointingInIcon} {...props} />;
+  return (
+    <Svg {...props}>
+      <path d="M20 4l-6 6" />
+      <path d="M14 4v6h6" />
+      <path d="M4 20l6-6" />
+      <path d="M10 20v-6H4" />
+    </Svg>
+  );
+}
+
+/** Writing box Aa row (ui/WritingBox): Bold. */
+export function IconBold(props: IconProps) {
+  return <Hero icon={BoldIcon} {...props} />;
+}
+
+/** Writing box Aa row: Italic. */
+export function IconItalic(props: IconProps) {
+  return <Hero icon={ItalicIcon} {...props} />;
+}
+
+/** Writing box Aa row: Underline. */
+export function IconUnderline(props: IconProps) {
+  return <Hero icon={UnderlineIcon} {...props} />;
+}
+
+/** Writing box Aa row: Strike. */
+export function IconStrike(props: IconProps) {
+  return <Hero icon={StrikethroughIcon} {...props} />;
+}
+
+/** Writing box Aa row: Numbered list. */
+export function IconListNumbered(props: IconProps) {
+  return <Hero icon={NumberedListIcon} {...props} />;
+}
+
+/** Writing box Aa row: Bullet list. */
+export function IconListBullet(props: IconProps) {
+  return <Hero icon={ListBulletIcon} {...props} />;
+}
+
+/** Writing box Aa row: Quote (a bar beside two lines). */
+export function IconQuote(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 5v14" />
+      <path d="M10 8h9M10 12h9M10 16h6" />
+    </Svg>
+  );
 }
 
 export function IconFilterLines(props: IconProps) {
@@ -508,6 +572,26 @@ export function IconTickDouble(props: IconProps) {
 
 export function IconSmile(props: IconProps) {
   return <Hero icon={FaceSmileIcon} {...props} />;
+}
+
+/** The emoji sheet's Hearts group tab. */
+export function IconHeart(props: IconProps) {
+  return <Hero icon={HeartIcon} {...props} />;
+}
+
+/** The emoji sheet's Work group tab. */
+export function IconBriefcase(props: IconProps) {
+  return <Hero icon={BriefcaseIcon} {...props} />;
+}
+
+/** The emoji sheet's Media group tab. */
+export function IconMusic(props: IconProps) {
+  return <Hero icon={MusicalNoteIcon} {...props} />;
+}
+
+/** The emoji sheet's Things group tab. */
+export function IconGift(props: IconProps) {
+  return <Hero icon={GiftIcon} {...props} />;
 }
 
 export function IconArrowUp(props: IconProps) {

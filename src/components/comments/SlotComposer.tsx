@@ -3,7 +3,7 @@
 // post's existing ledger_seq; the empty next slot is a dashed ring), one point
 // per slot, added with the small
 // "+ Another" ghost under the slots, all sent in ONE comment_batch_create
-// call (the round Send, named "Send" for one, "Send N checkpoints" for more). It
+// call (ui/WritingBox's round Send, named "Send" for one, "Send N checkpoints" for more). It
 // replaces only the CLIENT-role TOP-LEVEL composer on posts; replies (any
 // role), the agency composer, and brief comments keep the free-text
 // CommentComposer untouched. Checkpoints carry no mentions, so a slot is a
@@ -17,9 +17,9 @@
 
 import { Suspense, useId, useLayoutEffect, useRef, useState } from 'react';
 import { itemIn, useFreshKeys } from '@/lib/motion';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { ComposerFrame } from '@/components/ui/Composer';
+import { RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
@@ -43,7 +43,6 @@ import {
   warmAssetPicker,
 } from '@/components/comments/CommentComposer';
 import { CheckpointCircle } from '@/components/comments/CheckpointCircle';
-import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 import type { Pending } from '@/components/comments/CommentComposer';
 
 /** One point exactly as comment_batch_create expects it inside p_points. */
@@ -149,6 +148,8 @@ interface SlotComposerProps {
    * plus one. Absent: 1 (a post with no checkpoints yet).
    */
   startSeq?: number;
+  /** The expanded editor's title (ui/WritingBox): the post's title. */
+  expandTitle?: ReactNode;
 }
 
 /** One slot: its draft body plus its own attachments (uploads and library picks). */
@@ -171,6 +172,7 @@ export function SlotComposer({
   canAttach,
   uploadFile,
   startSeq = 1,
+  expandTitle,
 }: SlotComposerProps): ReactElement {
   const [slots, setSlots] = useState<Slot[]>(() => [newSlot()]);
   const [submitting, setSubmitting] = useState(false);
@@ -186,7 +188,7 @@ export function SlotComposer({
   const photoInputRef = useRef<HTMLInputElement>(null);
   // The slot whose "+" opened the shared pickers (file, photo or library).
   const attachSlotId = useRef<string | null>(null);
-  // Each slot's textarea, so its emoji button inserts at that slot's caret.
+  // Each slot's textarea, so its writing box (Aa, emoji) acts on that slot.
   const textareas = useRef(new Map<string, HTMLTextAreaElement>());
 
   // itemIn (docs/motion.md): a slot added after the first paint rises 8 px
@@ -382,17 +384,14 @@ export function SlotComposer({
   }
 
   const sendButton = (
-    <Button
-      variant="primary"
-      shape="round"
-      aria-label={sendLabel(Math.max(1, filledCount(slots.map((slot) => slot.body))))}
-      className="shrink-0"
+    <RowSend
+      type="button"
+      label={sendLabel(Math.max(1, filledCount(slots.map((slot) => slot.body))))}
+      icon={<IconSend size={ICON_SIZE.control} />}
       disabled={!canSend}
       busy={submitting}
       onClick={() => void submit()}
-    >
-      <IconSend size={ICON_SIZE.control} />
-    </Button>
+    />
   );
 
   return (
@@ -413,21 +412,29 @@ export function SlotComposer({
               // relative: the slot's "+" tray sits above this slot, across its width.
               className="relative flex flex-col gap-2"
             >
-              {/* ui/Composer: "+", number, field, emoji, then Send on one row
-                  (the comment composer's layout). A later slot holds its
-                  remove X in the send column, so every field keeps one width. */}
-              <ComposerFrame
+              {/* ui/WritingBox (comment mode): the number, then the field on
+                  the text line; focused or holding text, the row: + , Aa,
+                  emoji ... Send. A later slot holds its remove bin in the send
+                  slot, so every field keeps one width. */}
+              <WritingBox
+                mode="comment"
+                field={() => textareas.current.get(slot.id) ?? null}
+                hasText={slot.body.trim() !== '' || chipCount > 0}
+                expandTitle={expandTitle}
                 state={submitting && index === 0 ? { kind: 'sending' } : { kind: 'idle' }}
                 leading={
-                  <>
-                    {attachEnabled ? (
-                      <ComposerTray
-                        layout={layout}
-                        only={{ tiles: COMMENT_TRAY_TILES, trayId: `${trayBaseId}-${slot.id}` }}
-                        onShownChange={warmAssetPicker}
-                        onPick={(id) => pickTile(slot.id, id)}
-                      />
-                    ) : null}
+                  attachEnabled ? (
+                    <ComposerTray
+                      compact
+                      layout={layout}
+                      only={{ tiles: COMMENT_TRAY_TILES, trayId: `${trayBaseId}-${slot.id}` }}
+                      onShownChange={warmAssetPicker}
+                      onPick={(id) => pickTile(slot.id, id)}
+                    />
+                  ) : undefined
+                }
+                input={
+                  <div className="flex min-w-0 items-start gap-2">
                     <span
                       aria-hidden
                       data-slot-number={number.n}
@@ -435,38 +442,22 @@ export function SlotComposer({
                     >
                       <CheckpointCircle n={number.n} state={number.state} />
                     </span>
-                  </>
-                }
-                input={
-                  <Textarea
-                    formatting
-                    compact
-                    rows={1}
-                    aria-label={`Checkpoint ${index + 1}`}
-                    placeholder={index === 0 ? 'Add a checkpoint' : 'Add another checkpoint'}
-                    value={slot.body}
-                    disabled={submitting}
-                    ref={(el) => {
-                      if (el !== null) textareas.current.set(slot.id, el);
-                      else textareas.current.delete(slot.id);
-                    }}
-                    onChange={(event) => updateBody(slot.id, event.target.value)}
-                    className="min-w-0 flex-1 self-center"
-                  />
-                }
-                side={
-                  <CommentEmojiButton
-                    disabled={submitting}
-                    className={COMPOSER_SIDE}
-                    onPick={(char) =>
-                      insertIntoTextarea(
-                        () => textareas.current.get(slot.id) ?? null,
-                        slot.body,
-                        char,
-                        (next) => updateBody(slot.id, next),
-                      )
-                    }
-                  />
+                    <Textarea
+                      formatting
+                      compact
+                      rows={1}
+                      aria-label={`Checkpoint ${index + 1}`}
+                      placeholder={index === 0 ? 'Add a checkpoint' : 'Add another checkpoint'}
+                      value={slot.body}
+                      disabled={submitting}
+                      ref={(el) => {
+                        if (el !== null) textareas.current.set(slot.id, el);
+                        else textareas.current.delete(slot.id);
+                      }}
+                      onChange={(event) => updateBody(slot.id, event.target.value)}
+                      className="min-w-0 flex-1 self-center"
+                    />
+                  </div>
                 }
                 send={
                   index === 0 ? (

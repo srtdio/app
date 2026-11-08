@@ -51,7 +51,6 @@ const REQUIRED: readonly string[] = [
   'chat-dm-private-reply-long',
   'chat-dm-private-reply-long-sent',
   'chat-dm-private-reply-strip',
-  'chat-format-strip',
   'chat-home-chip-files',
   'chat-home-chip-files-dark',
   'chat-home-chip-links',
@@ -278,6 +277,24 @@ const REQUIRED: readonly string[] = [
   'plan-screen-calm',
   'plan-screen-compact',
   'plan-screen-cozy',
+  // The writing box (ui/WritingBox, Slack style, 8 Nov 2026): the chat pill,
+  // the card focused and typing, the Aa row, @, the + drawer from the card,
+  // the emoji and Add link sheets, the expanded editor (phone) and box
+  // (laptop), bubbles with blocks, and the comment, field and caption boxes.
+  'add-link-sheet',
+  'brief-field-row',
+  'chat-box-expanded',
+  'chat-box-expanded-laptop',
+  'chat-box-focused',
+  'chat-box-format-row',
+  'chat-box-idle',
+  'chat-box-mention',
+  'chat-box-tray',
+  'chat-box-typing',
+  'chat-bubble-blocks',
+  'emoji-sheet',
+  'post-caption-box',
+  'post-comment-box',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
@@ -344,13 +361,20 @@ const PHONE_ONLY_NAMES = [
   'person-card-inline',
   'chat-tasks-swipe',
   'chat-composer-keyboard',
+  'chat-box-idle',
+  'chat-box-expanded',
 ];
 
 /**
- * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel and the
- * chip hover (a hover pointer).
+ * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel, the
+ * chip hover (a hover pointer) and the writing box grown in place.
  */
-const LAPTOP_LIGHT_NAMES = ['cockpit-panel-needs', 'cockpit-panel-users', 'chip-row-hover'];
+const LAPTOP_LIGHT_NAMES = [
+  'cockpit-panel-needs',
+  'cockpit-panel-users',
+  'chip-row-hover',
+  'chat-box-expanded-laptop',
+];
 
 /** Laptop dark shots taken in the laptop-light project (`only: 'laptop', dark: true`). */
 const LAPTOP_FORCED_DARK_NAMES = [

@@ -22,15 +22,14 @@ import {
   recordingElapsed,
   ReplyBar,
 } from '@/components/chat/Composer';
-import { ComposerEmoji } from '@/components/chat/ComposerEmoji';
 import { ComposerFrame, type ComposerState } from '@/components/ui/Composer';
 import { Button } from '@/components/ui/Button';
 import { ICON_SIZE, IconMic, IconSend, IconTrash } from '@/components/ui/icons';
 
 const SRC = readFileSync(fileURLToPath(new URL('../Composer.tsx', import.meta.url)), 'utf8');
 
-/** The JSX from `<ComposerFrame` to its closing `/>` (the composer's one row). */
-const FRAME = SRC.slice(SRC.indexOf('<ComposerFrame'), SRC.indexOf('/>\n\n        <input'));
+/** The JSX from `<WritingBox` to its closing `/>` (the composer's one box). */
+const FRAME = SRC.slice(SRC.indexOf('<WritingBox'), SRC.indexOf('/>\n\n        <input'));
 
 const STATES: ComposerState[] = [
   { kind: 'idle' },
@@ -63,7 +62,7 @@ function row(state: ComposerState, strip?: boolean): string {
           </Button>
         }
         input={<textarea aria-label="Message" placeholder={composerPlaceholder(false)} />}
-        side={<ComposerEmoji onPick={() => undefined} />}
+        side={<button type="button" aria-label="Emoji" className="rounded-full" />}
         send={
           <Button
             type="submit"
@@ -81,14 +80,17 @@ function row(state: ComposerState, strip?: boolean): string {
 }
 
 describe('chat Composer on ui/Composer', () => {
-  it('renders its row through ComposerFrame, with no hand-built well left', () => {
+  it('renders through ui/WritingBox (chat mode), with no hand-built well left', () => {
     expect(SRC).toContain(
-      "import { ComposerFrame, composerHint } from '@/components/ui/Composer';",
+      "import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';",
     );
+    expect(FRAME).toContain('mode="chat"');
     expect(FRAME).toContain('strip={');
     expect(FRAME).toContain('leading={');
     expect(FRAME).toContain('input={');
-    expect(FRAME).toContain('side={');
+    expect(FRAME).toContain('pillEnd={');
+    // The emoji is the box's own row key (the emoji sheet), not a side slot.
+    expect(FRAME).not.toContain('side={');
     expect(FRAME).toContain('send={');
     expect(FRAME).toContain('discard={');
     // The old recording well, voice-busy row and hand-built spinners are gone.
@@ -142,7 +144,7 @@ describe('chat Composer on ui/Composer', () => {
     // Scheduling keeps the field mounted (its text and ref come back).
     expect(row({ kind: 'scheduling' })).toContain('aria-label="Message"');
     expect(FRAME).toContain('busy={editBusy}');
-    expect(FRAME).toMatch(/type="submit"\s+variant="primary"\s+shape="round"/);
+    expect(FRAME).toContain('<RowSend');
   });
 
   it('voice busy never collapses the row: the mic spins in the send slot', () => {
@@ -203,11 +205,10 @@ describe('chat Composer on ui/Composer', () => {
     expect(html.indexOf('Cancel editing')).toBeLessThan(html.indexOf('data-composer-row'));
   });
 
-  it('side buttons are bare 44 circles; only send / mic are filled', () => {
-    const emoji = renderToStaticMarkup(<ComposerEmoji onPick={() => undefined} />);
-    expect(emoji).toContain('rounded-full');
-    expect(emoji).not.toContain('lit-btn-primary');
-    expect(FRAME).toMatch(/variant="primary"\s+shape="round"\s+aria-label="Record voice note"/);
+  it('the mic is a bare row key (pill on a phone, laptop card while empty); send is RowSend', () => {
+    expect(SRC).toMatch(/<RowKey\s+label="Record voice note"/);
+    expect(FRAME).toContain('pillEnd={showMic ? micKey : undefined}');
+    expect(FRAME).toContain('showMic && laptopBox ? (');
   });
 
   it('the hint is "Message", "Reply" while replying; "Edit message" while editing', () => {
@@ -219,10 +220,11 @@ describe('chat Composer on ui/Composer', () => {
 
   it('keeps the tour and test hooks on its controls', () => {
     expect(FRAME).toContain('data-induction={INDUCTION_KEYS.chatHash}');
-    expect(FRAME).toContain('data-induction={INDUCTION_KEYS.chatMic}');
+    expect(SRC).toContain('data-induction={INDUCTION_KEYS.chatMic}');
     expect(FRAME).not.toContain('data-schedule-chevron');
     expect(FRAME).toContain('onShownChange={setTrayShown}');
     expect(FRAME).toContain('formatting');
     expect(FRAME).toContain('compact');
+    expect(FRAME).toContain('listEnter={false}');
   });
 });

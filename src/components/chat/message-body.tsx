@@ -1,12 +1,20 @@
 // A message body as text runs and links: chat bubbles (MessageThread) and the
 // Plan item screen's concept description render through this one function, so
 // a link looks and opens the same everywhere. Moved out of MessageThread.tsx
-// unchanged, so screens that show a body never import the thread.
+// unchanged, so screens that show a body never import the thread. renderRich
+// adds the Slack blocks (numbered and bullet lists, quotes) as the outermost
+// layer; a body with none renders exactly as before.
 
 import { Fragment } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { parseFormat, type FormatStyle } from '@srtdio/comments';
+import {
+  hasBlocks,
+  parseBlocks,
+  parseFormat,
+  splitLinks,
+  type FormatStyle,
+} from '@srtdio/comments';
 import { UnsafeLinkText } from '@/components/ui/UnsafeLinkSheet';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { cn } from '@/lib/cn';
@@ -71,10 +79,74 @@ export function renderFormatted(body: string, inner: (text: string) => ReactNode
   });
 }
 
+/** What renders one styled segment's text (links, mentions, search marks). */
+export type InnerRender = (text: string) => ReactNode[];
+
+/** Space between a list or quote and the text around it (the 4 step). */
+const BLOCK_GAP = 'my-1 first:mt-0 last:mb-0';
+/** List markers sit in a 24 indent; the marker ink follows the text (currentColor). */
+export const FORMAT_OL_CLASS = cn('list-decimal pl-6', BLOCK_GAP);
+export const FORMAT_UL_CLASS = cn('list-disc pl-6', BLOCK_GAP);
+/** Quote: a 3px bar in faded currentColor (index.css .fmt-quote); the text keeps full ink. */
+export const FORMAT_QUOTE_CLASS = cn('fmt-quote pl-3', BLOCK_GAP);
+
 /**
- * A message body with WhatsApp formatting, then text runs and links inside
- * each styled segment (renderBodyLinks). Every saved-text surface that shows a
- * chat body renders through here.
+ * Saved free text with Slack blocks as the OUTER layer: consecutive "N. "
+ * lines are an ordered list from the first N, "- " lines a bullet list, "> "
+ * lines a quote; each paragraph, item and quote then renders through
+ * renderFormatted with `inner`. A body with no block renders exactly as
+ * renderFormatted(body, inner) (fast path, no block parse). Parsing is
+ * memoised (parseBlocks, parseFormat). The container must allow block
+ * children (a div, not a p).
+ */
+export function renderRich(body: string, inner: InnerRender): ReactNode[] {
+  if (!hasBlocks(body)) return renderFormatted(body, inner);
+  const blocks = parseBlocks(body);
+  const first = blocks[0];
+  if (blocks.length === 1 && first !== undefined && first.kind === 'para') {
+    return renderFormatted(body, inner);
+  }
+  return blocks.map((block, i) => {
+    const key = `blk-${i}`;
+    switch (block.kind) {
+      case 'para':
+        // A trailing blank line is kept (pre-wrap drops a final line break).
+        return (
+          <span key={key} className="block">
+            {renderFormatted(block.text, inner)}
+            {block.text.endsWith('\n') ? '\n' : null}
+          </span>
+        );
+      case 'ol':
+        return (
+          <ol key={key} start={block.start} className={FORMAT_OL_CLASS}>
+            {block.items.map((item, j) => (
+              <li key={`li-${j}`}>{renderFormatted(item, inner)}</li>
+            ))}
+          </ol>
+        );
+      case 'ul':
+        return (
+          <ul key={key} className={FORMAT_UL_CLASS}>
+            {block.items.map((item, j) => (
+              <li key={`li-${j}`}>{renderFormatted(item, inner)}</li>
+            ))}
+          </ul>
+        );
+      case 'quote':
+        return (
+          <blockquote key={key} className={FORMAT_QUOTE_CLASS}>
+            {renderFormatted(block.text, inner)}
+          </blockquote>
+        );
+    }
+  });
+}
+
+/**
+ * A message body with Slack blocks and WhatsApp formatting, then text runs and
+ * links inside each styled segment (renderBodyLinks). Every saved-text surface
+ * that shows a chat body renders through here.
  */
 export function renderMessageBody(
   body: string,
@@ -82,14 +154,105 @@ export function renderMessageBody(
   origin: string | null = currentOrigin(),
   highlight: readonly string[] = [],
 ): ReactNode[] {
-  return renderFormatted(body, (text) => renderBodyLinks(text, mine, origin, highlight));
+  return renderRich(body, (text) => renderBodyLinks(text, mine, origin, highlight));
+}
+
+/**
+ * One link's tap target: an external url opens in a new tab, a link to this
+ * app's own post or brief page is a router link, an unsafe url opens the check
+ * sheet (never the site). `label` is what shows. Pure.
+ */
+function linkNode(
+  url: string,
+  label: ReactNode,
+  key: string,
+  mine: boolean,
+  origin: string | null,
+): ReactNode {
+  const className = bodyLinkClass(mine);
+  const target = classify(url, origin, APP_ENTITY_ROUTES);
+  // An unsafe link opens the check sheet, never the site (its card warns too).
+  const verdict = target.kind === 'external' ? checkLink(url) : null;
+  if (verdict !== null && verdict.verdict === 'unsafe') {
+    return (
+      <UnsafeLinkText
+        key={key}
+        url={url}
+        reasons={verdict.reasons}
+        className={cn('inline', className)}
+        msgLink
+      >
+        {label}
+      </UnsafeLinkText>
+    );
+  }
+  return target.kind === 'external' ? (
+    <a
+      key={key}
+      data-msg-link=""
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+    >
+      {label}
+    </a>
+  ) : (
+    <Link key={key} data-msg-link="" to={target.path} className={className}>
+      {label}
+    </Link>
+  );
+}
+
+/**
+ * A [text](url) link: its text (inline styles drawn, mono literal, search
+ * words marked) as the tap target, opening exactly like a pasted url. Pure.
+ */
+export function renderTextLink(
+  text: string,
+  url: string,
+  key: string,
+  mine: boolean,
+  origin: string | null = currentOrigin(),
+  highlight: readonly string[] = [],
+): ReactNode {
+  const label = renderFormatted(text, (t) =>
+    highlight.length === 0 ? [t] : markSearchWords(t, highlight),
+  );
+  return linkNode(url, <>{label}</>, key, mine, origin);
+}
+
+/**
+ * `inner` with [text](url) links taken out first: each link renders through
+ * renderTextLink, the text between through `inner`. For surfaces whose inner
+ * renderer does not know [text](url) (comments, brief fields). Pure.
+ */
+export function withTextLinks(
+  inner: InnerRender,
+  mine = false,
+  origin: string | null = currentOrigin(),
+  highlight: readonly string[] = [],
+): InnerRender {
+  return (text) => {
+    const parts = splitLinks(text);
+    const only = parts[0];
+    if (parts.length === 1 && only !== undefined && only.kind === 'text') return inner(text);
+    return parts.map((part, i) =>
+      part.kind === 'text' ? (
+        <Fragment key={`tl-${i}`}>{inner(part.text)}</Fragment>
+      ) : (
+        renderTextLink(part.text, part.url, `tl-${i}`, mine, origin, highlight)
+      ),
+    );
+  };
 }
 
 /**
  * A message body as text runs and links. External urls open in a new tab and
  * show without the scheme; links to this app's own post or brief pages are
- * router links that open in-app. The whole link text is the tap target. Pure:
- * the origin is read at call time, so the first paint is final.
+ * router links that open in-app; a [text](url) link shows its text. The whole
+ * link text is the tap target. Pure: the origin is read at call time, so the
+ * first paint is final.
  */
 export function renderBodyLinks(
   body: string,
@@ -97,7 +260,6 @@ export function renderBodyLinks(
   origin: string | null = currentOrigin(),
   highlight: readonly string[] = [],
 ): ReactNode[] {
-  const className = bodyLinkClass(mine);
   return tokenize(body).map((segment, i) => {
     if (segment.kind === 'text') {
       return highlight.length === 0 ? (
@@ -106,39 +268,10 @@ export function renderBodyLinks(
         <Fragment key={`part-${i}`}>{markSearchWords(segment.text, highlight)}</Fragment>
       );
     }
-    const target = classify(segment.url, origin, APP_ENTITY_ROUTES);
-    const label = displayUrl(segment.url);
-    // An unsafe link opens the check sheet, never the site (its card warns too).
-    const verdict = target.kind === 'external' ? checkLink(segment.url) : null;
-    if (verdict !== null && verdict.verdict === 'unsafe') {
-      return (
-        <UnsafeLinkText
-          key={`part-${i}`}
-          url={segment.url}
-          reasons={verdict.reasons}
-          className={cn('inline', className)}
-          msgLink
-        >
-          {label}
-        </UnsafeLinkText>
-      );
+    if (segment.kind === 'link') {
+      return renderTextLink(segment.text, segment.url, `part-${i}`, mine, origin, highlight);
     }
-    return target.kind === 'external' ? (
-      <a
-        key={`part-${i}`}
-        data-msg-link=""
-        href={segment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={className}
-      >
-        {label}
-      </a>
-    ) : (
-      <Link key={`part-${i}`} data-msg-link="" to={target.path} className={className}>
-        {label}
-      </Link>
-    );
+    return linkNode(segment.url, displayUrl(segment.url), `part-${i}`, mine, origin);
   });
 }
 

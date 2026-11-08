@@ -103,15 +103,22 @@ describe('insertIntoTextarea (Slot, Pin, Caption composers)', () => {
   });
 });
 
-describe('every comment input wires the emoji button', () => {
+describe('every comment input takes its emoji from ui/WritingBox', () => {
   const root = fileURLToPath(new URL('../../', import.meta.url));
   it.each([
     'components/comments/CommentComposer.tsx',
     'components/comments/SlotComposer.tsx',
+    'components/comments/Comments.tsx',
     'components/pages/pcs/PinAnnotationComposer.tsx',
     'components/pages/pcs/CaptionAnnotationComposer.tsx',
-  ])('%s renders CommentEmojiButton', (file) => {
-    expect(readFileSync(root + file, 'utf8')).toContain('<CommentEmojiButton');
+    'components/pages/pcs/use-post-decisions.tsx',
+    'components/pages/pipeline/StageMoveConfirm.tsx',
+    'components/ui/PersonMessageInput.tsx',
+  ])('%s renders WritingBox in comment mode, not the laptop popover', (file) => {
+    const source = readFileSync(root + file, 'utf8');
+    expect(source).toContain('<WritingBox');
+    expect(source).toContain('mode="comment"');
+    expect(source).not.toContain('<CommentEmojiButton');
   });
 
   it('the button never imports the picker body statically', () => {

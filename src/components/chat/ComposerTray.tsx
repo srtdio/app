@@ -176,6 +176,11 @@ export function ComposerTray(props: {
    * chat tour keys. Absent: the chat tray, unchanged.
    */
   only?: { tiles: readonly TrayTileId[]; trayId: string };
+  /**
+   * Inside ui/WritingBox: the + is a 36 grey circle on a 44 tall hit (the
+   * composer-row 36 exception); ink while open, the plus turned into the X.
+   */
+  compact?: boolean;
 }): ReactElement {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -231,7 +236,7 @@ export function ComposerTray(props: {
   return (
     <div ref={rootRef} className={cn('shrink-0', NO_TOUCH_SELECT)} onContextMenu={preventDefault}>
       <Button
-        variant={open ? 'primary' : 'secondary'}
+        variant={props.compact === true ? 'ghost' : open ? 'primary' : 'secondary'}
         shape="round"
         buttonRef={buttonRef}
         type="button"
@@ -241,6 +246,9 @@ export function ComposerTray(props: {
         aria-expanded={open}
         aria-controls={trayId}
         onClick={() => setOpen((o) => !o)}
+        className={
+          props.compact === true ? 'w-9 min-w-9 items-stretch py-1 hover:bg-transparent' : undefined
+        }
         // Round secondary, primary while the tray is open; buttonRef returns
         // focus on Escape.
       >
@@ -248,7 +256,13 @@ export function ComposerTray(props: {
         <span
           aria-hidden="true"
           data-plus-icon=""
-          className={cn('flex', MOVE_CLASS.turn, open && 'rotate-45')}
+          className={cn(
+            'flex',
+            props.compact === true && 'w-full items-center justify-center rounded-full',
+            props.compact === true && (open ? 'bg-accent text-accent-fg' : 'bg-panel-3 text-fg-2'),
+            MOVE_CLASS.turn,
+            open && 'rotate-45',
+          )}
         >
           <IconPlus size={ICON_SIZE.control} />
         </span>

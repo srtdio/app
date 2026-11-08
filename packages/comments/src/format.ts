@@ -54,6 +54,9 @@ const MONO = '```';
 // punctuation trimmed.
 const URL_AT = /https?:\/\/[^\s<]+/iy;
 const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
+// A Slack link [text](url): text has no ']' or line break, url is http(s) with
+// no space, ')' or '<'. Both bounded, negated classes only: linear, no backtracking.
+export const MD_LINK_AT = /\[([^\]\n]{1,500})\]\((https?:\/\/[^\s)<]{1,2000})\)/iy;
 const MENTION_AT = /@\[(?:all|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/iy;
 const PUNCT = /^[\p{P}\p{S}]$/u;
 const SPACE = /^\s$/u;
@@ -140,6 +143,13 @@ function pairsForLine(line: string): Pair[] {
       const len = urlLengthAt(line, i, isOpen);
       if (len > 0) {
         i += len;
+        continue;
+      }
+    } else if (ch === '[') {
+      MD_LINK_AT.lastIndex = i;
+      const m = MD_LINK_AT.exec(line);
+      if (m !== null) {
+        i += m[0].length;
         continue;
       }
     } else if (ch === '@') {
@@ -291,12 +301,40 @@ export function hasFormat(body: string): boolean {
   return segs.some((s) => s.styles.length > 0);
 }
 
-/** The body as plain text with the markers removed (one-line previews, email). Pure. */
-export function stripFormat(body: string): string {
+/** Inline markers removed, nothing else (one line or many). Pure. */
+export function stripInline(body: string): string {
   if (!/[*_~+`]/.test(body)) return body;
   return parseFormat(body)
     .map((s) => s.text)
     .join('');
+}
+
+const MD_LINK_ALL = /\[([^\]\n]{1,500})\]\((https?:\/\/[^\s)<]{1,2000})\)/gi;
+
+/** [text](url) as its text. Pure. */
+export function linkText(body: string): string {
+  if (!body.includes('](')) return body;
+  return body.replace(MD_LINK_ALL, (_m, text: string) => text);
+}
+
+/**
+ * The body as display text for plain-text readers (previews, search, email
+ * subject lines, xlsx): inline markers removed, [text](url) as its text, the
+ * quote prefix "> " removed, "- " shown as "• ", list numbers kept. Pure.
+ */
+export function stripFormat(body: string): string {
+  let out = stripInline(linkText(body));
+  if (/(^|\n)(?:- |> ?)/.test(out)) {
+    out = out
+      .split('\n')
+      .map((line) => {
+        if (line.startsWith('- ')) return `• ${line.slice(2)}`;
+        if (line === '>' || line.startsWith('> ')) return line.slice(2);
+        return line;
+      })
+      .join('\n');
+  }
+  return out;
 }
 
 /**

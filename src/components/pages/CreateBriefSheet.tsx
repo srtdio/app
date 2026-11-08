@@ -1,9 +1,10 @@
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { ComposerSheet } from '@/components/pages/create/ComposerSheet';
@@ -288,6 +289,10 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
   const [attachmentsRoot, setAttachmentsRoot] = useState<HTMLDivElement | null>(null);
   const failedUploads = useFailedUploadCount(attachmentsRoot);
   const attachmentsRef = useCallback((node: HTMLDivElement | null) => setAttachmentsRoot(node), []);
+  // The writing boxes' fields (ui/WritingBox acts on them: Aa row, emoji).
+  const objectiveRef = useRef<HTMLTextAreaElement | null>(null);
+  const brandRef = useRef<HTMLTextAreaElement | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
   function patch(next: Partial<CreateBriefFormState>): void {
     setForm((prev) => ({ ...prev, ...next }));
@@ -430,27 +435,45 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
         </Field>
 
         <Field label="Objective" htmlFor="brief-objective" required>
-          <Textarea
-            formatting
-            id="brief-objective"
-            data-induction={INDUCTION_KEYS.briefSheetObjective}
-            autoGrow
-            value={form.objective}
-            {...fieldErrorProps('objective')}
-            onChange={(event) => patch({ objective: event.target.value })}
-            placeholder="What should this brief achieve?"
+          <WritingBox
+            mode="field"
+            field={() => objectiveRef.current}
+            hasText={form.objective !== ''}
+            expandTitle="Objective"
+            input={
+              <Textarea
+                formatting
+                ref={objectiveRef}
+                id="brief-objective"
+                data-induction={INDUCTION_KEYS.briefSheetObjective}
+                autoGrow
+                value={form.objective}
+                {...fieldErrorProps('objective')}
+                onChange={(event) => patch({ objective: event.target.value })}
+                placeholder="What should this brief achieve?"
+              />
+            }
           />
           {fieldError('objective')}
         </Field>
 
         <Field label="Brand requirements (optional)" htmlFor="brief-brand-requirements">
-          <Textarea
-            formatting
-            id="brief-brand-requirements"
-            autoGrow
-            value={form.brandRequirements}
-            onChange={(event) => patch({ brandRequirements: event.target.value })}
-            placeholder="Colors, tone, logo use, words to avoid"
+          <WritingBox
+            mode="field"
+            field={() => brandRef.current}
+            hasText={form.brandRequirements !== ''}
+            expandTitle="Brand requirements"
+            input={
+              <Textarea
+                formatting
+                ref={brandRef}
+                id="brief-brand-requirements"
+                autoGrow
+                value={form.brandRequirements}
+                onChange={(event) => patch({ brandRequirements: event.target.value })}
+                placeholder="Colors, tone, logo use, words to avoid"
+              />
+            }
           />
         </Field>
 
@@ -505,13 +528,22 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
         </Field>
 
         <Field label="Note to the agency (optional)" htmlFor="brief-initial-comment">
-          <Textarea
-            formatting
-            id="brief-initial-comment"
-            autoGrow
-            value={form.initialComment}
-            onChange={(event) => patch({ initialComment: event.target.value })}
-            placeholder="Anything the agency should know first"
+          <WritingBox
+            mode="field"
+            field={() => noteRef.current}
+            hasText={form.initialComment !== ''}
+            expandTitle="Note to the agency"
+            input={
+              <Textarea
+                formatting
+                ref={noteRef}
+                id="brief-initial-comment"
+                autoGrow
+                value={form.initialComment}
+                onChange={(event) => patch({ initialComment: event.target.value })}
+                placeholder="Anything the agency should know first"
+              />
+            }
           />
         </Field>
 

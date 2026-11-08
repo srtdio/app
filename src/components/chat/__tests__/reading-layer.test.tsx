@@ -167,9 +167,10 @@ describe('T8 tray and emoji button by pointer', () => {
     expect(showsEmojiButton(chatLayout({ widthPx: 1280 }))).toBe(true);
   });
 
-  it('the composer gates the emoji button on that rule', () => {
+  it('the chat composer takes emoji from ui/WritingBox (the emoji sheet, phone and laptop)', () => {
     const src = readFileSync(fileURLToPath(new URL('../Composer.tsx', import.meta.url)), 'utf8');
-    expect(src).toContain('showsEmojiButton(layout)');
+    expect(src).toContain('<WritingBox');
+    expect(src).toContain('onInsert={insertEmoji}');
     expect(src).not.toContain('IconPaperclip');
   });
 

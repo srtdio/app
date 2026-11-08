@@ -6,19 +6,27 @@
 // shared cards at Send.
 
 import { matchPath } from 'react-router-dom';
-import { closingMarkerTail } from '@srtdio/comments';
+import { closingMarkerTail, splitLinks } from '@srtdio/comments';
 import { parseEntityRef, type EntityRef } from '@/lib/entityRef';
 
 const URL_TOKEN = /https?:\/\/[^\s<]+/gi;
 const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
 
-/** One run of a message body: plain text, or an http(s) url. */
-type BodySegment = { kind: 'text'; text: string } | { kind: 'url'; url: string };
+/**
+ * One run of a message body: plain text, an http(s) url, or a [text](url)
+ * link (its text shows, its url opens).
+ */
+export type BodySegment =
+  | { kind: 'text'; text: string }
+  | { kind: 'url'; url: string }
+  | { kind: 'link'; text: string; url: string };
 
 /**
- * Split a body into text and url runs in order. Trailing sentence punctuation
- * after a url stays in the following text run. Only http and https match; a bare
- * domain with no scheme stays text. Adjacent text runs are merged.
+ * Split a body into text, url and [text](url) runs in order. A [text](url)
+ * link is found first and kept whole (its url is never a bare url run).
+ * Trailing sentence punctuation after a url stays in the following text run.
+ * Only http and https match; a bare domain with no scheme stays text. Adjacent
+ * text runs are merged. Linear: no backtracking regex.
  */
 export function tokenize(body: string): BodySegment[] {
   const segments: BodySegment[] = [];
@@ -28,9 +36,32 @@ export function tokenize(body: string): BodySegment[] {
     if (prev?.kind === 'text') prev.text += text;
     else segments.push({ kind: 'text', text });
   };
+  let at = 0;
+  for (const part of splitLinks(body)) {
+    if (part.kind === 'link') {
+      segments.push(part);
+      at += part.text.length + part.url.length + 4;
+      continue;
+    }
+    tokenizeUrls(body, at, at + part.text.length, segments, pushText);
+    at += part.text.length;
+  }
+  return segments;
+}
+
+/** The url runs of body[from, to): bare urls and the text between. */
+function tokenizeUrls(
+  body: string,
+  from: number,
+  to: number,
+  segments: BodySegment[],
+  pushText: (text: string) => void,
+): void {
+  const piece = body.slice(from, to);
   let last = 0;
-  for (const m of body.matchAll(URL_TOKEN)) {
-    const start = m.index ?? 0;
+  for (const m of piece.matchAll(URL_TOKEN)) {
+    const local = m.index ?? 0;
+    const start = from + local;
     let url = m[0];
     const trail = url.match(URL_TRAILING);
     let suffix = trail !== null ? trail[0] : '';
@@ -42,7 +73,7 @@ export function tokenize(body: string): BodySegment[] {
       suffix = url.slice(url.length - tail) + suffix;
       url = url.slice(0, url.length - tail);
     }
-    pushText(body.slice(last, start));
+    pushText(piece.slice(last, local));
     // Trimming can leave a bare scheme ("http://."): that stays text.
     if (/^https?:\/\/./i.test(url)) {
       segments.push({ kind: 'url', url });
@@ -50,10 +81,9 @@ export function tokenize(body: string): BodySegment[] {
       pushText(url);
     }
     pushText(suffix);
-    last = start + m[0].length;
+    last = local + m[0].length;
   }
-  pushText(body.slice(last));
-  return segments;
+  pushText(piece.slice(last));
 }
 
 /** The app's pretty entity route patterns (see the /p/:ref and /b/:ref routes in src/App.tsx). */
@@ -105,7 +135,7 @@ export function displayUrl(url: string): string {
 
 /**
  * The one link in a body that gets a preview card (WhatsApp rule): the first
- * external url. Links to this app's own pages (post/brief refs and any other
+ * external url, bare or behind [text](url). Links to this app's own pages (post/brief refs and any other
  * same-origin url) are skipped; they keep their in-app behaviour. Pure.
  */
 export function firstExternalUrl(
@@ -114,7 +144,8 @@ export function firstExternalUrl(
   routes: EntityRoutes = APP_ENTITY_ROUTES,
 ): string | null {
   for (const segment of tokenize(body)) {
-    if (segment.kind !== 'url') continue;
+    // A [text](url) link's url counts like a pasted url.
+    if (segment.kind === 'text') continue;
     if (classify(segment.url, appOrigin, routes).kind !== 'external') continue;
     let sameOrigin = false;
     try {

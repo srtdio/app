@@ -10,6 +10,7 @@ import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { rejectConfirmBody, sendForReviewHelper } from '@/components/pages/pipeline/card-status';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
@@ -157,12 +158,25 @@ export function StageMoveConfirmView(props: StageMoveConfirmViewProps): ReactEle
             <label htmlFor={props.reasonId} className="text-base font-medium text-fg-2">
               {REASON_LABEL}
             </label>
-            <Textarea
-              formatting
-              id={props.reasonId}
-              rows={3}
-              value={props.reason}
-              onChange={(event) => props.onReasonChange(event.target.value)}
+            {/* ui/WritingBox (comment mode) with no send: Cancel and Reject
+                stay in the footer; focused, the row shows Aa and emoji. */}
+            <WritingBox
+              mode="comment"
+              field={() => {
+                const el = document.getElementById(props.reasonId);
+                return el instanceof HTMLTextAreaElement ? el : null;
+              }}
+              hasText={props.reason.trim() !== ''}
+              expandTitle={REASON_LABEL}
+              input={
+                <Textarea
+                  formatting
+                  id={props.reasonId}
+                  rows={3}
+                  value={props.reason}
+                  onChange={(event) => props.onReasonChange(event.target.value)}
+                />
+              }
             />
             <p className="text-sm text-fg-3">{REASON_HINT}</p>
           </div>

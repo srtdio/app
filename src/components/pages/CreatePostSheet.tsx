@@ -6,6 +6,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
@@ -1489,30 +1490,43 @@ export function CreatePostSheet({
           />
 
           <Field label="Caption" htmlFor="post-caption" required>
-            <div className="relative">
-              <Textarea
-                ref={captionRef}
-                id="post-caption"
-                autoGrow
-                value={form.caption}
-                aria-invalid={fieldErrors.caption !== undefined ? true : undefined}
-                aria-describedby="post-caption-count"
-                onChange={(event) => patchField('caption', { caption: event.target.value })}
-                placeholder="Write the caption"
-                className="pb-6 aria-[invalid=true]:border-bad aria-[invalid=true]:lit-bad"
-              />
-              <span
-                id="post-caption-count"
-                data-caption-count=""
-                {...(captionOver ? { 'data-over': '' } : {})}
-                className={cn(
-                  'pointer-events-none absolute bottom-2 right-3 text-sm tabular-nums',
-                  captionOver ? 'text-bad' : 'text-fg-3',
-                )}
-              >
-                {captionCounterText(captionCount, CAPTION_MAX)}
-              </span>
-            </div>
+            {/* ui/WritingBox (caption mode): Emoji and a plain "@" only, no
+                formatting (captions never format); the box draws the field's
+                edge (red while invalid). The counter keeps its corner. */}
+            <WritingBox
+              mode="caption"
+              field={() => captionRef.current}
+              hasText={form.caption !== ''}
+              mention
+              expandTitle="Caption"
+              invalid={fieldErrors.caption !== undefined}
+              input={
+                <div className="relative">
+                  <Textarea
+                    ref={captionRef}
+                    id="post-caption"
+                    autoGrow
+                    value={form.caption}
+                    aria-invalid={fieldErrors.caption !== undefined ? true : undefined}
+                    aria-describedby="post-caption-count"
+                    onChange={(event) => patchField('caption', { caption: event.target.value })}
+                    placeholder="Write the caption"
+                    className="pb-6"
+                  />
+                  <span
+                    id="post-caption-count"
+                    data-caption-count=""
+                    {...(captionOver ? { 'data-over': '' } : {})}
+                    className={cn(
+                      'pointer-events-none absolute bottom-2 right-0 text-sm tabular-nums',
+                      captionOver ? 'text-bad' : 'text-fg-3',
+                    )}
+                  >
+                    {captionCounterText(captionCount, CAPTION_MAX)}
+                  </span>
+                </div>
+              }
+            />
             {gridError('caption')}
           </Field>
 
@@ -1829,14 +1843,25 @@ function PresetFields(props: {
       </Field>
 
       <Field label="Caption" htmlFor="post-caption" required>
-        <Textarea
-          ref={captionRef}
-          id="post-caption"
-          data-induction={INDUCTION_KEYS.postSheetCaption}
-          value={form.caption}
-          onChange={(event) => patch({ caption: event.target.value })}
-          {...(fill !== undefined ? { inputMode: 'none' as const, onFocus: fillCaption } : {})}
-          placeholder="Write the caption. Its first line becomes the title."
+        {/* ui/WritingBox (caption mode): Emoji and a plain "@" only, no
+            formatting (captions never format). */}
+        <WritingBox
+          mode="caption"
+          field={() => captionRef.current}
+          hasText={form.caption !== ''}
+          mention
+          expandTitle="Caption"
+          input={
+            <Textarea
+              ref={captionRef}
+              id="post-caption"
+              data-induction={INDUCTION_KEYS.postSheetCaption}
+              value={form.caption}
+              onChange={(event) => patch({ caption: event.target.value })}
+              {...(fill !== undefined ? { inputMode: 'none' as const, onFocus: fillCaption } : {})}
+              placeholder="Write the caption. Its first line becomes the title."
+            />
+          }
         />
         {props.captionError}
       </Field>

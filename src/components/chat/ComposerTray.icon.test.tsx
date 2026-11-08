@@ -29,7 +29,8 @@ describe('ComposerTray opener icon', () => {
     const src = readFileSync(fileURLToPath(new URL('./ComposerTray.tsx', import.meta.url)), 'utf8');
     expect(src).not.toContain('IconPaperclip');
     // The plus turns 45deg into the X (mv-turn); the tray slides above the composer.
-    expect(src).toContain("cn('flex', MOVE_CLASS.turn, open && 'rotate-45')");
+    expect(src).toContain('MOVE_CLASS.turn,');
+    expect(src).toContain("open && 'rotate-45'");
     expect(src).toContain("stripIn(el, 'above-composer', TRAY_SLIDE_PX)");
     expect(src).not.toMatch(/duration-|transition-|\bease-out\b/);
   });

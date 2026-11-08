@@ -14,15 +14,16 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import type { KeyboardEvent } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { parseFormatRuns } from '@srtdio/comments';
+import { linePrefix, parseFormatRuns } from '@srtdio/comments';
 import {
   HIGHLIGHT_NAMES,
   ensureFormatHighlightCss,
   rangesForOffsets,
-  useFormatStrip,
-} from '@/components/ui/FormatStrip';
+  useFormatKeys,
+} from '@/components/ui/format-actions';
 import type { MentionCandidate } from '@/lib/workspace-members';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { cn } from '@/lib/cn';
 
 // The editor's own field look (a standalone field), and the bare editor inside
 // ui/Composer's field: the field draws the line, the well and the focus line;
@@ -262,8 +263,29 @@ export function paintFormatHighlights(
   if (reg === null) return [];
   for (const o of owned) reg.get(o.name)?.delete(o.range);
   const next: { name: string; range: Range }[] = [];
-  if (!/[*_~+`]/.test(body)) return next;
+  const quoteLines = /(^|\n)>/.test(body);
+  if (!/[*_~+`]/.test(body) && !quoteLines) return next;
   ensureFormatHighlightCss();
+  const add = (name: string, from: number, to: number): void => {
+    for (const range of rangesForOffsets(root, from, to)) {
+      const h = highlightFor(reg, name);
+      if (h === null) continue;
+      h.add(range);
+      next.push({ name, range });
+    }
+  };
+  // Quote lines: the "> " prefix faded, the line's text fg-2.
+  if (quoteLines) {
+    let lineAt = 0;
+    for (const line of body.split('\n')) {
+      const p = linePrefix(line);
+      if (p !== null && p.kind === 'quote') {
+        add(HIGHLIGHT_NAMES.marker, lineAt, lineAt + p.len);
+        add(HIGHLIGHT_NAMES.quote, lineAt + p.len, lineAt + line.length);
+      }
+      lineAt += line.length + 1;
+    }
+  }
   let at = 0;
   for (const run of parseFormatRuns(body)) {
     const from = at;
@@ -289,6 +311,8 @@ export function paintFormatHighlights(
 export interface MentionInputHandle {
   /** Insert text at the last caret in the editor (else the end), caret after it. */
   insertText: (text: string) => void;
+  /** The editable itself (ui/WritingBox's Aa row formats it in place). */
+  element: () => HTMLElement | null;
 }
 
 interface MentionInputProps {
@@ -299,9 +323,12 @@ interface MentionInputProps {
   /** Seed the editor once on mount (e.g. a reply pre-tagging the author). When
    *  empty / undefined the editor mounts blank and uncontrolled, exactly as before. */
   initialBody?: string | undefined;
-  /** Opt-in WhatsApp-style formatting: live styling, the format strip and the
-   *  Cmd/Ctrl shortcuts. Off, the editor is exactly as before. */
+  /** Opt-in WhatsApp-style formatting: live styling, lists and quotes (Return
+   *  continues them) and the Cmd/Ctrl shortcuts; the buttons live in
+   *  ui/WritingBox's Aa row. Off, the editor is exactly as before. */
   formatting?: boolean;
+  /** Focus and blur, for ui/WritingBox's focused look. */
+  onFocus?: () => void;
   /** Inside ui/Composer's field (ComposerFrame): the editor draws no line, well
    *  or focus line of its own (the field owns the one look) and fills the field. */
   bare?: boolean;
@@ -328,11 +355,12 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     initialBody,
     formatting = false,
     bare = false,
+    onFocus,
   },
   ref,
 ) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const fmt = useFormatStrip(editorRef, formatting);
+  const formatKeys = useFormatKeys(editorRef, formatting);
   const painted = useRef<{ name: string; range: Range }[]>([]);
   const seeded = useRef(false);
   // The last selection inside the editor, kept while focus is elsewhere (the
@@ -398,6 +426,9 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   }
 
   useImperativeHandle(ref, () => ({
+    element(): HTMLElement | null {
+      return editorRef.current;
+    },
     insertText(text: string): void {
       const root = editorRef.current;
       if (root === null) return;
@@ -504,7 +535,8 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   useEscapeLayer(query !== null, () => setQuery(null));
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    if (fmt.onKeyDown(event)) return;
+    // The mention list owns Return while it is open.
+    if (!(open && event.key === 'Enter') && formatKeys(event)) return;
     if (!open) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -541,17 +573,25 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
           saveSelection();
           refreshQuery();
         }}
-        onSelect={fmt.onSelect}
+        onFocus={onFocus}
         onBlur={() => {
           saveSelection();
-          fmt.onBlur();
         }}
         onKeyDown={onKeyDown}
         className={bare ? BARE_EDITOR : FIELD_EDITOR}
       />
 
       {open ? (
-        <ul className="absolute left-0 right-0 z-sticky mt-1 max-h-64 overflow-auto rounded-xl border bg-panel py-1 lit-overlay">
+        <ul
+          data-mention-list=""
+          // Inside a writing box (bare) the box sits low on the screen, over
+          // the keyboard: the list opens above the field, like chat's, so it
+          // never covers what is under the box or runs off the bottom.
+          className={cn(
+            'absolute left-0 right-0 z-sticky max-h-64 overflow-auto rounded-xl border bg-panel py-1 lit-overlay',
+            bare ? 'bottom-full mb-2' : 'top-full mt-1',
+          )}
+        >
           {matches.map((member, index) => (
             <li key={member.id}>
               <PressableRow
@@ -587,7 +627,6 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
           ))}
         </ul>
       ) : null}
-      {fmt.strip}
     </div>
   );
 });

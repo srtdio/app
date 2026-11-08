@@ -26,7 +26,7 @@ import {
   sized,
   useChatLayout,
 } from '@/components/chat/chat-type';
-import { renderBodyLinks, renderFormatted } from '@/components/chat/message-body';
+import { renderBodyLinks, renderRich } from '@/components/chat/message-body';
 import { TEAM_ONLY_LABEL } from '@/components/chat/plan-card';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import { startChatMembers } from '@/lib/chat/open-members';
@@ -306,10 +306,10 @@ export function usePlanMentionMembers(
   return { members, load: () => setAsked(true) };
 }
 
-/** A body with WhatsApp formatting outermost, then its mention tokens as
- *  pills and chat's links in each styled segment. */
+/** A body with Slack blocks and WhatsApp formatting outermost, then its
+ *  mention tokens as pills and chat's links in each styled segment. */
 function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): ReactNode[] {
-  return renderFormatted(body, (text) => mentionNodes(text, ownTone, workspaceId));
+  return renderRich(body, (text) => mentionNodes(text, ownTone, workspaceId));
 }
 
 /** One styled segment: mention tokens as pills; the text between keeps chat's links. */
@@ -496,14 +496,14 @@ function PlanBubble(props: {
               {TEAM_ONLY_LABEL}
             </span>
           ) : null}
-          <p
+          <div
             className={cn(
               'whitespace-pre-wrap break-words text-base',
               ownTone ? 'text-accent-fg' : 'text-fg',
             )}
           >
             {bodyNodes(c.body, ownTone, props.workspaceId)}
-          </p>
+          </div>
         </div>
         {tail ? (
           <time dateTime={c.createdAt} className="px-1 font-mono text-sm tabular-nums text-fg-3">

@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ApproveConfirm, APPROVE_CONFIRM_TITLE } from '@/components/ui/ApproveConfirm';
 import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
@@ -214,6 +215,8 @@ export function StageReasonConfirm(props: {
   const label = props.label ?? REJECT_REASON_LABEL;
   const body = props.body ?? null;
   const helper = props.helper ?? null;
+  // Hookless: the writing box reaches the field through this render's ref.
+  let reasonField: HTMLTextAreaElement | null = null;
   return (
     <Sheet
       open={copy !== null}
@@ -243,20 +246,33 @@ export function StageReasonConfirm(props: {
           {body}
         </p>
       ) : null}
-      <label className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
         <span className="text-base text-fg-2">{label}</span>
-        <Textarea
-          formatting
-          aria-label={label}
-          value={props.reason}
-          onChange={(event) => props.onReasonChange(event.target.value)}
+        {/* ui/WritingBox (comment mode) with no send: Cancel and Reject / Park
+            stay in the footer; focused, the row shows Aa and emoji. */}
+        <WritingBox
+          mode="comment"
+          field={() => reasonField}
+          hasText={props.reason.trim() !== ''}
+          expandTitle={label}
+          input={
+            <Textarea
+              formatting
+              aria-label={label}
+              ref={(el) => {
+                reasonField = el;
+              }}
+              value={props.reason}
+              onChange={(event) => props.onReasonChange(event.target.value)}
+            />
+          }
         />
         {helper !== null ? (
           <span data-stage-confirm-helper="" className="text-sm text-fg-3">
             {helper}
           </span>
         ) : null}
-      </label>
+      </div>
     </Sheet>
   );
 }

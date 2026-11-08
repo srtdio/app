@@ -46,6 +46,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
+import { WritingBox } from '@/components/ui/WritingBox';
 import {
   PipelineDateControl,
   PipelineSortControl,
@@ -555,6 +556,14 @@ describe('post flow C: move sheet and confirms', () => {
     expect(words).toContain('Ravi gets it back to rework. You can send a reason.');
     expect(words).toContain(REASON_LABEL);
     expect(words).toContain(REASON_HINT);
+    // The reason is ui/WritingBox in comment mode, with no send of its own:
+    // Cancel and Reject stay in the footer.
+    const box = all(reject.tree).find((el) => el.type === WritingBox);
+    expect(box).toBeDefined();
+    const boxProps = box?.props as { mode: string; send?: unknown; input: ReactElement };
+    expect(boxProps.mode).toBe('comment');
+    expect(boxProps.send).toBeUndefined();
+    expect((boxProps.input.props as { id?: string }).id).toBe('r1');
     (reject.button('Reject').props as { onClick: () => void }).onClick();
     expect(reject.onConfirm).toHaveBeenCalledWith('p1', 'rejected', 'Wrong offer dates');
     (reject.button('Cancel').props as { onClick: () => void }).onClick();

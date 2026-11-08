@@ -53,6 +53,8 @@ const CHAT_SPECS = [
   'chat-remove-files',
   'chat-reply-focus',
   'chat-format',
+  // The writing box on every surface (ui/WritingBox): stories S1-S10.
+  'writing-box',
   'chat-search',
   'search-placeholder-fit',
   'chat-select-text',

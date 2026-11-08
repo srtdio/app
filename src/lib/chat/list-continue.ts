@@ -9,7 +9,11 @@
 //   same delimiter, and the caret lands after it.
 // - The caret line is exactly "N. " or "N) " (an empty item): the marker is
 //   removed and nothing is inserted, which ends the list.
+// - "- text" and "> text" (bullet and quote, @srtdio/comments continueBlock)
+//   continue the same way; an empty "- " or "> " line ends the list or quote.
 // - Anything else (a paragraph, a line that only looks numbered mid-way): null.
+
+import { continueBlock } from '@srtdio/comments';
 
 /** The field after a list edit and where the caret goes. */
 interface ListEdit {
@@ -32,7 +36,15 @@ export function continueList(value: string, start: number, end: number = start):
     return { value: value.slice(0, lineStart) + value.slice(lineEnd), caret: lineStart };
   }
   const match = ITEM.exec(line);
-  if (match === null) return null;
+  if (match === null) {
+    if (from !== to || !/^(?:- |>)/.test(line)) return null;
+    const edit = continueBlock(value, from);
+    if (edit === null) return null;
+    return {
+      value: value.slice(0, edit.from) + edit.insert + value.slice(edit.to),
+      caret: edit.selStart,
+    };
+  }
   const marker = `\n${Number(match[1]) + 1}${match[2] ?? '.'} `;
   return { value: value.slice(0, from) + marker + value.slice(to), caret: from + marker.length };
 }

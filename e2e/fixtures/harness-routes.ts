@@ -1450,6 +1450,19 @@ const RPC: Record<string, RpcHandler> = {
     rows.push(row);
     return row;
   },
+  // Edit an own message (the proc's owner and window rules aside): the body
+  // and mentions change, edited_at is stamped, and the updated row comes back.
+  chat_message_edit: (args, tables) => {
+    const row = (tables.chat_messages ?? []).find(
+      (m) => m.id === args.p_message_id && m.channel_id === args.p_channel_id,
+    );
+    if (row === undefined) throw new HarnessRpcError('message not found');
+    row.body = typeof args.p_body === 'string' ? args.p_body : row.body;
+    row.mentions =
+      Array.isArray(args.p_mentions) && args.p_mentions.length > 0 ? args.p_mentions : null;
+    row.edited_at = new Date().toISOString();
+    return row;
+  },
   // Scheduled sends: the four procs over the chat_scheduled_messages fixture.
   chat_message_schedule: (args, tables) => {
     const rows = (tables.chat_scheduled_messages ??= []);

@@ -1615,6 +1615,25 @@ describe('runCatchup: DM preview hides formatting markers', () => {
     const out = await run(dmWorld('snake_case_name'));
     expect(renderedBody(only(out, A, W1))).toContain('snake_case_name');
   });
+
+  // The DM line is a one-line preview inside the row's own link: blocks and
+  // [text](url) read as display text (never a nested <a>, never the raw url).
+  it('a [text](url) link reads as its text, the url never shows', async () => {
+    const out = await run(dmWorld('see [the deck](https://evil.test/x) now'));
+    const req = only(out, A, W1);
+    const body = renderedBody(req);
+    expect(body).toContain('see the deck now');
+    expect(body).not.toContain('evil.test');
+    expect(body).not.toContain('](');
+    expect(req.email.rendered.html).not.toContain('href="https://evil.test');
+  });
+
+  it('lists and quotes read as one line: bullets as "•", numbers kept, quote bar dropped', async () => {
+    const out = await run(dmWorld('> asked\n- one\n- two\n1. first\n2. second'));
+    const body = renderedBody(only(out, A, W1));
+    expect(body).toContain('asked • one • two 1. first 2. second');
+    expect(body).not.toContain('&gt; asked');
+  });
 });
 
 describe('runCatchup: idea bank (Plans section)', () => {

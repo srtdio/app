@@ -2,7 +2,8 @@ import { useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
-import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
+import { RowSend, WritingBox } from '@/components/ui/WritingBox';
+import { ICON_SIZE, IconSend } from '@/components/ui/icons';
 import { COMMENT_DISCARD } from '@/components/pages/pcs/CaptionAnnotationComposer';
 
 // F5 image-pin composer: the sibling of the F4 caption composer, pin-worded. It
@@ -11,6 +12,9 @@ import { COMMENT_DISCARD } from '@/components/pages/pcs/CaptionAnnotationCompose
 // and the image_pin annotation on one trace. The context line is the same ink
 // rail (border-l-rail fg) as the caption composer's quote. Draft, dirty, busy and
 // failure handling match the caption composer.
+
+/** The sheet's title, also the writing box's expanded title. */
+const SHEET_TITLE = 'Comment on image';
 
 interface PinAnnotationComposerProps {
   open: boolean;
@@ -48,46 +52,49 @@ export function PinAnnotationComposer({
     <Sheet
       open={open}
       onClose={onDiscard}
-      title="Comment on image"
+      title={SHEET_TITLE}
       dirty={body.trim() !== ''}
       discard={COMMENT_DISCARD}
       busy={submitting}
       footer={
-        <>
-          <Button disabled={submitting} onClick={onCancel}>
-            Cancel
-          </Button>
-          <CommentEmojiButton
-            disabled={submitting}
-            onPick={(char) =>
-              insertIntoTextarea(() => textareaRef.current, body, char, onBodyChange)
-            }
-          />
-          <Button
-            variant="primary"
-            className="ml-auto"
-            busy={submitting}
-            disabled={!canPost}
-            onClick={() => void onSubmit(body)}
-          >
-            Post
-          </Button>
-        </>
+        <Button disabled={submitting} onClick={onCancel}>
+          Cancel
+        </Button>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="min-w-0 border-l-rail border-fg pl-3 text-base text-fg-2 [overflow-wrap:anywhere]">
           {context}
         </div>
-        <Textarea
-          formatting
-          ref={textareaRef}
-          value={body}
-          onChange={(event) => onBodyChange(event.target.value)}
-          placeholder="Add your comment"
-          aria-label="Image comment body"
-          disabled={submitting}
-          autoFocus
+        {/* ui/WritingBox (comment mode): text on top; focused, the row
+            under it: Aa, emoji ... the round Post (no +, no @ here). */}
+        <WritingBox
+          mode="comment"
+          field={() => textareaRef.current}
+          hasText={body.trim() !== ''}
+          expandTitle={SHEET_TITLE}
+          input={
+            <Textarea
+              formatting
+              ref={textareaRef}
+              value={body}
+              onChange={(event) => onBodyChange(event.target.value)}
+              placeholder="Add your comment"
+              aria-label="Image comment body"
+              disabled={submitting}
+              autoFocus
+            />
+          }
+          send={
+            <RowSend
+              type="button"
+              label="Post"
+              icon={<IconSend size={ICON_SIZE.control} />}
+              busy={submitting}
+              disabled={!canPost}
+              onClick={() => void onSubmit(body)}
+            />
+          }
         />
         {error !== null ? (
           <p role="alert" className="text-base text-bad">

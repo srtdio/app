@@ -15,12 +15,13 @@
 // only; the Sheet's translateY motion only.
 
 import { Bone } from '@/lib/motion';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { PendingChip, readyChipMeta } from '@/components/ui/PendingChip';
@@ -218,6 +219,9 @@ export function ConceptSheet(props: {
   // Save tapped while uploads run: it goes once they settle.
   const [waiting, setWaiting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The description's writing box (ui/WritingBox) acts on this field.
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
+  const descriptionId = useId();
   const uploadRef = useRef(props.uploadFile);
   uploadRef.current = props.uploadFile;
   const changeRef = useRef(onChange);
@@ -374,24 +378,34 @@ export function ConceptSheet(props: {
             />
           </label>
           <div className="flex flex-col gap-1">
-            <label className="flex flex-col gap-1">
-              <span className="text-md text-fg-3">Description</span>
-              <Textarea
-                formatting
-                data-plan-concept-description=""
-                value={form.description}
-                maxLength={CONCEPT_DESCRIPTION_MAX}
-                rows={4}
-                disabled={busy}
-                placeholder={CONCEPT_DESCRIPTION_PLACEHOLDER}
-                onChange={(e) => {
-                  const description = e.target.value;
-                  onChange((f) => ({ ...f, description }));
-                }}
-                className={FIELD}
-                style={{ minHeight: '104px' }}
-              />
+            <label htmlFor={descriptionId} className="text-md text-fg-3">
+              Description
             </label>
+            <WritingBox
+              mode="field"
+              field={() => descriptionRef.current}
+              hasText={form.description !== ''}
+              expandTitle="Description"
+              input={
+                <Textarea
+                  formatting
+                  ref={descriptionRef}
+                  id={descriptionId}
+                  data-plan-concept-description=""
+                  value={form.description}
+                  maxLength={CONCEPT_DESCRIPTION_MAX}
+                  rows={4}
+                  disabled={busy}
+                  placeholder={CONCEPT_DESCRIPTION_PLACEHOLDER}
+                  onChange={(e) => {
+                    const description = e.target.value;
+                    onChange((f) => ({ ...f, description }));
+                  }}
+                  className={FIELD}
+                  style={{ minHeight: '104px' }}
+                />
+              }
+            />
             <p
               data-plan-concept-words={words.over ? 'over' : 'ok'}
               aria-live="polite"

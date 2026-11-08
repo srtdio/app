@@ -346,3 +346,27 @@ describe('CreateBriefSheet: fields', () => {
     expect(args.p_payload.brand_requirements).toBe('Use the gold logo');
   });
 });
+
+describe('CreateBriefSheet: writing boxes (ui/WritingBox field mode)', () => {
+  const boxOf = (id: string): HTMLElement | null =>
+    document.getElementById(id)?.closest<HTMLElement>('[data-writing-box]') ?? null;
+
+  it('Objective, Brand requirements and Note sit in field-mode boxes, labels still named', async () => {
+    await mount();
+    for (const id of ['brief-objective', 'brief-brand-requirements', 'brief-initial-comment']) {
+      expect(boxOf(id)?.dataset.mode).toBe('field');
+      expect(document.querySelector(`label[for="${id}"]`)).not.toBeNull();
+    }
+  });
+
+  it('a field box shows its Aa row only while focused', async () => {
+    await mount();
+    const box = boxOf('brief-objective');
+    expect(box?.querySelector('[aria-label="Bold"]')).toBeNull();
+    await act(async () => document.getElementById('brief-objective')?.focus());
+    expect(box?.querySelector('[aria-label="Bold"]')).not.toBeNull();
+    expect(box?.querySelector('[aria-label="Emoji"]')).not.toBeNull();
+    // No mentions in a brief field.
+    expect(box?.querySelector('[aria-label="Mention"]')).toBeNull();
+  });
+});

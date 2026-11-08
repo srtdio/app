@@ -132,3 +132,65 @@ describe('tokenize: a closing format marker after a url', () => {
     );
   });
 });
+
+describe('tokenize: [text](url) links', () => {
+  it('a link is one run with its text and url, found before bare urls', () => {
+    expect(tokenize('see [the deck](https://a.test/d) and https://b.test')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'link', text: 'the deck', url: 'https://a.test/d' },
+      { kind: 'text', text: ' and ' },
+      { kind: 'url', url: 'https://b.test' },
+    ]);
+  });
+
+  it('the url inside a link is never a bare url run, and its ")" is not text', () => {
+    expect(tokenize('[x](https://a.test/p).')).toEqual([
+      { kind: 'link', text: 'x', url: 'https://a.test/p' },
+      { kind: 'text', text: '.' },
+    ]);
+  });
+
+  it('a bare url right before a link keeps its own run', () => {
+    expect(tokenize('https://a.test [b](https://b.test)')).toEqual([
+      { kind: 'url', url: 'https://a.test' },
+      { kind: 'text', text: ' ' },
+      { kind: 'link', text: 'b', url: 'https://b.test' },
+    ]);
+  });
+
+  it('a closing marker after a url before a link still leaves the url', () => {
+    expect(tokenize('[a](https://a.test) *see https://x.com*')).toEqual([
+      { kind: 'link', text: 'a', url: 'https://a.test' },
+      { kind: 'text', text: ' *see ' },
+      { kind: 'url', url: 'https://x.com' },
+      { kind: 'text', text: '*' },
+    ]);
+  });
+
+  it('a non-http link or a broken one stays text', () => {
+    expect(tokenize('[x](javascript:alert(1))')).toEqual([
+      { kind: 'text', text: '[x](javascript:alert(1))' },
+    ]);
+    expect(tokenize('[x] (https://a.test)')).toEqual([
+      { kind: 'text', text: '[x] (' },
+      { kind: 'url', url: 'https://a.test' },
+      { kind: 'text', text: ')' },
+    ]);
+  });
+
+  it("firstExternalUrl counts a link's url like a pasted url; own-app links are skipped", () => {
+    expect(firstExternalUrl('read [this](https://c.test/a)', ORIGIN, APP_ENTITY_ROUTES)).toBe(
+      'https://c.test/a',
+    );
+    const body = `[post](${ORIGIN}/p/gbl-142) then [ext](https://d.test)`;
+    expect(firstExternalUrl(body, ORIGIN, APP_ENTITY_ROUTES)).toBe('https://d.test');
+  });
+
+  it('long input with many brackets is linear (no backtracking)', () => {
+    const body = `${'[a'.repeat(20000)} ${'](h'.repeat(20000)} [ok](https://e.test)`;
+    const t0 = Date.now();
+    const out = tokenize(body);
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(out[out.length - 1]).toEqual({ kind: 'link', text: 'ok', url: 'https://e.test' });
+  });
+});

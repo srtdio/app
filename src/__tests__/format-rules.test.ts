@@ -56,10 +56,22 @@ describe('format rules', () => {
     'components/pages/pcs/CaptionAnnotationComposer.tsx',
     'components/pages/CreateBriefSheet.tsx',
     'components/pages/pipeline/StageMoveConfirm.tsx',
+    'components/pages/plan-tab/BankAddSheet.tsx',
   ])('%s: every Textarea formats', (rel) => {
     const found = tags(read(rel), 'Textarea');
     expect(found.length).toBeGreaterThan(0);
     for (const tag of found) expect(hasFormatting(tag)).toBe(true);
+  });
+
+  it('caption boxes are WritingBox caption mode; sheet fields are field mode', () => {
+    const modes = (rel: string): string[] =>
+      [...read(rel).matchAll(/<WritingBox\s+mode="(\w+)"/g)].map((m) => m[1] ?? '');
+    expect(modes('components/pages/CreatePostSheet.tsx')).toEqual(['caption', 'caption']);
+    expect(modes('components/pages/PostDetailPage.tsx')).toEqual(['caption']);
+    expect(modes('components/pages/CreateBriefSheet.tsx')).toEqual(['field', 'field', 'field']);
+    expect(modes('components/chat/ConceptSheet.tsx')).toEqual(['field']);
+    expect(modes('components/pages/plan-tab/BankAddSheet.tsx')).toEqual(['field']);
+    expect(modes('components/chat/PlanItemScreen.tsx')).toEqual(['field']);
   });
 
   it('the comment composer MentionInput formats', () => {
@@ -75,19 +87,22 @@ describe('format rules', () => {
 
   it('chat and comment bodies render through the formatting renderer', () => {
     expect(read('components/chat/message-body.tsx')).toContain('parseFormat(body)');
-    expect(read('components/chat/MessageThread.tsx')).toContain('renderFormatted(body');
-    expect(read('components/chat/PlanItemThread.tsx')).toContain('renderFormatted(body');
-    expect(read('components/comments/Comments.tsx')).toContain('renderFormatted(body');
-    expect(read('components/pages/BriefDetailPage.tsx')).toContain(
-      'renderFormatted(brief.objective',
+    // Blocks (lists, quotes) are the outer layer: whole bodies go through renderRich.
+    expect(read('components/chat/message-body.tsx')).toContain('parseBlocks(body)');
+    expect(read('components/chat/MessageThread.tsx')).toContain('renderRich(body');
+    expect(read('components/chat/PlanItemThread.tsx')).toContain('renderRich(body');
+    expect(read('components/comments/Comments.tsx')).toMatch(/renderRich\(\s*body/);
+    expect(read('components/pages/BriefDetailPage.tsx')).toMatch(/renderRich\(\s*brief\.objective/);
+    expect(read('components/pages/BriefDetailPage.tsx')).toMatch(
+      /renderRich\(\s*brief\.brand_requirements/,
     );
   });
 
-  it('CLAUDE.md carries the rule and lists FormatStrip', () => {
+  it('CLAUDE.md carries the rule and lists WritingBox', () => {
     const doc = readFileSync(fileURLToPath(new URL('../../CLAUDE.md', import.meta.url)), 'utf8');
     expect(doc).toContain(
       'Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.',
     );
-    expect(doc).toContain('ui/FormatStrip');
+    expect(doc).toContain('ui/WritingBox');
   });
 });
