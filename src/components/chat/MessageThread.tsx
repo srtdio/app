@@ -144,7 +144,8 @@ import {
   scheduleWindowBoundary,
 } from '@/components/chat/MessageActionMenu';
 import { useCancelUpload, useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
-import { ideaTitleOf } from '@/components/chat/PlanItemCard';
+import { ideaCardStore, ideaTitleOf } from '@/components/chat/PlanItemCard';
+import { useSharedCardCache, type ThreadCardCache } from '@/components/chat/PostCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { ChatStatus, ThreadsStripItem } from '@/components/chat/StatusTicker';
@@ -240,6 +241,10 @@ import {
   freezeMemberships,
   isRootCard,
   localReplyCounts,
+  rootCardOf,
+  THREAD_TITLE,
+  threadTitleOf,
+  type RootCardTitles,
   membershipOf,
   pageCountRoots,
   railPlans,
@@ -361,6 +366,65 @@ import {
 
 // MessageBubble and its pieces live in MessageBubble.tsx; re-exported here so
 // every importer keeps its path.
+
+/** No plan card cache (outside a chat): nothing to subscribe to. */
+const noCardSubscribe = (): (() => void) => () => {};
+const noCardVersion = (): number => 0;
+
+/**
+ * The card titles the device already holds, by kind: posts from the chip
+ * batch, briefs from the chat's card cache, plans from the plan card cache,
+ * plan items (concepts, bank ideas) from the idea card store. Lookups only,
+ * never a read. Pure over its inputs.
+ */
+export function heldCardTitles(
+  postTitle: (id: string) => string | null,
+  briefs: ThreadCardCache | null,
+  plans: ReturnType<typeof usePlanCards>,
+): RootCardTitles {
+  return {
+    post: postTitle,
+    brief: (id) => briefs?.briefs([id]).briefs.find((b) => b.id === id)?.title ?? null,
+    plan: (id) => planTitleOf(plans, { sharedPlanIds: [id] }),
+    item: (id) => ideaTitleOf({ sharedPlanItemIds: [id] }),
+  };
+}
+
+/**
+ * The thread screen's frame titled by its root card (threadTitleOf) over the
+ * chat's name. It alone subscribes to the plan, brief and idea card caches,
+ * so a title landing re-renders the header, never the chat; the list and
+ * composer are the caller's children (same elements, no re-render).
+ */
+function ThreadViewTitled(props: {
+  root: ThreadMessage | undefined;
+  postTitle: (id: string) => string | null;
+  subtitle: string;
+  selecting: boolean;
+  onClosed: () => void;
+  children: ReactNode;
+}): ReactElement {
+  const plans = usePlanCards();
+  useSyncExternalStore(
+    plans?.cache.subscribe ?? noCardSubscribe,
+    plans?.cache.version ?? noCardVersion,
+  );
+  const briefs = useSharedCardCache();
+  const ideas = ideaCardStore();
+  useSyncExternalStore(ideas.subscribe, ideas.version, ideas.version);
+  const title = threadTitleOf(props.root, heldCardTitles(props.postTitle, briefs, plans));
+  return (
+    <ThreadViewFrame
+      title={title}
+      subtitle={props.subtitle}
+      selecting={props.selecting}
+      onClosed={props.onClosed}
+    >
+      {props.children}
+    </ThreadViewFrame>
+  );
+}
+
 export {
   type BubblePointerHandlers,
   type BubbleSwipe,
@@ -4135,6 +4199,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     userId: props.currentUserId ?? null,
   });
   const statusPlanCards = usePlanCards();
+  // Read only (no subscription here): ThreadViewTitled re-renders the header alone.
+  const briefCards = useSharedCardCache(false);
   // Chat open, paint together: the first page waits (at most OPEN_HOLD_MS from
   // the tap, else from this mount) for the viewer side, the ticker's
   // inputs and the bundles of the plan cards on it, so they all paint in one
@@ -4497,8 +4563,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       const post = rootCardPost(m.threadRootId, m, known);
       if (typeof post === 'string') ids.add(post);
     }
-    const viewPost = view?.root.sharedPostIds[0];
-    if (viewPost !== undefined) ids.add(viewPost);
+    const viewCard = view !== null ? rootCardOf(view.root) : null;
+    if (viewCard?.kind === 'post') ids.add(viewCard.id);
     return [...ids];
   }, [props.messages, known, view]);
   const batchIds = useMemo(
@@ -5101,13 +5167,19 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // The open thread: its root, then its replies oldest first (the chat's loaded
   // rows win over the view's own copies, so live arrivals and own sends show).
   const viewRoot = viewParts?.root;
-  const viewPostId =
-    viewRoot !== undefined && isRootCard(viewRoot) ? viewRoot.sharedPostIds[0] : undefined;
-  const viewPost = viewPostId !== undefined ? (postRef(viewPostId) ?? null) : null;
-  // L4: a thread on a post card takes the post's title; every other thread
-  // is "Thread" with the chat's name as its second line. No naming step.
-  const viewTitle = viewPost?.title ?? 'Thread';
-  const viewSubtitle = viewPost === null ? props.title : undefined;
+  // A thread on any card (post, brief, plan, plan item) takes the card's
+  // title from the caches the device already holds (no read here: the root's
+  // own card read fills them); "Thread" until then and for a root with no
+  // card. The chat's name is always the second line.
+  const viewPostTitle = (id: string): string | null => postRef(id)?.title ?? null;
+  const cardTitles = heldCardTitles(viewPostTitle, briefCards, statusPlanCards);
+  const viewTitle = threadTitleOf(viewRoot, cardTitles);
+  /** A thread list row's card title (the same rule as the view's title), or null. */
+  const threadCardTitle = (root: ThreadMessage): string | null => {
+    const title = threadTitleOf(root, cardTitles);
+    return title === THREAD_TITLE ? null : title;
+  };
+  const viewSubtitle = props.title;
   // The view's count: the chat's own when it has the root loaded (or the
   // counts read's), else the view's rows once it has read them all.
   const viewCount = ((): number | null => {
@@ -5811,6 +5883,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           loaded={known}
           currentUserId={props.currentUserId ?? ''}
           nameOf={profileNameFor}
+          cardTitleOf={threadCardTitle}
           photoOf={(userId) =>
             userId !== null ? (props.profiles.get(userId)?.avatarUrl ?? undefined) : undefined
           }
@@ -5821,10 +5894,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         />
       ) : null}
       {view !== null && viewParts !== null && viewThreads !== undefined ? (
-        <ThreadViewFrame
+        <ThreadViewTitled
           key={`thread:${view.rootId}`}
-          title={viewTitle}
-          {...(viewSubtitle !== undefined ? { subtitle: viewSubtitle } : {})}
+          root={viewRoot}
+          postTitle={viewPostTitle}
+          subtitle={viewSubtitle}
           selecting={selecting}
           onClosed={closeThread}
         >
@@ -5858,7 +5932,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               {...composerShared(true)}
             />
           )}
-        </ThreadViewFrame>
+        </ThreadViewTitled>
       ) : null}
       <PaintLogOverlay />
     </div>

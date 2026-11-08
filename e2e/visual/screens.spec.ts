@@ -8,6 +8,7 @@ import {
 import {
   assertCommentBars,
   assertCommentTray,
+  assertThreadHeader,
   assertListCards,
   assertNoUploadBar,
   assertPinnedBarOnScroll,
@@ -33,6 +34,7 @@ import {
   PEER_NAME,
   PLAN_CONCEPT_ITEM,
   PLAN_ID,
+  planThreadReply,
   PLAN_POST_ITEM,
   POST_IDS,
   REFUSED_SEND,
@@ -1322,6 +1324,35 @@ const SCREENS: Screen[] = [
         'replies row',
       );
       await waitFor([page.locator('[data-thread-separator]')], 'thread screen');
+      await assertThreadHeader(page, 'chat-thread-screen');
+    },
+  },
+  {
+    // A thread on a plan card: the plan's title over the chat's name, the
+    // plan card in the root (every card kind names its thread the same way).
+    name: 'chat-thread-screen-plan',
+    seed: creator,
+    url: '/chat',
+    extra: (network) => {
+      seedChatPlan(network);
+      (network.world.tables.chat_messages ??= []).push(
+        planThreadReply(DM_CHANNEL, PEER, NOW + 30_000),
+      );
+    },
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      await tap(
+        [page.locator('[data-replies-row]', { hasText: '1 reply' }).last().locator('button')],
+        'plan card replies row',
+      );
+      await waitFor(
+        [
+          page.locator('[data-thread-separator]'),
+          page.locator(`[data-thread-view] [data-plan-card="${PLAN_ID}"]`),
+        ],
+        'plan card thread screen',
+      );
+      await assertThreadHeader(page, 'chat-thread-screen-plan');
     },
   },
   {

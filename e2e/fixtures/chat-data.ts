@@ -651,6 +651,24 @@ export function planMessage(
   };
 }
 
+/** The reply in the plan card's thread (planThreadReply). */
+export const PLAN_THREAD_REPLY_ID = '0190d200-0000-7000-8000-00000000d2a1';
+export const PLAN_THREAD_REPLY_BODY = 'Diwali dates look right to me';
+
+/**
+ * One reply in the plan card message's thread (reply_to and thread root =
+ * PLAN_MESSAGE_ID), 30s after the card. Seed the plan first (seedClientPlan).
+ */
+export function planThreadReply(channelId: string, sender: string, now: number = Date.now()): Row {
+  return {
+    ...planMessage(PLAN_THREAD_REPLY_ID, channelId, sender, [], now + 30_000),
+    body: PLAN_THREAD_REPLY_BODY,
+    shared_plan_ids: null,
+    reply_to_message_id: PLAN_MESSAGE_ID,
+    thread_root_message_id: PLAN_MESSAGE_ID,
+  };
+}
+
 /**
  * Seed a client plan (one concept with one library file, one post item, an
  * Everyone comment on the concept) shared by `sender` into `channelId`.

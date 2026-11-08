@@ -27,6 +27,8 @@ import {
   uploadBarViolations,
   wrapsPastOneLine,
   writingBoxViolations,
+  threadHeaderViolations,
+  type ThreadHeaderGeom,
   type Box,
   type ChipGeom,
   type ChipRowGeom,
@@ -881,6 +883,37 @@ export async function assertNoUploadBar(page: Page, screenName: string): Promise
       check: 'upload-bar' as const,
       message,
     })),
+  );
+}
+
+/**
+ * The thread screen's header: every thread carries a one line title (its
+ * root card's title, else "Thread") and the chat's name under it, both
+ * inside the bar.
+ */
+export async function assertThreadHeader(page: Page, screenName: string): Promise<void> {
+  const geom = await page.evaluate((): ThreadHeaderGeom => {
+    const toBox = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height });
+    const read = (sel: string) => {
+      const el = document.querySelector(`[data-thread-view] ${sel}`);
+      if (el === null) return null;
+      // A truncating line keeps one client rect; a wrap adds one per line.
+      return {
+        text: el.textContent ?? '',
+        lines: el.getClientRects().length,
+        box: toBox(el.getBoundingClientRect()),
+      };
+    };
+    const bar = document.querySelector('[data-thread-view] [data-header-bar]');
+    return {
+      title: read('[data-thread-view-title]'),
+      subtitle: read('[data-thread-view-subtitle]'),
+      bar: bar !== null ? toBox(bar.getBoundingClientRect()) : null,
+    };
+  });
+  settleFindings(
+    screenName,
+    threadHeaderViolations(geom).map((message) => ({ check: 'thread-header' as const, message })),
   );
 }
 

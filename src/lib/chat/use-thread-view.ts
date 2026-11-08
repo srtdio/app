@@ -28,6 +28,7 @@ import {
   type ThreadMessage,
 } from '@/lib/chat/thread';
 import { setOlderPageFailed, threadOlderKey } from '@/lib/chat/older-page-status';
+import { withRootCards } from '@/lib/chat/thread-rail';
 
 /** The reads the view makes; injected in tests. */
 interface ThreadViewReads {
@@ -61,7 +62,7 @@ export function threadViewRows(
   const byId = new Map(view.fetched.map((m) => [m.id, m] as const));
   let root = view.root;
   for (const m of loaded) {
-    if (m.id === view.rootId) root = m;
+    if (m.id === view.rootId) root = withRootCards(m, view.root);
     else if (m.threadRootId === view.rootId) byId.set(m.id, m);
   }
   return { root, replies: [...byId.values()].sort(compareMessages) };

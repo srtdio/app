@@ -121,16 +121,90 @@ export function freezeMemberships(
   return frozen;
 }
 
-/** A card message that can head a thread: it shares a post, is live, and is not a reply. */
+/** The kinds of card a thread root can carry, in the order rootCardOf picks them. */
+export type RootCardKind = 'post' | 'brief' | 'plan' | 'item';
+
+/** A thread root's card: its kind and the id of the first card of that kind. */
+export interface RootCard {
+  kind: RootCardKind;
+  id: string;
+}
+
+/** The card fields rootCardOf reads (plan and plan item ids are optional on a message). */
+export type RootCardFields = Pick<ThreadMessage, 'sharedPostIds' | 'sharedBriefIds'> &
+  Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>;
+
+/**
+ * The card a message carries, for naming and drawing its thread: post, then
+ * brief, then plan, then plan item (concepts and bank ideas are plan items),
+ * first id of the first kind held. Null for a message with no card. Pure.
+ */
+export function rootCardOf(row: RootCardFields): RootCard | null {
+  const post = row.sharedPostIds[0];
+  if (post !== undefined) return { kind: 'post', id: post };
+  const brief = row.sharedBriefIds[0];
+  if (brief !== undefined) return { kind: 'brief', id: brief };
+  const plan = row.sharedPlanIds?.[0];
+  if (plan !== undefined) return { kind: 'plan', id: plan };
+  const item = row.sharedPlanItemIds?.[0];
+  if (item !== undefined) return { kind: 'item', id: item };
+  return null;
+}
+
+/** Card titles the device already holds, by kind; each returns null while not held. */
+export interface RootCardTitles {
+  post: (id: string) => string | null;
+  brief: (id: string) => string | null;
+  plan: (id: string) => string | null;
+  item: (id: string) => string | null;
+}
+
+/** The fallback title of a thread whose root has no card, or whose card title is not held yet. */
+export const THREAD_TITLE = 'Thread';
+
+/**
+ * A thread's title: its root card's title when the device holds it, else
+ * "Thread" (also for a root with no card or a deleted root). Pure.
+ */
+export function threadTitleOf(
+  root: (RootCardFields & Pick<ThreadMessage, 'deleted'>) | undefined,
+  titles: RootCardTitles,
+): string {
+  if (root === undefined || root.deleted === true) return THREAD_TITLE;
+  const card = rootCardOf(root);
+  if (card === null) return THREAD_TITLE;
+  const title = titles[card.kind](card.id)?.trim() ?? '';
+  return title !== '' ? title : THREAD_TITLE;
+}
+
+/** A card message that can head a thread: it carries any card, is live, and is not a reply. */
 export function isRootCard(
-  row: Pick<ThreadMessage, 'sharedPostIds' | 'deleted' | 'reply' | 'threadRootId'>,
+  row: RootCardFields & Pick<ThreadMessage, 'deleted' | 'reply' | 'threadRootId'>,
 ): boolean {
   return (
-    row.sharedPostIds.length > 0 &&
+    rootCardOf(row) !== null &&
     row.deleted !== true &&
     row.reply === null &&
     typeof row.threadRootId !== 'string'
   );
+}
+
+/**
+ * The view root as drawn: the chat's loaded copy wins, but card ids are fixed
+ * at send, so a loaded copy still missing them (a live arrival before its row
+ * landed) keeps the ones the view's own root read holds. Pure.
+ */
+export function withRootCards<T extends RootCardFields>(loaded: T, held: RootCardFields): T {
+  if (rootCardOf(loaded) !== null || rootCardOf(held) === null) return loaded;
+  const plans = held.sharedPlanIds ?? [];
+  const items = held.sharedPlanItemIds ?? [];
+  return {
+    ...loaded,
+    sharedPostIds: [...held.sharedPostIds],
+    sharedBriefIds: [...held.sharedBriefIds],
+    ...(plans.length > 0 ? { sharedPlanIds: [...plans] } : {}),
+    ...(items.length > 0 ? { sharedPlanItemIds: [...items] } : {}),
+  };
 }
 
 /**
