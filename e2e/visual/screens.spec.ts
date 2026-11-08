@@ -2745,33 +2745,28 @@ function seedLongPrivateReplies(network: HarnessNetwork): void {
 }
 
 /**
- * The bubble stays inside its column (BUBBLE_MAX of the row: 76% touch, 65%
- * laptop) and inside the viewport, mine and theirs.
+ * L1 (8 Nov 2026): the message stays inside its column (the row's content
+ * column right of the photo gutter, no bubble cap) and inside the viewport,
+ * mine and theirs.
  */
 async function expectBubbleInsideColumn(page: Page, body: string): Promise<void> {
   const bubble = await lastVisible(page.locator('[data-bubble]', { hasText: body }), body);
   await bubble.scrollIntoViewIfNeeded();
-  const max = isLaptop(page) ? 0.65 : 0.76;
-  const box = await bubble.evaluate((el, cap) => {
+  const box = await bubble.evaluate((el) => {
     const b = el.getBoundingClientRect();
     let col: Element | null = el.parentElement;
-    while (col !== null && !/max-w-\[(76|65)%\]/.test(col.className)) col = col.parentElement;
+    while (col !== null && !/\bflex-col\b/.test(col.className)) col = col.parentElement;
     const c = col?.getBoundingClientRect() ?? null;
-    const row = el.closest('li');
-    const rowWidth = row !== null ? row.clientWidth : 0;
     return {
       left: b.left,
       right: b.right,
-      width: b.width,
       colLeft: c?.left ?? Number.NaN,
       colRight: c?.right ?? Number.NaN,
-      cap: rowWidth * cap,
       vw: window.innerWidth,
     };
-  }, max);
+  });
   expect(box.left, `${body}: left edge inside column`).toBeGreaterThanOrEqual(box.colLeft - 0.5);
   expect(box.right, `${body}: right edge inside column`).toBeLessThanOrEqual(box.colRight + 0.5);
-  expect(box.width, `${body}: width <= BUBBLE_MAX`).toBeLessThanOrEqual(box.cap + 0.5);
   expect(box.left, `${body}: on screen`).toBeGreaterThanOrEqual(0);
   expect(box.right, `${body}: on screen`).toBeLessThanOrEqual(box.vw);
 }
