@@ -22,6 +22,7 @@ const DEFAULT_PROJECTS: readonly Project[] = ['iphone-light', 'iphone-dark', 'la
 const REQUIRED: readonly string[] = [
   'account-menu-density',
   'activity-bank',
+  'activity-catch-up-bar',
   'activity-chip-mentions',
   'activity-chip-unread',
   'approve-confirm-approver',
@@ -301,6 +302,16 @@ const REQUIRED: readonly string[] = [
   'chat-replies-row',
   'chat-thread-screen',
   'chat-thread-screen-plan',
+  // Catch up (8 Nov 2026): the cards, the swipe frames, typing, the end
+  // screen; and the thread view redo (root at top, divider icons).
+  'catch-up-comment',
+  'catch-up-end',
+  'catch-up-swipe-keep',
+  'catch-up-swipe-read',
+  'catch-up-thread-mention',
+  'catch-up-thread-started',
+  'catch-up-typing',
+  'chat-thread-view-divider',
   // Flat finish (8 Nov 2026): own edited comment, its inline editor with Save
   // in view, and the Edit concept day tiles with one picked.
   'plan-day-picker',

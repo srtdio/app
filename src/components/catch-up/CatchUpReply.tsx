@@ -3,14 +3,14 @@
 // ("Reply in thread", "Message <chat>", "Reply") and the round Send once there
 // is text. Sending never advances the queue (several messages are fine).
 // Focus and blur are reported so the screen can switch to its typing state.
-// Keys: the chat send rule (src/lib/chat/send-key.ts).
+// Keys: the chat send rule (src/lib/chat/send-key.ts). The field is ui/Textarea
+// (compact: 44 at rest, grows to its cap, then scrolls).
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactElement, Ref } from 'react';
 import { RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { ICON_SIZE, IconSend } from '@/components/ui/icons';
-import { INPUT_BODY } from '@/components/ui/Text';
-import { cn } from '@/lib/cn';
+import { Textarea } from '@/components/ui/Textarea';
 import { isSendKeydown } from '@/lib/chat/send-key';
 
 export function CatchUpReply(props: {
@@ -32,14 +32,6 @@ export function CatchUpReply(props: {
       (outer as { current: HTMLTextAreaElement | null }).current = el;
     }
   }
-
-  // Grow with the text up to the cap, then scroll (the composer's rule).
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (el === null) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [text]);
 
   function send(): void {
     const body = text.trim();
@@ -71,8 +63,11 @@ export function CatchUpReply(props: {
         hasText={text !== ''}
         expandTitle={props.hint}
         input={
-          <textarea
+          <Textarea
             ref={setRefs}
+            formatting
+            compact
+            listEnter={false}
             data-catch-up-reply-input=""
             autoComplete="off"
             rows={1}
@@ -93,10 +88,7 @@ export function CatchUpReply(props: {
                 send();
               }
             }}
-            className={cn(
-              'max-h-32 min-w-0 flex-1 resize-none self-center overflow-y-auto bg-transparent py-2 text-fg outline-none placeholder:text-fg-3',
-              INPUT_BODY,
-            )}
+            className="min-w-0 flex-1 self-center"
           />
         }
         send={

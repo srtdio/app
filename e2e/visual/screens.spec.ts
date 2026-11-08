@@ -44,6 +44,8 @@ import {
   TEAM_PLAN_ID,
   planMessage,
   TAB_SHARED_PLAN_ID,
+  THREAD_GROUP,
+  THREAD_IDS,
   WORKSPACE_ID,
   civilPlus,
   mondayOf,
@@ -681,6 +683,106 @@ function seedBankActivity(network: HarnessNetwork): void {
       plan_id: PLAN_ID,
     }),
   ];
+}
+
+// Catch up (8 Nov screens): a mention in the "Thread crew" post-card thread,
+// that thread's start on the post, and a comment on a post, all unread, on
+// top of the fixture world's DM mention.
+const CATCH_UP_MENTION = '0190f1c0-0000-7000-8000-00000000c001';
+const CATCH_UP_STARTED = '0190f1c0-0000-7000-8000-00000000c002';
+const CATCH_UP_COMMENT = '0190f1c0-0000-7000-8000-00000000c003';
+const CATCH_UP_COMMENT_ID = '0190f1c0-0000-7000-8000-00000000c0c3';
+
+function seedCatchUp(network: HarnessNetwork): void {
+  const t = network.world.tables;
+  const root = THREAD_IDS.gr ?? '';
+  const reply = THREAD_IDS.gd ?? '';
+  // The reply that mentions me (the mention token the chat resolves to @name).
+  for (const row of t.chat_messages ?? []) {
+    if (row.id === reply) row.body = `Thanks both! @[${ME}] can you post it today?`;
+  }
+  const entry = (id: string, minsAgo: number, row: Row): Row => ({
+    id,
+    user_id: ME,
+    workspace_id: WORKSPACE_ID,
+    tier: 'active',
+    scope_key: null,
+    read_at: null,
+    snoozed_until: null,
+    email_sent_at: null,
+    deleted_at: null,
+    created_at: new Date(NOW - minsAgo * 60_000).toISOString(),
+    ...row,
+  });
+  (t.inbox_entries ??= []).push(
+    entry(CATCH_UP_MENTION, 1, {
+      actor_user_id: COLLEAGUE_A,
+      event_type: 'mention',
+      entity_type: 'chat_channel',
+      entity_id: THREAD_GROUP,
+      scope: 'groups',
+      tier: 'urgent',
+      payload: { message_id: reply, thread_root_id: root },
+    }),
+    entry(CATCH_UP_STARTED, 2, {
+      actor_user_id: COLLEAGUE_B,
+      event_type: 'system',
+      entity_type: 'chat_channel',
+      entity_id: THREAD_GROUP,
+      scope: 'groups',
+      payload: {
+        kind: 'thread_started',
+        message_id: THREAD_IDS.ga ?? '',
+        thread_root_id: root,
+        card_kind: 'post',
+        card_id: POST,
+      },
+    }),
+    entry(CATCH_UP_COMMENT, 3, {
+      actor_user_id: PEER,
+      event_type: 'comment',
+      entity_type: 'post',
+      entity_id: POST,
+      scope: 'posts',
+      payload: { comment_id: CATCH_UP_COMMENT_ID },
+    }),
+  );
+  (t.comments ??= []).push({
+    id: CATCH_UP_COMMENT_ID,
+    workspace_id: WORKSPACE_ID,
+    entity_type: 'post',
+    entity_id: POST,
+    parent_comment_id: null,
+    author_user_id: PEER,
+    body: 'Can we try a warmer cover for this one?',
+    mentions: null,
+    attachment_asset_ids: null,
+    resolved_at: null,
+    resolved_by: null,
+    unaccepted_by: null,
+    created_at: new Date(NOW - 3 * 60_000).toISOString(),
+    edited_at: null,
+    deleted_at: null,
+  });
+}
+
+/** Catch up open on one entry, its card painted (a chat card waits for its messages). */
+async function catchUpReady(page: Page, chat: boolean): Promise<void> {
+  await waitFor([page.locator('[data-catch-up] [data-catch-up-card]')], 'catch up card');
+  if (chat) await waitFor([page.locator('[data-catch-up-message]').first()], 'catch up messages');
+}
+
+/** Hold a swipe on the card mid-way (`dx` px), the pointer kept down for the shot. */
+async function holdSwipe(page: Page, dx: number): Promise<void> {
+  const card = page.locator('[data-catch-up] [data-catch-up-card]');
+  const box = await card.boundingBox();
+  if (box === null) throw new Error('catch up card has no box');
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 3;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let step = 1; step <= 8; step += 1) await page.mouse.move(x + (dx * step) / 8, y);
+  await waitFor([page.locator('[data-catch-up-tint]')], 'swipe tint');
 }
 
 /** The chat plan plus a Not OK note on its post item (the item's Plan notes). */
@@ -1386,6 +1488,118 @@ const SCREENS: Screen[] = [
     url: '/activity',
     steps: async (page) =>
       waitFor([page.locator('[data-activity-event="bank_idea_planned"]')], 'bank activity'),
+  },
+  {
+    // Activity's Catch up bar under the chips: "<N> unread" and Catch up.
+    name: 'activity-catch-up-bar',
+    seed: creator,
+    extra: seedCatchUp,
+    url: '/activity',
+    steps: async (page) =>
+      waitFor([page.locator('[data-activity-catch-up-bar]')], 'catch up bar'),
+  },
+  {
+    // Catch up's first card: a mention in a thread (kicker "Thread in <chat>").
+    name: 'catch-up-thread-mention',
+    seed: creator,
+    extra: seedCatchUp,
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    steps: async (page) => catchUpReady(page, true),
+  },
+  {
+    // A thread start on a post: the card block above the replies.
+    name: 'catch-up-thread-started',
+    seed: creator,
+    extra: seedCatchUp,
+    url: `/activity?catchup=${CATCH_UP_STARTED}`,
+    steps: async (page) => {
+      await catchUpReady(page, true);
+      await waitFor([page.locator('[data-catch-up-thread-card]')], 'thread card block');
+    },
+  },
+  {
+    // A post comment: the Activity line as kicker, the post, the comment, Reply.
+    name: 'catch-up-comment',
+    seed: creator,
+    extra: seedCatchUp,
+    url: `/activity?catchup=${CATCH_UP_COMMENT}`,
+    steps: async (page) => {
+      await catchUpReady(page, false);
+      await waitFor([page.locator('[data-catch-up-note]')], 'comment text');
+    },
+  },
+  {
+    // Swipe right past half the threshold: the green Mark as read tint.
+    name: 'catch-up-swipe-read',
+    seed: creator,
+    extra: seedCatchUp,
+    hold: true,
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    steps: async (page) => {
+      await catchUpReady(page, true);
+      await holdSwipe(page, 90);
+    },
+  },
+  {
+    // Swipe left: the ink Keep unread tint.
+    name: 'catch-up-swipe-keep',
+    seed: creator,
+    extra: seedCatchUp,
+    hold: true,
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    steps: async (page) => {
+      await catchUpReady(page, true);
+      await holdSwipe(page, -90);
+    },
+  },
+  {
+    // Typing in the reply box: phone hides the bar and the buttons and shows
+    // hide-keyboard and the green check; laptop keeps the buttons.
+    name: 'catch-up-typing',
+    seed: creator,
+    extra: seedCatchUp,
+    hold: true,
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    steps: async (page) => {
+      await catchUpReady(page, true);
+      await tap([page.locator('[data-catch-up-reply-input]')], 'reply box');
+      await waitFor([page.locator('[data-catch-up-typing-read]')], 'typing check');
+    },
+  },
+  {
+    // The end screen after the last card: "Everything's sorted."
+    name: 'catch-up-end',
+    seed: creator,
+    extra: seedCatchUp,
+    url: `/activity?catchup=${CATCH_UP_COMMENT}`,
+    steps: async (page) => {
+      await catchUpReady(page, false);
+      const end = page.locator('[data-catch-up-end]');
+      for (let n = 0; n < 40 && (await end.count()) === 0; n += 1) {
+        const read = page.locator('[data-catch-up-read]');
+        if ((await read.count()) > 0 && (await read.isEnabled())) await read.click();
+        await page.waitForTimeout(300);
+      }
+      await waitFor([end], 'catch up end');
+    },
+  },
+  {
+    // The thread view redo: the root at the top, the "N replies" divider with
+    // Add to Tasks, Forward and More actions on the root.
+    name: 'chat-thread-view-divider',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button')],
+        'replies row',
+      );
+      await waitFor(
+        [page.locator('[data-thread-view]').getByRole('button', { name: 'More actions' })],
+        'thread divider icons',
+      );
+    },
   },
   // Loading boxes (sweepBoxes): each read below never answers, and a fresh
   // browser holds nothing for the screen, so its boxes are what paints.
@@ -5538,6 +5752,16 @@ const LAPTOP_DARK_SCREENS = new Set([
   'activity-chip-unread',
   'activity-chip-mentions',
   'plan-tab-chip-past',
+  // Catch up and the thread view redo: phone and laptop, light and dark.
+  'activity-catch-up-bar',
+  'catch-up-thread-mention',
+  'catch-up-thread-started',
+  'catch-up-comment',
+  'catch-up-swipe-read',
+  'catch-up-swipe-keep',
+  'catch-up-typing',
+  'catch-up-end',
+  'chat-thread-view-divider',
   // One search, the top bar and the chip row (decisions A to F): phone and
   // laptop, light and dark. The top bar of the six list screens is shot on
   // their base screens above (pipeline, briefs-approver, assets, plan-tab,

@@ -9,7 +9,7 @@
 // owns every read and write. Tokens only; light and dark at parity.
 
 import { useLayoutEffect, useRef } from 'react';
-import type { ReactElement, ReactNode, Ref } from 'react';
+import type { HTMLAttributes, ReactElement, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { Text } from '@/components/ui/Text';
 import { Tag } from '@/components/ui/Tag';
@@ -136,7 +136,10 @@ export interface CatchUpCardProps {
   onRetry: (id: string) => void;
   cardRef?: Ref<HTMLDivElement>;
   /** Pointer handlers for the swipe (the screen owns the gesture). */
-  gesture?: Record<string, unknown>;
+  gesture?: Pick<
+    HTMLAttributes<HTMLDivElement>,
+    'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel'
+  >;
 }
 
 export function CatchUpCard(props: CatchUpCardProps): ReactElement {
@@ -145,7 +148,8 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   const chat = isChatCard(kind);
   const title = catchUpTitle(item, content?.threadName ?? null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const newest = props.sent[props.sent.length - 1]?.id ?? content?.messages[content.messages.length - 1]?.id;
+  const loaded = content?.messages ?? [];
+  const newest = props.sent[props.sent.length - 1]?.id ?? loaded[loaded.length - 1]?.id;
   // Scrolled so the newest message shows (on load and on each send).
   useLayoutEffect(() => {
     const el = bodyRef.current;
@@ -237,9 +241,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           )}
         >
           {props.tint === 'read' ? (
-            <IconCheckCircle size={48} />
+            <IconCheckCircle size={ICON_SIZE.status} />
           ) : (
-            <IconEyeOff size={48} />
+            <IconEyeOff size={ICON_SIZE.status} />
           )}
           <Text role="heading" className="text-current">
             {props.tint === 'read' ? MARK_AS_READ : KEEP_UNREAD}
