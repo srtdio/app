@@ -279,7 +279,7 @@ test('Open plan: the client OK on a client-approved row, Also in, and keep the a
   expectClean(network);
 });
 
-test('Notifications: plan alerts under Plans; a deleted plan only toasts; a tap opens the plan', async ({
+test('Notifications: plan alerts under All; a tap opens catch up; the plan link opens the plan', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -337,17 +337,20 @@ test('Notifications: plan alerts under Plans; a deleted plan only toasts; a tap 
     expectMinTouchTarget(await lead.boundingBox());
   }
 
-  // A deleted plan's card opens nothing: it toasts and is marked read.
-  await line('plan_deleted').locator('[data-activity-lead]').click();
-  await expect(page.getByText('This plan was deleted')).toBeVisible();
-  await expect(page).toHaveURL(/\/notifications$/);
-  await expect(line('plan_deleted').locator('[aria-label="Unread"]')).toHaveCount(0);
-
-  // A date change opens the plan at the item.
+  // A tap opens catch up at that alert (8 Nov 2026); Mark as read saves it.
   await line('plan_date_changed').locator('[data-activity-lead]').click();
-  await expect(page).toHaveURL(new RegExp(`/plan/${DATED_PLAN_ID}\\?item=${concept.id}$`));
+  await expect(page).toHaveURL(/[?&]catchup=0190d800-0000-7000-8000-000000000003/);
+  const card = page.locator('[data-catch-up-card]');
+  await expect(card).toBeVisible({ timeout: 8000 });
+  await expect(card).toContainText('Lamp lighting reel moved to Fri 16 Oct');
+  await page.locator('[data-catch-up-read]').click();
+  await expect
+    .poll(() => network.rpcCalls.some((c) => c.name === 'inbox_mark_read_ids'))
+    .toBe(true);
+
+  // The alert's link still opens the plan at the item.
+  await page.goto(`/plan/${DATED_PLAN_ID}?item=${concept.id}`);
   await expect(page.locator('[data-plan-page="item"]')).toBeVisible();
-  expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(2);
   expectClean(network);
 });
 

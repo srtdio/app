@@ -2,8 +2,8 @@
 // screens); non-chat cards reuse the Activity line for their kicker (no new
 // copy). Pure.
 
+import { activityCardTitle } from '@/components/pages/activity/ActivityCard';
 import {
-  activityLine,
   cardTitle,
   isChatMention,
   isThreadStarted,
@@ -55,7 +55,8 @@ export function catchUpKicker(item: ActivityItem): string {
     case 'thread-started':
       return `Thread on ${threadCardNoun(item.cardKind)} · ${chat}`;
     default:
-      return activityLine(item);
+      // The entry's own Activity line, as its row reads it (alerts included).
+      return activityCardTitle([item]);
   }
 }
 
@@ -74,7 +75,7 @@ export function catchUpTitle(item: ActivityItem, threadName: string | null = nul
       return item.title !== null && item.title !== '' ? item.title : (threadName ?? THREAD_TITLE);
     default:
       if (item.title !== null && item.title !== '') return item.title;
-      return item.planTitle ?? cardTitle(item);
+      return item.alert?.itemTitle ?? item.alert?.planTitle ?? item.planTitle ?? cardTitle(item);
   }
 }
 

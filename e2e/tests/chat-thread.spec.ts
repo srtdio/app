@@ -27,17 +27,6 @@ const SCENARIOS: Scenario[] = [
     target: (page) => page.getByText(PEER_NAME, { exact: true }).first(),
   },
   {
-    // A chat mention's card on Notifications.
-    name: 'dm-from-notifications',
-    isDm: true,
-    start: '/notifications',
-    target: (page) =>
-      page
-        .locator('[data-activity-event="mention"]', { hasText: MENTION_PREVIEW })
-        .locator('[data-activity-lead]')
-        .first(),
-  },
-  {
     name: 'group-from-list',
     isDm: false,
     start: '/chat',

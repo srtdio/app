@@ -19,7 +19,11 @@ import { ICON_SIZE, IconCheck, IconCheckCircle, IconEyeOff } from '@/components/
 import { UnreadDivider } from '@/components/chat/ReadingLayer';
 import { MENTION_ME_PEER } from '@/components/chat/MessageBubble';
 import { activityKind } from '@/components/pages/activity/ActivityCard';
-import { segmentSelfMentions, type ActivityItem } from '@/components/pages/activity/data';
+import {
+  alertBody,
+  segmentSelfMentions,
+  type ActivityItem,
+} from '@/components/pages/activity/data';
 import { formatTime } from '@/lib/time';
 import {
   KEEP_UNREAD,
@@ -98,7 +102,8 @@ function MessageRow(props: {
 /** The entity block: the kind's one grey tag and the entity's words. */
 function EntityBlock({ item }: { item: ActivityItem }): ReactElement | null {
   const kind = activityKind(item);
-  const words = item.caption ?? null;
+  // A post's caption, else an alert's second line (as its Activity row reads).
+  const words = item.caption ?? (item.alert != null ? alertBody(item.alert) : null);
   if (kind === undefined && words === null) return null;
   return (
     <div data-catch-up-entity="" className="flex min-w-0 flex-col gap-2 border-b px-4 py-3">
