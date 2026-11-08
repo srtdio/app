@@ -15,6 +15,16 @@ import {
 import { seedAudit } from '../fixtures/audit-pr-b';
 import { installLinkPreviewStub, TEXT_URL } from '../fixtures/link-previews';
 
+/**
+ * The saved (marker) text of a live-format box. The box keeps paired markers as
+ * invisible characters and its own `value` getter hands back the saved text in
+ * the page's world; Playwright's toHaveValue reads from its utility world, which
+ * sees the raw characters, so the saved text is read with evaluate.
+ */
+async function expectSaved(field: Locator, text: string): Promise<void> {
+  await expect.poll(() => field.evaluate((el) => (el as HTMLTextAreaElement).value)).toBe(text);
+}
+
 // The writing box (ui/WritingBox, Slack style, 8 Nov 2026): one box for chat,
 // comments, sheet fields and the post caption. Stories:
 //   S1 phone: tap the box, Aa, Numbered list, three lines, send: the bubble is
@@ -136,16 +146,16 @@ test('S1 phone: Aa, Numbered list, three lines, send: an <ol> of three, preview 
   expect(overflow.box).toBeLessThanOrEqual(0);
   await key(box, 'Numbered list').scrollIntoViewIfNeeded();
   await key(box, 'Numbered list').click();
-  await expect(field).toHaveValue('1. ');
+  await expectSaved(field, '1. ');
   await expect(key(box, 'Numbered list')).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.type('Hamper unboxing');
   // Return on a phone continues the list.
   await page.keyboard.press('Enter');
-  await expect(field).toHaveValue('1. Hamper unboxing\n2. ');
+  await expectSaved(field, '1. Hamper unboxing\n2. ');
   await page.keyboard.type('Lamp close-up');
   await page.keyboard.press('Enter');
   await page.keyboard.type('Team toast');
-  await expect(field).toHaveValue(LIST_BODY);
+  await expectSaved(field, LIST_BODY);
 
   const bubble = await sendFromBox(page);
   expect(lastArgs(network, 'chat_message_send')?.p_body).toBe(LIST_BODY);
@@ -154,7 +164,7 @@ test('S1 phone: Aa, Numbered list, three lines, send: an <ol> of three, preview 
   await expect(bubble.locator('[data-msg-body]')).not.toContainText('1. ');
   // Send closes the format row and empties the box.
   await expect(box.getByRole('toolbar', { name: 'Format' })).toHaveCount(0);
-  await expect(field).toHaveValue('');
+  await expectSaved(field, '');
 
   // The chat list's preview keeps the raw prefix (after the sender label).
   await page.goto('/chat');
@@ -176,13 +186,13 @@ test('S2 phone: a quote, Add link and a bullet list render as blocks in the bubb
   await field.click();
   await key(box, 'Aa').click();
   await key(box, 'Quote').click();
-  await expect(field).toHaveValue('> ');
+  await expectSaved(field, '> ');
   await page.keyboard.type('Can the hook land in 2 seconds?');
   // Return continues the quote; Return on the empty "> " line ends it.
   await page.keyboard.press('Enter');
-  await expect(field).toHaveValue('> Can the hook land in 2 seconds?\n> ');
+  await expectSaved(field, '> Can the hook land in 2 seconds?\n> ');
   await page.keyboard.press('Enter');
-  await expect(field).toHaveValue('> Can the hook land in 2 seconds?\n');
+  await expectSaved(field, '> Can the hook land in 2 seconds?\n');
   await page.keyboard.type('Brief is ');
 
   // Link with nothing selected: Add link opens with both fields empty.
@@ -195,17 +205,17 @@ test('S2 phone: a quote, Add link and a bullet list render as blocks in the bubb
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(sheet).toBeHidden();
   const withLink = `> Can the hook land in 2 seconds?\nBrief is [here](${TEXT_URL})`;
-  await expect(field).toHaveValue(withLink);
+  await expectSaved(field, withLink);
 
   await caretToEnd(field);
   await page.keyboard.press('Enter');
   await key(box, 'Bullet list').click();
-  await expect(field).toHaveValue(`${withLink}\n- `);
+  await expectSaved(field, `${withLink}\n- `);
   await page.keyboard.type('Lid lift');
   await page.keyboard.press('Enter');
   await page.keyboard.type('Logo');
   const body = `${withLink}\n- Lid lift\n- Logo`;
-  await expect(field).toHaveValue(body);
+  await expectSaved(field, body);
 
   const bubble = await sendFromBox(page);
   expect(lastArgs(network, 'chat_message_send')?.p_body).toBe(body);
@@ -235,13 +245,13 @@ test('S3 laptop: Cmd+B, Cmd+Shift+8, Cmd+K, emoji search "fire", Enter sends @de
     el.setSelectionRange(5, 10);
   });
   await page.keyboard.press('ControlOrMeta+b');
-  await expect(field).toHaveValue('ship *today*');
+  await expectSaved(field, 'ship *today*');
 
   await caretToEnd(field);
   // Shift+Return is the newline on a laptop (Return sends).
   await page.keyboard.press('Shift+Enter');
   await page.keyboard.press('ControlOrMeta+Shift+Digit8');
-  await expect(field).toHaveValue('ship *today*\n- ');
+  await expectSaved(field, 'ship *today*\n- ');
   await page.keyboard.type('Lid lift');
 
   // Cmd/Ctrl+K opens Add link; Cancel leaves the text as it was.
@@ -250,7 +260,7 @@ test('S3 laptop: Cmd+B, Cmd+Shift+8, Cmd+K, emoji search "fire", Enter sends @de
   await expect(linkSheet).toBeVisible();
   await linkSheet.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(linkSheet).toBeHidden();
-  await expect(field).toHaveValue('ship *today*\n- Lid lift');
+  await expectSaved(field, 'ship *today*\n- Lid lift');
 
   // Emoji: search "fire", pick it; on a laptop the sheet stays open.
   await caretToEnd(field);
@@ -259,7 +269,7 @@ test('S3 laptop: Cmd+B, Cmd+Shift+8, Cmd+K, emoji search "fire", Enter sends @de
   await expect(emoji).toBeVisible();
   await emoji.getByPlaceholder('Search emoji').fill('fire');
   await emoji.locator('[data-emoji-results] [data-emoji-cell="🔥"]').first().click();
-  await expect(field).toHaveValue('ship *today*\n- Lid lift🔥');
+  await expectSaved(field, 'ship *today*\n- Lid lift🔥');
   await page.keyboard.press('Escape');
   await expect(emoji).toBeHidden();
   await expect(field).toBeVisible();
@@ -272,7 +282,7 @@ test('S3 laptop: Cmd+B, Cmd+Shift+8, Cmd+K, emoji search "fire", Enter sends @de
   const bubble = page.locator('[data-msg-id]').last().locator('[data-msg-body]');
   await expect(bubble.locator('strong', { hasText: 'today' })).toBeVisible();
   await expect(bubble.locator('ul > li')).toHaveText(['Lid lift🔥']);
-  await expect(field).toHaveValue('');
+  await expectSaved(field, '');
   expectClean(network);
 });
 
@@ -295,12 +305,12 @@ test('S4 edit a sent list: the box shows the raw prefixes, Save edit renders a l
   await page.locator('[data-menu-item="more-actions"]').click();
   await page.locator('[data-menu-item="edit"]').click();
   // Edit puts the stored text back: the raw prefixes, never the drawn list.
-  await expect(field).toHaveValue('1. Alpha\n2. Beta');
+  await expectSaved(field, '1. Alpha\n2. Beta');
   await expect(page.getByRole('button', { name: 'Cancel editing', exact: true })).toBeVisible();
 
   await caretToEnd(field);
   await page.keyboard.press('Enter');
-  await expect(field).toHaveValue('1. Alpha\n2. Beta\n3. ');
+  await expectSaved(field, '1. Alpha\n2. Beta\n3. ');
   await page.keyboard.type('Gamma');
   await key(box, 'Save edit').click();
   await expect
@@ -463,7 +473,7 @@ test('S8 the + drawer from the card still opens its pickers', async ({ page }) =
     await expect(sheet).toBeHidden();
   }
   // The draft rode through every picker.
-  await expect(field).toHaveValue('Files for the cut');
+  await expectSaved(field, 'Files for the cut');
   expectClean(network);
 });
 
@@ -502,7 +512,7 @@ test('S9 phone: expand, ten lines, collapse keeps the text, expand, send closes 
   expect(Math.round(editor.right)).toBe(editor.width);
   expect(editor.height).toBeGreaterThan(editor.viewH * 0.5);
   // The same field: the text and the caret stayed.
-  await expect(field).toHaveValue('Line 1');
+  await expectSaved(field, 'Line 1');
   await expect(field).toBeFocused();
 
   for (let n = 2; n <= 10; n += 1) {
@@ -510,11 +520,11 @@ test('S9 phone: expand, ten lines, collapse keeps the text, expand, send closes 
     await page.keyboard.type(`Line ${n}`);
   }
   const ten = Array.from({ length: 10 }, (_, i) => `Line ${i + 1}`).join('\n');
-  await expect(field).toHaveValue(ten);
+  await expectSaved(field, ten);
 
   await key(page.locator('[data-expanded-bar]'), 'Collapse').click();
   await expect(root).not.toHaveAttribute('data-expanded', /.+/);
-  await expect(field).toHaveValue(ten);
+  await expectSaved(field, ten);
 
   await key(box, 'Expand').click();
   await expect(root).toHaveAttribute('data-expanded', 'phone');
@@ -522,7 +532,7 @@ test('S9 phone: expand, ten lines, collapse keeps the text, expand, send closes 
   await expect(root).not.toHaveAttribute('data-expanded', /.+/);
   await expect(bubble.locator('[data-msg-body]')).toContainText('Line 10');
   expect(lastArgs(network, 'chat_message_send')?.p_body).toBe(ten);
-  await expect(field).toHaveValue('');
+  await expectSaved(field, '');
   expectClean(network);
 });
 

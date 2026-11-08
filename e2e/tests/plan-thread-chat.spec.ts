@@ -84,7 +84,9 @@ test('a plan comment is a chat row: swipe right replies, left rubber-bands @them
   await swipeRow(r, -120);
   await expect(r).toBeVisible();
   await expect(menu(page)).toHaveCount(0);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // No delete sheet or confirm opens (the item screen itself is a dialog).
+  await expect(page.getByRole('dialog', { name: /delete/i })).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
 
   // Right: Reply focuses the comment box (a plan item is itself a thread).
   await swipeRow(r, 120);

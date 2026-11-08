@@ -2,6 +2,16 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { PEER_NAME } from '../fixtures/chat-data';
 
+/**
+ * The saved (marker) text of a live-format box. The box keeps paired markers as
+ * invisible characters and its own `value` getter hands back the saved text in
+ * the page's world; Playwright's toHaveValue reads from its utility world, which
+ * sees the raw characters, so the saved text is read with evaluate.
+ */
+async function expectSaved(field: Locator, text: string): Promise<void> {
+  await expect.poll(() => field.evaluate((el) => (el as HTMLTextAreaElement).value)).toBe(text);
+}
+
 // WhatsApp-style formatting through the writing box (ui/WritingBox): select a
 // word in the chat box, tap Aa, then Bold on the format row, send; the bubble
 // shows the word bold with no stars, and the stored body keeps the markers
@@ -53,7 +63,7 @@ test('select a word, tap Aa then Bold, send: the bubble shows it bold without st
     document.dispatchEvent(new Event('selectionchange'));
   });
   await row.getByRole('button', { name: 'Bold', exact: true }).click();
-  await expect(box).toHaveValue('ship *today*');
+  await expectSaved(box, 'ship *today*');
   // The box kept focus (the row keys never take it).
   expect(await box.evaluate((el) => document.activeElement === el)).toBe(true);
   // Live styling: the mirror draws the word styled, and no star shows.
@@ -79,12 +89,12 @@ test('typing the closing star hides both markers; Aa closes its own row', async 
   const box = composer(page);
   await box.click();
   await page.keyboard.type('ship *today*');
-  await expect(box).toHaveValue('ship *today*');
+  await expectSaved(box, 'ship *today*');
   await expect(chatBox(page).locator('[data-format-mirror]')).not.toContainText('*');
   await expect(page.locator('[data-format-mirror] span', { hasText: 'today' })).toBeVisible();
   // A letter right after the bold word stays bold; the saved text keeps the pair.
   await page.keyboard.type('s');
-  await expect(box).toHaveValue('ship *todays*');
+  await expectSaved(box, 'ship *todays*');
   await chatBox(page).getByRole('button', { name: 'Aa', exact: true }).click();
   const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
   await expect(row).toBeVisible();
