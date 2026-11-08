@@ -26,7 +26,7 @@ import { barHasButtons, type CommentBar, type TaskTag } from '@/lib/comment-task
 
 /** The pill: 36 tall, hairline frame, the surface behind it so the row's top line stops at its edge. */
 export const COMMENT_BAR_CLASS =
-  'flex h-9 shrink-0 items-center self-start -translate-y-1/2 rounded-lg border border-border bg-panel';
+  'flex h-9 shrink-0 items-center self-start -translate-y-1/2 rounded-lg border border-border bg-panel lit-pill';
 
 /** Each 44 box runs 4 past the 36 pill, top and bottom. */
 const BAR_BUTTON_CLASS = '-my-1';

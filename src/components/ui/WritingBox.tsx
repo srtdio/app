@@ -804,10 +804,10 @@ export function WritingBox(props: WritingBoxProps) {
       </div>
       {shape === 'pill' ? (pillEnd ?? mic) : null}
       {shape === 'line' ? trailing : null}
-      {overlayInEditor}
       {/* A comment's @ list (MentionInput) hangs here: on the box at rest, above
           the row in the phone editor, exactly where chat's pickers sit. */}
       <div data-writing-list-slot="" className={phoneExpanded ? 'relative' : 'contents'} />
+      {overlayInEditor}
       {row}
     </div>
   );
