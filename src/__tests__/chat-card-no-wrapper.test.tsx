@@ -126,26 +126,21 @@ describe('chat cards: the card is the bubble (no wrapper bubble)', () => {
         const cls = String(shell!.props.className);
         expect(cls).not.toMatch(WRAPPER);
         expect(cls).toContain('focus-visible:lit-focus');
-        // No meta row in the shell: the time goes to the last card's slot.
+        // No meta row in the shell. L1: a head's time sits on its name line,
+        // so the card's time slot stays empty.
         expect(rowMeta).toBe(0);
-        const last = cards.find((c) => c.props.cardMeta !== undefined);
-        expect(last).toBeDefined();
-        expect(isValidElement(last!.props.cardMeta)).toBe(true);
-        expect((last!.props.cardMeta as ReactElement).type).toBe(BubbleMetaView);
-        expect((last!.props.cardMeta as ReactElement<{ placement: string }>).props.placement).toBe(
-          'card',
-        );
+        expect(cards.every((c) => c.props.cardMeta === undefined)).toBe(true);
         for (const card of cards) expect(card.props.inBubble).toBe(false);
       });
     }
   }
 
-  it('a card with text keeps its bubble: the cards sit inside it, the meta row stays', () => {
+  it('a card with text: the cards sit inside the message, no bubble fill (L1)', () => {
     const m = message({ body: 'Have a look', sharedPostIds: ['p1'] });
     expect(isCardOnly(m, { chip: false })).toBe(false);
     const { shell, cards, rowMeta } = parts(bubble(m));
-    expect(String(shell!.props.className)).toContain('bg-panel-2');
-    expect(rowMeta).toBe(1);
+    expect(String(shell!.props.className)).not.toContain('bg-panel-2');
+    expect(rowMeta).toBe(0);
     for (const card of cards) expect(card.props.inBubble).toBe(true);
   });
 
@@ -202,7 +197,7 @@ describe('chat cards: the card is the bubble (no wrapper bubble)', () => {
     }
     const thread = read('components/chat/MessageThread.tsx');
     expect(thread).toContain('card: cardOnly');
-    expect(thread).toContain('voiceOnly || cardOnly ? null');
-    expect(thread).toContain('mine && !cardOnly && OWN_BUBBLE_CONTENT');
+    expect(thread).toContain('voiceOnly || cardOnly || metaEmpty ? null');
+    expect(thread).not.toContain('OWN_BUBBLE_CONTENT');
   });
 });
