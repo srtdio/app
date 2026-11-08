@@ -242,13 +242,14 @@ describe('ListCard picture: 48 (40 in Compact) on the left, centred', () => {
     );
   });
 
-  it('person: a circle photo through ui/Avatar card (48, 40 in Compact; initials when none)', () => {
+  it('person: a rounded-square photo through ui/Avatar card (48, 40 in Compact; initials when none)', () => {
     const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
     expect(html).toContain('data-list-card-picture="person"');
     expect(html).toContain('data-avatar-role="card"');
     expect(html).toContain('h-12 w-12 compact:h-10 compact:w-10');
     expect(html).not.toContain('width:40px;height:40px');
-    expect(html).toContain('rounded-full');
+    expect(html).toContain('rounded-lg');
+    expect(html).not.toContain('rounded-full');
     expect(html).toContain('>PS<');
   });
 

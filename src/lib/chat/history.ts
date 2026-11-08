@@ -740,7 +740,7 @@ export function latestPerChannel(rows: readonly PreviewScanRow[]): ConversationP
         shared_plan_item_ids: row.shared_plan_item_ids ?? null,
       }),
       createdAt: row.created_at,
-      threadRootId: row.thread_root_message_id ?? null,
+      ...(row.thread_root_message_id != null ? { threadRootId: row.thread_root_message_id } : {}),
     });
   }
   return previews;

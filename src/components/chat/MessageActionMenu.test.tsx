@@ -641,7 +641,8 @@ describe('Transcribe', () => {
       canTranscribe: true,
       onTranscribe: () => {},
     };
-    expect(menu(voice)).toEqual(['Reply', 'Transcribe', 'Forward']);
+    // L10: Forward is a tile; Transcribe sits on the More actions page.
+    expect(menu(voice)).toEqual(['Reply', 'Forward', 'Transcribe']);
   });
 
   it('hides Transcribe when not offered (loading, or a transcript exists)', () => {
@@ -670,7 +671,8 @@ describe('the divider is the 1px border token', () => {
       'utf8',
     );
     expect(src).toContain('data-menu-divider="" className="border-t border-border"');
-    expect(src.split('data-menu-divider').length - 1).toBe(1);
+    // L10: one hairline before More actions, one before the danger rows on its page.
+    expect(src.split('data-menu-divider').length - 1).toBe(2);
   });
 });
 

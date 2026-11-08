@@ -29,7 +29,7 @@ describe('Reply privately row', () => {
     );
     // L10: Reply privately opens the More actions page.
     expect(items.find((i) => i.label === REPLY_PRIVATELY)?.group).toBe('more');
-    const row = items[1];
+    const row = items.find((i) => i.key === 'reply-privately');
     expect(row?.kind === 'action' && row.hint).toBe('to Asha');
     expect(row?.kind === 'action' && row.key).toBe('reply-privately');
   });

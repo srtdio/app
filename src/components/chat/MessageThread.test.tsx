@@ -335,7 +335,8 @@ describe('MessageBubble time and state', () => {
   it('shows the time inside the bubble, h:mm AM/PM on the given clock', () => {
     const message = makeMessage({});
     const root = renderBubble(message, { timeZone: 'Asia/Kolkata' });
-    expect(metaOf(root)?.meta.time).toBe(T_KOLKATA);
+    // L1: the head's name line carries the clock time.
+    expect(renderStrip(root)).toMatch(new RegExp(`data-sender-time[^>]*>${T_KOLKATA}`));
     let aria = '';
     walk(root, (el) => {
       const props = el.props as Record<string, unknown>;
@@ -420,62 +421,29 @@ describe('MessageBubble time and state', () => {
   });
 });
 
-describe('bubble shell', () => {
+describe('bubble shell (L1: no bubbles)', () => {
   const base = { head: false, failed: false, voiceOnly: false, layout: 'touch' as const };
 
-  it('own is the bubble-own fill with accent-fg ink, peer is panel-2; no border', () => {
+  it('own and peer draw the same: no fill, no tail, no light, fg ink', () => {
     const own = bubbleClass({ ...base, mine: true, tail: true });
     const peer = bubbleClass({ ...base, mine: false, tail: true });
-    expect(own).toContain('bg-bubble-own text-accent-fg');
-    expect(own.split(' ')).not.toContain('bg-accent');
-    expect(peer).toContain('bg-panel-2 text-fg');
-    // Lit from above: one bubble light per side.
-    expect(own.split(' ')).toContain('lit-bubble-own');
-    expect(peer.split(' ')).toContain('lit-bubble-other');
-    expect(own.split(' ')).not.toContain('lit-bubble-other');
-    expect(peer.split(' ')).not.toContain('lit-bubble-own');
+    expect(own).toBe(peer);
     for (const cls of [own, peer]) {
-      expect(cls).toContain('rounded-[18px]');
-      expect(cls.split(' ')).not.toContain('border');
+      expect(cls).toContain('text-fg');
+      expect(cls).not.toContain('bg-bubble-own');
+      expect(cls).not.toContain('bg-panel-2');
+      expect(cls).not.toContain('lit-bubble');
+      expect(cls).not.toMatch(/rounded-(br|bl|tr|tl)-/);
     }
   });
 
-  it('squares the sender-side corner only on the tail', () => {
-    expect(bubbleClass({ ...base, mine: true, tail: true })).toContain('rounded-br-[4px]');
-    expect(bubbleClass({ ...base, mine: false, tail: true })).toContain('rounded-bl-[4px]');
-    expect(bubbleClass({ ...base, mine: true, tail: false })).not.toContain('rounded-br-[4px]');
-    expect(bubbleClass({ ...base, mine: false, tail: false })).not.toContain('rounded-bl-[4px]');
-  });
-
-  it('F6 laptop: the first bubble of a run keeps its tail corner, later ones are fully 12px', () => {
-    const laptop = { ...base, layout: 'laptop' as const };
-    for (const mine of [true, false]) {
-      const corner = mine ? 'rounded-tr-none' : 'rounded-tl-none';
-      const first = bubbleClass({ ...laptop, mine, head: true, tail: false }).split(' ');
-      const later = bubbleClass({ ...laptop, mine, head: false, tail: true }).split(' ');
-      expect(first).toEqual(expect.arrayContaining(['rounded-xl', corner]));
-      expect(later).toContain('rounded-xl');
-      expect(later.filter((c) => c.startsWith('rounded-'))).toEqual(['rounded-xl']);
-      expect(first).not.toContain('rounded-[18px]');
-    }
-    // Touch is unchanged: 18px, the 4px tail on the last bubble, nothing on the head.
-    const touchHead = bubbleClass({ ...base, mine: true, head: true, tail: false }).split(' ');
-    expect(touchHead.filter((c) => c.startsWith('rounded-'))).toEqual(['rounded-[18px]']);
-  });
-
-  it('caps rows at 76% and spaces rows 2px in a run, 12px between runs', () => {
-    const headRow = renderBubble(makeMessage({}), { head: true });
+  it('every row sits on the left, spaced 4px in a group and 12px between groups', () => {
+    const headRow = renderBubble(makeMessage({ mine: true, senderUserId: 'me' }), { head: true });
     const tucked = renderBubble(makeMessage({}), { head: false });
     expect(rootClass(headRow)).toContain('pt-3');
     expect(rootClass(tucked)).toContain('pt-1');
-    expect(rootClass(headRow)).not.toContain('py-2');
-    let column = '';
-    walk(headRow, (el) => {
-      const cls = (el.props as { className?: string }).className ?? '';
-      // The column's BUBBLE_MAX (the bubble itself carries max-w-full).
-      if (cls.includes('max-w-[')) column = cls;
-    });
-    expect(column).toContain('max-w-[76%]');
+    expect(rootClass(headRow)).toContain('flex-row');
+    expect(rootClass(headRow)).not.toContain('flex-row-reverse');
   });
 });
 
@@ -487,7 +455,12 @@ describe('in-bubble meta and ticks', () => {
     expect(bubbleStatus(own({ status: 'read' }), { showTicks: true })).toBe('read');
     expect(bubbleStatus(own({}), { showTicks: false })).toBeNull();
     expect(bubbleStatus(makeMessage({}), { showTicks: true })).toBeNull();
-    const nonTail = renderBubble(own({ status: 'read' }), { showTicks: true, tail: false });
+    // L1: a continuation row keeps its send state in the body meta.
+    const nonTail = renderBubble(own({ status: 'read' }), {
+      showTicks: true,
+      tail: false,
+      head: false,
+    });
     expect(metaOf(nonTail)?.meta.status).toBe('read');
   });
 
@@ -495,7 +468,8 @@ describe('in-bubble meta and ticks', () => {
     const delivered = renderStrip(renderBubble(own({ status: 'sent' }), { showTicks: true }));
     expect(delivered).toContain('data-tick="delivered"');
     expect(delivered).toContain('aria-label="Delivered"');
-    expect(delivered).toContain('text-bubble-meta-own');
+    // L1: on a head the tick follows the time on the name line, in fg-3.
+    expect(delivered).toMatch(/data-sender-time[\s\S]*data-tick="delivered"/);
     const read = renderStrip(renderBubble(own({ status: 'read' }), { showTicks: true }));
     expect(read).toMatch(/data-tick="read"[^>]*text-tick-read|text-tick-read[^>]*data-tick="read"/);
     // The tick box is 20x12, the shared double tick's box.
@@ -503,18 +477,17 @@ describe('in-bubble meta and ticks', () => {
     expect(read).toContain('h-3 w-5');
   });
 
-  it('peer meta takes the peer meta token; no tick', () => {
+  it('peer rows draw no tick', () => {
     const html = renderStrip(renderBubble(makeMessage({}), { showTicks: true }));
-    expect(html).toContain('text-bubble-meta');
     expect(html).not.toContain('data-tick');
   });
 
   it('F4 sending: a clock in the meta ink at full strength; no opacity anywhere', () => {
-    const root = renderBubble(own({ state: 'sending' }), { showTicks: true });
+    const root = renderBubble(own({ state: 'sending' }), { showTicks: true, head: false });
     expect(metaOf(root)?.meta.status).toBe('sending');
     const html = renderStrip(root);
     expect(html).toContain('data-tick="sending"');
-    expect(html).toContain('text-bubble-meta-own');
+    expect(html).toContain('text-bubble-meta');
     let bubble = '';
     walk(root, (el) => {
       const props = el.props as Record<string, unknown>;
@@ -543,7 +516,7 @@ describe('in-bubble meta and ticks', () => {
     expect(cls).toEqual(
       expect.arrayContaining([
         'absolute',
-        'right-full',
+        'left-full',
         'top-1/2',
         '-translate-y-1/2',
         'h-11',
@@ -592,7 +565,8 @@ describe('in-bubble meta and ticks', () => {
     expect(html).toContain('aria-hidden="true"');
     // Same parts as the meta, so the same width.
     expect(html).toContain('edited');
-    expect(html).toContain(T_UTC);
+    // L1: the time sits on the name line, never in the body meta.
+    expect(html).not.toContain(T_UTC);
     let bodySpacer = false;
     walk(root, (el) => {
       const props = el.props as { className?: string; children?: ReactNode };
@@ -635,15 +609,9 @@ describe('in-bubble meta and ticks', () => {
     ];
     for (const [message, placement] of expected) {
       expect(metaPlacement(message)).toBe(placement);
+      // L1: the head carries the time, so a plain row draws no body meta.
       const root = renderBubble(message);
-      // A card-only message: the card is the bubble, its time sits in the card.
-      const cardOnly = message === card || message === brief;
-      expect(metaOf(root)?.placement).toBe(cardOnly ? 'card' : placement);
-      let spacers = 0;
-      walk(root, (el) => {
-        if (el.type === MetaSpacer) spacers += 1;
-      });
-      expect(spacers).toBe(placement === 'inline' ? 1 : 0);
+      expect(metaOf(root)).toBeNull();
     }
     // The row is in flow (never absolute), right-aligned, after the content.
     const row = renderStrip(
@@ -680,7 +648,7 @@ describe('threadRows', () => {
   const t = (iso: string) => ({ createdAt: iso, time: Date.parse(iso) });
   const msgs = [
     makeMessage({ id: 'a', mine: true, senderUserId: 'me', ...t('2026-09-21T10:00:00Z') }),
-    makeMessage({ id: 'b', mine: true, senderUserId: 'me', ...t('2026-09-21T10:05:00Z') }),
+    makeMessage({ id: 'b', mine: true, senderUserId: 'me', ...t('2026-09-21T10:04:00Z') }),
     makeMessage({ id: 'c', mine: true, senderUserId: 'me', ...t('2026-09-21T10:15:00Z') }),
     makeMessage({ id: 'd', ...t('2026-09-21T10:16:00Z') }),
     makeMessage({ id: 'e', ...t('2026-09-22T09:00:00Z') }),
@@ -695,7 +663,7 @@ describe('threadRows', () => {
   it('computes runs: head on the first, tail on the last', () => {
     expect([msg('a')?.head, msg('a')?.tail]).toEqual([true, false]);
     expect([msg('b')?.head, msg('b')?.tail]).toEqual([false, true]);
-    // A 10-minute gap breaks the run even from the same sender.
+    // L1: a 5-minute gap breaks the group even from the same sender.
     expect([msg('c')?.head, msg('c')?.tail]).toEqual([true, true]);
     expect([msg('d')?.head, msg('d')?.tail]).toEqual([true, true]);
     // A day pill breaks the run.
@@ -819,9 +787,9 @@ describe('MessageBubble forwarded label', () => {
     expect(cls).toContain('text-fg-2');
     expect(cls).toContain('text-sm');
     expect((label.props as { children: unknown[] }).children).toContain('Forwarded');
-    // On the solid accent the label takes the bubble's on-accent ink.
-    const own = ForwardedLabel({ mine: true });
-    expect((own.props as { className: string }).className).toContain('text-accent-fg');
+    // L1: rows pass mine false; the label keeps its own ink.
+    const own = ForwardedLabel({ mine: false });
+    expect((own.props as { className: string }).className).toContain('text-fg-2');
   });
 
   it('has no label on a message that was not forwarded', () => {
@@ -969,14 +937,14 @@ describe('MessageBubble keyboard and hover actions', () => {
     expect(stop).toHaveBeenCalled();
   });
 
-  it('the chevron gradient takes the bubble colour: own fill or peer panel', () => {
+  it('the chevron gradient takes the page fill on every row (L1: no bubbles)', () => {
     const own = withAttr(
       render(pressed({ onMore: noop }), makeMessage({ mine: true })),
       'data-more-glyph',
     );
-    expect(String(own[0]?.props.className)).toContain('from-bubble-own');
+    expect(String(own[0]?.props.className)).toContain('from-bg');
     const peer = withAttr(render(pressed({ onMore: noop })), 'data-more-glyph');
-    expect(String(peer[0]?.props.className)).toContain('from-panel-2');
+    expect(String(peer[0]?.props.className)).toContain('from-bg');
   });
 
   it('right-click on the bubble goes to the same menu opener as long-press', () => {
@@ -1027,9 +995,11 @@ describe('voice-only bubble', () => {
       const props = el.props as { className?: string } & Record<string, unknown>;
       if (props['data-bubble'] !== undefined) cls = props.className ?? '';
     });
+    // L1: the voice note keeps its own hairline player frame.
     expect(cls).toContain('rounded-[18px]');
     expect(cls).toContain('min-w-56');
-    expect(metaOf(root)).toMatchObject({ placement: 'row', meta: { time: T_UTC } });
+    expect(cls).toContain('border border-border');
+    expect(metaOf(root)).toBeNull();
   });
 
   it('hands the voice note its message id, side, sender and the next voice id', () => {
@@ -1058,7 +1028,8 @@ describe('voice-only bubble', () => {
       if (el.type === BubbleMetaView) trailing += 1;
     });
     expect(trailing).toBe(0);
-    expect(isValidElement(voiceContext(root).meta)).toBe(true);
+    // L1: the head's name line carries the time; the note's slot stays empty.
+    expect(voiceContext(root).meta).toBeNull();
   });
 
   it('hands the Transcribe flow to every recorded note, own notes included', () => {
@@ -1295,8 +1266,8 @@ describe('own-bubble inner content', () => {
       // Top edge 3px above the bubble's bottom; nothing anchors it to the bottom.
       expect(badge.split(' ')).toContain('top-[calc(100%-3px)]');
       expect(badge).not.toMatch(/(^| )-?bottom-/);
-      // The meta starts 3px or more above the bubble's bottom (or sits in flow above it).
-      expect(meta).toMatch(/bottom-1\b|bottom-2|mt-1 flex justify-end/);
+      // L1: a head row draws no body meta (its time is on the name line).
+      expect(meta).toBe('');
       expect(rootClass(root).split(' ')).toContain(REACTION_ROW_SPACE);
     }
     // 20px of room below: the ~17px overhang never touches the next bubble.
@@ -1312,7 +1283,7 @@ describe('own-bubble inner content', () => {
       renderBubble(makeMessage({ mine: true, senderUserId: 'me', reactions })),
       3 as never,
     );
-    expect((own?.props as { className?: string }).className).toContain('text-fg-2');
+    expect((own?.props as { className?: string }).className).toContain('text-fg-3');
   });
 });
 
@@ -1367,8 +1338,9 @@ describe('image album and viewer', () => {
         expect(corners).toContain(layout === 'touch' ? 'rounded-[18px]' : 'rounded-xl');
       }
     }
+    // L1: no tail corner on media.
     const touchTail = attachmentsEl(renderBubble(albumMessage, { tail: true, layout: 'touch' }));
-    expect((touchTail?.props as { albumCorners?: string }).albumCorners).toContain(
+    expect((touchTail?.props as { albumCorners?: string }).albumCorners).not.toContain(
       'rounded-bl-[4px]',
     );
   });
@@ -1389,7 +1361,8 @@ describe('image album and viewer', () => {
       voiceOnly: false,
       album: true,
     });
-    expect(cls).toContain('p-1');
+    // L1: the album keeps its own frame; no bubble padding around it.
+    expect(cls).not.toContain('p-1');
     expect(cls).toContain('min-w-60');
     expect(cls).not.toContain('px-3');
   });
@@ -1590,30 +1563,33 @@ describe('bubble text sizes', () => {
     expect(bar).not.toContain(QUOTE_TEXT_TYPE.touch);
   });
 
-  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 8, 65%', () => {
+  it('L1 text rows: no padding or radius, the column takes the row width', () => {
     const shape = { mine: false, head: false, tail: false, failed: false, voiceOnly: false };
     const touch = bubbleClass({ ...shape, layout: 'touch' });
-    expect(touch).toContain('px-3 py-2');
-    expect(touch).toContain('rounded-[18px]');
     const laptop = bubbleClass({ ...shape, layout: 'laptop' });
-    expect(laptop).toContain('rounded-xl');
-    expect(laptop).toContain('p-2');
-    for (const cls of [touch, laptop]) expect(cls).not.toContain('md:');
+    for (const cls of [touch, laptop]) {
+      expect(cls).not.toContain('px-3 py-2');
+      expect(cls).not.toContain('rounded-');
+      expect(cls).not.toContain('md:');
+    }
     const columnOf = (layout: ChatLayout): string => {
       let column = '';
       walk(renderBubble(makeMessage({}), { layout }), (el) => {
         const c = (el.props as { className?: string }).className ?? '';
-        if (c.includes('max-w-[')) column = c;
+        if (c.includes('flex-col items-start')) column = c;
       });
       return column;
     };
-    expect(columnOf('touch')).toContain('max-w-[76%]');
-    expect(columnOf('laptop')).toContain('max-w-[65%]');
+    expect(columnOf('touch')).toContain('flex-1');
+    expect(columnOf('laptop')).not.toContain('max-w-[');
     expect(renderStrip(renderBubble(makeMessage({}), { layout: 'laptop' }))).not.toContain('md:');
   });
 
   it('meta, day pill and typing row sizes come from chat-type', () => {
-    expect(renderStrip(renderBubble(makeMessage({})))).toContain(BUBBLE_META_TYPE);
+    // L1: the body meta shows on a continuation row (here, "edited").
+    expect(renderStrip(renderBubble(makeMessage({ editedAt: 'x' }), { head: false }))).toContain(
+      BUBBLE_META_TYPE,
+    );
     expect(BUBBLE_META_TYPE).toContain('text-xs');
     let pill = '';
     walk(DayPill({ label: 'Today', layout: 'touch' }), (el) => {
@@ -1707,10 +1683,11 @@ describe('message body links', () => {
   });
 
   it('the bubble body renders the link segments', () => {
+    // L1: own rows draw links like everyone else's.
     const root = renderBubble(makeMessage({ body: 'go https://example.com now', mine: true }));
     const found = links(root);
     expect(found).toHaveLength(1);
-    expect(found[0]?.props.className).toBe('underline text-accent-fg');
+    expect(found[0]?.props.className).toBe('underline text-accent');
   });
 
   it('plain text stays a single text run', () => {
@@ -2378,23 +2355,22 @@ describe('tombstones, edited label and the neutral selection', () => {
       const meta = /<span[^>]*data-meta="inline"[^>]*>/.exec(html)?.[0] ?? '';
       expect(meta).toContain('static');
       expect(meta).not.toContain('absolute');
-      expect(html.indexOf('data-meta="inline"')).toBeGreaterThan(
-        html.indexOf('data-tombstone-label'),
-      );
+      // L1: the time sits on the name line above the one grey line.
+      expect(html.indexOf('data-sender-time')).toBeLessThan(html.indexOf('data-tombstone-label'));
       expect(html).toContain('data-tombstone');
       expect(html).toContain('M18.364 18.364A9 9');
       expect(root.props).toMatchObject({ 'data-deleted': '' });
       const cls = tombstoneClass({ mine, head: false, tail: true, layout: 'touch' });
-      // The same shell and lighting as a peer bubble, in secondary ink.
-      expect(cls).toContain('bg-panel-2');
-      expect(cls).toContain('lit-bubble-other');
+      // L1: one grey italic line, no bubble shell.
+      expect(cls).not.toContain('bg-panel-2');
+      expect(cls).not.toContain('lit-bubble-other');
       expect(cls).toContain('text-fg-3');
       expect(cls).toContain('whitespace-nowrap');
       expect(cls).not.toContain('border border-border');
       // Italic sits on the text, which takes the body size.
       expect(html).toContain('italic');
-      expect(cls).toContain(mine ? 'rounded-br-[4px]' : 'rounded-bl-[4px]');
-      expect(String(root.props.className)).toContain(mine ? 'flex-row-reverse' : 'flex-row');
+      expect(cls).not.toMatch(/rounded-(br|bl)-/);
+      expect(String(root.props.className)).not.toContain('flex-row-reverse');
     }
   });
 
@@ -2426,7 +2402,7 @@ describe('tombstones, edited label and the neutral selection', () => {
   it('Delete for me: a tombstone without onDeleteForMe, or in select mode, stays inert', () => {
     const inert = renderStrip(render(tomb));
     expect(inert).toContain('data-testid="tombstone"');
-    expect(inert).not.toContain('tabindex="0"');
+    expect(inert).not.toMatch(/data-testid="tombstone"[^>]*tabindex="0"/);
     expect(inert).not.toContain('aria-haspopup');
     const selecting = renderStrip(
       render(tomb, {
@@ -2483,14 +2459,11 @@ describe('tombstones, edited label and the neutral selection', () => {
     expect(quoteOf('me')?.props).toMatchObject({ preview: DELETED_OWN_LABEL, deleted: true });
   });
 
-  it('an edited message shows "edited" before the time inside the bubble, also read aloud', () => {
+  it('an edited message shows "edited" after its text (the time is on the name line), also read aloud', () => {
     const edited = makeMessage({ editedAt: '2026-09-22T18:50:00Z' });
     const html = renderStrip(render(edited));
-    expect(html).toMatch(
-      new RegExp(
-        `data-meta="inline"[^>]*><span data-edited="">edited</span><span[^>]*>${escapeRe(T_UTC)}`,
-      ),
-    );
+    expect(html).toMatch(/data-meta="inline"[^>]*><span data-edited="">edited<\/span><\/span>/);
+    expect(html).toMatch(new RegExp(`data-sender-time[^>]*>${escapeRe(T_UTC)}`));
     expect(bubbleTimeLabel(edited, 'UTC')).toBe(`${EDITED_LABEL}, ${T_UTC}`);
     expect(renderStrip(render(makeMessage({})))).not.toContain('data-edited');
     expect(renderStrip(render({ ...tomb, editedAt: 'x' }))).not.toContain('data-edited');
@@ -2513,9 +2486,9 @@ describe('tombstones, edited label and the neutral selection', () => {
     const classes = String(bubble?.props.className).split(' ');
     expect(classes).not.toContain('ring-accent');
     expect(classes).not.toContain('ring-2');
-    expect(classes.filter((c) => c.includes('accent') && !c.startsWith('focus-visible:'))).toEqual([
-      'text-accent-fg',
-    ]);
+    expect(classes.filter((c) => c.includes('accent') && !c.startsWith('focus-visible:'))).toEqual(
+      [],
+    );
     expect(renderStrip(checked)).not.toContain('ring-2 ring-accent ring-offset');
 
     const unchecked = render(makeMessage({ mine: true }), {
@@ -3317,9 +3290,7 @@ describe('@mentions in bubbles', () => {
     expect(mentionClass(true, false)).toContain('text-accent-fg');
     expect(mentionClass(false, false)).toContain('text-accent');
     expect(mentionClass(false, true)).toContain('font-semibold');
-    const own = markup(true);
     const peer = markup(false);
-    expect(own).toContain('text-accent-fg');
     expect(peer).not.toContain('text-accent-fg');
     // A mention button is a PressableRow (class before data-mention); an inert one a span.
     expect(peer).toMatch(
@@ -3508,12 +3479,12 @@ describe('F5 mentions are bold and the peer ink clears 4.5:1 in both themes', ()
       expect(mentionClass(mine, false)).toContain('font-semibold');
       expect(mentionClass(mine, true)).toContain('font-semibold');
       expect(mentionClass(mine, true)).toContain(mine ? MENTION_ME_OWN : MENTION_ME_PEER);
-      expect(mentionClass(mine, false)).not.toContain(MENTION_ME_OWN);
       expect(mentionClass(mine, false)).not.toContain(MENTION_ME_PEER);
       expect(mentionClass(mine, true)).not.toContain('bg-accent-soft');
     }
-    expect(MENTION_ME_PEER).toBe('bg-hover-fill');
-    expect(MENTION_ME_OWN).toBe('bg-on-bubble/15');
+    // L8: ink on fg at 12%, one tint for every row.
+    expect(MENTION_ME_PEER).toBe('bg-fg/[.12] text-fg');
+    expect(MENTION_ME_OWN).toBe(MENTION_ME_PEER);
     expect(mentionClass(true, false)).toContain('text-accent-fg');
   });
 });
