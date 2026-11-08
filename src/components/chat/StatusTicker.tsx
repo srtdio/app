@@ -1001,7 +1001,7 @@ export function ThreadsStripItem(props: { label: string; onOpen: () => void }): 
       }}
       className="-my-1 flex h-11 shrink-0 items-center gap-1 px-2 text-sm text-fg focus-visible:lit-focus"
     >
-      <span className="whitespace-nowrap">{props.label}</span>
+      <span className="shrink-0 whitespace-nowrap">{props.label}</span>
       <span aria-hidden="true" data-threads-dot="" className={LIST_CARD_UNREAD_DOT} />
     </PressableRow>
   );
