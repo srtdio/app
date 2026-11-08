@@ -78,8 +78,9 @@ test(
     await expect(replies).toBeVisible();
     await expect(replies.locator('[data-replies-count]')).toHaveCSS('font-weight', '600');
     // Up to 3 square photos of the latest repliers; the latest reply's first line.
-    expect(await replies.locator('[data-replies-photos] [data-avatar-role="stack"]').count())
-      .toBeLessThanOrEqual(3);
+    expect(
+      await replies.locator('[data-replies-photos] [data-avatar-role="stack"]').count(),
+    ).toBeLessThanOrEqual(3);
     await expect(replies.locator('[data-replies-latest]')).toContainText(':');
     expectMinTouchTarget(await replies.locator('button').boundingBox(), { dimension: 'height' });
     // A reply to a deleted root stays out of the main chat too.
@@ -91,7 +92,11 @@ test(
 test('DM: the thread screen opens, sends a reply, and shows a refused reply', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   await openChat(page, MAYA_NAME);
-  await page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button').click();
+  await page
+    .locator('[data-replies-row]', { hasText: '4 replies' })
+    .first()
+    .locator('button')
+    .click();
 
   const view = page.locator('[data-thread-view]');
   await expect(view).toBeVisible();
@@ -133,7 +138,11 @@ test('group: every head carries the square photo at 16, the thread keeps names',
   await openChat(page, THREAD_GROUP_NAME);
   const plainPhoto = await row(page, 'ge').locator(':scope > *').first().boundingBox();
   expect(Math.round(plainPhoto?.x ?? 0)).toBe(16);
-  await page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button').click();
+  await page
+    .locator('[data-replies-row]', { hasText: '4 replies' })
+    .first()
+    .locator('button')
+    .click();
   const view = page.locator('[data-thread-view]');
   await expect(view).toBeVisible();
   await expect(view.locator('li[data-msg-id]', { hasText: 'Love the colours.' })).toContainText(

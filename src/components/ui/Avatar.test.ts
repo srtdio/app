@@ -34,7 +34,14 @@ describe('initialsFor', () => {
 
 describe('Avatar roles', () => {
   it('has exactly five roles: inline 20, header 32, row 40, card 48 (the list row picture; 40 in Compact), profile 72', () => {
-    expect(AVATAR_PX).toEqual({ inline: 20, stack: 24, header: 32, row: 40, card: 48, profile: 72 });
+    expect(AVATAR_PX).toEqual({
+      inline: 20,
+      stack: 24,
+      header: 32,
+      row: 40,
+      card: 48,
+      profile: 72,
+    });
   });
 
   it('the card role draws its initials at text-base (the row size), never text-lg', () => {
@@ -86,7 +93,9 @@ describe('Avatar shapes', () => {
     for (const role of Object.keys(AVATAR_PX) as AvatarRole[]) {
       const face = renderToStaticMarkup(createElement(Avatar, { role, name: 'A B' }));
       expect(face).not.toContain('rounded-full');
-      const img = renderToStaticMarkup(createElement(Avatar, { role, name: 'A B', src: 'https://x/a.png' }));
+      const img = renderToStaticMarkup(
+        createElement(Avatar, { role, name: 'A B', src: 'https://x/a.png' }),
+      );
       expect(img).not.toContain('rounded-full');
     }
   });

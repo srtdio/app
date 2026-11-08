@@ -221,7 +221,10 @@ export function repliesLabel(count: number): string {
 
 /** A body's first line for one-line previews: format stripped, trimmed. Pure. */
 export function firstLineOf(body: string): string {
-  const line = stripFormat(body).split('\n').find((l) => l.trim() !== '') ?? '';
+  const line =
+    stripFormat(body)
+      .split('\n')
+      .find((l) => l.trim() !== '') ?? '';
   return line.trim();
 }
 

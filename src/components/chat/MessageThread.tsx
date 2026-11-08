@@ -937,9 +937,7 @@ export const TASK_FROM_MESSAGE_MAX = Math.min(280, TASK_TITLE_MAX);
  * characters, capped by the table's limit); a file-only message uses the file
  * name; empty when it has neither. Pure.
  */
-export function taskTitleOf(
-  message: Pick<ThreadMessage, 'body' | 'attachments'>,
-): string {
+export function taskTitleOf(message: Pick<ThreadMessage, 'body' | 'attachments'>): string {
   const text = stripFormat(message.body).replace(/\s+/g, ' ').trim();
   if (text !== '') return text.slice(0, TASK_FROM_MESSAGE_MAX).trim();
   const file = message.attachments[0];
@@ -1911,7 +1909,8 @@ export function bubbleClass(
     NO_TOUCH_SELECT,
     state.album === true && 'min-w-60',
     // A voice note keeps its own player frame (a hairline card).
-    state.voiceOnly && cn('min-w-56 border border-border', bubbleCorners(state), sized(BUBBLE_PAD, state.layout)),
+    state.voiceOnly &&
+      cn('min-w-56 border border-border', bubbleCorners(state), sized(BUBBLE_PAD, state.layout)),
   );
 }
 
@@ -2641,7 +2640,11 @@ export function MessageBubble(props: {
         'min-w-0',
       )}
       {fullMeta.time !== '' ? (
-        <span aria-hidden="true" data-sender-time="" className={cn('shrink-0 text-fg-3', SENDER_TIME_TYPE)}>
+        <span
+          aria-hidden="true"
+          data-sender-time=""
+          className={cn('shrink-0 text-fg-3', SENDER_TIME_TYPE)}
+        >
           {fullMeta.time}
         </span>
       ) : null}
@@ -2668,7 +2671,12 @@ export function MessageBubble(props: {
   const photo = showMeta
     ? withRailPhoto(
         asPerson(
-          <Avatar name={headerName(message, profiles)} {...senderAvatar} role="header" decorative />,
+          <Avatar
+            name={headerName(message, profiles)}
+            {...senderAvatar}
+            role="header"
+            decorative
+          />,
           'block',
         ),
         rail,
@@ -3046,9 +3054,7 @@ export function MessageBubble(props: {
                   {distinctEmojis}
                 </span>
                 {totalReactions > 1 ? (
-                  <span className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>
-                    {totalReactions}
-                  </span>
+                  <span className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>{totalReactions}</span>
                 ) : null}
               </ReactionBadge>
             ) : null}
@@ -3056,7 +3062,7 @@ export function MessageBubble(props: {
           rail,
           railEdge,
         )}
-        {meta.status === 'failed' && mine && canDiscardFailed(message) ? (
+        {fullMeta.status === 'failed' && mine && canDiscardFailed(message) ? (
           <FailedActions
             {...(message.refusal !== undefined ? { refusal: message.refusal } : {})}
             {...(props.onRetry !== undefined ? { onRetry: () => props.onRetry?.(message.id) } : {})}
@@ -3064,8 +3070,8 @@ export function MessageBubble(props: {
               ? { onDelete: () => props.onDiscard?.(message.id) }
               : {})}
           />
-        ) : meta.status === 'failed' || meta.status === 'files-missing' ? (
-          <FailedLine status={meta.status} />
+        ) : fullMeta.status === 'failed' || fullMeta.status === 'files-missing' ? (
+          <FailedLine status={fullMeta.status} />
         ) : null}
       </div>
       {onReact !== undefined ? (
@@ -3933,6 +3939,8 @@ function ThreadBody(
      * in the thread screen, which shows its "N replies" separator instead.
      */
     repliesFor?: (message: ThreadMessage) => RepliesRowData | null;
+    /** L4: the thread screen: no reply quote or post chip on a reply (every reply targets the root). */
+    hideQuotes?: boolean;
     /** L11: menu "Mark unread"; absent hides it. */
     onMarkUnread?: (message: ThreadMessage) => void;
     /** L12: menu "Add to Tasks"; absent hides it. */
@@ -5132,7 +5140,7 @@ function ThreadBody(
                         onTalkAbout: onTalkAboutRow,
                         onTalkAboutFocus: onTalkAboutFocusRow,
                       })}
-                      threadMember={memberOf?.(row.message) != null}
+                      threadMember={props.hideQuotes === true || memberOf?.(row.message) != null}
                       rail={rowCaches.rail(id, rowRail)}
                       {...(props.selection !== undefined
                         ? {
@@ -6863,7 +6871,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const [markedUnread, setMarkedUnread] = useState<{ channelId: string; firstId: string } | null>(
     null,
   );
-  const markedId = markedUnread !== null && markedUnread.channelId === channelId ? markedUnread.firstId : null;
+  const markedId =
+    markedUnread !== null && markedUnread.channelId === channelId ? markedUnread.firstId : null;
   const markedHere = markedId !== null;
   const markedFirst = markedId !== null ? shownMessages.findIndex((m) => m.id === markedId) : -1;
   const unread: FirstUnread | null | undefined =
@@ -6890,8 +6899,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     paintedRef.current = channelId;
     const early = earlyThreadsRef.current;
     const target = chatOpenTarget({
-      unreadTopLevel:
-        unread != null && (unread.kind === 'beyond' || unread.count > 0) ? 1 : 0,
+      unreadTopLevel: unread != null && (unread.kind === 'beyond' || unread.count > 0) ? 1 : 0,
       threads: early !== null && early.channelId === channelId ? early.rows : null,
       painted: false,
     });
@@ -7748,7 +7756,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           onSend={composerSend}
           onTyping={props.onTyping}
           onCancelReply={() => setReplyDraft(null)}
-          {/* L3: no quote strip in the main chat; Reply opens the thread. */}
+          // L3: no quote strip in the main chat; Reply opens the thread.
           {...(notes ? { placeholder: NOTES_PLACEHOLDER } : {})}
           {...(notes ? { notes: true } : {})}
           onCancelAbout={() => setAboutDraft(null)}
@@ -7915,6 +7923,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             loading={false}
             onReply={viewHandleReply}
             reading={{ unread: viewUnread, seen: null, readBy: null }}
+            hideQuotes
             loadingOlder={threadView.loadingOlder}
             hasMore={view.hasMore}
             onLoadOlder={threadView.loadOlder}

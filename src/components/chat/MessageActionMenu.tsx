@@ -1214,7 +1214,9 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           </div>
         )
       ) : null}
-      {page === 'main' ? rows.map((item) => <MenuRow key={item.key} item={item} onRun={run} />) : null}
+      {page === 'main'
+        ? rows.map((item) => <MenuRow key={item.key} item={item} onRun={run} />)
+        : null}
       {page === 'main' && moreRow !== null ? (
         <>
           <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />

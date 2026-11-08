@@ -1757,7 +1757,9 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     void loadThreadsForMe(supabase, row.channel_id, generateTraceId()).then((result) => {
       if (!result.ok || !result.data.some((t) => t.rootId === rootId)) return;
       const sender =
-        row.sender_user_id !== null ? mentionNamesIn(row.workspace_id)(row.sender_user_id) : undefined;
+        row.sender_user_id !== null
+          ? mentionNamesIn(row.workspace_id)(row.sender_user_id)
+          : undefined;
       alertIncomingRef.current(row, threadAlertText(sender ?? 'Someone', row.body ?? text));
     });
   };

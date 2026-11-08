@@ -248,7 +248,13 @@ export function RepliesRow(props: {
         {props.repliers.length > 0 ? (
           <span data-replies-photos="" className="flex shrink-0 items-center gap-1">
             {props.repliers.map((r) => (
-              <Avatar key={r.id} role="stack" name={r.name} {...(r.src !== undefined ? { src: r.src } : {})} decorative />
+              <Avatar
+                key={r.id}
+                role="stack"
+                name={r.name}
+                {...(r.src !== undefined ? { src: r.src } : {})}
+                decorative
+              />
             ))}
           </span>
         ) : null}

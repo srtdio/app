@@ -27,7 +27,8 @@ describe('Reply privately row', () => {
     const items = messageMenuItems(
       itemProps({ canReplyPrivately: true, replyPrivatelyName: 'Asha Rao' }),
     );
-    expect(items.map((i) => i.label).slice(0, 3)).toEqual(['Reply', REPLY_PRIVATELY, 'Copy']);
+    // L10: Reply privately opens the More actions page.
+    expect(items.find((i) => i.label === REPLY_PRIVATELY)?.group).toBe('more');
     const row = items[1];
     expect(row?.kind === 'action' && row.hint).toBe('to Asha');
     expect(row?.kind === 'action' && row.key).toBe('reply-privately');

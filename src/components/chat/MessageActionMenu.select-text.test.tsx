@@ -91,12 +91,12 @@ function keysFor(message: ThreadMessage, opts: KeyOpts = {}): string[] {
 }
 
 describe('menu order', () => {
-  it('mine: Reply / Copy / Select / Forward / Save / Edit / Delete', () => {
+  it('mine: Reply / Forward / Copy text, then More actions: Select / Save / Edit / Delete', () => {
     expect(keysFor(msg())).toEqual([
       'reply',
+      'forward',
       'copy',
       'select-text',
-      'forward',
       'save-notes',
       'edit',
       'delete',
@@ -106,9 +106,9 @@ describe('menu order', () => {
   it('theirs: no Edit or Delete', () => {
     expect(keysFor(msg({ mine: false }))).toEqual([
       'reply',
+      'forward',
       'copy',
       'select-text',
-      'forward',
       'save-notes',
     ]);
   });
@@ -117,8 +117,8 @@ describe('menu order', () => {
     const voice = msg({ mine: false, body: '', attachments: [VOICE] });
     expect(keysFor(voice, { transcribe: true })).toEqual([
       'reply',
-      'transcribe',
       'forward',
+      'transcribe',
       'save-notes',
     ]);
   });
@@ -145,9 +145,9 @@ describe('menu order', () => {
     const old = msg({ createdAt: new Date(NOW - 90 * MIN).toISOString() });
     expect(keysFor(old, { notes: true })).toEqual([
       'reply',
+      'forward',
       'copy',
       'select-text',
-      'forward',
       'edit',
       'delete',
     ]);

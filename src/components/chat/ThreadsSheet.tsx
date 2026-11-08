@@ -147,7 +147,9 @@ export function ThreadsSheet(props: {
             unread={row.unread}
             muted={!row.unread}
             onPress={() => props.onOpenThread(row.rootId)}
-            press={{ 'aria-label': `${row.name}: ${row.preview}. ${row.tag}${row.unread ? ', unread' : ''}` }}
+            press={{
+              'aria-label': `${row.name}: ${row.preview}. ${row.tag}${row.unread ? ', unread' : ''}`,
+            }}
           />
         ))}
       </ul>

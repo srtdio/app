@@ -529,6 +529,23 @@ Chat messages never land in the Activity feed. Chat notification is Agora native
 
 Plans: a shared object in chat holding concepts and posts with team and client approval. Schema step 3a applied 9 Oct 2026.
 
+### Work chat: threads and signals (decided 8 Nov 2026)
+
+| Item | Decision |
+| --- | --- |
+| Layout | Everyone on the left, no bubbles (main chat, thread, DMs, groups, Personal notes). A group head is a square photo 32, the name and the clock time; the same sender within 5 minutes groups under one head. Own messages look the same; clock while pending, ticks after the time, "Not sent" + Retry, Seen / Read by left-aligned. Attachments keep their own frames. |
+| Photos | People are rounded squares like groups and workspaces at every size (one rule in ui/Avatar). |
+| Threads | Every reply is a thread: reply_to_message_id = the root (the trigger keeps thread_root_message_id). Replies never show in the main chat; the root carries a replies row (up to 3 photos, "N replies", the latest reply's first line, an ink dot while unread). No quote-reply in the main chat; existing quoted replies show as thread replies. Reply privately unchanged. Post-card threads use the same model (no rail, chips or inline "N replies"). No nested threads. A deleted root keeps its thread. |
+| Thread screen | Opens over the app with "<". Root, "N replies", replies; composer hint "Reply". A card thread takes the card's title; every other thread is "Thread" over the chat's name. Opening or reading to the bottom calls chat_thread_read_set. |
+| Signals | In-app alert and catch-up email only to thread participants (root sender, repliers, anyone @mentioned; everyone in chats of 6 or fewer): "<Name> replied in thread: <first line>". Replies count in the chat's unread; the list preview reads "<Name> in thread: <first line>". Status strip "N threads" + dot opens the Threads sheet. The "New" line (ink rule + New pill) marks the first unread in the main chat and in threads. |
+| Threads sheet | From chat_threads_for_me: unread first (dot), read in fg-3; ListCard rows (root sender photo, name, time, root's first line, "N replies"). Laptop: the conversation pane. |
+| Open rule | Unread top-level messages open at the New line; else unread threads (known before the first paint) open onto the Threads sheet; else the chat opens as today. One chat_threads_for_me call in parallel with the first page; never holds the paint. |
+| Long-press | Grab handle sheet: round reactions (👍 ✅ ❤️ 😂 🙏) + "+", tiles Reply / Forward / Add to Tasks, rows Mark unread / Copy link / Copy text, then More actions (Reply privately, Select text, Transcribe, Save to notes, Edit, Remove file, Delete). Laptop right-click: the same order as a popover. ✅ never means approval. |
+| Mark unread | Main chat: chat_mark_unread (cursor and counter). Thread reply: chat_thread_mark_unread. Private, synced from the database. |
+| Add to Tasks | One task in the chat's Tasks list from the message text (a file-only message: the file name), default priority, through chat_task_save_batch. |
+| Copy link | The open-chat-at-message link; a reply opens its thread with the reply highlighted. |
+| Schema | chat_thread_reads plus chat_thread_read_set, chat_thread_mark_unread, chat_mark_unread, chat_threads_for_me (20261108090000_chat_threads_unread.sql). |
+
 ### Idea bank (decided 6 Nov 2026)
 
 | Item | Decision |

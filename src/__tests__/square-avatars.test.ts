@@ -44,6 +44,8 @@ describe('square people avatars (L2)', () => {
   });
 
   it('flags a hand-built round avatar', () => {
-    expect(roundAvatarUses('x.tsx', '<Bone lit="lit-avatar" className="h-8 w-8 rounded-full" />')).toEqual(['x.tsx:1']);
+    expect(
+      roundAvatarUses('x.tsx', '<Bone lit="lit-avatar" className="h-8 w-8 rounded-full" />'),
+    ).toEqual(['x.tsx:1']);
   });
 });
