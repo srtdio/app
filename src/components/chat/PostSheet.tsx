@@ -446,10 +446,10 @@ export function PostSheetExtras(props: PostSheetExtrasProps): ReactElement | nul
       {props.onTalkAbout !== undefined ? (
         <Button
           type="button"
-          variant="link"
+          variant="secondary"
           data-sheet-talk-about=""
           onClick={props.onTalkAbout}
-          className="w-full md:w-auto bg-accent-soft"
+          className="w-full md:w-auto"
         >
           {talkAboutLabel()}
         </Button>
