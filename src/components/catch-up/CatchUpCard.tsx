@@ -110,7 +110,7 @@ function EntityBlock({ item }: { item: ActivityItem }): ReactElement | null {
     (item.welcome != null ? WELCOME_BODY : null);
   if (kind === undefined && words === null) return null;
   return (
-    <div data-catch-up-entity="" className="flex min-w-0 flex-col gap-2 border-b px-4 py-3">
+    <div data-catch-up-entity="" className="flex min-w-0 flex-col gap-2 border-b border-border px-4 py-3">
       {kind !== undefined ? <Tag label={kind} /> : null}
       {words !== null && words.trim() !== '' ? (
         <Text role="secondary" as="p" className="line-clamp-2 whitespace-normal">
@@ -129,7 +129,7 @@ function ThreadCardBlock({ item }: { item: ActivityItem }): ReactElement {
   return (
     <div
       data-catch-up-thread-card={kind ?? 'post'}
-      className="flex min-w-0 flex-col gap-2 border-b px-4 py-3"
+      className="flex min-w-0 flex-col gap-2 border-b border-border px-4 py-3"
     >
       <Tag label={label} />
       {item.title !== null && item.title !== '' ? (
@@ -231,7 +231,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       data-catch-up-card={item.id}
       data-catch-up-kind={kind}
       {...props.gesture}
-      className="lit-float relative flex min-h-0 flex-1 touch-pan-y select-none flex-col overflow-hidden rounded-2xl border bg-panel"
+      className="lit-float relative flex min-h-0 flex-1 touch-pan-y select-none flex-col overflow-hidden rounded-2xl border border-border bg-panel"
     >
       {props.typingRow ?? null}
       <div
@@ -245,7 +245,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           {title}
         </Text>
       </div>
-      <div ref={bodyRef} data-catch-up-body="" className="min-h-0 flex-1 overflow-y-auto border-t">
+      <div ref={bodyRef} data-catch-up-body="" className="min-h-0 flex-1 overflow-y-auto border-t border-border">
         {kind === 'thread-started' ? <ThreadCardBlock item={item} /> : null}
         {!chat ? <EntityBlock item={item} /> : null}
         {!chat && item.body !== null && item.body.trim() !== '' ? (

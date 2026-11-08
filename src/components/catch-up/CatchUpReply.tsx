@@ -43,7 +43,7 @@ export function CatchUpReply(props: {
   return (
     <form
       data-catch-up-reply=""
-      className="shrink-0 border-t px-3 py-2"
+      className="shrink-0 border-t border-border px-3 py-2"
       onSubmit={(event) => {
         event.preventDefault();
         send();

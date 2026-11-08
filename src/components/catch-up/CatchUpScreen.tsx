@@ -370,7 +370,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             data-catch-up-hide-keyboard=""
             onPointerDown={(event) => event.preventDefault()}
             onClick={hideKeyboard}
-            className="rounded-full border"
+            className="rounded-full border border-border"
           >
             <IconChevronDown size={ICON_SIZE.nav} />
           </IconButton>
@@ -478,7 +478,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         className={cn(
           'relative flex min-h-0 flex-col',
           laptop
-            ? 'h-catch-up max-h-full w-catch-up max-w-full rounded-2xl border bg-bg lit-overlay'
+            ? 'h-catch-up max-h-full w-catch-up max-w-full rounded-2xl border border-border bg-bg lit-overlay'
             : 'flex-1',
         )}
       >
