@@ -84,7 +84,7 @@ const flush = async (): Promise<void> => {
 describe('PlanBankItemPage re-reads after a save', () => {
   it('shows the saved description without navigating, and Edit starts from it', async () => {
     host = document.createElement('div');
-    document.body.append(host);
+    document.body.appendChild(host);
     root = createRoot(host);
     act(() => {
       root?.render(
@@ -120,7 +120,7 @@ describe('PlanBankItemPage re-reads after a save', () => {
   it('stops listening once unmounted', async () => {
     const before = net.calls;
     host = document.createElement('div');
-    document.body.append(host);
+    document.body.appendChild(host);
     root = createRoot(host);
     act(() => {
       root?.render(
