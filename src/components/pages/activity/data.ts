@@ -139,12 +139,32 @@ export function payloadNum(p: unknown, key: string): number | null {
 export const BRIEF_REOPENED_EVENT = 'brief_reopened';
 
 /**
+ * The display event type of a thread's first reply on a card root.
+ * chat_message_send writes event_type 'system' with payload.kind
+ * 'thread_started' (card_kind, card_id, thread_root_id, message_id); mapEntry
+ * lifts it to this type, as with BRIEF_REOPENED_EVENT.
+ */
+export const THREAD_STARTED_EVENT = 'thread_started';
+
+/** The card kinds a thread_started row names (payload.card_kind). */
+export type ThreadCardKind = 'post' | 'brief' | 'plan' | 'item';
+
+function threadCardKindOf(p: unknown): ThreadCardKind | null {
+  const kind = payloadStr(p, 'card_kind');
+  return kind === 'post' || kind === 'brief' || kind === 'plan' || kind === 'item' ? kind : null;
+}
+
+/**
  * The event_type values the app knows (the canonical DB list). A row whose
  * event_type is outside this set still renders a generic line (never blank), but
  * we log it loudly once so app<->DB drift is visible instead of silent. This is
  * the runtime companion to the DB<->app parity test.
  */
-const KNOWN_EVENT_TYPES = new Set<string>([...INBOX_EVENT_TYPES, BRIEF_REOPENED_EVENT]);
+const KNOWN_EVENT_TYPES = new Set<string>([
+  ...INBOX_EVENT_TYPES,
+  BRIEF_REOPENED_EVENT,
+  THREAD_STARTED_EVENT,
+]);
 const warnedUnknownEventTypes = new Set<string>();
 
 /** Log (once per value) any event_type the canonical app list does not know. */
@@ -169,11 +189,16 @@ export const MENTION_EVENT_TYPE: InboxEventTypeValue = 'mention';
  */
 export type ActivityState = 'all' | 'unread' | 'mentions' | 'snoozed';
 
-/** The display event type of a row: a 'system' brief reopen is BRIEF_REOPENED_EVENT. */
+/**
+ * The display event type of a row: a 'system' brief reopen is
+ * BRIEF_REOPENED_EVENT, a 'system' thread start is THREAD_STARTED_EVENT.
+ */
 function displayEventType(row: InboxEntryRow, payload: unknown): string {
-  return row.event_type === 'system' && payloadStr(payload, 'kind') === BRIEF_REOPENED_EVENT
-    ? BRIEF_REOPENED_EVENT
-    : row.event_type;
+  if (row.event_type !== 'system') return row.event_type;
+  const kind = payloadStr(payload, 'kind');
+  if (kind === BRIEF_REOPENED_EVENT) return BRIEF_REOPENED_EVENT;
+  if (kind === THREAD_STARTED_EVENT) return THREAD_STARTED_EVENT;
+  return row.event_type;
 }
 
 /** The inbox scope every brief event is written with (brief comments, mentions,
@@ -301,6 +326,13 @@ export interface ActivityItem {
   fromBriefTitle?: string | null;
   /** A chat, plan or task alert's own fields (alerts.ts); null or absent on every other row. */
   alert?: AlertInfo | null;
+  /** A chat mention in a thread, or a thread start: the thread's root (payload.thread_root_id). */
+  threadRootId?: string | null;
+  /** thread_started only: the root card's kind and id (payload.card_kind, payload.card_id). */
+  cardKind?: ThreadCardKind | null;
+  cardId?: string | null;
+  /** Chat rows: the group chat's name by join; null for a DM or before the read. */
+  chatName?: string | null;
 }
 
 /**
@@ -424,6 +456,7 @@ const ROW_ACTOR_EVENTS: ReadonlySet<string> = new Set([
   'brief_created',
   'brief_closed',
   BRIEF_REOPENED_EVENT,
+  THREAD_STARTED_EVENT,
 ]);
 
 /** The actor id a row names: actor_user_id where the writer stamps it, else the payload's. */
@@ -486,6 +519,30 @@ const CHAT_CHANNEL_ENTITY = 'chat_channel';
 /** An @mention in a chat message (not a comment): its own line, link and preview. */
 export function isChatMention(item: Pick<ActivityItem, 'eventType' | 'entityType'>): boolean {
   return item.eventType === MENTION_EVENT_TYPE && item.entityType === CHAT_CHANNEL_ENTITY;
+}
+
+/** A thread's first reply on a card (system/thread_started on a chat). */
+export function isThreadStarted(item: Pick<ActivityItem, 'eventType'>): boolean {
+  return item.eventType === THREAD_STARTED_EVENT;
+}
+
+/** A chat row the chat reads fill: a chat mention or a thread start. */
+export function isChatRow(item: Pick<ActivityItem, 'eventType' | 'entityType'>): boolean {
+  return isChatMention(item) || isThreadStarted(item);
+}
+
+/** What a thread_started card is, in words: "a post", "a brief", "a plan", "an idea". Pure. */
+export function threadCardNoun(kind: ThreadCardKind | null | undefined): string {
+  switch (kind) {
+    case 'brief':
+      return 'a brief';
+    case 'plan':
+      return 'a plan';
+    case 'item':
+      return 'an idea';
+    default:
+      return 'a post';
+  }
 }
 
 /** The first line of a chat message, mentions resolved; null when it has no text. */
@@ -580,6 +637,10 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     onBehalfOfId,
     onBehalfOfName: null,
     alert: alertOf(row, payload),
+    threadRootId: payloadStr(payload, 'thread_root_id'),
+    cardKind: threadCardKindOf(payload),
+    cardId: payloadStr(payload, 'card_id'),
+    chatName: null,
   };
 }
 
@@ -640,7 +701,22 @@ function pointsLabel(n: number): string {
 function chatMentionLine(item: ActivityItem): string {
   const who = item.actorName;
   const inGroup = item.channelType === 'group' && item.title !== null ? ` in ${item.title}` : '';
+  if (item.threadRootId != null) {
+    return who !== null
+      ? `${who} mentioned you in a thread${inGroup}`
+      : `New mention in a thread${inGroup}`;
+  }
   return who !== null ? `${who} mentioned you${inGroup}` : `New mention${inGroup}`;
+}
+
+/**
+ * A thread start's line: "<Actor> started a thread on <card title>", else
+ * "<Actor> started a thread in <chat name>" while the card title is unknown.
+ */
+function threadStartedLine(item: ActivityItem): string {
+  const who = item.actorName ?? UNKNOWN_ACTOR;
+  if (item.title !== null && item.title !== '') return `${who} started a thread on ${item.title}`;
+  return `${who} started a thread in ${item.chatName ?? CHAT_LABEL}`;
 }
 
 /**
@@ -812,6 +888,7 @@ export function activityLine(item: ActivityItem): string {
   const who = item.actorName;
   const target = entityTarget(item);
   if (isChatMention(item)) return chatMentionLine(item);
+  if (isThreadStarted(item)) return threadStartedLine(item);
   // An idea bank row reads its own line (the search hit's words too).
   if (item.alert?.kind === 'bank') {
     return bankAlertLine(item.eventType, item.alert.bank, item.actorName, 'unknown');
@@ -946,6 +1023,8 @@ export function shortLine(item: ActivityItem, parts: { name?: boolean } = {}): s
       return 'Brief closed';
     case BRIEF_REOPENED_EVENT:
       return 'Brief reopened';
+    case THREAD_STARTED_EVENT:
+      return threadStartedLine(item);
     case 'brief_post_created':
       return item.fromBriefTitle !== null && item.fromBriefTitle !== undefined
         ? `Created from ${item.fromBriefTitle}`
@@ -1153,7 +1232,8 @@ export function entityHref(
   side: ViewerSide = 'unknown',
 ): string | null {
   if (item.alert != null) return alertHref(item, item.alert, side);
-  if (isChatMention(item)) {
+  if (isChatRow(item)) {
+    // A reply in a thread opens its thread at that reply (the chat's jump).
     if (item.entityId === null) return null;
     return chatMessageHref(item.entityId, item.messageId);
   }
@@ -1667,6 +1747,36 @@ async function readPlanSources(
   return { items, planTitles, comments };
 }
 
+/** A thread start's card title from the batched reads; null while unknown (the line falls back to the chat). */
+function threadCardTitle(
+  item: Pick<ActivityItem, 'cardKind' | 'cardId'>,
+  from: {
+    postTitles: ReadonlyMap<string, string>;
+    briefTitles: ReadonlyMap<string, string>;
+    planTitles: ReadonlyMap<string, string>;
+    planItems: ReadonlyMap<string, PlanItemInfo>;
+  },
+): string | null {
+  const id = item.cardId ?? null;
+  if (id === null) return null;
+  switch (item.cardKind) {
+    case 'post':
+      return from.postTitles.get(id) ?? null;
+    case 'brief':
+      return from.briefTitles.get(id) ?? null;
+    case 'plan':
+      return from.planTitles.get(id) ?? null;
+    case 'item': {
+      const info = from.planItems.get(id);
+      if (info === undefined) return null;
+      if (info.kind === 'post') return info.postId !== null ? (from.postTitles.get(info.postId) ?? null) : null;
+      return info.title !== null && info.title !== '' ? info.title : null;
+    }
+    default:
+      return null;
+  }
+}
+
 /** Group names by id, one IN read; empty on failure or no ids. */
 async function readGroupNames(client: Client, groupIds: string[]): Promise<Map<string, string>> {
   const names = new Map<string, string>();
@@ -1823,6 +1933,32 @@ export async function fetchActivityEntries(
 }
 
 /**
+ * One entry by id, mapped and enriched like a page row: catch up opened by a
+ * link to an entry the screen does not hold (a refresh, a deep link). One
+ * RLS-scoped select by id, then the page's batched waves. ok with null when it
+ * is gone or not the caller's.
+ */
+export async function fetchActivityEntry(
+  client: Client,
+  workspaceId: string,
+  entryId: string,
+): Promise<{ ok: true; data: ActivityItem | null } | { ok: false; error: string }> {
+  const res = await client
+    .from('inbox_entries')
+    .select(SELECT_COLS)
+    .eq('workspace_id', workspaceId)
+    .eq('id', entryId)
+    .is('deleted_at', null)
+    .limit(1);
+  if (res.error) return { ok: false, error: res.error.message };
+  const rows = (res.data ?? []).map((row) => row as InboxEntryRow);
+  if (rows.length === 0) return { ok: true, data: null };
+  const enriched = await enrichInboxRows(client, workspaceId, rows);
+  if (!enriched.ok) return enriched;
+  return { ok: true, data: enriched.data[0] ?? null };
+}
+
+/**
  * The feed's one mapping path: map inbox rows (mapEntry) and resolve what the
  * minimal payloads omit (actor names, titles, previews, thumbnails) in batched
  * waves, never one read per row.
@@ -1848,11 +1984,16 @@ async function enrichInboxRows(
       item.entityType === 'post' && item.entityId !== null ? [item.entityId] : [],
     ),
   );
-  const briefIds = unique(
-    items.flatMap((item) =>
+  // Thread starts name their card: its title joins the posts, briefs and plan reads below.
+  const threadStarts = items.filter(isThreadStarted);
+  const threadCardIds = (kind: ThreadCardKind): string[] =>
+    threadStarts.flatMap((i) => (i.cardKind === kind && i.cardId != null ? [i.cardId] : []));
+  const briefIds = unique([
+    ...items.flatMap((item) =>
       item.entityType === 'brief' && item.entityId !== null ? [item.entityId] : [],
     ),
-  );
+    ...threadCardIds('brief'),
+  ]);
   // The distinct feedback-point batch ids on the page. Every point in one batch
   // shares a single author, so one IN query (below) resolves author + preview for
   // all of them (no per-batch fetch).
@@ -1866,7 +2007,7 @@ async function enrichInboxRows(
   const chatMentions = items.filter(isChatMention);
   const alerts = items.flatMap((i) => (i.alert != null ? [i.alert] : []));
   const channelIds = unique([
-    ...chatMentions.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
+    ...items.filter(isChatRow).flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
     ...alerts.flatMap((alert) => (alert.channelId !== null ? [alert.channelId] : [])),
   ]);
   const messageIds = unique(
@@ -1886,10 +2027,12 @@ async function enrichInboxRows(
     itemIds: unique([
       ...planEvents.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
       ...planAlerts.flatMap((f) => (f.itemTitle === null && f.itemId !== null ? [f.itemId] : [])),
+      ...threadCardIds('item'),
     ]),
     planIds: unique([
       ...planEvents.flatMap((i) => (i.planId != null ? [i.planId] : [])),
       ...planAlerts.flatMap((f) => (f.planTitle === null && f.planId !== null ? [f.planId] : [])),
+      ...threadCardIds('plan'),
     ]),
     commentIds: unique(
       planEvents.flatMap((i) => (isPlanCommentRow(i) && i.commentId !== null ? [i.commentId] : [])),
@@ -1904,7 +2047,7 @@ async function enrichInboxRows(
       ),
       ...planAlerts.flatMap((f) => (f.itemTitle === null && f.postId !== null ? [f.postId] : [])),
     ]);
-    const postReadIds = unique([...postIds, ...planPostIds]);
+    const postReadIds = unique([...postIds, ...planPostIds, ...threadCardIds('post')]);
     if (postReadIds.length === 0) return null;
     return await client
       .from('posts')
@@ -2053,9 +2196,17 @@ async function enrichInboxRows(
       const channel = item.entityId !== null ? chatRes.channels.get(item.entityId) : undefined;
       item.channelType = channel?.type ?? null;
       item.title = channel?.groupId != null ? (groupNames.get(channel.groupId) ?? null) : null;
+      item.chatName = item.title;
       const body =
         item.messageId !== null ? (chatRes.messages.get(item.messageId)?.body ?? null) : null;
       item.body = chatMentionPreview(body, chatNames);
+    } else if (isThreadStarted(item)) {
+      // The replier, carried on the row; the chat by join; the card title from
+      // the posts, briefs and plan reads (no read of its own).
+      actorUserId = item.actorId;
+      const channel = item.entityId !== null ? chatRes.channels.get(item.entityId) : undefined;
+      item.channelType = channel?.type ?? null;
+      item.chatName = channel?.groupId != null ? (groupNames.get(channel.groupId) ?? null) : null;
     } else if (item.alert != null) {
       // Every alert names its own actor.
       actorUserId = item.actorId;
@@ -2087,6 +2238,20 @@ async function enrichInboxRows(
     item.actorAvatarUrl = actorUserId !== null ? personAvatar(workspaceId, actorUserId) : null;
     item.onBehalfOfName = item.onBehalfOfId != null ? nameOf(item.onBehalfOfId) : null;
     if (isChatMention(item)) return;
+    if (isThreadStarted(item)) {
+      item.title = threadCardTitle(item, {
+        postTitles,
+        briefTitles,
+        planTitles: planRes.planTitles,
+        planItems: planRes.items,
+      });
+      item.body = null;
+      item.format = null;
+      item.caption = null;
+      item.thumbnailAssetVersionId = null;
+      item.number = null;
+      return;
+    }
 
     if (item.alert != null) {
       stitchAlert(item.alert, {

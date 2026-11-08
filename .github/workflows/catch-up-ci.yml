@@ -1,0 +1,135 @@
+name: Catch Up Threads
+
+# Spins up a local Supabase stack, applies supabase/migrations/, and runs the
+# catch-up suite (thread_started entries, thread mentions, inbox_mark_unread_ids).
+# Mirrors the RLS workflow; independent of it and of schema-drift.yml.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  # changes: on a PR, diffs against the merge base with the PR's base branch and
+  # sets run=true only when a changed file matches PATTERNS below. A push to main
+  # always runs.
+  # Imports behind the list: tests/catch-up/**/*.ts imports packages/test-
+  # utils/rls.ts and the generated types; the globalSetup (tests/rls/setup.ts)
+  # boots the local stack from supabase/config.toml.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect suite-relevant changes
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          # One extended regex per line, matched against each changed path.
+          PATTERNS: |
+            ^supabase/migrations/
+            ^supabase/seed
+            ^packages/schemas/src/supabase\.generated\.ts$
+            ^tests/catch-up/
+            ^tests/rls/setup\.ts$
+            ^\.github/workflows/catch-up-ci\.yml$
+            ^supabase/config\.toml$
+            ^supabase/templates/
+            ^packages/test-utils/
+            ^package\.json$
+            ^pnpm-lock\.yaml$
+            ^pnpm-workspace\.yaml$
+            ^tsconfig\.json$
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "push: whole suite"
+            exit 0
+          fi
+          git fetch --no-tags origin "$BASE_REF"
+          base=$(git merge-base "origin/$BASE_REF" HEAD)
+          files=$(git diff --name-only "$base" HEAD)
+          echo "$files"
+          printf '%s\n' "$PATTERNS" | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/patterns"
+          if hits=$(grep -E -f "$RUNNER_TEMP/patterns" <<< "$files"); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "relevant:"
+            echo "$hits"
+          else
+            rc=$?
+            if [ "$rc" -ne 1 ]; then exit "$rc"; fi
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  catch-up:
+    needs: changes
+    # Always reports, so the required check never waits on a skipped job.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    env:
+      RUN: ${{ needs.changes.outputs.run }}
+    steps:
+      - name: Check change detection
+        if: needs.changes.result != 'success'
+        run: |
+          set -euo pipefail
+          echo "changes job: ${{ needs.changes.result }}"
+          exit 1
+
+      - name: Skip note
+        if: env.RUN != 'true'
+        run: |
+          echo "skipped: no relevant files changed"
+
+      - uses: actions/checkout@v4
+        if: env.RUN == 'true'
+
+      - name: Start Supabase images load
+        id: supabase-images-start
+        if: env.RUN == 'true'
+        uses: ./.github/actions/supabase-images
+        with:
+          mode: start
+
+      - uses: pnpm/action-setup@v4
+        if: env.RUN == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.RUN == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: env.RUN == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check the catch-up test workspace
+        if: env.RUN == 'true'
+        run: pnpm exec tsc -p tests/catch-up/tsconfig.json --noEmit
+
+      - name: Wait for Supabase images
+        id: supabase-images
+        if: env.RUN == 'true'
+        uses: ./.github/actions/supabase-images
+        with:
+          mode: wait
+
+      - name: Run catch-up suite
+        if: env.RUN == 'true'
+        run: pnpm exec vitest run --config tests/catch-up/vitest.config.ts
+
+      - name: Stop local Supabase
+        if: always() && env.RUN == 'true'
+        run: pnpm exec supabase stop --no-backup || true
+
+      - name: Save Supabase images
+        if: always() && env.RUN == 'true' && steps.supabase-images.outputs.cache-hit != 'true'
+        uses: ./.github/actions/supabase-images
+        with:
+          mode: save

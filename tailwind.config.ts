@@ -310,8 +310,12 @@ export default {
         'side-panel': '380px',
         // The thread rail glyph in ui/icons (the rail geometry is 13px).
         'rail-glyph': '13px',
+        // Catch up's centred box on laptop (components/catch-up, 8 Nov screens).
+        'catch-up': '560px',
       },
       height: {
+        // Catch up's centred box on laptop (components/catch-up, 8 Nov screens).
+        'catch-up': '680px',
         // Emoji popover from the message action menu (MessageActionMenu).
         emoji: '400px',
         // PressableRow dense: laptop Plan month item lines (decided 28 Oct 2026).

@@ -137,6 +137,13 @@ export interface SwipeReplyOptions {
    * rubber-band (a marked message, a tombstone) but nothing fires. Default true.
    */
   canTrigger?: (side: SwipeSide) => boolean;
+  /**
+   * Per gesture, whether a way is taken at all: false releases the press as
+   * it locks (no movement, no icon, the list scrolls), as if the gesture went
+   * the other way. Default true. A thread view's rows refuse 'right' (no Reply
+   * inside a thread); their left swipe (Delete) stays.
+   */
+  takes?: (side: SwipeSide) => boolean;
 }
 
 /** A rubber band: the row follows a little and never arms (canTrigger false). */
@@ -192,6 +199,7 @@ export function createSwipeReplyController({
   onReply,
   onLeft,
   canTrigger = () => true,
+  takes = () => true,
   onFrame,
   onStart,
   enabled = () => true,
@@ -346,6 +354,7 @@ export function createSwipeReplyController({
       if (
         lockDx <= 0 ||
         Math.abs(dy) >= lockDx ||
+        !takes(side) ||
         (direction === 'both' && nearSystemEdge(startX, side))
       ) {
         // Vertical, the other way or the system's edge: not ours. The list

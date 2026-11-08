@@ -595,11 +595,11 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).not.toMatch(/\.rpc\(|callRpc\(/);
   });
 
-  it('fix 9: opening a group marks every unread entry in it, not only the lead', () => {
-    expect(page).toMatch(
-      /const unread = group\.filter\(\s*\(e\) => e\.readAt === null && openAction\(e, workspaceKey, side\)\.markRead,?\s*\);\s*markEntriesRead\(unread\);/,
-    );
-    expect(page).not.toContain('if (lead !== undefined) handleOpenEntry(lead);');
+  it('fix 9 (catch up): opening a group opens catch up at its newest entry, the others follow', () => {
+    expect(page).toContain('const head = groupHeadEntry(group);');
+    expect(page).toMatch(/openCatchUp\(\s*head,\s*group\.filter\(\(e\) => e\.id !== head\.id\),?\s*\);/);
+    // A tap no longer marks the group read: catch up decides per card.
+    expect(page).not.toContain('markEntriesRead(unread);');
   });
 
   it('fix 11: relative times age on the shared minute clock, never a page timer of its own', () => {
@@ -683,9 +683,9 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(provider).toContain('toastedRef.current = new Set();');
   });
 
-  it('fix 21: opening an entry marks it read through the reverting batch', () => {
-    expect(page).toContain('if (open.markRead && entry.readAt === null) markEntriesRead([entry]);');
-    expect(page).not.toContain('void markEntryRead(supabase, entry, workspaceId, newTrace());');
+  it('fix 21 (catch up): a row tap opens catch up with that entry first, never a direct navigate', () => {
+    expect(page).toContain('(entry: ActivityItem) => openCatchUp(entry)');
+    expect(page).not.toContain('if (open.href !== null) navigate(open.href);');
     expect(page).toMatch(
       /revertRead\(failed, stamp\);\s*toast\?\.show\(\{ title: MARK_READ_FAILED \}\);/,
     );

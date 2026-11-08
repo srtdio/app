@@ -1,7 +1,8 @@
 // The thread view's frame: full screen over the chat on the opaque canvas
 // token (no blur, no translucency), the 56px ui/HeaderBar with "Close thread"
 // (the back "<") on the left and the thread's title (the root card's title
-// for any card kind, else "Thread") over the chat's name, then the
+// for any card kind, else "Thread") over the chat's name (sans, secondary
+// role), then the
 // thread's list and its composer (the caller's). Close and Escape (while the view has focus) close
 // it. Motion (docs/motion.md, push): on a phone the view enters from the
 // right (280 ms) and goes back the same way (240 ms); a drag from the left
@@ -18,6 +19,7 @@ import { useCoarsePointer, useIsLaptop } from '@/lib/use-is-laptop';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
 import { HeaderBar } from '@/components/ui/HeaderBar';
+import { textRole } from '@/components/ui/Text';
 import {
   EDGE_BACK_CLOSE_PX,
   EDGE_BACK_ZONE_PX,
@@ -151,12 +153,24 @@ export function ThreadViewFrame(props: {
           : {})}
       >
         {/* FN23: the dismiss is a chevron, like every other chat layer's back. */}
+        {/* 8 Nov 2026: the chat's name under the title reads in the sans
+            secondary role (HeaderBar's own subtitle is the mono meta role),
+            through the bar's title slot. */}
         <HeaderBar
           compact
           title={<span data-thread-view-title="">{props.title}</span>}
-          {...(props.subtitle !== undefined
-            ? { subtitle: <span data-thread-view-subtitle="">{props.subtitle}</span> }
-            : {})}
+          titleSlot={
+            <>
+              <h1 className={textRole('title', 'truncate')}>
+                <span data-thread-view-title="">{props.title}</span>
+              </h1>
+              {props.subtitle !== undefined ? (
+                <span data-thread-view-subtitle="" className={textRole('secondary')}>
+                  {props.subtitle}
+                </span>
+              ) : null}
+            </>
+          }
           onBack={() => close()}
           backProps={{
             label: 'Close thread',
