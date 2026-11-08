@@ -71,7 +71,6 @@ import {
   SELECTED_ROW_TINT,
   tombstoneClass,
   DELETE_FOR_ME_ROW,
-  OWN_BUBBLE_CONTENT,
   SwipeReplyIcon,
   THREAD_LIST_CLASS,
   threadListItems,
@@ -1261,24 +1260,10 @@ describe('own-bubble inner content', () => {
     return cls;
   }
 
-  it('own bubbles restyle quote, chips, cards and voice onto the fill', () => {
+  // L1 (8 Nov 2026): no own fill, so own and peer content draw the same.
+  it('own bubbles carry no restyle', () => {
     const cls = contentClass(renderBubble(makeMessage({ mine: true, senderUserId: 'me' })));
-    expect(cls).toContain(OWN_BUBBLE_CONTENT);
-    for (const token of [
-      '[&_.text-fg]:text-accent-fg',
-      '[&_.text-accent]:text-accent-fg',
-      '[&_.text-fg-2]:text-accent-fg',
-      '[&_.bg-panel]:bg-on-bubble/[.12]',
-      // The stage tag on a shared card is bg-panel-2: without this it stays a
-      // solid light block under on-bubble ink.
-      '[&_.bg-panel-2]:bg-on-bubble/[.12]',
-      '[&_.bg-panel-3]:bg-on-bubble/[.12]',
-      '[&_.bg-accent]:bg-on-bubble/70',
-    ]) {
-      expect(OWN_BUBBLE_CONTENT).toContain(token);
-    }
-    // No theme-literal variants: token ink plus accent-fg's own value only.
-    expect(OWN_BUBBLE_CONTENT).not.toContain(['dark', ':'].join(''));
+    expect(cls).toBe('contents');
   });
 
   it('peer bubbles are unchanged', () => {
@@ -3762,7 +3747,7 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     const file = attachments[0]?.mime === 'application/pdf' ? attachments[0] : undefined;
     return renderStrip(
       <div className={theme === 'dark' ? 'dark' : undefined}>
-        <div className={mine ? OWN_BUBBLE_CONTENT : undefined}>
+        <div data-own={mine ? '' : undefined}>
           {file !== undefined ? (
             <UploadRing
               progress={file.local?.uploading === true ? (file.local?.progress ?? null) : null}
@@ -3806,20 +3791,6 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     }
     // No raw colour, no theme variant, no hard-coded white/black.
     expect(html).not.toMatch(new RegExp(['white', 'black', ['dark', ':'].join('')].join('|')));
-  });
-
-  it('the own-bubble restyle never reaches the ring (no translucent tile)', () => {
-    const html = ring(paint([pdf], true, 'light'));
-    const classes = new Set(
-      [...html.matchAll(/class="([^"]*)"/g)].flatMap((m) => (m[1] ?? '').split(/\s+/)),
-    );
-    const restyled = [...OWN_BUBBLE_CONTENT.matchAll(/\[&_\.([a-z0-9-]+)/g)].map((m) => m[1]);
-    for (const name of restyled) expect(classes.has(name ?? '')).toBe(false);
-    // The hover tint skips the ring's button (and the voice note's controls).
-    expect(OWN_BUBBLE_CONTENT).toContain(
-      '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]',
-    );
-    expect(OWN_BUBBLE_CONTENT).not.toContain('[&_button:hover]');
   });
 
   it('the tap target is at least 44x44 and the unknown arc starts empty (never a spin or pulse)', () => {

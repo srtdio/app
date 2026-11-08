@@ -56,6 +56,11 @@ function traceId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+/** A proc's arguments as one value (each carries p_trace_id). */
+function procArgs<T extends Record<string, unknown>>(args: T): T {
+  return args;
+}
+
 /** ISO timestamp `minutes` before now. */
 function minutesAgo(minutes: number): string {
   return new Date(Date.now() - minutes * 60_000).toISOString();
@@ -98,10 +103,13 @@ describe.runIf(RLS_SUITE)('chat threads: read points, Mark unread and threads fo
   }
 
   async function threadsFor(userId: string): Promise<ThreadRow[]> {
-    const res = await clientFor(userId).rpc('chat_threads_for_me', {
-      p_channel_id: dm,
-      p_trace_id: traceId(),
-    });
+    const res = await clientFor(userId).rpc(
+      'chat_threads_for_me',
+      procArgs({
+        p_channel_id: dm,
+        p_trace_id: traceId(),
+      }),
+    );
     if (res.error) throw new Error(`chat_threads_for_me failed: ${res.error.message}`);
     return (res.data ?? []) as ThreadRow[];
   }
@@ -117,20 +125,29 @@ describe.runIf(RLS_SUITE)('chat threads: read points, Mark unread and threads fo
   async function allErrors(client: Client): Promise<(string | null)[]> {
     const t = traceId();
     const results = await Promise.all([
-      client.rpc('chat_thread_read_set', {
-        p_channel_id: dm,
-        p_root_id: root,
-        p_message_id: reply,
-        p_trace_id: t,
-      }),
-      client.rpc('chat_thread_mark_unread', {
-        p_channel_id: dm,
-        p_root_id: root,
-        p_message_id: reply,
-        p_trace_id: t,
-      }),
-      client.rpc('chat_mark_unread', { p_channel_id: dm, p_message_id: root, p_trace_id: t }),
-      client.rpc('chat_threads_for_me', { p_channel_id: dm, p_trace_id: t }),
+      client.rpc(
+        'chat_thread_read_set',
+        procArgs({
+          p_channel_id: dm,
+          p_root_id: root,
+          p_message_id: reply,
+          p_trace_id: t,
+        }),
+      ),
+      client.rpc(
+        'chat_thread_mark_unread',
+        procArgs({
+          p_channel_id: dm,
+          p_root_id: root,
+          p_message_id: reply,
+          p_trace_id: t,
+        }),
+      ),
+      client.rpc(
+        'chat_mark_unread',
+        procArgs({ p_channel_id: dm, p_message_id: root, p_trace_id: t }),
+      ),
+      client.rpc('chat_threads_for_me', procArgs({ p_channel_id: dm, p_trace_id: t })),
     ]);
     return results.map((r) => r.error?.message ?? null);
   }
@@ -161,21 +178,27 @@ describe.runIf(RLS_SUITE)('chat threads: read points, Mark unread and threads fo
     expect(before?.reply_count).toBe(1);
     expect(before?.unread).toBe(true);
 
-    const read = await clientFor(bob.id).rpc('chat_thread_read_set', {
-      p_channel_id: dm,
-      p_root_id: root,
-      p_message_id: reply,
-      p_trace_id: traceId(),
-    });
+    const read = await clientFor(bob.id).rpc(
+      'chat_thread_read_set',
+      procArgs({
+        p_channel_id: dm,
+        p_root_id: root,
+        p_message_id: reply,
+        p_trace_id: traceId(),
+      }),
+    );
     expect(read.error).toBeNull();
     expect((await threadsFor(bob.id)).find((t) => t.root_message_id === root)?.unread).toBe(false);
 
-    const unread = await clientFor(bob.id).rpc('chat_thread_mark_unread', {
-      p_channel_id: dm,
-      p_root_id: root,
-      p_message_id: reply,
-      p_trace_id: traceId(),
-    });
+    const unread = await clientFor(bob.id).rpc(
+      'chat_thread_mark_unread',
+      procArgs({
+        p_channel_id: dm,
+        p_root_id: root,
+        p_message_id: reply,
+        p_trace_id: traceId(),
+      }),
+    );
     expect(unread.error).toBeNull();
     expect((await threadsFor(bob.id)).find((t) => t.root_message_id === root)?.unread).toBe(true);
     // My own reply is never unread to me.
@@ -219,11 +242,14 @@ describe.runIf(RLS_SUITE)('chat threads: read points, Mark unread and threads fo
   });
 
   it('T5: chat_mark_unread recomputes my counter from that message on', async () => {
-    const res = await clientFor(alice.id).rpc('chat_mark_unread', {
-      p_channel_id: dm,
-      p_message_id: root,
-      p_trace_id: traceId(),
-    });
+    const res = await clientFor(alice.id).rpc(
+      'chat_mark_unread',
+      procArgs({
+        p_channel_id: dm,
+        p_message_id: root,
+        p_trace_id: traceId(),
+      }),
+    );
     expect(res.error).toBeNull();
     const counter = await adminGeneric
       .from('chat_unread_counters')

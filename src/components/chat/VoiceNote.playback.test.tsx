@@ -7,12 +7,11 @@ const { logError, logWarn } = vi.hoisted(() => ({ logError: vi.fn(), logWarn: vi
 vi.mock('@/lib/logger', () => ({
   logger: { error: logError, warn: logWarn, info: vi.fn(), debug: vi.fn() },
 }));
-// MessageThread (for OWN_BUBBLE_CONTENT) pulls the agora-chat browser SDK.
+// The import graph may pull the agora-chat browser SDK.
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
 import { PRESSABLE_ROW_BASE } from '@/components/ui/PressableRow';
 import {
   VOICE_RELINK_RETRY_MAX_MS,
@@ -408,39 +407,6 @@ describe('VoiceNote playback', () => {
     await flush();
     expect(refreshUrl).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
-  });
-
-  it('the own-bubble hover tint skips every voice control and still tints other buttons', async () => {
-    // The tint's selector, as the arbitrary variant writes it (minus :hover).
-    const variant = /\[&_(button\S*?):hover\]:bg-on-bubble-hover/.exec(OWN_BUBBLE_CONTENT)?.[1];
-    expect(variant).toBe('button:not([data-upload-ring]):not([data-voice-control])');
-    const selector = variant!;
-    voiceStore.update('pb-1', { transcript: 'hello there', collapsed: true });
-    play.mockRejectedValue(new DOMException('no', 'NotSupportedError'));
-    const audio = mount({
-      peekUrl: () => 'https://r2/a',
-      refreshUrl: async () => ok('https://r2/b'),
-    });
-    fire(audio, 'play');
-    // Play/pause, the speed pill and the Transcribe link while playing.
-    const playingButtons = [...document.querySelectorAll('[data-voice-note] button')];
-    expect(document.querySelector('[data-voice-speed]')).not.toBeNull();
-    fire(audio, 'pause');
-    act(() => playButton().click());
-    await flush();
-    await flush();
-    // The error row's "Read the transcript".
-    expect(document.querySelector('[data-voice-read]')).not.toBeNull();
-    const failedButtons = [...document.querySelectorAll('[data-voice-note] button')];
-    const controls = [...playingButtons, ...failedButtons];
-    expect(controls.length).toBeGreaterThanOrEqual(5);
-    for (const button of controls) expect(button.matches(selector)).toBe(false);
-    // Any other button in an own bubble keeps the tint; the upload ring never had it.
-    const other = document.createElement('button');
-    const ring = document.createElement('button');
-    ring.setAttribute('data-upload-ring', '');
-    expect(other.matches(selector)).toBe(true);
-    expect(ring.matches(selector)).toBe(false);
   });
 
   it('play is a bare glyph on the shared PressableRow surface: no fill or radius of its own', () => {

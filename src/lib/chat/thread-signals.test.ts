@@ -98,11 +98,9 @@ describe('L3: every reply is a thread; the main chat holds top-level messages on
   it('a recorded reply (thread root set) or a pending reply (a quote) is not top level', () => {
     expect(isTopLevel(msg())).toBe(true);
     expect(isTopLevel(msg({ threadRootId: 'root' }))).toBe(false);
-    expect(
-      isTopLevel(
-        msg({ threadRootId: undefined, reply: { id: 'root', authorUserId: 'me', preview: 'x' } }),
-      ),
-    ).toBe(false);
+    const pending = msg({ reply: { id: 'root', authorUserId: 'me', preview: 'x' } });
+    delete pending.threadRootId;
+    expect(isTopLevel(pending)).toBe(false);
   });
 
   it('existing quoted replies render as thread replies (they carry the root)', () => {
@@ -121,15 +119,12 @@ describe('L3: every reply is a thread; the main chat holds top-level messages on
   it('a reply records with reply_to = the root: the root of a reply is its recorded root', () => {
     expect(threadRootOf(msg({ id: 'a' }))).toBe('a');
     expect(threadRootOf(msg({ id: 'b', threadRootId: 'root' }))).toBe('root');
-    expect(
-      threadRootOf(
-        msg({
-          id: 'c',
-          threadRootId: undefined,
-          reply: { id: 'p', authorUserId: null, preview: '', rootId: 'root' },
-        }),
-      ),
-    ).toBe('root');
+    const pending = msg({
+      id: 'c',
+      reply: { id: 'p', authorUserId: null, preview: '', rootId: 'root' },
+    });
+    delete pending.threadRootId;
+    expect(threadRootOf(pending)).toBe('root');
   });
 
   it('the replies row: count, up to 3 latest repliers newest first, the latest reply', () => {

@@ -66,10 +66,11 @@ export function loadThreadsForMe(
   traceId: string,
 ): Promise<Result<ThreadForMe[]>> {
   return withReadTimeout(async (signal) => {
-    const { data, error } = await abortable(
-      client.rpc('chat_threads_for_me', { p_channel_id: channelId, p_trace_id: traceId }),
-      signal,
-    );
+    const args: Functions['chat_threads_for_me']['Args'] = {
+      p_channel_id: channelId,
+      p_trace_id: traceId,
+    };
+    const { data, error } = await abortable(client.rpc('chat_threads_for_me', args), signal);
     if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
     return {
       ok: true,

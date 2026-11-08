@@ -34,9 +34,8 @@ describe('no arbitrary radius', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('chat-type.ts keeps the bubble radii as named constants: 18 touch, 12 laptop, a 4px tail', async () => {
-    const { BUBBLE_SHAPE, BUBBLE_TAIL } = await import('@/components/chat/chat-type');
+  it('chat-type.ts keeps the media radii as named constants: 18 touch, 12 laptop (no tail since L1)', async () => {
+    const { BUBBLE_SHAPE } = await import('@/components/chat/chat-type');
     expect(BUBBLE_SHAPE).toEqual({ touch: 'rounded-[18px]', laptop: 'rounded-xl' });
-    expect(BUBBLE_TAIL).toEqual({ mine: 'rounded-br-[4px]', theirs: 'rounded-bl-[4px]' });
   });
 });

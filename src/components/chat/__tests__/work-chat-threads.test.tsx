@@ -109,7 +109,7 @@ describe('L1: everyone on the left, no bubbles', () => {
   });
 
   it('own messages look the same: own photo, own name (never "You"), left side, ticks after the time', () => {
-    const html = bubbleHtml(msg({ mine: true, senderUserId: 'me', status: 'delivered' }));
+    const html = bubbleHtml(msg({ mine: true, senderUserId: 'me', status: 'read' }));
     expect(html).toContain('Shubham Gune');
     expect(html).toContain('data-avatar-role="header"');
     expect(html).not.toContain('bg-bubble-own');
