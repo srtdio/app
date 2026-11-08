@@ -20,7 +20,10 @@ const h = vi.hoisted(() => ({
   fetchActivityEntries: vi.fn(),
   readActivityBadge: vi.fn(),
   markEntryRead: vi.fn(),
-  rpc: vi.fn(async (..._args: unknown[]) => ({ data: null, error: null })),
+  rpc: vi.fn<(...args: unknown[]) => Promise<{ data: null; error: null }>>(async () => ({
+    data: null,
+    error: null,
+  })),
   from: vi.fn(),
 }));
 
