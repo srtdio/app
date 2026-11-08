@@ -403,7 +403,7 @@ export function channelListError(onRetry: () => void): ReactElement {
       icon={<IconChat size={ICON_SIZE.status} />}
       title="Couldn't load chats"
       action={
-        <Button variant="primary" onClick={onRetry}>
+        <Button variant="ghost" onClick={onRetry}>
           Retry
         </Button>
       }

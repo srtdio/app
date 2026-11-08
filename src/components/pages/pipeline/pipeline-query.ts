@@ -1,6 +1,6 @@
 // The Pipeline filters live in the URL query so Back (from a post, or any other
 // page) lands on the same stage and date window. Pure helpers: the page
-// reads and writes through useSearchParams; the feed keys its Show more depth
+// reads and writes through useSearchParams; the feed keys its Load more depth
 // in sessionStorage by the same query string.
 
 import { DATE_WINDOW_DEFAULT, DATE_WINDOW_OPTIONS, type DateWindow } from '@/lib/list-sort';
@@ -64,12 +64,12 @@ export function dateChipLabel(query: Pick<PipelineQuery, 'dateWindow' | 'customR
   return DATE_WINDOW_OPTIONS.find((o) => o.value === query.dateWindow)?.label ?? '';
 }
 
-/** The sessionStorage key for the feed's Show more depth under this query. */
+/** The sessionStorage key for the feed's Load more depth under this query. */
 export function showMoreKey(query: string): string {
   return `pipeline:shown:${query}`;
 }
 
-/** Read a remembered Show more depth; storage off or junk falls back. */
+/** Read a remembered Load more depth; storage off or junk falls back. */
 export function readShown(key: string, fallback: number): number {
   try {
     const raw = globalThis.sessionStorage?.getItem(key) ?? null;
@@ -80,7 +80,7 @@ export function readShown(key: string, fallback: number): number {
   }
 }
 
-/** Remember a Show more depth; storage off is a no-op. */
+/** Remember a Load more depth; storage off is a no-op. */
 export function writeShown(key: string, value: number): void {
   try {
     globalThis.sessionStorage?.setItem(key, String(value));

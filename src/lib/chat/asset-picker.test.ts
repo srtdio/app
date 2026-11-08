@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
-  ASSET_PAGE_SIZE,
+  assetPageSize,
   LIBRARY_SELECT,
   assetCursorAfter,
   assetCursorOr,
@@ -85,8 +85,9 @@ describe('listLibraryAssetsPage', () => {
       method: 'order',
       args: ['uploaded_at', { ascending: false }],
     });
-    expect(read.filters).toContainEqual({ method: 'limit', args: [ASSET_PAGE_SIZE] });
-    expect(ASSET_PAGE_SIZE).toBe(50);
+    // One screen of tiles a page (no window here: the 6 floor), never 50.
+    expect(read.filters).toContainEqual({ method: 'limit', args: [assetPageSize()] });
+    expect(assetPageSize()).toBe(6);
     expect(read.filters.some((f) => f.method === 'or')).toBe(false);
     expect(result.ok && result.data.count).toBe(1);
     expect(result.ok && result.data.rows.map((r) => r.versionId)).toEqual(['v1']);

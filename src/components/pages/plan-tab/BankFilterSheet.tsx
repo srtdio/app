@@ -105,13 +105,7 @@ export function BankFilterSheet(props: {
         // The sheet footer is a flex row: the wrapper takes its full width so
         // Done sits at the right end, never the left.
         <div data-bank-filter-footer="" className="flex w-full justify-end">
-          <Button
-            variant="primary"
-            shape="pill"
-            type="button"
-            data-bank-filter-done=""
-            onClick={props.onClose}
-          >
+          <Button variant="primary" type="button" data-bank-filter-done="" onClick={props.onClose}>
             Done
           </Button>
         </div>
@@ -395,17 +389,20 @@ export function BucketChips(props: {
             onDone={() => void add()}
           />
         ) : (
-          <Chip
-            label="Bucket"
-            variant="add"
+          // An action, not a filter: a Tool (chips are filters only).
+          <Button
+            type="button"
+            variant="ghost"
             data-bank-bucket-add=""
-            dot={<IconPlus size={ICON_SIZE.inline} />}
             onClick={() => {
               setDraft('');
               setRenaming(null);
               setAdding(true);
             }}
-          />
+          >
+            <IconPlus size={ICON_SIZE.inline} />
+            Bucket
+          </Button>
         )
       ) : null}
     </div>

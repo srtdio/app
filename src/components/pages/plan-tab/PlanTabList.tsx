@@ -18,7 +18,6 @@ import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import { BoxSkeleton, Bone, itemIn, rememberCard, useFreshKeys } from '@/lib/motion';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { Thumbnail } from '@/components/media/Thumbnail';
-import { Button } from '@/components/ui/Button';
 import { LIST_CARD_GRID, ListCard, ListCardBox } from '@/components/ui/ListCard';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
@@ -36,13 +35,14 @@ import {
 import { formatPlanStart } from '@/lib/time';
 import { Text } from '@/components/ui/Text';
 import { getFillCount } from '@/lib/use-fill-count';
+import { LoadMore, LOAD_MORE_LABEL } from '@/components/ui/LoadMore';
 
 /**
  * Load more's copy. It never swaps while the page is in flight: busy shows on
  * the button (Button busy), so the label keeps its width. Pure.
  */
 export function loadMoreLabel(): string {
-  return 'Load more';
+  return LOAD_MORE_LABEL;
 }
 
 /** What Load more needs: busy while a page is in flight, and the tap. Null: every plan is in. */
@@ -52,22 +52,12 @@ export interface PlanTabMore {
 }
 
 /**
- * Load more (the Comments pattern): the shared Button, 44 tall, busy (its
- * label kept, the arc over it) while the page is in flight. The plan list,
- * the Bank and From bank end with it.
+ * Load more: the shared ui/LoadMore (Button level, left aligned, busy keeps
+ * its width) while the page is in flight. The plan list, the Bank and From
+ * bank end with it.
  */
 export function PlanTabLoadMore(props: { more: PlanTabMore }): ReactElement {
-  return (
-    <Button
-      type="button"
-      data-plan-tab-load-more=""
-      className="self-start"
-      busy={props.more.busy}
-      onClick={props.more.onMore}
-    >
-      {loadMoreLabel()}
-    </Button>
-  );
+  return <LoadMore data-plan-tab-load-more="" busy={props.more.busy} onMore={props.more.onMore} />;
 }
 
 /**

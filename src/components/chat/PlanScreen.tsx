@@ -831,7 +831,9 @@ export function ScreenFailed(props: { onRetry: () => void }): ReactElement {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-base text-fg-2">{SCREEN_LOAD_FAILED}</p>
-      <Button onClick={props.onRetry}>Retry</Button>
+      <Button variant="ghost" onClick={props.onRetry}>
+        Retry
+      </Button>
     </div>
   );
 }

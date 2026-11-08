@@ -1,7 +1,8 @@
 // The composer's Assets tile: pick existing library assets and send them as
 // chat attachments, no upload. One RLS-scoped read per page (assets with their
 // current version embedded): library origin only, not deleted, link assets left
-// out (a link is not a file to attach), newest uploaded first, 50 a page on a
+// out (a link is not a file to attach), newest uploaded first, one screen of
+// tiles a page (assetPageSize) on a
 // (uploaded_at, id) keyset, with an exact count on the first page. Search is a
 // server-side ILIKE on display_name or filename. A pick becomes an already
 // uploaded attachment on the version id, its meta built the way an uploaded
@@ -17,9 +18,22 @@ import {
   type MessageAttachment,
 } from '@/lib/chat/attachments';
 import { errorText } from '@/lib/error-copy';
+import { getTileFillCount } from '@/lib/use-fill-count';
 
-/** Page size of the library picker (the "Load 50 more" step). */
-export const ASSET_PAGE_SIZE = 50;
+/** The picker grid's widest box (the sheet's content width), in px. */
+const ASSET_GRID_MAX_PX = 560;
+/** sm (640): the grid goes from 3 to 4 columns (AssetPicker GRID_CLASS). */
+const ASSET_GRID_SM_PX = 640;
+
+/**
+ * Page size of the library picker: one screen of its square-tile grid, the
+ * rows that fit times the columns (getTileFillCount, read once per app load),
+ * for the first page and every Load more.
+ */
+export function assetPageSize(): number {
+  const wide = typeof window !== 'undefined' && window.innerWidth >= ASSET_GRID_SM_PX;
+  return getTileFillCount(wide ? 4 : 3, ASSET_GRID_MAX_PX);
+}
 
 /** Search debounce, in milliseconds. */
 export const ASSET_SEARCH_DEBOUNCE_MS = 200;
@@ -162,7 +176,7 @@ export async function listLibraryAssetsPage(
     query = query
       .order('uploaded_at', { ascending: false })
       .order('id', { ascending: false })
-      .limit(ASSET_PAGE_SIZE);
+      .limit(assetPageSize());
     const { data, error, count } = await abortable(query, params.signal);
     if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
     return {
@@ -209,9 +223,4 @@ export function libraryAttachments(
     out.push(toLibraryAttachment(pick.version, pick.name));
   }
   return out;
-}
-
-/** The "Load 50 more" row's progress text. Pure. */
-export function assetsShownOf(shown: number, total: number): string {
-  return `${shown} of ${total}`;
 }

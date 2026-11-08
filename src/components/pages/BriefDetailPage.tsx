@@ -702,7 +702,7 @@ export function BriefDetailPage({
           title="Brief not found"
           description="This brief may have been removed, or you may not have access to it."
           action={
-            <Button variant="primary" onClick={() => navigate('/briefs')}>
+            <Button variant="ghost" onClick={() => navigate('/briefs')}>
               Back to briefs
             </Button>
           }

@@ -318,12 +318,7 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
         </Button>
       ) : null}
       {actions.onLater !== undefined ? (
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={actions.onLater}
-          className={GUIDE_ACTION}
-        >
+        <Button type="button" variant="ghost" onClick={actions.onLater} className={GUIDE_ACTION}>
           {copy.later}
         </Button>
       ) : null}

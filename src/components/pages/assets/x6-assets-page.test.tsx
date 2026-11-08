@@ -224,8 +224,8 @@ describe('X6 Recently deleted link', () => {
     await mount();
     const link = document.querySelector('[data-recently-deleted-link]');
     const cls = (link?.getAttribute('class') ?? '').split(/\s+/);
-    // The shared link variant (accent text, its own 8px side padding), 44 tall.
-    expect(cls).toContain('text-accent');
+    // The shared link variant (a Tool: fg text, its own 8px side padding), 44 tall.
+    expect(cls).toContain('text-fg');
     expect(cls).toContain('h-11');
     expect(cls).not.toContain('text-fg-2');
     // No duplicate call-site focus ring; the primitive carries it.

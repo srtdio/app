@@ -98,10 +98,11 @@ describe('AssetPicker grid', () => {
     expect(html.match(/bg-accent text-accent-fg/g)).toHaveLength(1);
   });
 
-  it('"Load 50 more" with "<shown> of <N>" only while more remain', () => {
-    expect(grid({ count: 120 })).toContain('Load 50 more');
-    expect(grid({ count: 120 })).toContain('2 of 120');
-    expect(grid({ count: 2 })).not.toContain('Load 50 more');
+  it('the shared Load more (no count) only while more remain', () => {
+    expect(grid({ count: 120 })).toContain('>Load more</button>');
+    expect(grid({ count: 120 })).toContain('data-asset-load-more');
+    expect(grid({ count: 120 })).not.toContain('2 of 120');
+    expect(grid({ count: 2 })).not.toContain('Load more');
   });
 
   it('empty library reads one positive line', () => {

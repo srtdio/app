@@ -24,7 +24,6 @@ import {
 } from '../../packages/test-utils/rls';
 import type { Database } from '../../packages/schemas/src/supabase.generated';
 import {
-  ASSETS_PAGE_SIZE,
   countAssetTabs,
   listAssetIds,
   listAssetsPage,
@@ -32,6 +31,9 @@ import {
 } from '../../src/lib/assets';
 
 const ASSETS_SUITE = process.env.ASSETS_SUITE === '1';
+
+/** The page this suite walks: 100, so the tie straddles one page edge (the app pages by the fill count). */
+const ASSETS_PAGE_SIZE = 100;
 
 const TOTAL = 250;
 const TIED = 20;
@@ -158,7 +160,7 @@ describe.runIf(ASSETS_SUITE)('listAssetsPage keyset paging (250 assets, tied upl
     let cursor: AssetCursor | undefined;
     let pages = 0;
     for (;;) {
-      const page = await listAssetsPage(client, wsA.id, cursor);
+      const page = await listAssetsPage(client, wsA.id, cursor, ASSETS_PAGE_SIZE);
       expect(page.ok).toBe(true);
       if (!page.ok) return;
       pages += 1;
@@ -180,13 +182,13 @@ describe.runIf(ASSETS_SUITE)('listAssetsPage keyset paging (250 assets, tied upl
     const bIds = new Set(seededB.map((row) => row.id));
 
     // Asking for B outright: RLS gives nothing back.
-    const direct = await listAssetsPage(client, wsB.id);
+    const direct = await listAssetsPage(client, wsB.id, undefined, ASSETS_PAGE_SIZE);
     expect(direct.ok && direct.data.items).toEqual([]);
 
     // Paging A never picks up a B row, even with B's uploads interleaved.
     let cursor: AssetCursor | undefined;
     for (;;) {
-      const page = await listAssetsPage(client, wsA.id, cursor);
+      const page = await listAssetsPage(client, wsA.id, cursor, ASSETS_PAGE_SIZE);
       if (!page.ok) throw new Error(page.error.message);
       expect(page.data.items.some((item) => bIds.has(item.id))).toBe(false);
       if (page.data.next.done) break;

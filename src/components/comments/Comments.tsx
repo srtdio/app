@@ -17,6 +17,8 @@ import type {
   ReactNode,
 } from 'react';
 import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
+import { getFillCount } from '@/lib/use-fill-count';
 import { Chip } from '@/components/ui/Chip';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Textarea } from '@/components/ui/Textarea';
@@ -98,7 +100,6 @@ import {
   resolveComment,
   stripFormat,
   withTaskEmbeds,
-  PAGE_SIZE,
 } from '@srtdio/comments';
 import type {
   Client,
@@ -1636,7 +1637,8 @@ export function Comments({
   const hasLoaded = useRef(false);
 
   // Fetch a single page. page 0 replaces the list (mount + post-submit refetch);
-  // later pages append. A full page (exactly PAGE_SIZE) implies there may be more.
+  // later pages append. One page is one screen's worth (getFillCount, read once
+  // per app load); a full page implies there may be more.
   const loadPage = useCallback(
     async (nextPage: number): Promise<void> => {
       const seq = nextPage === 0 ? ++page0Seq.current : null;
@@ -1656,12 +1658,14 @@ export function Comments({
       // (checkpoints never exist on a brief); a host-owned read
       // (sharedCheckpoints) is never repeated here.
       const withCheckpoints = nextPage === 0 && entityType === 'post' && !sharedMode;
+      const pageSize = getFillCount();
       const [result, checkpointRows] = await Promise.all([
         listComments(supabase, {
           workspace_id: workspaceId,
           entity_type: entityType,
           entity_id: entityId,
           page: nextPage,
+          pageSize,
         }),
         withCheckpoints ? fetchCheckpoints(supabase, workspaceId, entityId) : Promise.resolve(null),
       ]);
@@ -1685,7 +1689,7 @@ export function Comments({
       if (nextPage === 0) hasLoaded.current = true;
       setComments((prev) => (nextPage === 0 ? result.data : [...prev, ...result.data]));
       setPage(nextPage);
-      setHasMore(result.data.length === PAGE_SIZE);
+      setHasMore(result.data.length === pageSize);
       if (nextPage === 0) setLoading(false);
       else setLoadingMore(false);
     },
@@ -3329,9 +3333,11 @@ export function Comments({
       ) : null}
 
       {!loading && !loadError && !moreError && hasMore ? (
-        <Button className="self-start" busy={loadingMore} onClick={() => void loadPage(page + 1)}>
-          Load more
-        </Button>
+        <LoadMore
+          data-comments-load-more=""
+          busy={loadingMore}
+          onMore={() => void loadPage(page + 1)}
+        />
       ) : null}
 
       <div data-comments-composer="">{composer}</div>

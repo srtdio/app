@@ -67,7 +67,8 @@ describe('LinkButton', () => {
   it('appends the caller className last without dropping the base classes', () => {
     const out = render('https://srtd.io/x', 'w-full');
     expect(out).toContain('w-full');
-    expect(out).toContain('lit-btn-secondary');
+    expect(out).toContain('bg-fg/10');
+    expect(out).not.toContain('lit-btn-');
     expect(out).toContain('min-h-11');
   });
 

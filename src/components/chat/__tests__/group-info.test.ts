@@ -323,7 +323,7 @@ describe('group info full page', () => {
     expect('onEscape' in (el.props as object)).toBe(false);
   });
 
-  it('Leave group is the 44px outlined secondary button with destructive text, no filled red', () => {
+  it('Leave group is the 44px soft grey Button with destructive text, no filled red', () => {
     const row = LeaveGroupRow({ disabled: false, onClick: vi.fn() });
     expect(row.type).toBe(Button);
     // The class string the Button primitive renders for this call site.
@@ -337,7 +337,8 @@ describe('group info full page', () => {
     expect(className).not.toContain('min-h-14');
     expect(className).toContain('w-full');
     expect(className).toContain('text-bad');
-    expect(className).toContain('lit-btn-secondary');
+    expect(className).toContain('bg-fg/10');
+    expect(className).not.toContain('lit-btn-');
     expect(className).not.toContain('bg-bad');
     expect({
       admin: groupInfoSections(true, true),

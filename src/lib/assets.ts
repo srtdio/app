@@ -14,6 +14,7 @@ import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-
 import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, peekKept, primeRead, readKey, sharedRead } from '@/lib/session-read';
 import { readSharedMemberRole } from '@/lib/member-role';
+import { getFillCount } from '@/lib/use-fill-count';
 
 /**
  * The version kinds the server records (asset_versions.kind CHECK, live). A
@@ -244,8 +245,19 @@ export function embeddedAttachmentCounts(rows: RawAssetRow[]): Map<string, numbe
   return counts;
 }
 
-/** Rows per library page. */
-export const ASSETS_PAGE_SIZE = 100;
+/**
+ * Rows per library page: one screen's worth (getFillCount, read once per app
+ * load), so the first page and every Load more fill one screen.
+ */
+export function assetsPageSize(): number {
+  return getFillCount();
+}
+
+/**
+ * The upload-naming read (listAssets): one list of the newest assets to pick
+ * a free name against. Not a Load more list, so it keeps its fixed reach.
+ */
+export const ASSET_NAMING_READ_SIZE = 100;
 
 /**
  * Where the next library page starts: the last loaded row's (uploaded_at, id).
@@ -310,6 +322,7 @@ export async function listAssetsPage(
   client: Client,
   workspaceId: string,
   cursor?: AssetCursor,
+  size: number = assetsPageSize(),
 ): Promise<Result<AssetPage>> {
   let query = client
     .from('assets')
@@ -322,16 +335,16 @@ export async function listAssetsPage(
   const assetsResult = await query
     .order('uploaded_at', { ascending: false })
     .order('id', { ascending: false })
-    .limit(ASSETS_PAGE_SIZE + 1);
+    .limit(size + 1);
   if (assetsResult.error) {
     return { ok: false, error: { code: 'unknown', message: assetsResult.error.message } };
   }
 
   const fetched = (assetsResult.data ?? []) as unknown as RawAssetRow[];
-  const rows = fetched.slice(0, ASSETS_PAGE_SIZE);
+  const rows = fetched.slice(0, size);
   const last = rows[rows.length - 1];
   const next: AssetPageNext =
-    fetched.length > ASSETS_PAGE_SIZE && last !== undefined
+    fetched.length > size && last !== undefined
       ? {
           done: false,
           cursor: { uploadedAt: last.uploaded_at, id: last.id },
@@ -462,7 +475,7 @@ export function prefetchAssetsData(ctx: PrefetchContext): Promise<void> {
 }
 
 /**
- * The first library page (the newest ASSETS_PAGE_SIZE assets). Kept for callers
+ * The newest ASSET_NAMING_READ_SIZE assets in one read. Kept for callers
  * that need only a list (PostDetailPage's upload naming); the Assets page pages
  * with {@link listAssetsPage}.
  */
@@ -470,7 +483,7 @@ export async function listAssets(
   client: Client,
   workspaceId: string,
 ): Promise<Result<AssetListItem[]>> {
-  const page = await listAssetsPage(client, workspaceId);
+  const page = await listAssetsPage(client, workspaceId, undefined, ASSET_NAMING_READ_SIZE);
   if (!page.ok) return page;
   return { ok: true, data: page.data.items };
 }

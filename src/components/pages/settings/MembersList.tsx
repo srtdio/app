@@ -274,7 +274,11 @@ function PendingRowItem({
                   <Button variant="ghost" disabled={cancelling} onClick={() => setEditing(true)}>
                     Edit
                   </Button>
-                  <Button disabled={cancelling} onClick={() => onCancelInvite(member)}>
+                  <Button
+                    variant="ghost"
+                    disabled={cancelling}
+                    onClick={() => onCancelInvite(member)}
+                  >
                     {cancelling ? 'Cancelling' : 'Cancel'}
                   </Button>
                 </div>

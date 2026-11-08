@@ -12,7 +12,6 @@ import {
   draftsAllowed,
   pickerReads,
   searchStageFilter,
-  shownOfLabel,
   togglePost,
 } from '@/components/chat/post-picker';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
@@ -166,7 +165,6 @@ describe('labels', () => {
   it('matches and paging text', () => {
     expect(matchesLabel(1)).toBe('1 match');
     expect(matchesLabel(120)).toBe('120 matches');
-    expect(shownOfLabel(50, 120)).toBe('50 of 120');
     expect(hasMoreResults(50, 120)).toBe(true);
     expect(hasMoreResults(120, 120)).toBe(false);
   });

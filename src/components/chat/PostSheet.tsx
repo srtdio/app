@@ -677,7 +677,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     <div data-sheet-actions="" className="w-full">
       <Button
         type="button"
-        variant="secondary"
+        variant="ghost"
         onClick={() => setCommenting(false)}
         className="w-full md:w-auto"
       >

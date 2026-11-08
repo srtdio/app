@@ -98,7 +98,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
         </Button>
       }
       primary={
-        <Button variant="primary" shape="pill" type="submit" form={formId} busy={submitting}>
+        <Button variant="primary" type="submit" form={formId} busy={submitting}>
           {submitting ? null : <IconLink size={ICON_SIZE.inline} />}
           Add link
         </Button>

@@ -349,7 +349,6 @@ export function ConceptSheet(props: {
               </Button>
               <Button
                 variant="primary"
-                shape="pill"
                 data-plan-concept-save=""
                 busy={busy || waiting}
                 disabled={busy || !valid}
@@ -435,7 +434,7 @@ export function ConceptSheet(props: {
               className="flex min-h-18 items-center justify-between gap-3"
             >
               <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
-              <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>
+              <Button variant="ghost" data-plan-concept-files-retry="" onClick={props.onRetryFiles}>
                 Retry
               </Button>
             </div>

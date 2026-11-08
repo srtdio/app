@@ -41,7 +41,7 @@ import {
   PlanItemScreen,
   sharedBankItemRead,
 } from '@/components/chat/PlanItemScreen';
-import { bankItemReadWhat, type PlanItemRead } from '@/lib/chat/plans';
+import { bankItemReadWhat, PLAN_CHANGED_EVENT, type PlanItemRead } from '@/lib/chat/plans';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { PLAN_BANK_CHIP, PLAN_WEEK_PARAM } from '@/lib/plan-tab';
 import { Bone } from '@/lib/motion';
@@ -220,6 +220,25 @@ export function PlanBankItemPage(): ReactElement {
     });
     return () => {
       live = false;
+    };
+  }, [key, me, workspaceId, itemId]);
+  // A write anywhere (Edit > Save on this idea, a flag, a move) re-reads this
+  // idea: the writer marks the kept read stale first (invalidateReads), so the
+  // shared read goes to the network. The idea on screen stays until it lands
+  // (no box); a key change ends the listener (live), so a result for a key
+  // that is no longer current is dropped.
+  useEffect(() => {
+    if (key === null || me === null || workspaceId === null || itemId === null) return;
+    let live = true;
+    const onChanged = (): void => {
+      void sharedBankItemRead(me, workspaceId, itemId).then((result) => {
+        if (live) setSettled({ key, result });
+      });
+    };
+    window.addEventListener(PLAN_CHANGED_EVENT, onChanged);
+    return () => {
+      live = false;
+      window.removeEventListener(PLAN_CHANGED_EVENT, onChanged);
     };
   }, [key, me, workspaceId, itemId]);
   const kept = key !== null ? peekKept<Result<PlanItemRead>>(key) : undefined;

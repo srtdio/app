@@ -1672,7 +1672,7 @@ export function PostDetailPage({
           title="Post not found"
           description="This post may have been removed, or you may not have access to it."
           action={
-            <Button variant="primary" onClick={goPipeline}>
+            <Button variant="ghost" onClick={goPipeline}>
               Back to pipeline
             </Button>
           }

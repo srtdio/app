@@ -2,7 +2,7 @@
 // DM or group. Media and Files share ONE attachments read per page (split
 // client-side, voice notes in neither); Links is one read per page. A tab's first page loads the first
 // time it is shown and shows its loading state until that page resolves (first
-// paint is final), then "Load more" reads the next keyset page while a page
+// paint is final), then Load more (ui/LoadMore) reads the next keyset page while a page
 // comes back full. Presigns go through the thread's PresignCache; sender names
 // come from the profiles map, and senders missing from it are read in ONE
 // batched readProfiles call per page (never per row). In 'preview' mode each
@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -124,7 +125,7 @@ export function appendPage<T>(feed: Feed<T>, page: ChannelPage<T>): Feed<T> {
   };
 }
 
-/** "Load more" shows only once the list is final and the last page came back full. */
+/** Load more shows only once the list is final and the last page came back full. */
 export function showLoadMore(feed: Feed<unknown>): boolean {
   return feed.status === 'ready' && feed.hasMore;
 }
@@ -542,7 +543,7 @@ export function SeeAllRow(props: { onClick: () => void }): ReactElement {
       type="button"
       data-see-all=""
       onClick={props.onClick}
-      className="w-full md:w-auto text-accent"
+      className="w-full md:w-auto"
     >
       {SEE_ALL_LABEL}
     </Button>
@@ -551,7 +552,7 @@ export function SeeAllRow(props: { onClick: () => void }): ReactElement {
 
 /**
  * The first page's loading or error state, or the body once it resolved, plus
- * a 44px "Load more" when the last page came back full. A capped preview tab
+ * ui/LoadMore when the last page came back full. A capped preview tab
  * passes `seeAll` instead: it never pages, and shows See all when `show`; when
  * it is empty but an older page may exist it reads "Recent items show up here." above See
  * all rather than a blank area. Hook-free.
@@ -577,7 +578,9 @@ export function FeedBody<T>(props: {
     return (
       <div data-feed="error" className="flex flex-col items-center gap-2 py-10 text-base text-fg-3">
         <span>Couldn&apos;t load</span>
-        <Button onClick={props.onRetry}>Retry</Button>
+        <Button variant="ghost" onClick={props.onRetry}>
+          Retry
+        </Button>
       </div>
     );
   }
@@ -587,14 +590,7 @@ export function FeedBody<T>(props: {
         <SeeAllRow onClick={props.seeAll.onClick} />
       ) : null
     ) : showLoadMore(feed) ? (
-      <Button
-        data-load-more=""
-        className="w-full md:w-auto"
-        disabled={feed.loadingMore}
-        onClick={props.onLoadMore}
-      >
-        Load more
-      </Button>
+      <LoadMore data-load-more="" busy={feed.loadingMore} onMore={props.onLoadMore} />
     ) : null;
   return (
     <div data-feed="ready" className="flex flex-col gap-3">

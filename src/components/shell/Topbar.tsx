@@ -29,6 +29,14 @@ function Slot({ name, children }: { name: 'sort' | 'primary'; children: ReactNod
 }
 
 /**
+ * The laptop search field's own look (a field, not a Button level): panel
+ * fill, hairline edge with the strong bottom line, fg ink. It rides the ghost
+ * Button only for its 44 box, press and hover overlay, so the Button levels
+ * never grey it.
+ */
+export const TOPBAR_SEARCH_FIELD = 'border border-b-border-strong bg-panel text-fg';
+
+/**
  * The page's published sort and primary (useTopbarActions), in two fixed
  * slots. Pure render: a context read, no network read, no await. Its own
  * component so Topbar itself stays hookless.
@@ -121,9 +129,9 @@ export function Topbar({
       {onCreateWorkspace !== undefined ? null : (
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           onClick={onOpenPalette}
-          className="hidden md:flex min-w-60"
+          className={cn(TOPBAR_SEARCH_FIELD, 'hidden md:flex min-w-60')}
         >
           <IconSearch size={ICON_SIZE.inline} className="text-fg-3" />
           <span className="flex-1 text-left text-fg-3">Search</span>

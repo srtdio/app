@@ -13,14 +13,13 @@ export type ButtonVariant =
   /** Alias of 'secondary', kept for one release so older call sites compile. */
   | 'default';
 
-export type ButtonShape = 'default' | 'round' | 'pill';
+export type ButtonShape = 'default' | 'round';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   /**
-   * 'round' renders a 44x44 circle (composer actions); 'pill' is the sheet
-   * primary action (Done / OK / Save: full radius, 24 side padding, same 44
-   * height, auto width); default is the 8px-radius rectangle.
+   * 'round' renders a 44x44 circle (icon-only Main: composer Send); default is
+   * the 8px-radius rectangle every text button uses (no pill text buttons).
    */
   shape?: ButtonShape;
   /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
@@ -34,15 +33,21 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   busy?: boolean | undefined;
 }
 
-// One height (44), one radius (8), one type (14 / 500). Tokens only, so light
-// and dark match. cn() merges classes (tailwind-merge): a caller's class of the
-// same group replaces the base one (px-3 over px-4, min-w-0 over min-w-11).
-// Callers never override a base property with the ! modifier (no-raw-button
-// test): pick another variant or primitive instead.
+// Three levels by job (9 Nov 2026), never by look:
+// - MAIN (primary / success / danger): the one action a surface exists to
+//   complete. Solid fill: ink by default, green only to approve, red only to
+//   destroy.
+// - BUTTON (secondary / default): any other standalone action. Solid soft grey
+//   (fg at 10%, 15% on hover), no border, fg ink; reads in light and dark.
+// - TOOL (ghost / link): dismiss or recover words, inline actions, rows of 3+.
+//   No fill, no border, the hover overlay only; link is ghost with fg ink.
+// No lighting on any button (no lit-btn-*). One height (44), one radius (8),
+// one type (14 / 500). Tokens only, so light and dark match. cn() merges
+// classes (tailwind-merge): a caller's class of the same group replaces the
+// base one (px-3 over px-4, min-w-0 over min-w-11). Callers never override a
+// base property with the ! modifier (no-raw-button test).
 // Press (motion move 5): MOVE_CLASS.press sinks to .97 while held, 120 ms, and
 // eases colours; it ignores disabled and aria-disabled buttons.
-// Hover and press keep the light: lit-hover (or the lit-btn-secondary rule)
-// stacks the --hover-fill / --press-fill overlay, never a flat swap or opacity.
 // Disabled never fades: filled buttons turn solid fg-3 with accent-fg text,
 // the rest take text-fg-3; no hover (pointer-events-none), default cursor.
 const BUTTON_BASE =
@@ -51,22 +56,22 @@ const BUTTON_BASE =
 const FILLED_DISABLED = 'disabled:bg-fg-3 disabled:text-accent-fg';
 const QUIET_DISABLED = 'disabled:text-fg-3';
 
-const secondary = `lit-btn-secondary bg-panel text-fg border ${QUIET_DISABLED}`;
+/** The BUTTON level: solid soft grey, no border, no lighting. */
+export const BUTTON_LEVEL_CLASS = `bg-fg/10 text-fg hover:bg-fg/15 ${QUIET_DISABLED}`;
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: `lit-btn-primary bg-accent text-accent-fg hover:bg-accent-hover ${FILLED_DISABLED}`,
-  secondary,
+  primary: `bg-accent text-accent-fg hover:bg-accent-hover ${FILLED_DISABLED}`,
+  secondary: BUTTON_LEVEL_CLASS,
   ghost: `lit-hover text-fg-2 hover:text-fg ${QUIET_DISABLED}`,
-  link: `text-accent !px-2 hover:bg-accent-soft ${QUIET_DISABLED}`,
-  success: `lit-btn-success lit-hover bg-good-solid text-accent-fg ${FILLED_DISABLED}`,
-  danger: `lit-btn-danger lit-hover bg-bad-solid text-accent-fg ${FILLED_DISABLED}`,
-  default: secondary,
+  link: `lit-hover text-fg !px-2 ${QUIET_DISABLED}`,
+  success: `lit-hover bg-good-solid text-accent-fg ${FILLED_DISABLED}`,
+  danger: `lit-hover bg-bad-solid text-accent-fg ${FILLED_DISABLED}`,
+  default: BUTTON_LEVEL_CLASS,
 };
 
 const BUTTON_SHAPES: Record<ButtonShape, string> = {
   default: 'rounded-lg px-4',
   round: 'rounded-full w-11 px-0',
-  pill: 'rounded-full px-6',
 };
 
 /** The class string a Button renders; exported for the few anchors that must look like one. */
@@ -145,19 +150,11 @@ function BusyArc() {
 }
 
 /**
- * The visible face of the outlined Clear pill: 36 tall (the chip face height),
- * a border-strong hairline (3:1 edge rule), fg-2 ink, no fill. It sits inside
- * the 44 tall ghost pill Button, so the tap box stays 44.
- */
-export const CLEAR_PILL_FACE =
-  'inline-flex h-9 items-center rounded-full border border-border-strong px-4 text-fg-2';
-
-/**
  * Clear (dismiss a toast, drop a reply/edit/about bar, remove a link preview,
- * clear a chip filter or a date): the outlined pill. The shared ghost Button in
- * the pill shape (44 tall hit, no padding of its own) around a 36 face with the
- * border-strong hairline. `faceClassName` is for a tone that needs other ink
- * (the error toast's accent-fg on red).
+ * clear a chip filter or a date): a TOOL. The word "Clear" on the ghost Button,
+ * 44 tall, no outline, no fill, no pill, so it never reads as a chip.
+ * `faceClassName` is for a tone that needs other ink (the error toast's
+ * accent-fg on red).
  */
 export function ClearButton({
   children = 'Clear',
@@ -170,13 +167,16 @@ export function ClearButton({
       type="button"
       {...props}
       variant="ghost"
-      shape="pill"
-      data-clear-pill=""
-      className={cn('shrink-0 px-0 [&:disabled>span]:text-fg-3', className)}
+      data-clear-button=""
+      className={cn('shrink-0 px-3', className)}
     >
-      <span data-clear-face="" className={cn(CLEAR_PILL_FACE, faceClassName)}>
-        {children}
-      </span>
+      {faceClassName !== undefined ? (
+        <span data-clear-face="" className={faceClassName}>
+          {children}
+        </span>
+      ) : (
+        children
+      )}
     </Button>
   );
 }

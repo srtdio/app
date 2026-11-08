@@ -1787,17 +1787,15 @@ export function bankItemReadWhat(itemId: string): string {
 export type BankSort = 'active' | 'newest' | 'oldest' | 'name';
 
 /**
- * Ideas a Bank page holds: the screen's fill count (lib/use-fill-count, read
- * once per app load, again once if the density changed), at least 12. Read at
- * call time (sync, no read), so the first page and every Load more follow the
- * active density. Load more reads the next page of the same size with the same
- * .limit(n + 1) query.
+ * Ideas a Bank page holds: exactly the screen's fill count (lib/use-fill-count,
+ * read once per app load, again once if the density changed), no floor of its
+ * own. Read at call time (sync, no read), so the first page and every Load more
+ * follow the active density. Load more reads the next page of the same size
+ * with the same .limit(n + 1) query.
  */
 export function bankPageSize(): number {
-  return Math.max(12, getFillCount());
+  return getFillCount();
 }
-/** bankPageSize() as it was when this module loaded (tests). */
-export const BANK_PAGE_SIZE = bankPageSize();
 /** Search answers at most this many ideas (one read, no pages). */
 export const BANK_SEARCH_LIMIT = 50;
 

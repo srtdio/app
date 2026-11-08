@@ -53,7 +53,7 @@ describe('DeleteSheet', () => {
     expect(choice('cancel')?.props.children).toBe('Cancel');
     expect(choice('everyone')?.props.variant).toBe('danger');
     expect(choice('me')?.props.variant).toBe('danger');
-    expect(choice('cancel')?.props.variant).toBe('secondary');
+    expect(choice('cancel')?.props.variant).toBe('ghost');
     expect(DELETE_FOR_EVERYONE_LABEL).toBe('Delete for everyone');
     expect(DELETE_FOR_ME_LABEL).toBe('Delete for me');
   });

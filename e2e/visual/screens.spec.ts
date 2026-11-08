@@ -993,6 +993,29 @@ function seedBank(network: HarnessNetwork): void {
   );
 }
 
+/**
+ * The Bank with more ideas than one screen: seedBank plus 44 plain ideas
+ * (past the 40-row fill ceiling on every device), so the first page ends with
+ * Load more.
+ */
+function seedBankMany(network: HarnessNetwork): void {
+  seedBank(network);
+  const rows = (network.world.tables.plan_items ??= []);
+  const template = rows.find((r) => r.id === BANK_IDEAS[2]);
+  if (template === undefined) throw new Error('seedBankMany: no template idea');
+  for (let i = 0; i < 44; i += 1) {
+    const at = new Date(NOW - (10 + i) * 86_400_000).toISOString();
+    rows.push({
+      ...template,
+      id: `0190d500-0000-7000-8000-0000000e6${String(i).padStart(3, '0')}`,
+      title: `Idea ${String(i + 1).padStart(2, '0')}`,
+      created_at: at,
+      updated_at: at,
+      last_active_at: at,
+    });
+  }
+}
+
 /** The Plan tab on the Bank chip (phone and laptop: the idea cards in the grid). */
 async function bankReady(page: Page): Promise<void> {
   await waitFor([page.locator('[data-bank-row]').getByText(BANK_FIRST_TITLE)], 'bank');
@@ -1873,6 +1896,20 @@ const SCREENS: Screen[] = [
     extra: seedBank,
     url: '/plan?week=bank',
     steps: bankReady,
+  },
+  {
+    // More ideas than one screen: the first page (the fill count), scrolled
+    // to the shared Load more (Button level, left aligned).
+    name: 'plan-tab-bank-load-more',
+    seed: creator,
+    extra: seedBankMany,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      const more = page.locator('[data-plan-tab-load-more]').first();
+      await waitFor([more], 'bank Load more');
+      await more.scrollIntoViewIfNeeded();
+    },
   },
   {
     name: 'plan-tab-bank-filter',

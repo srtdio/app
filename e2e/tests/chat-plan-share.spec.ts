@@ -313,7 +313,8 @@ test('agency: Send in {chat} reads Sending, then Sent; again does nothing; an ed
   await expect(primary).toHaveText('Sent');
   await expect(primary).toHaveAttribute('data-plan-send-state', 'sent');
   await expect(primary).toBeDisabled();
-  await expect(primary).toHaveClass(/lit-btn-primary/);
+  await expect(primary).toHaveClass(/bg-accent/);
+  await expect(primary).not.toHaveClass(/lit-btn-/);
   await expect(primary.locator('svg')).toHaveCount(0);
   const sentBox = await primary.boundingBox();
   expect(sentBox?.height).toBe(idleBox?.height);

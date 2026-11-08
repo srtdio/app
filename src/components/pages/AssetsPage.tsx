@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { SortMenu } from '@/components/ui/SortMenu';
@@ -889,17 +890,8 @@ export function AssetsPage() {
         {/* Older files load a page at a time; tabs and sort work over what is
             loaded. Shown only while another page exists. */}
         {!assetsFailed && !listLoading && !next.done ? (
-          <div className={cn(GUTTER, 'pb-4 flex justify-center')}>
-            <Button
-              variant="secondary"
-              type="button"
-              data-assets-load-more=""
-              disabled={loadingMore}
-              aria-busy={loadingMore}
-              onClick={() => void loadMore()}
-            >
-              Load more
-            </Button>
+          <div className={cn(GUTTER, 'pb-4 flex flex-col')}>
+            <LoadMore data-assets-load-more="" busy={loadingMore} onMore={() => void loadMore()} />
           </div>
         ) : null}
       </div>

@@ -695,7 +695,9 @@ export function ProfileSettingsPanel(): React.ReactElement {
       <div className="flex flex-col gap-3">
         <p className="text-base text-bad">{errorText('load your profile', null)}</p>
         <div>
-          <Button onClick={refetch}>Retry</Button>
+          <Button variant="ghost" onClick={refetch}>
+            Retry
+          </Button>
         </div>
       </div>
     );
@@ -846,7 +848,7 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
       <span
         data-camera-badge=""
         aria-hidden="true"
-        className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-bg bg-accent text-accent-fg lit-btn-primary"
+        className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-bg bg-accent text-accent-fg lit-badge"
       >
         <IconCamera size={ICON_SIZE.inline} />
       </span>
@@ -1038,6 +1040,7 @@ export function PhotoPickActions(props: {
         Use photo
       </Button>
       <Button
+        variant="ghost"
         type="button"
         data-action="cancel-photo"
         disabled={props.busy}

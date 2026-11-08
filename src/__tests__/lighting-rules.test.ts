@@ -483,9 +483,10 @@ describe('lighting rules', () => {
   });
 
   it('the shared primitives carry their lit class', () => {
+    // Buttons carry no lighting (9 Nov 2026): no lit-btn-* on any variant.
     const button = src('ui/Button.tsx');
     for (const c of ['lit-btn-primary', 'lit-btn-secondary', 'lit-btn-success', 'lit-btn-danger']) {
-      expect(button, c).toContain(c);
+      expect(button, c).not.toContain(c);
     }
     // Chips are the flat outline pill (7 Nov 2026): rest on the strong edge in
     // fg-2 (3:1 edge rule, 8 Nov 2026), the pick is the fg line in fg ink; no

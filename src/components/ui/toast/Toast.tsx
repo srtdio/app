@@ -89,7 +89,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         aria-label="Dismiss notification"
         onClick={() => onDismiss(id)}
         className={error ? 'focus-visible:outline-accent-fg' : undefined}
-        faceClassName={error ? 'border-accent-fg text-accent-fg' : undefined}
+        faceClassName={error ? 'text-accent-fg' : undefined}
       />
       {action !== undefined ? (
         <button

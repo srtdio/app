@@ -8,9 +8,6 @@ import type { PostCardFields, Stage } from '@srtdio/posts';
 import type { PostPickerCursor } from '../../../packages/posts/src/reads';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 
-/** Page size for search results and each default section. */
-export const PICKER_PAGE_SIZE = 50;
-
 /** How far back the "Approved in the last 30 days" section reaches. */
 const RECENT_APPROVED_DAYS = 30;
 
@@ -200,11 +197,6 @@ export function olderApprovedFooter(count: number): string | null {
 /** The search results header. */
 export function matchesLabel(count: number): string {
   return count === 1 ? '1 match' : `${count} matches`;
-}
-
-/** The "Load 50 more" row's progress text. */
-export function shownOfLabel(shown: number, total: number): string {
-  return `${shown} of ${total}`;
 }
 
 /** The keyset cursor after a page: the (created_at, id) of its last row. */

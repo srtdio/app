@@ -89,14 +89,15 @@ describe('task row buttons', () => {
     expect(dated.at(-1)?.tone).toBe('danger');
   });
 
-  it('Undo is the link Button', () => {
+  it('Undo is the link Button (a Tool: fg ink, no accent)', () => {
     const html = renderToStaticMarkup(<TaskRow {...props({ queuedDelete: true })} />);
     const undo = tag(html, 'data-task-undo-delete=""');
     expectOnSystem(undo);
-    expect(undo).toContain('text-accent');
+    expect(undo).toContain('text-fg');
+    expect(undo).not.toContain('text-accent');
   });
 
-  it('Keep mine and Keep theirs are secondary Buttons', () => {
+  it('Keep mine and Keep theirs are secondary Buttons (the soft grey Button level)', () => {
     const html = renderToStaticMarkup(
       <TaskRow
         {...props({
@@ -107,7 +108,8 @@ describe('task row buttons', () => {
     for (const attr of ['data-task-keep-mine=""', 'data-task-keep-theirs=""']) {
       const t = tag(html, attr);
       expectOnSystem(t);
-      expect(t).toContain('lit-btn-secondary');
+      expect(t).toContain('bg-fg/10');
+      expect(t).not.toContain('lit-btn-');
     }
   });
 

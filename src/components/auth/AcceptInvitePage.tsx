@@ -204,7 +204,7 @@ export function AcceptFailureView(props: {
       <ErrorNote>{ACCEPT_ERROR_MESSAGE}</ErrorNote>
       {/* Retry reuses the same accept path the mount effect runs. */}
       <Button
-        variant="primary"
+        variant="ghost"
         className="w-full md:w-full"
         onClick={props.actions.retry}
         busy={props.submitting}

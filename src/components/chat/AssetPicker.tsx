@@ -1,7 +1,7 @@
 // The composer's Assets tile: a picker over the workspace's library assets, in
 // the same Sheet chrome as the share picker (a bottom sheet on touch, the
 // centred panel on a laptop). A grid of library assets, newest uploaded first,
-// 50 a page with "Load 50 more". Search is the palette in pick mode (the
+// one screen of tiles a page with Load more (ui/LoadMore). Search is the palette in pick mode (the
 // header's search button, files only): its picks come back here and are added
 // the same way. An image tile shows its thumbnail through the shared presign
 // cache (presigned lazily as tiles scroll in, deduped and concurrency-bounded);
@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SelectCheck } from '@/components/ui/SelectCheck';
@@ -28,9 +29,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 import type { WorkspaceHit } from '@/lib/search/workspace-search';
 import {
   ASSETS_LOAD_FAILED,
-  ASSET_PAGE_SIZE,
   assetCursorAfter,
-  assetsShownOf,
   isLibraryImage,
   listLibraryAssetsPage,
   toggleLibraryAsset,
@@ -266,7 +265,6 @@ export function AssetPicker(props: {
         <div className="flex w-full justify-end">
           <Button
             variant="primary"
-            shape="pill"
             disabled={selected.length === 0}
             busy={resolving}
             onClick={confirm}
@@ -300,7 +298,7 @@ export function AssetGridSkeleton(): ReactElement {
   );
 }
 
-/** The grid: one tile per asset, then "Load 50 more" while more remain. */
+/** The grid: one tile per asset, then ui/LoadMore while more remain. */
 export function AssetGrid(props: {
   rows: LibraryAsset[];
   count: number;
@@ -330,17 +328,7 @@ export function AssetGrid(props: {
         ))}
       </ul>
       {props.rows.length < props.count ? (
-        <PressableRow
-          type="button"
-          onClick={props.onLoadMore}
-          disabled={props.loadingMore}
-          className="flex items-center justify-between gap-3 px-3 py-2 text-base font-medium text-accent mv-tint disabled:text-fg-3"
-        >
-          <span>{`Load ${ASSET_PAGE_SIZE} more`}</span>
-          <span className="text-sm font-normal tabular-nums text-fg-3">
-            {assetsShownOf(props.rows.length, props.count)}
-          </span>
-        </PressableRow>
+        <LoadMore data-asset-load-more="" busy={props.loadingMore} onMore={props.onLoadMore} />
       ) : null}
     </div>
   );

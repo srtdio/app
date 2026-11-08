@@ -107,7 +107,7 @@ export function UnreadPill(props: {
     >
       <span ref={popRef} className="flex">
         <Button
-          variant="secondary"
+          variant="ghost"
           type="button"
           data-unread-pill=""
           aria-label={`Jump to first unread, ${unreadLabel(props.count)}`}
@@ -115,8 +115,15 @@ export function UnreadPill(props: {
           tabIndex={props.visible ? 0 : -1}
           onClick={props.onJump}
           onContextMenu={(e) => e.preventDefault()}
-          // Secondary is the float surface (bg-panel, border-border, text-fg).
-          className={cn('lit-float', NO_TOUCH_SELECT, props.visible && 'pointer-events-auto')}
+          // A floating layer over the thread, not an in-content Button level:
+          // the solid float surface (the latest button's), fg ink, the ghost's
+          // hover overlay. Never the see-through grey.
+          className={cn(
+            'lit-float text-fg',
+            FLOAT_SURFACE_CLASS,
+            NO_TOUCH_SELECT,
+            props.visible && 'pointer-events-auto',
+          )}
         >
           <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
           <span className="font-mono tabular-nums text-accent">{props.count}</span>
@@ -433,7 +440,7 @@ export function WhoReactedSheet(props: {
         {state.kind === 'failed' ? (
           <div className="flex flex-col items-center gap-3 py-6">
             <p className="text-base text-fg-2">{SHEET_LOAD_FAILED}</p>
-            <Button variant="primary" className="min-w-11" onClick={retry}>
+            <Button variant="ghost" className="min-w-11" onClick={retry}>
               Retry
             </Button>
           </div>

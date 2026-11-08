@@ -900,7 +900,10 @@ export function ComposeItemRow(props: {
         variant="secondary"
         data-plan-day-button={need ? 'need' : item.day === 'none' ? 'none' : 'day'}
         onClick={props.onDay}
-        className={cn('w-full md:w-auto text-left', need ? 'border-warn text-warn' : 'bg-panel-2')}
+        className={cn(
+          'w-full md:w-auto text-left',
+          need ? 'border border-warn text-warn' : 'bg-panel-2',
+        )}
       >
         <span data-plan-day-inner="" className="flex w-full items-center justify-between gap-2">
           {need ? (

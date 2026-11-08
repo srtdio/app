@@ -329,7 +329,7 @@ function SheetRow(props: {
   );
 }
 
-/** Leave group: the full-width secondary button (44px, outlined), destructive text, no filled red. */
+/** Leave group: the full-width Button level (44px, soft grey), destructive text, no filled red. */
 export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void }): ReactElement {
   return (
     <Button
@@ -386,7 +386,7 @@ export function GroupHero(props: {
             <span
               data-camera-badge=""
               aria-hidden="true"
-              className="absolute -bottom-2 -right-2 flex h-12 w-12 items-center justify-center rounded-full border-cutout-lg border-bg bg-accent text-accent-fg lit-btn-primary"
+              className="absolute -bottom-2 -right-2 flex h-12 w-12 items-center justify-center rounded-full border-cutout-lg border-bg bg-accent text-accent-fg lit-badge"
             >
               <IconCamera size={ICON_SIZE.control} />
             </span>

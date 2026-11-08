@@ -1,7 +1,7 @@
 // From bank (agency): the third Add entry after New concept and Pick a post,
 // on the Plan screen's Add sheet, the Plan tab's Add sheet and the laptop
 // empty-day menu. A Sheet over the bank's live ideas, starred first, then
-// Recently active, 12 a page with Load more. It reads when it opens
+// Recently active, one screen (the fill count) a page with Load more. It reads when it opens
 // (readBankPage: the same plan_items select the Bank chip makes, plus its one
 // read per table for the page), never before. Search is the palette in pick
 // mode (the header's search button, bank ideas only); its pick takes the same
@@ -32,6 +32,7 @@ import { withReadTimeout } from '@/lib/chat-reads';
 import {
   dispatchPlanChanged,
   readBankPage,
+  bankPageSize,
   searchBank,
   type BankCursor,
   type BankIdea,
@@ -175,7 +176,7 @@ export function BankPickSheet(props: {
     setLoad({ status: 'loading' });
     mark('plan:from-bank:read:start');
     void withReadTimeout((signal) =>
-      readBankPage(supabase, fromBankQuery(workspaceId), null, signal),
+      readBankPage(supabase, fromBankQuery(workspaceId), null, signal, bankPageSize()),
     ).then((res) => {
       mark('plan:from-bank:read:end');
       if (mine !== seq.current) return;
@@ -204,7 +205,7 @@ export function BankPickSheet(props: {
     const mine = seq.current;
     setLoad({ ...shown, busy: true });
     void withReadTimeout((signal) =>
-      readBankPage(supabase, fromBankQuery(workspaceId), shown.next, signal),
+      readBankPage(supabase, fromBankQuery(workspaceId), shown.next, signal, bankPageSize()),
     ).then((res) => {
       if (mine !== seq.current) return;
       if (!res.ok) {
@@ -364,7 +365,7 @@ export function BankPickSheet(props: {
   if (ideas === null) {
     body = failed ? (
       <div className="py-2">
-        <Button type="button" onClick={readFirst}>
+        <Button variant="ghost" type="button" onClick={readFirst}>
           Retry
         </Button>
       </div>
@@ -432,12 +433,7 @@ export function BankPickSheet(props: {
           ? {
               footer: (
                 <div className="flex w-full justify-end">
-                  <Button
-                    variant="primary"
-                    shape="pill"
-                    data-plan-from-bank-done=""
-                    onClick={close}
-                  >
+                  <Button variant="primary" data-plan-from-bank-done="" onClick={close}>
                     {bankMultiDoneLabel(multi.selected.size)}
                   </Button>
                 </div>

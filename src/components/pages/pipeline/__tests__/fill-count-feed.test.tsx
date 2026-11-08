@@ -43,8 +43,9 @@ describe('PipelineFeed fills the first screen, then shows the same count more', 
     expect(rows(render())).toBe(9);
   });
 
-  it('"Show N more" offers the fill count again', () => {
-    expect(text(render())).toContain('Show 9 more');
+  it('"Load more" (ui/LoadMore, no count) offers the next screen', () => {
+    expect(text(render())).toContain('Load more');
+    expect(text(render())).not.toMatch(/Show \d+ more/);
   });
 
   it('the last step offers only what is left', () => {
@@ -55,7 +56,7 @@ describe('PipelineFeed fills the first screen, then shows the same count more', 
     });
     const html = render('k');
     expect(rows(html)).toBe(27);
-    expect(text(html)).toContain('Show 3 more');
+    expect(text(html)).toContain('Load more');
   });
 
   it('a kept depth larger than the fill count wins on return', () => {

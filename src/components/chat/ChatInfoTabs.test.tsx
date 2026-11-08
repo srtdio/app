@@ -7,6 +7,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   CONTACT_EMPTY,
@@ -117,7 +118,7 @@ const listRows = (tree: ReactElement, attr: string) =>
   );
 const seeAll = (tree: ReactElement) => findAll(tree, (el) => el.type === SeeAllRow);
 const loadMore = (tree: ReactElement) =>
-  findAll(tree, (el) => el.type === Button && 'data-load-more' in el.props);
+  findAll(tree, (el) => el.type === LoadMore && 'data-load-more' in el.props);
 const range = (n: number): number[] => Array.from({ length: n }, (_, i) => i + 1);
 
 describe('ChatInfoTabsView preview', () => {

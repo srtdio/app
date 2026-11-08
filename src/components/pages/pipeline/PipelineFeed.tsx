@@ -2,7 +2,7 @@ import { cn } from '@/lib/cn';
 import { GUTTER } from '@/components/ui/layout';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
 import { LIST_CARD_GRID, type ListCardSelect } from '@/components/ui/ListCard';
@@ -32,7 +32,7 @@ interface PipelineFeedProps {
    */
   selectFor?: (postId: string) => ListCardSelect;
   /**
-   * sessionStorage key for the Show more depth, built from the filter query, so
+   * sessionStorage key for the Load more depth, built from the filter query, so
    * Back to the same filters restores the same depth. Absent: not remembered.
    */
   shownKey?: string;
@@ -85,11 +85,11 @@ function cardGrid(
  * The Pipeline list, phone and laptop alike: the active stage's posts as
  * ui/ListCard cards in LIST_CARD_GRID, capped at the screen's fill count
  * (useFillCount: as many rows as the first screen holds) with an in-place
- * Show more control that reveals another page rather than navigating away. The
+ * Load more control (ui/LoadMore) that reveals another page rather than navigating away. The
  * 'all' chip shows every post; a stage chip shows just that stage, or the
  * stage's one-line empty state when it holds nothing. The shown count is keyed
  * by the filter query (shownKey) in sessionStorage: a new chip or filter starts
- * at the fill count, Show more adds the same count again, and Back to the same filters restores the same depth. One minute
+ * at the fill count, Load more adds the same count again, and Back to the same filters restores the same depth. One minute
  * clock (useMinuteClock) for every card's due and status time.
  */
 export function PipelineFeed({
@@ -143,10 +143,8 @@ export function PipelineFeed({
             new Date(nowMs),
           )}
           {list.length > shown ? (
-            <div className="mt-4 flex justify-center">
-              <Button variant="default" onClick={showMore}>
-                Show {Math.min(page, list.length - shown)} more
-              </Button>
+            <div className="mt-4 flex flex-col">
+              <LoadMore data-pipeline-load-more="" busy={false} onMore={showMore} />
             </div>
           ) : null}
         </>
