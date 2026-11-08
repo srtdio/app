@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // Rule (CLAUDE.md Design rules, 8 Nov 2026): "Sheet primary action: Button
@@ -10,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 // every "Clear" text Button is the shared ClearButton (ui/Button), except the
 // frozen list below, which may only shrink.
 
-const ROOT = join(__dirname, '..', '..');
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const SRC = join(ROOT, 'src');
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -77,7 +78,8 @@ describe('sheet primary action is the black pill', () => {
           if (!tag.includes('variant="primary"')) continue;
           if (!tag.includes('shape="pill"')) bad.push(`${rel}: no shape="pill"`);
           if (/className="[^"]*\bw-full\b/.test(tag)) bad.push(`${rel}: full width`);
-          if (/className="[^"]*\bml-auto\b/.test(tag)) bad.push(`${rel}: ml-auto, use a justify-end wrapper`);
+          if (/className="[^"]*\bml-auto\b/.test(tag))
+            bad.push(`${rel}: ml-auto, use a justify-end wrapper`);
         }
       }
     }
