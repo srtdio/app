@@ -86,8 +86,8 @@ export function initialsFor(name: string): string {
 /**
  * One shape rule for every kind (people, groups, personal notes): a rounded
  * square, rounded-lg (8) at 48 and below, rounded-xl above. People are square
- * like groups since 8 Nov 2026 (work chat, Slack way). The kind is kept for the
- * fill and the label only.
+ * like groups since 8 Nov 2026 (work chat, Slack way). The kind is kept as
+ * data-avatar-kind only.
  */
 export function avatarShapeClass(role: AvatarRole): string {
   return AVATAR_PX[role] <= 48 ? 'rounded-lg' : 'rounded-xl';
@@ -150,6 +150,7 @@ function AvatarFace({
         height={px}
         style={style}
         data-avatar-role={role}
+        data-avatar-kind={kind}
         onError={() => setErrored(true)}
         className={cn(box, 'object-cover')}
       />
@@ -161,6 +162,7 @@ function AvatarFace({
       <div
         style={style}
         data-avatar-role={role}
+        data-avatar-kind={kind}
         {...a11y}
         className={cn(box, avatarFillFor(name), 'text-avatar-ink font-medium', INITIALS_TYPE[role])}
       >
@@ -173,6 +175,7 @@ function AvatarFace({
     <div
       style={style}
       data-avatar-role={role}
+      data-avatar-kind={kind}
       {...a11y}
       className={cn(box, 'bg-accent-soft border border-border text-accent')}
     >

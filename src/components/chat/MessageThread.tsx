@@ -1925,9 +1925,9 @@ export function bubbleClass(
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
     // L1: one grey italic line in the message layout; no bubble.
-    'relative flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap text-fg-3 focus-visible:lit-focus',
+    'relative flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap rounded-lg text-fg-3 focus-visible:lit-focus',
     NO_TOUCH_SELECT,
-    'rounded-lg',
+    sized(BUBBLE_BODY_TYPE, shape.layout),
   );
 }
 
@@ -6521,10 +6521,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const viewComposerInputRef = useRef<HTMLTextAreaElement | null>(null);
   // L3/L14: Reply (sheet tile, swipe right, laptop right-click) opens that
   // message's thread with its composer focused; no quote-reply in the main chat.
+  const openThreadRef = useRef<(rootId: string, focus?: boolean) => void>(() => undefined);
   const handleReply = (message: ThreadMessage): void => {
     openThreadRef.current(threadRootOf(message), true);
   };
-  const openThreadRef = useRef<(rootId: string, focus?: boolean) => void>(() => undefined);
   // The quoted message became a tombstone: the reply chip loses its text and
   // reads the deleted label (the draft map is stripped by the store too).
   const replyQuoteId =
