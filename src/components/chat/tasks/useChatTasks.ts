@@ -7,7 +7,9 @@
 // and the thread holds an older page until its events are in (covers), so its
 // lines paint in the same commit as its rows. Deleted tasks that event lines
 // name come from one IN read; names the thread's profiles lack from one
-// profile read.
+// profile read. The list read embeds the comment each task was made from
+// (comment_tasks); the post and brief titles its source line names come from
+// two parallel IN reads once the list is in state, so the rows never wait.
 //
 // The one write is a Save (saveBatch: chat_task_save_batch with a fresh
 // uuid_v7 trace id): edits and deletes paint at once and revert if the record
@@ -53,14 +55,19 @@ import {
   isEmptyPayload,
   liveEditors,
   mergeEvents,
+  missingSourceIds,
   readChannelTasks,
+  readSourceTitles,
   readTaskEvents,
   readTasksByIds,
   saveTaskBatch,
+  sourceTitleKey,
+  taskSourceLink,
   type BatchPayload,
   type ChatTask,
   type TaskConflict,
   type TaskEvent,
+  type TaskSourceLink,
 } from '@/lib/chat/tasks';
 
 /** The list read: in flight with nothing to show, failed with nothing to show, or a list. */
@@ -100,6 +107,12 @@ export interface UseChatTasks {
   editors: string[];
   /** This sheet holds unsaved changes (true) or not (false); drives the live signal. */
   setEditing: (dirty: boolean) => void;
+  /**
+   * The "From a comment on ..." line per task id, for tasks made from a post
+   * or brief comment whose title is known (absent: no line). Filled after the
+   * list paints; never gates it.
+   */
+  sources: ReadonlyMap<string, TaskSourceLink>;
 }
 
 /** The SDK handler id of the task subscription. */
@@ -136,6 +149,19 @@ interface Remembered {
 
 // The last list per user and chat, this session only: a reopen paints it at once.
 const remembered = new Map<string, Remembered>();
+
+// Post and brief titles task sources name, per user, this session only
+// (sourceTitleKey -> title): a reopen paints its source lines at once.
+const sourceTitles = new Map<string, Map<string, string>>();
+
+function titlesFor(userId: string): Map<string, string> {
+  let map = sourceTitles.get(userId);
+  if (map === undefined) {
+    map = new Map();
+    sourceTitles.set(userId, map);
+  }
+  return map;
+}
 
 /** The chat connection when a ChatProvider is mounted (the app), else null (unit tests). */
 function useChatOptional(): ChatContextValue | null {
@@ -241,6 +267,11 @@ export function useChatTasks(params: {
   const [retrying, setRetrying] = useState(false);
   const [heard, setHeard] = useState<Map<string, number>>(new Map());
   const [nowMs, setNowMs] = useState(() => Date.now());
+  // The source titles known so far (a copy of this user's session cache).
+  const [titles, setTitles] = useState<ReadonlyMap<string, string>>(
+    () => new Map(titlesFor(currentUserId)),
+  );
+  const requestedTitles = useRef(new Set<string>());
 
   const channelRef = useRef(channelId);
   channelRef.current = channelId;
@@ -616,6 +647,44 @@ export function useChatTasks(params: {
     });
   }, [current.events, heard, profiles, currentUserId, db]);
 
+  // Source lines: the post and brief titles the list's sources name, read
+  // after the list is in state (two IN reads in parallel, bounded), so the rows
+  // paint exactly when they did before and the line fills in when they land.
+  useEffect(() => {
+    const cache = titlesFor(currentUserId);
+    const { postIds, briefIds } = missingSourceIds(
+      current.tasks,
+      (key) => cache.has(key) || requestedTitles.current.has(key),
+    );
+    if (postIds.length === 0 && briefIds.length === 0) return;
+    const keys = [
+      ...postIds.map((entityId) => sourceTitleKey({ entityType: 'post', entityId })),
+      ...briefIds.map((entityId) => sourceTitleKey({ entityType: 'brief', entityId })),
+    ];
+    for (const key of keys) requestedTitles.current.add(key);
+    void withReadTimeout((signal) => readSourceTitles(db, { postIds, briefIds }, signal)).then(
+      (res) => {
+        if (!res.ok) {
+          // Asked again on the next list read.
+          for (const key of keys) requestedTitles.current.delete(key);
+          logger.warn('chat: task source titles failed', { error: res.error.message });
+          return;
+        }
+        for (const [key, title] of res.data) cache.set(key, title);
+        if (res.data.size > 0) setTitles(new Map(cache));
+      },
+    );
+  }, [current.tasks, currentUserId, db]);
+
+  const sources = useMemo(() => {
+    const map = new Map<string, TaskSourceLink>();
+    for (const t of current.tasks) {
+      const link = taskSourceLink(t.source, titles);
+      if (link !== null) map.set(t.id, link);
+    }
+    return map;
+  }, [current.tasks, titles]);
+
   const nameOf = useCallback(
     (userId: string): string => {
       if (userId === currentUserId) return 'You';
@@ -658,6 +727,7 @@ export function useChatTasks(params: {
       saveBatch,
       editors,
       setEditing,
+      sources,
     }),
     [
       visibleTasks,
@@ -673,6 +743,7 @@ export function useChatTasks(params: {
       saveBatch,
       editors,
       setEditing,
+      sources,
     ],
   );
 }

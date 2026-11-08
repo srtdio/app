@@ -43,6 +43,7 @@ export function x4FakeTasks(list: ChatTask[], over: Partial<UseChatTasks> = {}):
     })),
     editors: [],
     setEditing: vi.fn(),
+    sources: new Map(),
     ...over,
   };
 }

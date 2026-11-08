@@ -8,7 +8,10 @@
 // chip ringed, and sub-lines: what it was ("was <s>old</s>", "priority was
 // <s>P2</s>", "marked done", "reopened", "New task", "date was <s>3 Nov</s>"),
 // or a both-edited notice with Keep mine / Keep theirs (or "deleted this" with
-// Restore mine / OK). 44px targets everywhere.
+// Restore mine / OK). A task made from a post or brief comment carries one more
+// line, `From a comment on "<title>"` (secondary, one line, 44 tall), that
+// opens that comment (/posts/:id?comment= or /briefs/:id?comment=); none is
+// reserved when there is no source. 44px targets everywhere.
 //
 // The row's menu (ui/ActionMenu: a sheet on a phone, a popover on laptop)
 // opens on a long-press of the title on touch, a right-click or Shift+F10 on
@@ -40,6 +43,7 @@ import type {
   RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -56,6 +60,7 @@ import { cancelPendingLongPressesWithin, useMenuGesture } from '@/components/ui/
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import { Highlight } from '@/components/ui/SearchHighlight';
+import { Text } from '@/components/ui/Text';
 import { cn } from '@/lib/cn';
 import { useDismissLayer } from '@/lib/modal-focus';
 import { useIsLaptop, usePrefersReducedMotion, viewportSize } from '@/lib/use-is-laptop';
@@ -70,6 +75,7 @@ import {
   markText,
   type TaskMark,
   type TaskPriority,
+  type TaskSourceLink,
 } from '@/lib/chat/tasks';
 import type { DayChoice, TaskDateLine } from '@/lib/chat/task-when';
 
@@ -419,6 +425,10 @@ export interface TaskRowProps {
   dateLine?: TaskDateLine | null;
   /** The row's long-press / right-click menu; absent for a row that has none. */
   menu?: RowMenu;
+  /** The comment this task was made from (useChatTasks sources); absent or null: no line. */
+  source?: TaskSourceLink | null;
+  /** Runs right before the source link navigates (the sheet sends what is unsaved). */
+  onBeforeOpenSource?: () => void;
   failed?: ReactNode;
   onToggle: () => void;
   onTitle: (title: string) => void;
@@ -453,6 +463,38 @@ function MarkLine(props: { mark: TaskMark }): ReactElement {
     );
   }
   return <span>{markText(mark)}</span>;
+}
+
+/**
+ * The source line: `From a comment on "<title>"`, one line, truncated, a 44
+ * tall PressableRow under the title that opens the comment in the app.
+ * Mounted only when a row has a source, so rows without one never need a router.
+ */
+export function TaskSourceLine(props: {
+  source: TaskSourceLink;
+  onBeforeOpen?: (() => void) | undefined;
+}): ReactElement {
+  const navigate = useNavigate();
+  return (
+    <div className="-mt-2 flex min-w-0 pl-13 pr-3">
+      <PressableRow
+        insetFocus
+        type="button"
+        data-task-source=""
+        data-href={props.source.href}
+        onClick={() => {
+          props.onBeforeOpen?.();
+          navigate(props.source.href);
+        }}
+        onContextMenu={(e) => e.preventDefault()}
+        className={cn('flex min-w-0 items-center', NO_TOUCH_SELECT)}
+      >
+        <Text role="secondary" className="min-w-0">
+          {props.source.text}
+        </Text>
+      </PressableRow>
+    </div>
+  );
 }
 
 /** The row menu's items in ActionMenu order (Delete sorts last). Pure. */
@@ -670,6 +712,9 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           </IconButton>
         ) : null}
       </div>
+      {props.source != null && !props.queuedDelete ? (
+        <TaskSourceLine source={props.source} onBeforeOpen={props.onBeforeOpenSource} />
+      ) : null}
       {menu !== undefined ? (
         <ActionMenu
           title={props.title}
