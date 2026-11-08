@@ -6,7 +6,7 @@ import { MAYA_NAME } from '../fixtures/chat-data';
 // ⋮ opens the root's long-press sheet, and the task icon opens the chat's
 // Tasks sheet with the root's text in "Add a task", saving nothing until the
 // person adds it. Real app tree against fixture data. Linux WebKit
-// approximates iOS WebKit, it is not iOS.
+// approximates iOS WebKit, it is not iOS. Listed in scripts/ci/e2e-areas.ts (chat).
 
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
