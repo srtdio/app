@@ -72,8 +72,11 @@ describe.runIf(RLS_SUITE)('comment_tasks + comment_task_create', () => {
     // The scaffold seeds a post comment by the owner and a group chat whose only
     // member is the owner (outsiderAgency is not in it).
     ctx = await seedScaffold(admin, ws);
-    // Clients only read posts out of draft.
-    const staged = await admin.from('posts').update({ stage: 'review' }).eq('id', ctx.postId);
+    // Clients only read posts out of draft (row_version must step by one).
+    const staged = await admin
+      .from('posts')
+      .update({ stage: 'review', row_version: 2 })
+      .eq('id', ctx.postId);
     expect(staged.error).toBeNull();
     const second = await insertRow(g, 'comments', {
       workspace_id: ws.id,

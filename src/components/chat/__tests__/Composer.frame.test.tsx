@@ -224,7 +224,8 @@ describe('chat Composer on ui/Composer', () => {
     expect(FRAME).toContain('data-induction={INDUCTION_KEYS.chatHash}');
     expect(SRC).toContain('data-induction={INDUCTION_KEYS.chatMic}');
     expect(FRAME).not.toContain('data-schedule-chevron');
-    expect(FRAME).toContain('onShownChange={setTrayShown}');
+    // The + tray opens inside the box: the dock never switches to a joined look.
+    expect(FRAME).not.toContain('lit-dock-joined');
     expect(FRAME).toContain('formatting');
     expect(FRAME).toContain('compact');
     expect(FRAME).toContain('listEnter={false}');
