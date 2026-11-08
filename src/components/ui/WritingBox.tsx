@@ -685,7 +685,7 @@ export function WritingBox(props: WritingBoxProps) {
     >
       {phoneFormat ? (
         <RowKey label="Close formatting" solid data-row-key="close" onPress={closeFormat}>
-          <IconX size={ICON_SIZE.control} />
+          <IconX size={ICON_SIZE.inline} />
         </RowKey>
       ) : shape === 'card' ? (
         // Laptop: Aa closes its own row (on while open).
