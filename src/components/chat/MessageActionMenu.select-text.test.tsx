@@ -220,7 +220,7 @@ describe('menu style', () => {
       'utf8',
     );
     expect(src).toContain('const isLaptop = useIsLaptop();');
-    expect(src).toContain('<Sheet open={active} onClose={onClose} title="Message actions">');
+    expect(src).toContain('<Sheet open={active} onClose={onClose} title="Message actions" handle>');
     expect(src).toMatch(
       /<MenuPopover\s+open\s+onClose=\{onClose\}\s+align=\{mine \? 'right' : 'left'\}/,
     );

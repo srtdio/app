@@ -329,7 +329,8 @@ describe('the thread hands each card its side', () => {
   for (const [kind, over] of kinds) {
     for (const mine of [true, false]) {
       for (const body of ['', 'Ready for your look']) {
-        it(`${mine ? 'own' : 'peer'} ${kind}${body !== '' ? ' with text' : ''}: cards under ChatCardOwn(${mine})`, () => {
+        // L1 (8 Nov 2026): no own fill, so every card sits under ChatCardOwn(false).
+        it(`${mine ? 'own' : 'peer'} ${kind}${body !== '' ? ' with text' : ''}: cards under ChatCardOwn(false)`, () => {
           const tree = MessageBubble({
             message: message({ ...over, mine, body }),
             profiles: new Map(),
@@ -346,7 +347,7 @@ describe('the thread hands each card its side', () => {
           const { under, outside, values } = cardsUnderOwn(tree);
           expect(under).toBeGreaterThan(0);
           expect(outside).toBe(0);
-          expect(values.every((v) => v === mine)).toBe(true);
+          expect(values.every((v) => v === false)).toBe(true);
         });
       }
     }

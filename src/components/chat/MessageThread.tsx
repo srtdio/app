@@ -1915,8 +1915,8 @@ export function bubbleClass(
 }
 
 /**
- * A deleted message's bubble: the same shell, side, radius, tail, padding and
- * light as a peer bubble (panel-2 fill, lit-bubble-other) in secondary ink
+ * A deleted message: one grey line in the message layout (L1, no bubble shell
+ * or light) in secondary ink
  * (fg-3). Its text takes the body size (italic) and its time the normal meta
  * (TombstoneBubble). One height always: one line, never wrapping (the label
  * truncates), the time in flow on the right, so it is exactly as tall as a
@@ -3341,9 +3341,9 @@ export function threadListItems(
       // FN24: a skeleton bubble, not a plain line; the words stay for screen readers.
       <li key="loading-older" aria-busy="true" className="flex flex-col gap-2 px-4 py-2">
         <span className="sr-only">Loading earlier messages</span>
-        {/* Two bubble-shaped boxes (other, then own side); a sweep, never a pulse. */}
-        <Bone lit="lit-bubble-other" className="h-9 w-48 rounded-2xl" />
-        <Bone lit="lit-bubble-own" className="h-9 w-36 self-end rounded-2xl" />
+        {/* L1: two text lines on the left (no bubbles); a sweep, never a pulse. */}
+        <Bone lit="flat" className="h-9 w-48 rounded-lg" />
+        <Bone lit="flat" className="h-9 w-36 rounded-lg" />
       </li>,
     );
   }
@@ -5540,15 +5540,9 @@ export function threadSkeleton(): ReactElement {
       className="flex flex-1 flex-col gap-3 overflow-hidden px-4 py-4"
     >
       {THREAD_SKELETON_WIDTHS.map((width, i) => (
-        <li
-          key={width}
-          data-skeleton-bubble={i % 2 === 1 ? 'own' : 'other'}
-          className={cn('flex', i % 2 === 1 && 'justify-end')}
-        >
-          <Bone
-            lit={i % 2 === 1 ? 'lit-bubble-own' : 'lit-bubble-other'}
-            className={cn('h-10 rounded-xl', width)}
-          />
+        <li key={width} data-skeleton-bubble={i % 2 === 1 ? 'own' : 'other'} className="flex">
+          {/* L1: every skeleton line on the left, flat, no bubble light. */}
+          <Bone lit="flat" className={cn('h-10 rounded-lg', width)} />
         </li>
       ))}
     </ul>
