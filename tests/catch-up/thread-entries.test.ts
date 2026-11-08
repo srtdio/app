@@ -49,6 +49,11 @@ function traceId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+/** A proc's arguments as one value (each carries p_trace_id). */
+function procArgs<T extends Record<string, unknown>>(args: T): T {
+  return args;
+}
+
 interface EntryRow {
   id: string;
   user_id: string;
@@ -179,36 +184,48 @@ describe.runIf(CATCH_UP_SUITE)('catch up: thread entries and mark unread', () =>
     const [mine] = (await entriesFor(root)).filter((r) => r.user_id === alice.id);
     expect(mine).toBeDefined();
     const id = mine?.id ?? '';
-    const read = await clientFor(alice.id).rpc('inbox_mark_read_ids', {
-      p_workspace_id: wsA.id,
-      p_ids: [id],
-      p_trace_id: traceId(),
-    });
+    const read = await clientFor(alice.id).rpc(
+      'inbox_mark_read_ids',
+      procArgs({
+        p_workspace_id: wsA.id,
+        p_ids: [id],
+        p_trace_id: traceId(),
+      }),
+    );
     expect(read.error).toBeNull();
     // bob cannot put alice's entry back to unread.
-    const other = await clientFor(bob.id).rpc('inbox_mark_unread_ids', {
-      p_workspace_id: wsA.id,
-      p_ids: [id],
-      p_trace_id: traceId(),
-    });
+    const other = await clientFor(bob.id).rpc(
+      'inbox_mark_unread_ids',
+      procArgs({
+        p_workspace_id: wsA.id,
+        p_ids: [id],
+        p_trace_id: traceId(),
+      }),
+    );
     expect(other.error).toBeNull();
     const still = await admin.from('inbox_entries').select('read_at').eq('id', id).single();
     expect(still.data?.read_at).not.toBeNull();
     // alice can.
-    const own = await clientFor(alice.id).rpc('inbox_mark_unread_ids', {
-      p_workspace_id: wsA.id,
-      p_ids: [id],
-      p_trace_id: traceId(),
-    });
+    const own = await clientFor(alice.id).rpc(
+      'inbox_mark_unread_ids',
+      procArgs({
+        p_workspace_id: wsA.id,
+        p_ids: [id],
+        p_trace_id: traceId(),
+      }),
+    );
     expect(own.error).toBeNull();
     const back = await admin.from('inbox_entries').select('read_at').eq('id', id).single();
     expect(back.data?.read_at).toBeNull();
     // An empty list is refused.
-    const empty = await clientFor(alice.id).rpc('inbox_mark_unread_ids', {
-      p_workspace_id: wsA.id,
-      p_ids: [],
-      p_trace_id: traceId(),
-    });
+    const empty = await clientFor(alice.id).rpc(
+      'inbox_mark_unread_ids',
+      procArgs({
+        p_workspace_id: wsA.id,
+        p_ids: [],
+        p_trace_id: traceId(),
+      }),
+    );
     expect(empty.error?.message).toContain('invalid_payload');
   });
 });

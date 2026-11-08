@@ -572,7 +572,8 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).not.toContain('SEARCH_PARAM');
     expect(page).not.toContain('useServerSearch');
     expect(page).not.toContain('searchActivityEntries');
-    expect(page).not.toContain('useSearchParams');
+    // The only query param Activity reads is catch up's (?catchup=), never a search.
+    expect(page).not.toMatch(/searchParams\.get\('q'\)/);
     expect(page).not.toContain('NoResults');
     expect(page).not.toContain('searching');
   });

@@ -102,7 +102,13 @@ describe('ui rules: one ⋯ menu', () => {
     const offenders: string[] = [];
     for (const { rel, src } of FILES) {
       if (rel === 'ui/ActionMenu.tsx') continue;
-      const uses = indexesOf(src, /<IconMore\b/);
+      // The one other ⋯ (8 Nov 2026, thread page redo): the thread view's
+      // "N replies" divider More opens the root message's own long-press menu
+      // (MessageActionMenu), the same menu a long-press opens. Marked in place.
+      const allowed = indexesOf(src, /data-thread-root-action="more"/);
+      const uses = indexesOf(src, /<IconMore\b/).filter(
+        (use) => !allowed.some((at) => use > at && use - at < 200),
+      );
       if (uses.length === 0) continue;
       const triggers: [number, number][] = [];
       for (const start of indexesOf(src, /<ActionMenu\b/)) {
