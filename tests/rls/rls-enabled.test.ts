@@ -53,7 +53,9 @@ const RLS_SUITE = process.env.RLS_SUITE === '1';
 // (20261107120000_chat_message_hides.sql, created with RLS enabled).
 // Then 163 -> 164 for chat_thread_reads
 // (20261108090000_chat_threads_unread.sql, created with RLS enabled).
-const EXPECTED_RELATION_COUNT = 164;
+// Then 164 -> 165 for comment_tasks
+// (20261108090100_comment_tasks.sql, created with RLS enabled).
+const EXPECTED_RELATION_COUNT = 165;
 
 interface Relation {
   relname: string;
