@@ -1,5 +1,5 @@
 // Guard: "First page fills the screen" (CLAUDE.md). Every list's first page and
-// every Load more / Show more step is the fill count: one row more than the
+// every Load more step (ui/LoadMore) is the fill count: one row more than the
 // screen holds at the active density's row height (60 / 72 / 80), times the
 // laptop columns, kept in 6..40. No device is hard-coded.
 
