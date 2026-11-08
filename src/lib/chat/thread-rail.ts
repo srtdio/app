@@ -223,6 +223,16 @@ export function renderedMembership(
   return decided;
 }
 
+/** A rail head: a live, top-level post card (rails and chips stay post-card threads). */
+function isRailHead(row: RailFields): boolean {
+  return (
+    row.sharedPostIds.length > 0 &&
+    row.deleted !== true &&
+    row.reply === null &&
+    typeof row.threadRootId !== 'string'
+  );
+}
+
 /** Where a row sits on its thread's rail. */
 export type RailRole = 'root' | 'middle' | 'last';
 
@@ -282,7 +292,7 @@ export function railPlans<T extends RailFields>(
     }
     close();
     if (member !== null) run = { rootId: member.rootId, head: null, members: [row.id] };
-    else if (isRootCard(row)) run = { rootId: row.id, head: row.id, members: [] };
+    else if (isRailHead(row)) run = { rootId: row.id, head: row.id, members: [] };
     else run = null;
   }
   close();
