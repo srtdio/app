@@ -251,7 +251,16 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
         ) : null}
         {rows.length > 0 ? <ul className="flex flex-col py-2">{rows}</ul> : null}
       </div>
-      {props.reply ?? null}
+      {props.reply != null ? (
+        // Mid-swipe the card is on its way out: its reply box takes no taps.
+        <div
+          data-catch-up-reply-slot=""
+          aria-hidden={props.tint !== null ? true : undefined}
+          className={cn('shrink-0', props.tint !== null && 'pointer-events-none')}
+        >
+          {props.reply}
+        </div>
+      ) : null}
       {props.tint !== null ? (
         <div
           aria-hidden="true"

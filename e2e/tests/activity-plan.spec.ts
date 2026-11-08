@@ -54,7 +54,7 @@ function card(page: Page, title: string) {
   return page.locator('[data-activity-id]').filter({ hasText: title }).first();
 }
 
-test('agency: a plan_comment row is a Notifications card (All) and opens the item', async ({
+test('agency: a plan_comment row is a Notifications card (All); a tap opens catch up; the link opens the item', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -78,21 +78,28 @@ test('agency: a plan_comment row is a Notifications card (All) and opens the ite
   ).toHaveCount(0);
   expectMinTouchTarget(await row.boundingBox());
 
-  // The tap: marked read, then the standalone page with the item open.
+  // The tap opens catch up at this entry (8 Nov 2026); Mark as read saves it.
   await row.click();
-  await expect(page).toHaveURL(
-    new RegExp(`/plan/${PLAN_ID}\\?item=${PLAN_CONCEPT_ITEM}&comment=${ACTIVITY_PLAN_COMMENT_ID}$`),
-  );
+  await expect(page).toHaveURL(/[?&]catchup=/);
+  const catchUp = page.locator('[data-catch-up-card]');
+  await expect(catchUp).toBeVisible({ timeout: 8000 });
+  await expect(catchUp).toContainText(PLAN_CONCEPT_TITLE);
+  await page.locator('[data-catch-up-read]').click();
+  await expect
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'inbox_mark_read_ids').length)
+    .toBe(1);
+
+  // The entry's link: the standalone page with the item open at the comment.
+  await page.goto(`/plan/${PLAN_ID}?item=${PLAN_CONCEPT_ITEM}&comment=${ACTIVITY_PLAN_COMMENT_ID}`);
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByRole('heading', { name: PLAN_CONCEPT_TITLE })).toBeVisible();
   await expect(item.getByText(ACTIVITY_PLAN_COMMENT_BODY)).toBeVisible();
   expectMinTouchTarget(await item.getByRole('button', { name: 'Back', exact: true }).boundingBox());
-  expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(1);
   expectClean(network);
 });
 
-test('client: a plan_review row is a Notifications card and opens the post item', async ({
+test('client: a plan_review row is a Notifications card; a tap opens catch up; the link opens the post item', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -115,7 +122,12 @@ test('client: a plan_review row is a Notifications card and opens the post item'
   await expect(row).toContainText(`Maya Chen approved ${POST_TITLE}`, { timeout: 15_000 });
 
   await row.click();
-  await expect(page).toHaveURL(new RegExp(`/plan/${PLAN_ID}\\?item=${PLAN_POST_ITEM}$`));
+  await expect(page).toHaveURL(/[?&]catchup=/);
+  const catchUp = page.locator('[data-catch-up-card]');
+  await expect(catchUp).toBeVisible({ timeout: 8000 });
+  await expect(catchUp).toContainText(POST_TITLE);
+
+  await page.goto(`/plan/${PLAN_ID}?item=${PLAN_POST_ITEM}`);
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByRole('heading', { name: POST_TITLE })).toBeVisible();
