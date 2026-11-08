@@ -5323,6 +5323,33 @@ export type Database = {
           },
         ]
       }
+      chat_thread_reads: {
+        Row: {
+          channel_id: string
+          last_read_at: string
+          root_message_id: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          last_read_at: string
+          root_message_id: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          last_read_at?: string
+          root_message_id?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       chat_unread_counters: {
         Row: {
           channel_id: string
@@ -9708,6 +9735,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      chat_mark_unread: {
+        Args: { p_channel_id: string; p_message_id: string; p_trace_id: string }
+        Returns: undefined
+      }
       chat_mentions_resolve: {
         Args: { p_actor: string; p_channel_id: string; p_mentions: Json }
         Returns: string[]
@@ -10228,6 +10259,24 @@ export type Database = {
         Args: { p_batch: Json; p_channel_id: string; p_trace_id: string }
         Returns: Json
       }
+      chat_thread_mark_unread: {
+        Args: {
+          p_channel_id: string
+          p_message_id: string
+          p_root_id: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
+      chat_thread_read_set: {
+        Args: {
+          p_channel_id: string
+          p_message_id: string
+          p_root_id: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
       chat_thread_reply_counts: {
         Args: {
           p_channel_id: string
@@ -10239,6 +10288,18 @@ export type Database = {
           last_reply_at: string
           reply_count: number
           root_id: string
+        }[]
+      }
+      chat_threads_for_me: {
+        Args: { p_channel_id: string; p_trace_id: string }
+        Returns: {
+          last_reply_at: string
+          last_reply_body: string
+          last_reply_id: string
+          last_reply_sender: string
+          reply_count: number
+          root_message_id: string
+          unread: boolean
         }[]
       }
       chat_unread_bump: {

@@ -533,6 +533,8 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
     chat_message_stars: [],
     // The viewer's Delete for me rows (RLS: own rows only); specs seed rows.
     chat_message_hides: [],
+    // The viewer's thread read points (procs only); specs seed rows.
+    chat_thread_reads: [],
     // The chat task list (specs seed rows: tasks-data.ts).
     chat_tasks: [],
     chat_task_events: [],

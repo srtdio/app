@@ -17,7 +17,7 @@ Grant hardening: TRUNCATE, TRIGGER, REFERENCES and MAINTAIN are revoked from ano
 4. Briefs: briefs
 5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
-7. Chat (Postgres record): chat_channels, chat_messages, chat_message_marks, chat_message_stars, chat_message_hides, chat_reactions, chat_read_cursors, chat_unread_counters, chat_sync_events
+7. Chat (Postgres record): chat_channels, chat_messages, chat_message_marks, chat_message_stars, chat_message_hides, chat_thread_reads, chat_reactions, chat_read_cursors, chat_unread_counters, chat_sync_events
 8. Inbox and delivery: inbox_entries, activity_badge_counts, activity_badge_snoozed, email_threads, delivery_attempts, webhook_events, webhook_processing_attempts
 9. Platform ops (Cockpit): audit_log, feature_flags, cockpit_access_log, cockpit_procedure_allowlist, intent_ledger, pending_flows
 10. Enumerations reference
@@ -734,6 +734,20 @@ RLS: chat_message_hides_select_own (SELECT to authenticated) USING user_id = aut
 - Delete for everyone is unchanged (chat_message_delete, own message within 30 minutes, all members). Delete for me only hides the message for the caller; the message itself and everyone else's view are untouched.
 
 Recorded in 20261107120000_chat_message_hides.sql.
+
+### chat_thread_reads
+
+Per user read point inside one thread (work chat: every reply is a thread). PK (root_message_id, user_id). Fields: root_message_id text (no FK; chat_messages is partitioned), user_id uuid FK auth.users.id ON DELETE CASCADE, channel_id text, workspace_id uuid, last_read_at timestamptz, updated_at timestamptz default now(). Index chat_thread_reads_user_channel (user_id, channel_id).
+
+RLS on. chat_thread_reads_own (SELECT to authenticated) USING user_id = auth.uid(). Table grants: none for anon or authenticated (INSERT, UPDATE, DELETE revoked; SELECT not granted); every read and write goes through the procs below.
+
+Procs (SECURITY DEFINER, search_path='', EXECUTE granted to authenticated only; each refuses a non-member with 'not a member of this chat' and an anonymous caller with 'not authenticated'):
+- chat_thread_read_set(p_channel_id text, p_root_id text, p_message_id text, p_trace_id uuid) RETURNS void: forward-only thread read mark at p_message_id's created_at (the root or a reply of that root).
+- chat_thread_mark_unread(p_channel_id text, p_root_id text, p_message_id text, p_trace_id uuid) RETURNS void: sets the thread read point to 1 microsecond before that reply (moves back).
+- chat_mark_unread(p_channel_id text, p_message_id text, p_trace_id uuid) RETURNS void: moves my chat_read_cursors row to just before a top-level message and recomputes my chat_unread_counters.unread from chat_messages (90 days, not mine, not deleted, after my clear).
+- chat_threads_for_me(p_channel_id text, p_trace_id uuid) RETURNS TABLE (root_message_id text, reply_count bigint, last_reply_at timestamptz, last_reply_id text, last_reply_sender uuid, last_reply_body text (first 140 chars), unread boolean), STABLE: threads I am in (root sender, replied, mentioned in root or a reply; every thread when the chat has 6 or fewer active members), unread first then newest reply, max 50, replies of the last 90 days.
+
+Recorded in 20261108090000_chat_threads_unread.sql.
 
 ### chat_message_stars
 
