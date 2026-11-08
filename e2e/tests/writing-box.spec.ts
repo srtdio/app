@@ -394,8 +394,10 @@ test('S6 a plan item comment: a mention chip inside a bullet', async ({ page }) 
   const box = item.locator('[data-writing-box]', {
     has: page.getByRole('textbox', { name: 'Comment' }),
   });
+  // The comment box (WritingBox comment mode) keeps its format row behind Aa.
+  if (!(await key(box, 'Bullet list').isVisible())) await key(box, 'Aa').click();
   await key(box, 'Bullet list').click();
-  await expect(comment).toHaveValue('- ');
+  await expectSaved(comment, '- ');
   await page.keyboard.type('@Le');
   const option = page.locator(`[data-mention-option="${COLLEAGUE_A}"]`);
   await expect(option).toBeVisible();
