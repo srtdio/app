@@ -60,3 +60,15 @@ test('thread divider task icon opens Tasks with the root text, unsaved', async (
   expect(taskSaves(network)).toBe(before);
   expectClean(network);
 });
+
+test('replies row photos are 32 square (legible, like Slack)', async ({ page }) => {
+  const network = await installHarnessNetwork(page);
+  await page.goto('/chat');
+  await page.getByText(MAYA_NAME, { exact: true }).first().click();
+  const photo = page.locator('[data-replies-photos] [data-avatar-role="stack"]').first();
+  await expect(photo).toBeVisible();
+  const box = await photo.boundingBox();
+  expect(box?.width).toBe(32);
+  expect(box?.height).toBe(32);
+  expectClean(network);
+});
