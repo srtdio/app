@@ -11,14 +11,14 @@ import { IconUser } from '@/components/ui/icons';
  */
 export type AvatarRole = 'inline' | 'header' | 'row' | 'card' | 'profile';
 
-/** Who the avatar stands for: people are circles, groups and personal notes rounded squares. */
+/** Who the avatar stands for: people, groups and personal notes all draw the same rounded square. */
 type AvatarKind = 'person' | 'group' | 'note';
 
 interface AvatarProps {
   name?: string;
   src?: string;
   role: AvatarRole;
-  /** Defaults to 'person' (circle). */
+  /** Defaults to 'person' (rounded square, like every kind). */
   kind?: AvatarKind;
   /** 'online' adds a bottom-right presence dot (and "online" to the name); absent renders no dot. */
   presence?: 'online' | undefined;
@@ -81,9 +81,13 @@ export function initialsFor(name: string): string {
   return (first + last).toUpperCase();
 }
 
-/** The shape class for a kind at a role: circle for people; rounded-lg (8) at 48 and below, rounded-xl above. */
-export function avatarShapeClass(role: AvatarRole, kind: AvatarKind = 'person'): string {
-  if (kind === 'person') return 'rounded-full';
+/**
+ * One shape rule for every kind (people, groups, personal notes): a rounded
+ * square, rounded-lg (8) at 48 and below, rounded-xl above. People are square
+ * like groups since 8 Nov 2026 (work chat, Slack way). The kind is kept for the
+ * fill and the label only.
+ */
+export function avatarShapeClass(role: AvatarRole): string {
   return AVATAR_PX[role] <= 48 ? 'rounded-lg' : 'rounded-xl';
 }
 
@@ -132,7 +136,7 @@ function AvatarFace({
       ? { role: 'img', 'aria-label': label }
       : {};
   const px = AVATAR_PX[role];
-  const box = cn(avatarShapeClass(role, kind), base, role === 'card' && CARD_SIZE);
+  const box = cn(avatarShapeClass(role), base, role === 'card' && CARD_SIZE);
   const style = sizeStyle(role, px);
 
   if (src !== undefined && !errored) {

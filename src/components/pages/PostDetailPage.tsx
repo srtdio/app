@@ -1628,7 +1628,7 @@ export function PostDetailPage({
           <div aria-hidden className={cn(grid.head, 'flex flex-col gap-3')}>
             <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
             <div className="flex min-h-11 items-center gap-2">
-              <Bone lit="lit-avatar" as="div" className="h-5 w-5 rounded-full" />
+              <Bone lit="lit-avatar" as="div" className="h-5 w-5 rounded-lg" />
               <Bone lit="flat" as="div" className="h-3 w-24 rounded" />
               <Bone lit="flat" as="div" className="h-3 w-16 rounded" />
               <Bone lit="flat" as="div" className="h-3 w-20 rounded" />

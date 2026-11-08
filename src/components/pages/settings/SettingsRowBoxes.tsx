@@ -27,7 +27,7 @@ export function SettingsRowBoxes({ label, rows = 3 }: { label: string; rows?: nu
         {Array.from({ length: rows }, (_unused, index) => (
           <Row
             key={`row-${index}`}
-            leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-full" />}
+            leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-lg" />}
             title={<Bone lit="flat" as="span" className="my-1 h-3 w-1/3 rounded" />}
             secondary={<Bone lit="flat" as="span" className="my-1 h-3 w-1/2 rounded" />}
             divider={index < rows - 1}

@@ -219,7 +219,7 @@ describe('action row and composer (items 3, 4)', () => {
   it('loading is a skeleton and a failed load is ui/LoadError with Retry', () => {
     expect(SRC).toContain('<span className="sr-only">Loading comments</span>');
     expect(SRC).toContain(
-      '<Bone lit="lit-avatar" as="div" className="h-8 w-8 shrink-0 rounded-full" />',
+      '<Bone lit="lit-avatar" as="div" className="h-8 w-8 shrink-0 rounded-lg" />',
     );
     expect(SRC).not.toContain('animate-pulse');
     // Retry re-reads page zero and, on a post page, the host's shared checkpoints.

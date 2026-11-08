@@ -3328,7 +3328,7 @@ export function Comments({
           {[0, 1, 2].map((row) => (
             <div key={row} aria-hidden className={cn(THREAD_ITEM_CLASS, 'flex gap-2')}>
               <span className={LEAD_COLUMN_CLASS}>
-                <Bone lit="lit-avatar" as="div" className="h-8 w-8 shrink-0 rounded-full" />
+                <Bone lit="lit-avatar" as="div" className="h-8 w-8 shrink-0 rounded-lg" />
               </span>
               <div className="min-w-0 flex-1">
                 <Bone lit="flat" as="div" className="mt-2 h-3 w-24 rounded" />

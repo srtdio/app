@@ -5388,7 +5388,7 @@ export function threadOpeningSkeleton(
             <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
-        <Bone lit="lit-avatar" as="div" className="h-9 w-9 shrink-0 rounded-full" />
+        <Bone lit="lit-avatar" as="div" className="h-9 w-9 shrink-0 rounded-lg" />
         <Bone lit="flat" as="div" className="h-3 w-32 rounded" />
       </div>
       {threadSkeleton()}

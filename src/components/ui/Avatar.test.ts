@@ -73,26 +73,28 @@ describe('Avatar roles', () => {
 });
 
 describe('Avatar shapes', () => {
-  it('draws people as circles at every role', () => {
-    for (const role of Object.keys(AVATAR_PX) as AvatarRole[]) {
-      expect(avatarShapeClass(role)).toBe('rounded-full');
-      expect(avatarShapeClass(role, 'person')).toBe('rounded-full');
-    }
+  // L2 (8 Nov 2026): people take the group shape at every size.
+  it('draws every kind as a rounded square: lg at 48 and below, xl at 72', () => {
+    expect(avatarShapeClass('card')).toBe('rounded-lg');
+    expect(avatarShapeClass('inline')).toBe('rounded-lg');
+    expect(avatarShapeClass('header')).toBe('rounded-lg');
+    expect(avatarShapeClass('row')).toBe('rounded-lg');
+    expect(avatarShapeClass('profile')).toBe('rounded-xl');
   });
 
-  it('draws groups and notes as rounded squares: lg at 40 and below, xl at 72', () => {
-    for (const kind of ['group', 'note'] as const) {
-      expect(avatarShapeClass('card', kind)).toBe('rounded-lg');
-      expect(avatarShapeClass('inline', kind)).toBe('rounded-lg');
-      expect(avatarShapeClass('header', kind)).toBe('rounded-lg');
-      expect(avatarShapeClass('row', kind)).toBe('rounded-lg');
-      expect(avatarShapeClass('profile', kind)).toBe('rounded-xl');
+  it('never draws a person round', () => {
+    for (const role of Object.keys(AVATAR_PX) as AvatarRole[]) {
+      const face = renderToStaticMarkup(createElement(Avatar, { role, name: 'A B' }));
+      expect(face).not.toContain('rounded-full');
+      const img = renderToStaticMarkup(createElement(Avatar, { role, name: 'A B', src: 'https://x/a.png' }));
+      expect(img).not.toContain('rounded-full');
     }
   });
 
   it('applies the shape to the rendered face', () => {
     const person = renderToStaticMarkup(createElement(Avatar, { role: 'row', name: 'A B' }));
-    expect(person).toContain('rounded-full');
+    expect(person).toContain('rounded-lg');
+    expect(person).not.toContain('rounded-full');
     const group = renderToStaticMarkup(
       createElement(Avatar, { role: 'profile', kind: 'group', name: 'Team' }),
     );

@@ -146,19 +146,20 @@ describe('the same notes avatar on the list card, header, picker and search', ()
       expect(html).toContain(`src="${PHOTO}"`);
     }
     // The chat list's Personal notes card is ui/ListCard's person slot: the
-    // caller's own photo, round at 48, 40 in Compact (Avatar 'card') like every
+    // caller's own photo, a rounded square at 48, 40 in Compact (Avatar 'card') like every
     // person card, from the summary; never the 72 notes avatar squeezed into the slot.
     expect(tile).toContain(`src="${PHOTO}"`);
     expect(tile).toContain('data-list-card-picture="person"');
     expect(tile).toContain('data-notes-picture=""');
     expect(tile).toContain('data-avatar-role="card"');
     expect(tile).toContain('h-12 w-12 compact:h-10 compact:w-10');
-    expect(tile).toContain('rounded-full');
+    expect(tile).toContain('rounded-lg');
+    expect(tile).not.toContain('rounded-full');
     expect(tile).not.toContain('data-notes-avatar');
-    // Header 32 and picker 40 keep the note rounded square; search rows match the card (round).
+    // Header 32 and picker 40 keep the note rounded square; search rows match the card (square since 8 Nov).
     expect(header).toContain('h-8 w-8 rounded-lg');
     expect(picker).toContain('h-10 w-10 rounded-lg');
-    expect(search).toContain('h-10 w-10 rounded-full');
+    expect(search).toContain('h-10 w-10 rounded-lg');
     expect(from).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -204,7 +205,7 @@ describe('U9: the notes card picture', () => {
     );
     expect(photo).toContain('data-notes-avatar="photo"');
     expect(photo).toContain('data-notes-badge');
-    expect(photo).toContain('h-18 w-18 rounded-full');
+    expect(photo).toContain('h-18 w-18 rounded-xl');
   });
 
   it("the list card without a photo: the caller's initials (ownName), else the person glyph", () => {
