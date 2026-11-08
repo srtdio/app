@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
-import { Button } from '@/components/ui/Button';
+import { ClearButton } from '@/components/ui/Button';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -44,9 +44,9 @@ interface ChipProps extends Omit<
   /** Ref to the rendered <button>; a plain prop so Chip stays a callable function. */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
   /**
-   * A clear action: when set, a ghost "Clear" text Button (44 tall, its own
-   * button, labelled "Clear <label> filter") sits right after the chip. No X
-   * (no-cross guard). Unset, the chip renders exactly as without this prop.
+   * A clear action: when set, the outlined Clear pill (ui/Button ClearButton:
+   * 36 face in a 44 hit, its own button, labelled "Clear <label> filter") sits
+   * right after the chip. No X (no-cross guard). Unset, the chip renders exactly as without this prop.
    */
   onClear?: (() => void) | undefined;
 }
@@ -169,21 +169,12 @@ export function Chip({
     </button>
   );
   if (onClear === undefined) return chip;
-  // "Clear" is a sibling (never a button in a button): the shared ghost Button,
-  // 44 tall, 12 side padding, right after the 32 chip in the same 44 row.
+  // "Clear" is a sibling (never a button in a button): the shared outlined
+  // Clear pill, 44 tall hit, right after the chip in the same 44 row.
   return (
-    <span data-chip-clearable="" className="inline-flex shrink-0 items-center">
+    <span data-chip-clearable="" className="inline-flex shrink-0 items-center gap-2">
       {chip}
-      <Button
-        type="button"
-        variant="ghost"
-        data-chip-clear=""
-        aria-label={`Clear ${label} filter`}
-        onClick={onClear}
-        className="shrink-0 px-3 focus-visible:lit-focus"
-      >
-        Clear
-      </Button>
+      <ClearButton data-chip-clear="" aria-label={`Clear ${label} filter`} onClick={onClear} />
     </span>
   );
 }

@@ -612,7 +612,9 @@ describe('F6: Done vs dismiss (the add-posts picker never adds on close)', () =>
     );
     const props = sheet.last as { onClose: () => void; footer?: unknown } | null;
     if (props === null) throw new Error('sheet not rendered');
-    const done = props.footer as ReactElement<{ onClick: () => void }>;
+    // The footer is the right-aligned wrapper around the Done pill.
+    const wrap = props.footer as ReactElement<{ children: ReactElement<{ onClick: () => void }> }>;
+    const done = wrap.props.children;
     return { dismiss: props.onClose, done: () => done.props.onClick() };
   }
 

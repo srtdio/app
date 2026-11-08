@@ -7,7 +7,7 @@ vi.mock('@/lib/logger', () => ({
 import { renderToStaticMarkup } from 'react-dom/server';
 import { isValidElement, type ReactElement } from 'react';
 import { dispatchSend, PrivateReplyBar } from '@/components/chat/Composer';
-import { Button } from '@/components/ui/Button';
+import { ClearButton } from '@/components/ui/Button';
 import { getDraft, resetDrafts, setPrivateReplyDraft } from '@/lib/chat/drafts';
 import { privateReplyFromDraft, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 
@@ -40,8 +40,7 @@ describe('PrivateReplyBar (the composer quote strip)', () => {
     const bar = PrivateReplyBar({ quote: QUOTE, preview: 'x', onRemove });
     const box = (bar.props as { children: ReactElement }).children;
     const trailing = (box.props as { trailing: ReactElement }).trailing;
-    expect(isValidElement(trailing) && trailing.type).toBe(Button);
-    expect((trailing.props as { children?: unknown }).children).toBe('Clear');
+    expect(isValidElement(trailing) && trailing.type).toBe(ClearButton);
     (trailing.props as { onClick: () => void }).onClick();
     expect(onRemove).toHaveBeenCalledOnce();
   });

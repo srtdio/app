@@ -250,7 +250,6 @@ const REQUIRED: readonly string[] = [
   // One search, the top bar and the chip row (7 Nov 2026): sorts, Activity at
   // 0 unread, palette pick mode, Select pressed, upload states.
   'activity-all-read',
-  'activity-sort',
   'assets-select-on',
   'assets-sort',
   'assets-upload-uploading',
@@ -302,6 +301,11 @@ const REQUIRED: readonly string[] = [
   'chat-replies-row',
   'chat-thread-screen',
   'chat-thread-screen-plan',
+  // Flat finish (8 Nov 2026): own edited comment, its inline editor with Save
+  // in view, and the Edit concept day tiles with one picked.
+  'plan-day-picker',
+  'post-comment-edited',
+  'post-comment-editing',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */

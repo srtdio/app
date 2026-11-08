@@ -36,13 +36,17 @@ describe('Comments row actions', () => {
     }
   });
 
-  it('the action bar is a 36 pill, hairline framed, riding half above the row', () => {
+  it('the action bar is a 36 pill, hairline framed, absolute on the row, half above it', () => {
     const t = tokens(COMMENT_BAR_CLASS);
+    expect(t).not.toContain('self-start');
     for (const want of [
       'flex',
       'h-9',
       'items-center',
       '-translate-y-1/2',
+      'absolute',
+      'right-0',
+      'top-0',
       'border',
       'rounded-lg',
     ]) {
@@ -57,9 +61,9 @@ describe('Comments row actions', () => {
     expect(BAR).not.toMatch(/group-hover|hover:opacity|opacity-0/);
   });
 
-  it('row actions and filters are Buttons, not raw buttons with their own recipe', () => {
+  it('row actions are Buttons, not raw buttons with their own recipe', () => {
     expect(SRC).toContain('cn(ROW_ACTION_CLASS,');
-    expect(SRC).toContain("variant={filter === value ? 'secondary' : 'ghost'}");
+    expect(SRC).not.toContain("variant={filter === value ? 'secondary' : 'ghost'}");
     expect(SRC).not.toMatch(/<Button[^>]*size="(sm|md|lg)"/);
     expect(SRC).toContain('<CommentActionBar');
   });

@@ -146,9 +146,11 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
         onClose={onClose}
         title="Booked"
         footer={
-          <Button variant="primary" className="ml-auto" onClick={onClose}>
-            Done
-          </Button>
+          <div className="flex w-full justify-end">
+            <Button variant="primary" shape="pill" onClick={onClose}>
+              Done
+            </Button>
+          </div>
         }
       >
         <p className="text-base text-fg-2">
@@ -164,17 +166,19 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
       onClose={onClose}
       title="Book a call"
       footer={
-        <Button
-          variant="primary"
-          className="ml-auto"
-          // No time picked yet is a choice not made (like an unpicked radio),
-          // not a form error; while sending the label stays with a spinner.
-          disabled={slotAt === null}
-          busy={sending}
-          onClick={() => void book()}
-        >
-          Book
-        </Button>
+        <div className="flex w-full justify-end">
+          <Button
+            variant="primary"
+            shape="pill"
+            // No time picked yet is a choice not made (like an unpicked radio),
+            // not a form error; while sending the label stays with a spinner.
+            disabled={slotAt === null}
+            busy={sending}
+            onClick={() => void book()}
+          >
+            Book
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-3">

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 // ui/WritingBox: the chat pill on a phone, the card on focus / with text, the
-// Aa row swap (Aa closes it, no X), caption mode with no Aa row, field mode
-// rows on focus, expand / collapse keeping the same field (no remount), one
-// collapse key, the mic beside send, the ink outline on an "on" key, the +
-// tray as the top of the box.
+// Aa row swap (laptop: Aa closes it; phone: X close and send as matching
+// filled circles, a selection opens the row), caption mode with no Aa row,
+// field mode rows on focus, expand / collapse keeping the same field (no
+// remount), one collapse key, the mic beside send, an "on" key's ink glyph
+// (never a tile or ring), the + tray as the top of the box.
 import { act, useRef, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -80,8 +81,8 @@ describe('WritingBox chat mode', () => {
     expect(byLabel(host, 'Message')).toBe(area);
   });
 
-  it('Aa swaps the row for the format row; Aa (on) closes it, no X', () => {
-    const host = mount(<Harness mode="chat" initial="hi" />);
+  it('laptop: Aa swaps the row for the format row; Aa (on) closes it, no X', () => {
+    const host = mount(<Harness mode="chat" laptop initial="hi" />);
     act(() => byLabel(host, 'Aa')?.click());
     const labels = [...host.querySelectorAll('[data-format-row] [aria-label]')].map((b) =>
       b.getAttribute('aria-label'),
@@ -101,13 +102,16 @@ describe('WritingBox chat mode', () => {
     expect(byLabel(host, 'Close formatting')).toBeNull();
     const aa = q(host, '[data-format-row] [data-row-key="aa"]');
     expect(aa?.getAttribute('aria-pressed')).toBe('true');
+    // Aa on: the glyph turns ink, never a tile or ring.
+    expect(aa?.querySelector('span')?.className).toContain('text-fg');
+    expect(aa?.querySelector('span')?.className).not.toMatch(/\bbg-|lit-selected|\bborder\b/);
     act(() => aa?.click());
     expect(q(host, '[data-format-row]')).toBeNull();
     // Back on the action row, Aa reads off again.
     expect(byLabel(host, 'Aa')?.getAttribute('aria-pressed')).toBeNull();
   });
 
-  it('a format key that is on draws the ink outline (lit-selected), never a fill', () => {
+  it('a format key that is on turns its glyph ink (fg), never a tile, ring or fill', () => {
     const host = mount(<Harness mode="chat" initial="*hi* there" />);
     const area = byLabel(host, 'Message') as HTMLTextAreaElement;
     act(() => {
@@ -118,11 +122,11 @@ describe('WritingBox chat mode', () => {
     const bold = byLabel(host, 'Bold');
     const face = bold?.querySelector('span');
     expect(bold?.getAttribute('aria-pressed')).toBe('true');
-    expect(face?.className).toContain('lit-selected');
-    expect(face?.className).not.toContain('bg-panel-3');
+    expect(face?.className).toMatch(/\btext-fg\b/);
+    expect(face?.className).not.toMatch(/\bbg-|lit-selected|\bborder\b|\bring\b/);
     const italic = byLabel(host, 'Italic')?.querySelector('span');
-    expect(italic?.className).not.toContain('lit-selected');
-    expect(italic?.className).toContain('border-transparent');
+    expect(italic?.className).toMatch(/\btext-fg-2\b/);
+    expect(italic?.className).not.toMatch(/\bbg-|lit-selected|\bborder\b/);
   });
 
   it('laptop: the card always, even empty', () => {
@@ -485,5 +489,155 @@ describe('WritingBox + tray', () => {
     // Closing takes it away again.
     act(() => byLabel(host, 'Close attachments')?.click());
     expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('line');
+  });
+});
+
+describe('WritingBox phone format row', () => {
+  function PhoneHarness(props: { mode?: WritingMode; initial?: string }): ReactElement {
+    const ref = useRef<HTMLTextAreaElement | null>(null);
+    const [text, setText] = useState(props.initial ?? '');
+    return (
+      <WritingBox
+        mode={props.mode ?? 'chat'}
+        laptop={false}
+        field={() => ref.current}
+        hasText={text !== ''}
+        mention
+        leading={<span data-testid="plus">+</span>}
+        mic={<span data-testid="mic">mic</span>}
+        send={<span data-testid="send">send</span>}
+        input={
+          <textarea
+            ref={ref}
+            aria-label="Message"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        }
+      />
+    );
+  }
+
+  const keysOf = (host: HTMLElement): (string | null)[] =>
+    [...host.querySelectorAll('[data-format-row] [data-row-key]')].map((b) =>
+      b.getAttribute('data-row-key'),
+    );
+
+  const selectionChange = (): void => {
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+  };
+
+  it('order: close, B I U S, link, numbered, bullet, send; no Aa, no Quote, mic hidden', () => {
+    const host = mount(<PhoneHarness initial="Three hooks" />);
+    act(() => (byLabel(host, 'Message') as HTMLTextAreaElement).focus());
+    act(() => byLabel(host, 'Aa')?.click());
+    expect(keysOf(host)).toEqual([
+      'close',
+      'bold',
+      'italic',
+      'underline',
+      'strike',
+      'link',
+      'ol',
+      'ul',
+    ]);
+    expect(q(host, '[data-format-row] [data-row-key="aa"]')).toBeNull();
+    expect(byLabel(host, 'Quote')).toBeNull();
+    expect(q(host, '[data-testid="mic"]')).toBeNull();
+    // Send stays in its one trailing slot (never remounted, so its submit
+    // lands) and closes the row; the keys spread between X and send.
+    const row = q(host, '[data-format-row]');
+    expect(row?.querySelector('[data-testid="send"]')).toBeNull();
+    expect(q(host, '[data-row-trailing] [data-testid="send"]')).not.toBeNull();
+    expect(q(host, '[data-row-trailing] [data-testid="mic"]')).toBeNull();
+    expect(row?.nextElementSibling?.hasAttribute('data-row-trailing')).toBe(true);
+    expect(row?.className).toContain('justify-between');
+    // X close closes the row; the mic is back beside send.
+    act(() => byLabel(host, 'Close formatting')?.click());
+    expect(q(host, '[data-format-row]')).toBeNull();
+    expect(q(host, '[data-row-trailing] [data-testid="mic"]')).not.toBeNull();
+  });
+
+  it('X close is a filled circle matching send (bg-accent, text-accent-fg)', () => {
+    const host = mount(<PhoneHarness initial="hi" />);
+    act(() => (byLabel(host, 'Message') as HTMLTextAreaElement).focus());
+    act(() => byLabel(host, 'Aa')?.click());
+    const close = q(host, '[data-row-key="close"]');
+    expect(close?.getAttribute('aria-label')).toBe('Close formatting');
+    expect(close?.className).toContain('h-11 w-9');
+    expect(close?.querySelector('span')?.className).toContain('bg-accent text-accent-fg');
+  });
+
+  it('an on key has no background, border or ring classes; rest keys share fg-2', () => {
+    const host = mount(<PhoneHarness initial="*hi* there" />);
+    const area = byLabel(host, 'Message') as HTMLTextAreaElement;
+    act(() => {
+      area.focus();
+      area.setSelectionRange(2, 2);
+    });
+    act(() => byLabel(host, 'Aa')?.click());
+    const bold = q(host, '[data-row-key="bold"]');
+    expect(bold?.getAttribute('aria-pressed')).toBe('true');
+    const face = bold?.querySelector('span')?.className ?? '';
+    expect(face).toMatch(/\btext-fg\b/);
+    expect(face).not.toMatch(/\bbg-|lit-selected|\bborder\b|\bring\b/);
+    for (const key of ['italic', 'underline', 'strike', 'link', 'ol', 'ul']) {
+      expect(q(host, `[data-row-key="${key}"] span`)?.className).toMatch(/\btext-fg-2\b/);
+    }
+  });
+
+  it('selecting text opens the row; collapsing the selection closes it', () => {
+    const host = mount(<PhoneHarness initial="Three hooks" />);
+    const area = byLabel(host, 'Message') as HTMLTextAreaElement;
+    act(() => area.focus());
+    expect(q(host, '[data-format-row]')).toBeNull();
+    act(() => area.setSelectionRange(0, 5));
+    selectionChange();
+    expect(q(host, '[data-format-row]')).not.toBeNull();
+    act(() => area.setSelectionRange(5, 5));
+    selectionChange();
+    expect(q(host, '[data-format-row]')).toBeNull();
+  });
+
+  it('opened with Aa, the row stays when the selection collapses, until X', () => {
+    const host = mount(<PhoneHarness initial="Three hooks" />);
+    const area = byLabel(host, 'Message') as HTMLTextAreaElement;
+    act(() => area.focus());
+    act(() => byLabel(host, 'Aa')?.click());
+    act(() => area.setSelectionRange(0, 5));
+    selectionChange();
+    act(() => area.setSelectionRange(5, 5));
+    selectionChange();
+    expect(q(host, '[data-format-row]')).not.toBeNull();
+    act(() => byLabel(host, 'Close formatting')?.click());
+    expect(q(host, '[data-format-row]')).toBeNull();
+  });
+
+  it('comment mode on a phone shares the row; caption never formats', () => {
+    const host = mount(<PhoneHarness mode="comment" initial="hi" />);
+    act(() => (byLabel(host, 'Message') as HTMLTextAreaElement).focus());
+    act(() => byLabel(host, 'Aa')?.click());
+    expect(keysOf(host)[0]).toBe('close');
+    act(() => root?.unmount());
+    root = null;
+    document.body.innerHTML = '';
+    const cap = mount(<PhoneHarness mode="caption" initial="hi" />);
+    const area = byLabel(cap, 'Message') as HTMLTextAreaElement;
+    act(() => area.focus());
+    act(() => area.setSelectionRange(0, 2));
+    selectionChange();
+    expect(q(cap, '[data-format-row]')).toBeNull();
+    expect(byLabel(cap, 'Bold')).toBeNull();
+  });
+
+  it('laptop: a selection does not open the row (Aa only)', () => {
+    const host = mount(<Harness mode="chat" laptop initial="Three hooks" />);
+    const area = byLabel(host, 'Message') as HTMLTextAreaElement;
+    act(() => area.focus());
+    act(() => area.setSelectionRange(0, 5));
+    selectionChange();
+    expect(q(host, '[data-format-row]')).toBeNull();
   });
 });

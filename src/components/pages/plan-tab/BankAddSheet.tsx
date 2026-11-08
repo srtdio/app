@@ -158,6 +158,7 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
           primary={
             <Button
               variant="primary"
+              shape="pill"
               type="button"
               data-bank-add-go=""
               busy={busy}

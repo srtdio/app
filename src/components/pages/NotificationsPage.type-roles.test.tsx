@@ -212,15 +212,13 @@ describe('Notifications type roles', () => {
 });
 
 describe('Activity header, order and the Unread zero state', () => {
-  it('no search field on the page: the sort and Mark all read live in the top bar', async () => {
+  it('no search field and no sort (decided 7 Nov): Mark all read lives in the top bar', async () => {
     await mount();
     expect(document.querySelector('input[aria-label="Search activity"]')).toBeNull();
     expect(document.querySelector('[data-search-group]')).toBeNull();
     const bar = document.querySelector('[data-test-topbar]');
-    const sort = document.querySelector('[data-test-topbar-sort] [aria-label="Sort activity"]');
-    expect(sort).not.toBeNull();
-    // One sort control, and it is the top bar's.
-    expect(document.querySelectorAll('[aria-label="Sort activity"]')).toHaveLength(1);
+    expect(document.querySelector('[aria-label="Sort activity"]')).toBeNull();
+    expect(document.querySelector('[data-test-topbar-sort]')?.childElementCount).toBe(0);
     const markAll = document.querySelectorAll('[data-activity-mark-all]');
     expect(markAll).toHaveLength(1);
     expect(bar?.contains(markAll[0] as Element)).toBe(true);
@@ -234,12 +232,9 @@ describe('Activity header, order and the Unread zero state', () => {
     });
     await mount();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
-    expect(
-      document.querySelector('[data-test-topbar-sort] [aria-label="Sort activity"]'),
-    ).not.toBeNull();
   });
 
-  it('reads in the stored order: Oldest first on the device reads oldest', async () => {
+  it('reads newest first even when an old Oldest first is stored on the device', async () => {
     try {
       window.localStorage.setItem('sorted:sort:activity', 'oldest');
     } catch {
@@ -250,7 +245,7 @@ describe('Activity header, order and the Unread zero state', () => {
       (call) => (call[2] as { direction?: string } | undefined)?.direction,
     );
     expect(directions.length).toBeGreaterThan(0);
-    for (const direction of directions) expect(direction).toBe('oldest');
+    for (const direction of directions) expect(direction).toBe('newest');
   });
 
   it('reads newest first when nothing is stored', async () => {

@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/Button';
+import { ClearButton } from '@/components/ui/Button';
 import { IconAlertTriangle, IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
@@ -16,8 +16,8 @@ interface ToastProps {
  * One presentational toast card. Hookless so it can be unit-tested by walking
  * its element tree (the codebase convention for pure components). The whole
  * content area is the press target when `onPress` is set; the dismiss control
- * is always a separate ghost "Clear" Button (44 tall, aria "Dismiss
- * notification"; no X) so the two never nest. Auto-hide and swipe stay. An optional action
+ * is always a separate outlined Clear pill (ui/Button ClearButton, 44 tall
+ * hit, aria "Dismiss notification"; no X) so the two never nest. Auto-hide and swipe stay. An optional action
  * (e.g. Undo) is its own 44px button at the card's right end, after the dismiss; pressing it runs the
  * action and dismisses the toast. Undo toasts never render here (UndoStrip).
  * It always renders at rest: the viewport lays the edgeStrip move over it
@@ -85,17 +85,12 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
       ) : (
         <div className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-3 py-2">{body}</div>
       )}
-      <Button
-        type="button"
-        variant="ghost"
+      <ClearButton
         aria-label="Dismiss notification"
         onClick={() => onDismiss(id)}
-        className={`shrink-0 px-3 ${
-          error ? 'text-accent-fg hover:text-accent-fg focus-visible:outline-accent-fg' : ''
-        }`}
-      >
-        Clear
-      </Button>
+        className={error ? 'focus-visible:outline-accent-fg' : undefined}
+        faceClassName={error ? 'border-accent-fg text-accent-fg' : undefined}
+      />
       {action !== undefined ? (
         <button
           type="button"

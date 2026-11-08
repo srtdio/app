@@ -3,6 +3,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { Tabs, tabKeyTarget } from '@/components/shell/Tabs';
+import { CHIP_FACE_SIZE, CHIP_PICKED_EDGE, CHIP_REST_EDGE } from '@/components/ui/Chip';
 
 const ITEMS = [
   { key: 'workspace', label: 'Workspace' },
@@ -23,22 +24,34 @@ describe('Tabs', () => {
     expect(html).not.toContain('aria-current');
   });
 
-  it('the active tab is the ink outline; the others rest on the hairline, no fill, no underline', () => {
+  it('every tab is the shared Chip pill: active = ink line, others rest on border-strong, no fill', () => {
     const html = renderToStaticMarkup(<Tabs items={ITEMS} active="members" onChange={() => {}} />);
+    const faces = [
+      ...html.matchAll(
+        /<button[^>]*aria-selected="(true|false)"[^>]*><span data-chip-face=""[^>]*class="([^"]*)"/g,
+      ),
+    ];
+    expect(faces).toHaveLength(3);
+    for (const [, on, cls] of faces) {
+      expect(cls).toContain('rounded-full');
+      expect(cls).toContain(CHIP_FACE_SIZE);
+      expect(cls).toContain(on === 'true' ? CHIP_PICKED_EDGE : CHIP_REST_EDGE);
+      for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill', 'bg-panel-3', 'lit-well-soft']) {
+        expect(cls).not.toContain(c);
+      }
+    }
     const active = /<button[^>]*aria-selected="true"[^>]*>/.exec(html)?.[0] ?? '';
     expect(active).toContain('data-selected="true"');
-    expect(active).toContain('border border-fg text-fg');
-    for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill']) expect(active).not.toContain(c);
-    const idle = [...html.matchAll(/<button[^>]*aria-selected="false"[^>]*>/g)].map((m) => m[0]);
-    expect(idle).toHaveLength(2);
-    for (const tag of idle) {
-      expect(tag).toContain('border border-border text-fg-2');
-      expect(tag).not.toContain('bg-panel-3');
-      expect(tag).not.toContain('lit-well-soft');
-      expect(tag).not.toContain('bg-accent');
-    }
+    expect(active).toContain('min-h-11');
     expect(html).not.toContain('h-0.5');
     expect(html).not.toMatch(/[\s"]border-b[\s"]/);
+  });
+
+  it('the row scrolls sideways with no scrollbar, like every chip row', () => {
+    const html = renderToStaticMarkup(<Tabs items={ITEMS} active="members" onChange={() => {}} />);
+    const row = /<div role="tablist"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(row).toContain('overflow-x-auto');
+    expect(row).toContain('gap-2');
   });
 
   it('only the active tab is a Tab stop', () => {

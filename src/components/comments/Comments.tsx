@@ -17,6 +17,7 @@ import type {
   ReactNode,
 } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Textarea } from '@/components/ui/Textarea';
 import { WritingBox } from '@/components/ui/WritingBox';
@@ -71,6 +72,7 @@ import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
 import { Bone, GlideItem, itemIn, itemOut, motionOff, paintSwipe } from '@/lib/motion';
 import { formatAgo } from '@/lib/time';
+import { isLaptopNow } from '@/lib/use-is-laptop';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { UNDO_MS } from '@/lib/undo';
@@ -979,8 +981,8 @@ export function editedTime(ts: string, now: Date): string {
   return formatAgo(ts, now);
 }
 
-/** The "edited <time>" marker shared by comments and ledger points, or null when
- *  it was never edited. */
+/** A ledger point's "edited <time>" marker (at the end of its body), or null
+ *  when it was never edited. Comments and replies end in EDITED_MARKER instead. */
 export function pointEditedMarker(editedAt: string | null, now: Date): string | null {
   return editedAt === null ? null : `edited ${editedTime(editedAt, now)}`.trimEnd();
 }
@@ -1317,6 +1319,16 @@ export const OWN_CARD_CLASS = 'border-b border-border';
 const LEAD_COLUMN_CLASS = 'flex w-11 shrink-0 justify-center';
 
 /**
+ * A row's lead and text columns sit 16 under the row's top edge, the room the
+ * action bar takes there (it rides that edge, absolute, half above it), so the
+ * bar never shares the name's line and never covers the name or the time.
+ */
+export const ROW_BAR_ROOM_CLASS = 'mt-4';
+
+/** The " (edited)" marker at the end of an edited comment or reply body (Slack way). */
+export const EDITED_MARKER = '(edited)';
+
+/**
  * The swipe icons behind a comment row (the chat bubble's look): a 32 circle,
  * panel-3 idle, accent when armed (data-armed). Reply sits behind the row's
  * resting left edge, the bin behind its right edge. Scale and opacity are
@@ -1561,6 +1573,7 @@ export function Comments({
   const [editBody, setEditBody] = useState('');
   // The edit field, for its ui/WritingBox rows (Aa, emoji).
   const editFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  const scrollEditorRef = useRef(false);
   // The edit box shows "@username"; these picks turn each back into its token on save.
   const [editPicks, setEditPicks] = useState<MentionPick[]>([]);
   // An edit Save in flight: the button shows busy, and a second tap (or Enter
@@ -2455,6 +2468,9 @@ export function Comments({
   }
 
   function startEdit(comment: CommentRow): void {
+    // Phone: the editor and its Save / Cancel scroll clear of the post
+    // screen's bottom bar on the commit that shows them (laptop unchanged).
+    scrollEditorRef.current = !isLaptopNow();
     setEditingId(comment.id);
     const shown = editableBody(comment.body, handleOf);
     setEditBody(shown.text);
@@ -2498,7 +2514,16 @@ export function Comments({
 
   // An unfold's revealed rows rise 8 px into place (itemIn: translateY only,
   // instant under Reduce Motion). A fold closes at once.
+  //
+  // The same pass brings a just-opened phone editor into view: nearest, so a
+  // shown editor never moves; its scroll-margin-bottom is the host's bottom
+  // bar height (--focus-inset-bottom, COMMENT_ROW_SCROLL_CLASS).
   useLayoutEffect(() => {
+    if (scrollEditorRef.current) {
+      scrollEditorRef.current = false;
+      const editor = rootRef.current?.querySelector<HTMLElement>('[data-comment-editor]');
+      if (typeof editor?.scrollIntoView === 'function') editor.scrollIntoView({ block: 'nearest' });
+    }
     const selector = revealSelector.current;
     if (selector === null) return;
     revealSelector.current = null;
@@ -2584,7 +2609,10 @@ export function Comments({
 
   function renderEditor(commentId: string): ReactNode {
     return (
-      <div className="mt-2 flex flex-col gap-2">
+      <div
+        data-comment-editor=""
+        className={cn('mt-2 flex flex-col gap-2', COMMENT_ROW_SCROLL_CLASS)}
+      >
         {/* ui/WritingBox (comment mode) with no send: Save and Cancel stay
             under it; focused, the row shows Aa and emoji. */}
         <WritingBox
@@ -2706,36 +2734,49 @@ export function Comments({
     );
   }
 
-  // The name on its own (the name is never cut).
+  // The name on its own: one line, cut with an ellipsis when the line is short
+  // (the time beside it never shrinks).
   function authorName(view: ReturnType<typeof authorView>): ReactNode {
     return view.asPerson(
-      <span data-comment-author="" className="text-sm font-medium text-fg [overflow-wrap:anywhere]">
+      <span
+        data-comment-author=""
+        className="min-w-0 truncate whitespace-nowrap text-sm font-medium text-fg"
+      >
         {view.name}
       </span>,
       'inline',
+      'min-w-0 truncate',
     );
   }
 
-  // The time after the name (formatAgo, meta: mono, tabular), then "edited ...".
+  // The time after the name (formatAgo, meta: mono, tabular).
   function rowTime(comment: CommentRow, now: Date): ReactNode {
-    const edited = pointEditedMarker(comment.edited_at, now);
     return (
-      <>
-        <Text
-          role="meta"
-          as="time"
-          dateTime={comment.created_at}
-          data-comment-time=""
-          className="shrink-0 whitespace-nowrap"
-        >
-          {formatAgo(comment.created_at, now)}
-        </Text>
-        {edited !== null ? (
-          <Text role="meta" data-comment-edited="" className="shrink-0 whitespace-nowrap">
-            {edited}
-          </Text>
-        ) : null}
-      </>
+      <Text
+        role="meta"
+        as="time"
+        dateTime={comment.created_at}
+        data-comment-time=""
+        className="shrink-0 whitespace-nowrap"
+      >
+        {formatAgo(comment.created_at, now)}
+      </Text>
+    );
+  }
+
+  // The edited marker at the end of the body, on the last word's line: " (edited)"
+  // on comments and replies; a point keeps its "edited <time>". Null when never edited.
+  function editedMarker(comment: CommentRow, point: boolean, now: Date): ReactNode {
+    const marker = point
+      ? pointEditedMarker(comment.edited_at, now)
+      : comment.edited_at === null
+        ? null
+        : EDITED_MARKER;
+    if (marker === null) return null;
+    return (
+      <span data-comment-edited="" className="text-sm text-fg-3">
+        {` ${marker}`}
+      </span>
     );
   }
 
@@ -2788,9 +2829,11 @@ export function Comments({
    * The ONE row template for every item: plain roots, checkpoint points and
    * replies. A root sits beside its 44 lead column (avatar, or the point's
    * circle); a reply sits on the root's text column with avatar 20 + name on
-   * one line. The head line: (avatar), name, time at the top left and the
-   * action bar at the trailing end, riding half above the row. Then the body
-   * and the task tag. No line under the body.
+   * one line. The head line: (avatar), name, time at the top left. The
+   * action bar is out of that line: absolute on the row's top edge, trailing,
+   * half above it; both columns sit 16 under it (ROW_BAR_ROOM_CLASS). Then the
+   * body (an edited body ends in its marker) and the task tag. No line under
+   * the body.
    */
   function renderRow(comment: CommentRow, opts: RowOptions): ReactNode {
     const view = authorView(comment);
@@ -2801,25 +2844,15 @@ export function Comments({
     const cardUrl = firstExternalUrl(comment.body);
     const now = new Date(nowMs);
 
-    // A point's author shows once on its group: its head line holds only the
-    // edited marker and the bar.
-    const header = (
-      <div
-        {...(opts.point ? { 'data-point-head': '' } : { 'data-comment-header': '' })}
-        className="flex min-w-0 items-center gap-2"
-      >
+    // A point's author shows once on its group: a point has no head line.
+    const header = opts.point ? null : (
+      <div data-comment-header="" className="flex min-w-0 items-center gap-2">
         {opts.reply ? <span className="flex shrink-0">{authorAvatar(view, 'inline')}</span> : null}
-        {opts.point ? null : authorName(view)}
-        {opts.point ? null : rowTime(comment, now)}
-        {opts.point && comment.edited_at !== null ? (
-          <Text role="meta" data-comment-edited="" className="shrink-0 whitespace-nowrap">
-            {pointEditedMarker(comment.edited_at, now)}
-          </Text>
-        ) : null}
-        <span className="min-w-0 flex-1" />
-        {renderBar(comment, opts)}
+        {authorName(view)}
+        {rowTime(comment, now)}
       </div>
     );
+    const edited = editedMarker(comment, opts.point, now);
 
     // Swipe left = the bar's Delete, only where the bar offers it (same path).
     const swipeDelete = !editing && opts.actions.canDelete ? () => handleDelete(comment.id) : null;
@@ -2835,8 +2868,11 @@ export function Comments({
           onReply={opts.swipeReply ?? null}
           onDelete={swipeDelete}
         >
-          {opts.lead !== null ? <span className={LEAD_COLUMN_CLASS}>{opts.lead}</span> : null}
-          <div className="min-w-0 flex-1">
+          {renderBar(comment, opts)}
+          {opts.lead !== null ? (
+            <span className={cn(LEAD_COLUMN_CLASS, ROW_BAR_ROOM_CLASS)}>{opts.lead}</span>
+          ) : null}
+          <div className={cn('min-w-0 flex-1', ROW_BAR_ROOM_CLASS)}>
             {header}
 
             {editing ? (
@@ -2857,7 +2893,10 @@ export function Comments({
                     )}
                   >
                     {renderCommentBody(comment.body, handleOf, searchWords, cardUrl)}
+                    {edited}
                   </div>
+                ) : edited !== null ? (
+                  <div>{edited}</div>
                 ) : null}
                 <CommentLinkCard body={comment.body} url={cardUrl} />
                 {attachments.length > 0 ? (
@@ -3216,15 +3255,12 @@ export function Comments({
     );
 
   const filterButton = (value: CommentFilter, label: string): ReactNode => (
-    <Button
+    <Chip
       type="button"
-      variant={filter === value ? 'secondary' : 'ghost'}
-      aria-pressed={filter === value}
+      label={label}
+      selected={filter === value}
       onClick={() => setFilter(value)}
-      className="min-w-11"
-    >
-      {label}
-    </Button>
+    />
   );
 
   return (
@@ -3232,7 +3268,7 @@ export function Comments({
       {showHeader ? (
         <div data-comments-header="" className="flex items-center gap-2">
           <h3 className="text-base font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>
-          <div role="group" aria-label="Show comments" className="ml-auto flex items-center">
+          <div role="group" aria-label="Show comments" className="ml-auto flex items-center gap-2">
             {filterButton('open', 'Open')}
             {filterButton('all', 'All')}
           </div>

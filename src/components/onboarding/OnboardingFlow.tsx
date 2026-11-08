@@ -1122,7 +1122,12 @@ export function OnboardingFlow({
               Cancel
             </Button>
             <span className="ml-auto">
-              <Button variant="primary" disabled={!cropReady} onClick={() => void applyPhoto()}>
+              <Button
+                variant="primary"
+                shape="pill"
+                disabled={!cropReady}
+                onClick={() => void applyPhoto()}
+              >
                 Use this photo
               </Button>
             </span>

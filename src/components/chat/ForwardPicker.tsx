@@ -160,17 +160,19 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         />
       }
       footer={
-        <Button
-          variant="primary"
-          className="w-full md:w-auto"
-          // Nothing picked yet is a choice not made, not a form error; while
-          // sending the label stays with a spinner beside it.
-          disabled={selected.size === 0}
-          busy={busy}
-          onClick={() => void send()}
-        >
-          {sendToLabel(selected.size)}
-        </Button>
+        <div className="flex w-full justify-end">
+          <Button
+            variant="primary"
+            shape="pill"
+            // Nothing picked yet is a choice not made, not a form error; while
+            // sending the label stays with a spinner beside it.
+            disabled={selected.size === 0}
+            busy={busy}
+            onClick={() => void send()}
+          >
+            {sendToLabel(selected.size)}
+          </Button>
+        </div>
       }
     >
       {listed.length === 0 ? (

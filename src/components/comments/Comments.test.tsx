@@ -953,7 +953,7 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
     expect(pointWordCount(fiftyOne)).toBeGreaterThan(POINT_WORD_CAP);
   });
 
-  it('shows the edit time on comments and points in formatAgo ("edited 3h")', () => {
+  it('shows the edit time on points in formatAgo ("edited 3h")', () => {
     const edited = new Date('2026-03-01T14:14:00Z');
     const now = new Date('2026-03-01T18:00:00Z');
     expect(editedTime(edited.toISOString(), now)).toBe('3h');

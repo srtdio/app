@@ -102,8 +102,16 @@ export function BankFilterSheet(props: {
       onClose={props.onClose}
       title="Filter and sort"
       footer={
-        <div className="flex justify-end">
-          <Button variant="primary" type="button" data-bank-filter-done="" onClick={props.onClose}>
+        // The sheet footer is a flex row: the wrapper takes its full width so
+        // Done sits at the right end, never the left.
+        <div data-bank-filter-footer="" className="flex w-full justify-end">
+          <Button
+            variant="primary"
+            shape="pill"
+            type="button"
+            data-bank-filter-done=""
+            onClick={props.onClose}
+          >
             Done
           </Button>
         </div>

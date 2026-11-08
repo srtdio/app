@@ -34,9 +34,17 @@ export function AssetInUseSheet({ state, onOpenParent, onClose }: AssetInUseShee
       title={shown.current?.title ?? 'File in use'}
       footer={
         <div className="flex w-full justify-end gap-2">
-          <Button onClick={onClose}>OK</Button>
+          {/* OK alone is the sheet's primary (black pill); beside the parent
+              link it is the quiet Cancel slot and the open link is the pill. */}
+          {parent === null ? (
+            <Button variant="primary" shape="pill" data-asset-in-use-ok="" onClick={onClose}>
+              OK
+            </Button>
+          ) : (
+            <Button onClick={onClose}>OK</Button>
+          )}
           {parent !== null ? (
-            <Button variant="primary" onClick={() => onOpenParent(parent)}>
+            <Button variant="primary" shape="pill" onClick={() => onOpenParent(parent)}>
               {openParentLabel(parent.kind)}
             </Button>
           ) : null}

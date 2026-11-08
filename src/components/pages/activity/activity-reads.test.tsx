@@ -462,13 +462,13 @@ describe('Activity: the top bar', () => {
     expect(document.querySelector('[data-probe-primary]')?.childElementCount).toBe(0);
   });
 
-  it('publishes the sort control (IconSort) into the top bar', async () => {
+  it('publishes no sort control into the top bar (decided 7 Nov)', async () => {
     render();
     await settle();
-    expect(document.querySelector('[data-probe-sort] button')).not.toBeNull();
+    expect(document.querySelector('[data-probe-sort] button')).toBeNull();
   });
 
-  it('reads newest first by default and Oldest first when that sort is stored', async () => {
+  it('reads newest first, also when an old Oldest first is stored', async () => {
     render();
     await settle();
     expect(askedDirections()).toEqual(['newest']);
@@ -480,7 +480,7 @@ describe('Activity: the top bar', () => {
     window.localStorage.setItem('sorted:sort:activity', 'oldest');
     render();
     await settle();
-    expect(askedDirections()).toEqual(['oldest']);
+    expect(askedDirections()).toEqual(['newest']);
   });
 
   it('only All, Unread and Mentions chips', async () => {

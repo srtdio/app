@@ -22,6 +22,7 @@ async function expectSaved(field: Locator, text: string): Promise<void> {
 const chatBox = (page: Page): Locator =>
   page.locator('[data-writing-box][data-mode="chat"]').first();
 const composer = (page: Page): Locator => chatBox(page).locator('textarea').first();
+const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 0) < 768;
 
 async function openDm(page: Page): Promise<void> {
   await installHarnessNetwork(page);
@@ -40,21 +41,16 @@ test('select a word, tap Aa then Bold, send: the bubble shows it bold without st
   await chatBox(page).getByRole('button', { name: 'Aa', exact: true }).click();
   const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
   await expect(row).toBeVisible();
-  const labels = await row
-    .getByRole('button')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
-  // Aa (on) closes its own row: no X.
-  expect(labels).toEqual([
-    'Aa',
-    'Bold',
-    'Italic',
-    'Underline',
-    'Strike',
-    'Link',
-    'Numbered list',
-    'Bullet list',
-    'Quote',
-  ]);
+  const keys = await row
+    .locator('[data-row-key]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-row-key')));
+  // Phone: X close (a filled circle like send) ... send; no Aa, no Quote, no
+  // mic. Laptop: Aa (on) closes its own row.
+  expect(keys).toEqual(
+    isPhone(page)
+      ? ['close', 'bold', 'italic', 'underline', 'strike', 'link', 'ol', 'ul']
+      : ['aa', 'bold', 'italic', 'underline', 'strike', 'link', 'ol', 'ul', 'quote'],
+  );
   // Select "today".
   await box.evaluate((el: HTMLTextAreaElement) => {
     el.focus();
@@ -69,10 +65,11 @@ test('select a word, tap Aa then Bold, send: the bubble shows it bold without st
   // Live styling: the mirror draws the word styled, and no star shows.
   await expect(page.locator('[data-format-mirror] span', { hasText: 'today' })).toBeVisible();
   await expect(chatBox(page).locator('[data-format-mirror]')).not.toContainText('*');
-  // The Bold key reads on with the ink outline (never a fill).
+  // The Bold key reads on: its glyph turns ink, never a tile, ring or fill.
   const bold = row.getByRole('button', { name: 'Bold', exact: true });
   await expect(bold).toHaveAttribute('aria-pressed', 'true');
-  await expect(bold.locator('span').first()).toHaveClass(/\blit-selected\b/);
+  await expect(bold.locator('span').first()).toHaveClass(/\btext-fg\b/);
+  await expect(bold.locator('span').first()).not.toHaveClass(/\bbg-|lit-selected|\bborder\b/);
 
   const before = await page.locator('[data-msg-id]').count();
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -84,7 +81,9 @@ test('select a word, tap Aa then Bold, send: the bubble shows it bold without st
   await expect(chatBox(page).getByRole('toolbar', { name: 'Format' })).toHaveCount(0);
 });
 
-test('typing the closing star hides both markers; Aa closes its own row', async ({ page }) => {
+test('typing the closing star hides both markers; the row closes (phone X, laptop Aa)', async ({
+  page,
+}) => {
   await openDm(page);
   const box = composer(page);
   await box.click();
@@ -98,6 +97,37 @@ test('typing the closing star hides both markers; Aa closes its own row', async 
   await chatBox(page).getByRole('button', { name: 'Aa', exact: true }).click();
   const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
   await expect(row).toBeVisible();
-  await row.getByRole('button', { name: 'Aa', exact: true }).click();
+  await row
+    .getByRole('button', { name: isPhone(page) ? 'Close formatting' : 'Aa', exact: true })
+    .click();
   await expect(chatBox(page).getByRole('toolbar', { name: 'Format' })).toHaveCount(0);
+});
+
+test('phone: selecting text opens the format row; collapsing it closes the row', async ({
+  page,
+}) => {
+  test.skip(!isPhone(page), 'phone only');
+  await openDm(page);
+  const box = composer(page);
+  await box.click();
+  await box.fill('ship today');
+  const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
+  await expect(row).toHaveCount(0);
+  await box.evaluate((el: HTMLTextAreaElement) => {
+    el.focus();
+    el.setSelectionRange(5, 10);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await expect(row).toBeVisible();
+  await expect(row.locator('[data-row-key="close"]')).toBeVisible();
+  // The mic hides while the row is open; send keeps its slot.
+  await expect(chatBox(page).getByRole('button', { name: 'Record voice note' })).toHaveCount(0);
+  await expect(chatBox(page).locator('[data-row-trailing]')).toBeVisible();
+  await box.evaluate((el: HTMLTextAreaElement) => {
+    el.setSelectionRange(10, 10);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await expect(row).toHaveCount(0);
+  // The mic is back beside send.
+  await expect(chatBox(page).getByRole('button', { name: 'Record voice note' })).toBeVisible();
 });

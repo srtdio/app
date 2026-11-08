@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import type { KeyboardEvent } from 'react';
-import { PressableRow } from '@/components/ui/PressableRow';
-import { cn } from '@/lib/cn';
+import { Chip } from '@/components/ui/Chip';
 
 export interface TabItem {
   key: string;
@@ -34,9 +33,9 @@ export function tabKeyTarget(keys: readonly string[], active: string, key: strin
 /**
  * In-page tabs (Settings panels): a role="tablist" row of role="tab" buttons
  * with aria-selected, never aria-current="page" (that is for nav links). The
- * active tab is the one Tab stop; the arrow keys move between tabs. The row
- * looks like every chip row: tabs rest on the grey fill, the active tab is the
- * ink fill.
+ * active tab is the one Tab stop; the arrow keys move between tabs. Each tab is
+ * the shared Chip (flat pill, 8 Nov 2026): at rest CHIP_REST_EDGE, the active
+ * tab CHIP_PICKED_EDGE, no fill; the row scrolls sideways like every chip row.
  */
 export function Tabs({ items, active, onChange, label }: TabsProps) {
   const refs = useRef(new Map<string, HTMLButtonElement>());
@@ -61,27 +60,20 @@ export function Tabs({ items, active, onChange, label }: TabsProps) {
       {items.map((tab) => {
         const isActive = tab.key === active;
         return (
-          <PressableRow
+          <Chip
             key={tab.key}
+            label={tab.label}
             buttonRef={(el: HTMLButtonElement | null) => {
               if (el === null) refs.current.delete(tab.key);
               else refs.current.set(tab.key, el);
             }}
-            type="button"
-            inline
-            align="center"
             role="tab"
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
-            data-selected={isActive ? 'true' : undefined}
+            selected={isActive}
             onClick={() => onChange(tab.key)}
-            className={cn(
-              'flex shrink-0 items-center justify-center px-3 text-base font-medium whitespace-nowrap',
-              isActive ? 'border border-fg text-fg' : 'border border-border text-fg-2',
-            )}
-          >
-            {tab.label}
-          </PressableRow>
+            className="shrink-0 whitespace-nowrap"
+          />
         );
       })}
     </div>

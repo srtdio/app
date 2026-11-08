@@ -1,7 +1,7 @@
 // Notifications: Activity and the chat bell on one feed. The chips (All,
 // Unread, Mentions: Mentions takes chat mentions; plan, brief and task alerts
 // only under All and Unread), Mark all read (the top bar's primary; one
-// inbox_mark_all_read call on All), the top bar's sort (Newest / Oldest), every
+// inbox_mark_all_read call on All), Newest first order (no sort control), every
 // former bell tap rule, the alert cards, and the batched enrichment (one IN
 // read per table, never per row). Reminders and scheduled sends are retired:
 // their rows map to no alert and the feed read leaves them out.
@@ -232,13 +232,13 @@ describe('Mark all read', () => {
       'utf8',
     );
     // The top bar's primary slot: an IconButton, gone (undefined) with nothing unread
-    // (the slot keeps its width), published with the sort.
+    // (the slot keeps its width); no sort beside it.
     expect(page).toContain("export const MARK_ALL_READ_LABEL = 'Mark all read';");
     expect(page).toMatch(
       /hasUnread \? \(\s*<IconButton\s+label=\{MARK_ALL_READ_LABEL\}[\s\S]{0,160}?<IconTickDouble size=\{ICON_SIZE\.control\} \/>[\s\S]{0,80}?\) : undefined/,
     );
     expect(page).toContain('const hasUnread = chipUnread > 0;');
-    expect(page).toContain('useTopbarActions({ sort: sortNode, primary: markAllNode });');
+    expect(page).toContain('useTopbarActions({ primary: markAllNode });');
     // Moved up from the day line: no link there any more, no count text.
     expect(page).not.toContain('<Button variant="link" onClick={handleMarkAll}>');
     expect(page).not.toContain('bucketIndex === 0 && chipUnread > 0');
@@ -577,13 +577,11 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).not.toContain('searching');
   });
 
-  it('sort: Newest first / Oldest first in the top bar, persisted with useSort, read in that order', () => {
-    expect(page).toMatch(
-      /<SortMenu\s+options=\{ACTIVITY_SORT_OPTIONS\}\s+value=\{sort\}\s+onChange=\{setSort\}/,
-    );
-    expect(page).toContain('useSort<ActivityDirection>(');
-    expect(page).toContain('ACTIVITY_SORT_PAGE,');
-    expect(page).toContain('const sort = activitySort(storedSort);');
+  it('sort: no sort control in the top bar (decided 7 Nov); Newest first, read in that order', () => {
+    expect(page).not.toContain('SortMenu');
+    expect(page).not.toContain('useSort');
+    expect(page).not.toMatch(/useTopbarActions\(\{[^}]*sort:/);
+    expect(page).toContain('const sort: ActivityDirection = ACTIVITY_SORT_DEFAULT;');
     // Page one and every next page are read server-side in the chosen direction
     // (fetchActivityEntries' ascending keyset), each order with its own kept page.
     expect(page).toContain('direction: sort,');

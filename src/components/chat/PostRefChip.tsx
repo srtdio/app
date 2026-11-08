@@ -198,7 +198,10 @@ export function PostRefChip(props: {
       }}
       className={cn('flex min-w-0 max-w-full items-center', props.className)}
     >
-      <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-2 rounded-full bg-panel-3 pl-1 pr-3 lit-pill">
+      <span
+        data-post-ref-face=""
+        className="inline-flex h-6 min-w-0 max-w-full items-center gap-2 rounded-full border border-border-strong pl-1 pr-3"
+      >
         <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={16} round />
         <span className="min-w-0 truncate text-sm text-fg-2">{post.title}</span>
       </span>

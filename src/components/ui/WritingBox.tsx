@@ -11,11 +11,16 @@
 //   caption  emoji and a plain "@" only; no formatting of any kind.
 //
 // The card's bottom row: + , Aa, emoji, @ ... mic, send. The mic sits beside
-// send in every state, typing included. Aa swaps the row for the format row:
-// Aa (on: pressed again it closes the row; no X), Bold, Italic, Underline,
-// Strike, Link, Numbered list, Bullet list, Quote ... mic, send. A key is "on"
-// (the ink outline, lit-selected, never a fill) while the caret or selection
-// sits inside that style. Formatting is WYSIWYG (ui/Textarea and
+// send in every state, typing included. Aa swaps the row for the format row.
+// Laptop: Aa (on: pressed again it closes the row), Bold, Italic, Underline,
+// Strike, Link, Numbered list, Bullet list, Quote ... mic, send. Phone card
+// (8 Nov 2026): X close (a filled circle matching send), Bold, Italic,
+// Underline, Strike, Link, Numbered list, Bullet list, send, spread evenly; no
+// Aa, no Quote, no mic while open. Selecting text in the phone card opens the
+// row; collapsing the selection closes it again unless Aa opened it (then it
+// stays until X). Keys rest in fg-2; a key is "on" (the glyph turns ink, fg;
+// never a tile, ring or fill) while the caret or selection sits inside that
+// style. Formatting is WYSIWYG (ui/Textarea and
 // comments/MentionInput hide the markers, src/lib/format-live.ts).
 //
 // The + tray (chat/ComposerTray) opens as the top of this same box: one
@@ -36,7 +41,7 @@
 // Speed: pure render at mount. The emoji sheet and Add link sheet load on the
 // first tap (React.lazy); the visual viewport is read only while expanded on
 // a phone or focused; selectionchange is listened to only while the format
-// row is open.
+// row is open or a phone card is focused.
 
 import {
   Suspense,
@@ -66,6 +71,7 @@ import {
   IconSmile,
   IconStrike,
   IconUnderline,
+  IconX,
 } from '@/components/ui/icons';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { textRole } from '@/components/ui/Text';
@@ -211,13 +217,10 @@ export function RowKey({
         className={cn(
           'flex w-full items-center justify-center rounded-full',
           MOVE_CLASS.tint,
-          // On: the ink outline (lit-selected), never a fill. The 1px edge is
-          // there at rest too (transparent), so nothing moves.
-          solid
-            ? 'bg-accent text-accent-fg'
-            : on
-              ? 'border lit-selected'
-              : 'border border-transparent text-fg-2 lit-hover',
+          // On: the glyph turns ink (fg), never a tile, ring or fill; at rest
+          // every key is the one grey (fg-2). Solid: the phone format row's
+          // close, the same filled circle as RowSend.
+          solid ? 'bg-accent text-accent-fg' : on ? 'text-fg' : 'text-fg-2 lit-hover',
         )}
       >
         {children}
@@ -379,6 +382,9 @@ export function WritingBox(props: WritingBoxProps) {
     [],
   );
   const [formatOpen, setFormatOpen] = useState(false);
+  // Aa opened the row (it then stays until closed); a selection's row closes
+  // when the selection collapses.
+  const openedByAa = useRef(false);
   const [on, setOn] = useState<ReadonlySet<FormatAction>>(() => new Set());
   const [expanded, setExpanded] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -442,15 +448,45 @@ export function WritingBox(props: WritingBoxProps) {
     };
   }, [focused, phoneExpanded]);
 
+  // The phone card: a selection in the field opens the format row.
+  const selectionOpens =
+    formatting && !laptop && focused && (mode === 'chat' || mode === 'comment');
+
   // While the format row is open, follow the caret (contentEditable has no
-  // select event of its own). Only then: nothing is listened to at mount.
+  // select event of its own); while a phone card is focused, a selection opens
+  // the row and its collapse closes it (unless Aa opened it). Only then:
+  // nothing is listened to at mount.
   useEffect(() => {
-    if (!formatOpen) return undefined;
-    const onChange = (): void => refreshOn();
+    if (!formatOpen && !selectionOpens) return undefined;
+    const onChange = (): void => {
+      if (selectionOpens) {
+        const el = field();
+        if (el === null) return;
+        const active = document.activeElement;
+        const inField = active !== null && (el === active || el.contains(active));
+        const { start, end } = fieldSelection(el);
+        if (inField && start !== end) {
+          setFormatOpen(true);
+        } else if (!openedByAa.current) {
+          setFormatOpen(false);
+          return;
+        }
+      }
+      refreshOn();
+    };
     document.addEventListener('selectionchange', onChange);
-    refreshOn();
+    if (formatOpen) refreshOn();
     return () => document.removeEventListener('selectionchange', onChange);
-  }, [formatOpen, refreshOn]);
+  }, [formatOpen, selectionOpens, field, refreshOn]);
+
+  const openFormat = (): void => {
+    openedByAa.current = true;
+    setFormatOpen(true);
+  };
+  const closeFormat = (): void => {
+    openedByAa.current = false;
+    setFormatOpen(false);
+  };
 
   const insert = useCallback(
     (text: string): void => {
@@ -570,7 +606,7 @@ export function WritingBox(props: WritingBoxProps) {
   // On a phone the box goes back into its form first, so the send button's
   // own submit still reaches the form.
   const onSendCapture = (): void => {
-    setFormatOpen(false);
+    closeFormat();
     if (!expanded) return;
     const slot = slotNode.current;
     if (!laptop && host !== null && slot !== null && host.parentNode !== slot) {
@@ -626,20 +662,38 @@ export function WritingBox(props: WritingBoxProps) {
     </RowKey>
   ) : null;
 
+  // The phone card's format row: X close and send (matching filled circles)
+  // at the ends, the keys spread evenly between; no Aa, no Quote, no mic.
+  const phoneFormat = shape === 'card' && !laptop;
+  const formatKeys = phoneFormat ? FORMAT_KEYS.filter((k) => k.action !== 'quote') : FORMAT_KEYS;
+  const sendKey =
+    send !== undefined ? (
+      <span className="flex shrink-0" onClickCapture={onSendCapture}>
+        {send}
+      </span>
+    ) : null;
+
   const formatRow = (
     <div
       data-format-row=""
       role="toolbar"
       aria-label="Format"
-      className="flex min-w-0 flex-1 items-center overflow-x-auto"
+      className={cn(
+        'flex min-w-0 flex-1 items-center overflow-x-auto',
+        phoneFormat && 'justify-between',
+      )}
     >
-      {/* Aa closes its own row (on while open): no X. */}
-      {shape === 'card' ? (
-        <RowKey label="Aa" on data-row-key="aa" onPress={() => setFormatOpen(false)}>
+      {phoneFormat ? (
+        <RowKey label="Close formatting" solid data-row-key="close" onPress={closeFormat}>
+          <IconX size={ICON_SIZE.inline} />
+        </RowKey>
+      ) : shape === 'card' ? (
+        // Laptop: Aa closes its own row (on while open).
+        <RowKey label="Aa" on data-row-key="aa" onPress={closeFormat}>
           <span className={textRole('label')}>Aa</span>
         </RowKey>
       ) : null}
-      {FORMAT_KEYS.map((k) => (
+      {formatKeys.map((k) => (
         <RowKey
           key={k.action}
           label={k.label}
@@ -657,7 +711,7 @@ export function WritingBox(props: WritingBoxProps) {
     <div data-action-row="" className="flex min-w-0 flex-1 items-center">
       {shape === 'card' ? leading : null}
       {formatting ? (
-        <RowKey label="Aa" data-row-key="aa" onPress={() => setFormatOpen(true)}>
+        <RowKey label="Aa" data-row-key="aa" onPress={openFormat}>
           <span className={textRole('label')}>Aa</span>
         </RowKey>
       ) : null}
@@ -682,16 +736,15 @@ export function WritingBox(props: WritingBoxProps) {
       </div>
     ) : null;
 
-  // The trailing keys: the mic beside send, in every state (typing too).
+  // The trailing keys: the mic beside send, in every state (typing too). The
+  // phone format row hides the mic; send never moves (Send closes the row in
+  // its click capture, and a send remounted elsewhere would drop the submit).
+  const micShown = !(formatOpen && phoneFormat);
   const trailing =
-    send !== undefined || (mic !== undefined && mic !== null) ? (
+    send !== undefined || (micShown && mic !== undefined && mic !== null) ? (
       <span data-row-trailing="" className="flex shrink-0 items-center">
-        {mic}
-        {send !== undefined ? (
-          <span className="flex shrink-0" onClickCapture={onSendCapture}>
-            {send}
-          </span>
-        ) : null}
+        {micShown ? mic : null}
+        {sendKey}
       </span>
     ) : null;
 

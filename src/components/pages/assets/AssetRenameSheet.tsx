@@ -109,7 +109,7 @@ export function AssetRenameSheet({
         </Button>
       }
       primary={
-        <Button variant="primary" type="submit" form={formId} busy={saving}>
+        <Button variant="primary" shape="pill" type="submit" form={formId} busy={saving}>
           Save
         </Button>
       }
