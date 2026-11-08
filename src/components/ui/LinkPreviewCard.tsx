@@ -30,7 +30,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { IconAlertTriangle, IconPlay, ICON_SIZE } from '@/components/ui/icons';
-import { Button } from '@/components/ui/Button';
+import { ClearButton } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { UnsafeLinkSheet } from '@/components/ui/UnsafeLinkSheet';
 import { cn } from '@/lib/cn';
@@ -453,16 +453,11 @@ function Draft(props: {
       {thumb}
       <span className="min-w-0 flex-1">{lines}</span>
       {props.onRemove !== undefined ? (
-        <Button
-          type="button"
-          variant="ghost"
+        <ClearButton
           aria-label="Remove link preview"
           data-card-remove=""
           onClick={props.onRemove}
-          className="shrink-0"
-        >
-          Clear
-        </Button>
+        />
       ) : null}
     </div>
   );

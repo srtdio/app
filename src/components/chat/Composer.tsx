@@ -18,7 +18,7 @@ import type {
   SyntheticEvent,
 } from 'react';
 import { logger } from '@/lib/logger';
-import { Button } from '@/components/ui/Button';
+import { Button, ClearButton } from '@/components/ui/Button';
 import { composerHint } from '@/components/ui/Composer';
 import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { useIsLaptop } from '@/lib/use-is-laptop';
@@ -464,15 +464,7 @@ export function EditingBar(props: { text: string; onCancel: () => void }): React
       preview={props.text}
       tone="warn"
       trailing={
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label="Cancel editing"
-          className="shrink-0 px-3"
-          onClick={props.onCancel}
-        >
-          Clear
-        </Button>
+        <ClearButton aria-label="Cancel editing" onClick={props.onCancel} />
       }
     />
   );
@@ -524,15 +516,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
           <span aria-hidden="true" className="my-1 h-3 w-28 rounded bg-panel-2" />
         )}
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        aria-label="Close about"
-        className="shrink-0 px-3"
-        onClick={props.onCancel}
-      >
-        Clear
-      </Button>
+      <ClearButton aria-label="Close about" onClick={props.onCancel} />
     </div>
   );
 }
@@ -573,15 +557,7 @@ export function ReplyBar(props: {
       thumbSource={props.thumbSource}
       className={NO_TOUCH_SELECT}
       trailing={
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label="Cancel reply"
-          className="shrink-0 px-3"
-          onClick={props.onCancel}
-        >
-          Clear
-        </Button>
+        <ClearButton aria-label="Cancel reply" onClick={props.onCancel} />
       }
     />
   );
@@ -606,15 +582,7 @@ export function PrivateReplyBar(props: {
         oneLine
         className={NO_TOUCH_SELECT}
         trailing={
-          <Button
-            type="button"
-            variant="ghost"
-            aria-label="Cancel reply"
-            className="shrink-0 px-3"
-            onClick={props.onRemove}
-          >
-            Clear
-          </Button>
+          <ClearButton aria-label="Cancel reply" onClick={props.onRemove} />
         }
       />
     </div>

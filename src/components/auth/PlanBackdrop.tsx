@@ -1,5 +1,6 @@
 import { useMemo, type ReactElement } from 'react';
 import { cn } from '@/lib/cn';
+import { CHIP_PICKED_EDGE, CHIP_REST_EDGE } from '@/components/ui/Chip';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import {
   backdropMonth,
@@ -74,10 +75,10 @@ function Bar({ className }: { className: string }): ReactElement {
 function Chips(): ReactElement {
   return (
     <div className="flex gap-2">
-      <span className="h-7 w-20 rounded-full bg-accent-soft" />
-      <span className="h-7 w-16 rounded-full bg-panel-2" />
-      <span className="h-7 w-24 rounded-full bg-panel-2" />
-      <span className="h-7 w-14 rounded-full bg-panel-2" />
+      <span data-backdrop-chip="" className={cn('h-7 w-20 rounded-full border', CHIP_PICKED_EDGE)} />
+      <span data-backdrop-chip="" className={cn('h-7 w-16 rounded-full border', CHIP_REST_EDGE)} />
+      <span data-backdrop-chip="" className={cn('h-7 w-24 rounded-full border', CHIP_REST_EDGE)} />
+      <span data-backdrop-chip="" className={cn('h-7 w-14 rounded-full border', CHIP_REST_EDGE)} />
     </div>
   );
 }

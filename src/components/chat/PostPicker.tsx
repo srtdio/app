@@ -936,17 +936,20 @@ export function PostPicker(props: PostPickerProps): ReactElement {
             {linkHint ? <ErrorNote>{LINK_PICK_FIRST_HINT}</ErrorNote> : null}
             <Button
               variant="primary"
+              shape="pill"
               data-picker-link-confirm=""
-              className="w-full md:w-auto"
+              className="self-end"
               onClick={confirmLink}
             >
               {LINK_CONFIRM}
             </Button>
           </div>
         ) : (
-          <Button variant="primary" className="ml-auto" onClick={done}>
-            {count > 0 ? `Done (${count})` : 'Done'}
-          </Button>
+          <div className="flex w-full justify-end">
+            <Button variant="primary" shape="pill" data-picker-done="" onClick={done}>
+              {count > 0 ? `Done (${count})` : 'Done'}
+            </Button>
+          </div>
         )
       }
     >

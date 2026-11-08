@@ -6,6 +6,9 @@
 // is 36 tall and the boxes run 4 past it top and bottom, so the hit stays 44
 // while the pill reads small. The row it sits on keeps the room above (the
 // list's spacing), so it never covers the comment above, a title or a time.
+// It never shares the author name's line: it is absolutely placed on the
+// row's top edge and the row's columns sit 16 under that edge (mt-4), so a
+// long name stays on one line and the bar never covers the name or time.
 // Pure render: no read, no wait.
 
 import type { ReactElement } from 'react';
@@ -24,9 +27,13 @@ import {
 import { cn } from '@/lib/cn';
 import { barHasButtons, type CommentBar, type TaskTag } from '@/lib/comment-tasks';
 
-/** The pill: 36 tall, hairline frame, the surface behind it so the row's top line stops at its edge. */
+/**
+ * The pill: 36 tall, hairline frame, the surface behind it so the row's top
+ * line stops at its edge. Absolute on the row (right-0, top-0, half above it),
+ * out of the name's line.
+ */
 export const COMMENT_BAR_CLASS =
-  'flex h-9 shrink-0 items-center self-start -translate-y-1/2 rounded-lg border border-border bg-panel lit-pill';
+  'absolute right-0 top-0 flex h-9 items-center -translate-y-1/2 rounded-lg border border-border bg-panel lit-pill';
 
 /** Each 44 box runs 4 past the 36 pill, top and bottom. */
 const BAR_BUTTON_CLASS = '-my-1';

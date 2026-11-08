@@ -280,9 +280,11 @@ export function PostDetailsSheet({
         dirty={dateDirty}
         footer={
           isAgencySide ? (
-            <Button variant="primary" className="ml-auto" data-details-done="" onClick={done}>
-              Done
-            </Button>
+            <div className="flex w-full justify-end">
+              <Button variant="primary" shape="pill" data-details-done="" onClick={done}>
+                Done
+              </Button>
+            </div>
           ) : undefined
         }
       >

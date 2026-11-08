@@ -17,7 +17,7 @@ import { useDismissLayer, useModalScopeNode } from '@/lib/modal-focus';
 import { formatSpokenDate } from '@/lib/time';
 import { usePresence } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
-import { Button } from '@/components/ui/Button';
+import { Button, ClearButton } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconCalendar, IconChevronLeft, IconChevronRight, ICON_SIZE } from '@/components/ui/icons';
 
@@ -404,15 +404,16 @@ export function DatePicker({
                 </div>
                 {actions ? (
                   <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
+                    <ClearButton disabled={value === ''} onClick={() => pick('')}>
+                      Clear date
+                    </ClearButton>
                     <Button
                       type="button"
-                      variant="ghost"
-                      disabled={value === ''}
-                      onClick={() => pick('')}
+                      variant="primary"
+                      shape="pill"
+                      data-date-done=""
+                      onClick={() => setOpen(false)}
                     >
-                      Clear date
-                    </Button>
-                    <Button type="button" onClick={() => setOpen(false)}>
                       Done
                     </Button>
                   </div>

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { PageHead } from '@/components/shell/PageHead';
-import { Chip } from '@/components/ui/Chip';
+import { CHIP_FACE_SIZE, CHIP_HIT, CHIP_REST_EDGE, Chip } from '@/components/ui/Chip';
 import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { NoResults } from '@/components/ui/NoResults';
 import { Text } from '@/components/ui/Text';
+import { cn } from '@/lib/cn';
 
 const CATEGORIES = [
   'All topics',
@@ -182,12 +183,17 @@ export function HelpPage() {
           </div>
           <nav aria-label="Helpful sections" className="mt-6 flex flex-wrap gap-2">
             {QUICK_LINKS.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className="inline-flex min-h-11 items-center rounded-full bg-panel-3 lit-well-soft lit-hover px-4 text-base font-medium text-fg focus-visible:lit-focus"
-              >
-                {link.label}
+              <NavLink key={link.to} to={link.to} data-help-quick-link="" className={CHIP_HIT}>
+                <span
+                  data-chip-face=""
+                  className={cn(
+                    'inline-flex items-center rounded-full border text-md font-medium lit-hover',
+                    CHIP_FACE_SIZE,
+                    CHIP_REST_EDGE,
+                  )}
+                >
+                  {link.label}
+                </span>
               </NavLink>
             ))}
           </nav>

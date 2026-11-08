@@ -508,9 +508,12 @@ describe('one row template for checkpoints and comments', () => {
     expect(time?.className).toContain('font-mono');
     expect(time?.className).toContain('text-sm');
     expect(rowEl('c-1')?.textContent ?? '').not.toMatch(/Agency|Creator|Approver/);
-    // A point shows its author on the group: its head line holds only the bar.
+    // A point shows its author on the group: no head line, the bar rides the row.
     expect(rowEl('p-1')?.querySelector('[data-comment-header]')).toBeNull();
-    expect(rowEl('p-1')?.querySelector('[data-point-head] [data-comment-bar]')).toBeTruthy();
+    expect(rowEl('p-1')?.querySelector('[data-point-head]')).toBeNull();
+    expect(
+      rowEl('p-1')?.querySelector('[data-comment-row="root"] > [data-comment-bar]'),
+    ).toBeTruthy();
     // The point's number is its circle, never a "#2".
     expect(rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.textContent).toBe('2');
     expect(rowEl('p-1')?.textContent ?? '').not.toContain('#2');
@@ -556,9 +559,10 @@ describe('one row template for checkpoints and comments', () => {
     const header = reply?.querySelector('[data-comment-header]');
     expect(header?.querySelector('[data-comment-author]')).toBeTruthy();
     expect(header?.className).toContain('items-center');
-    // Avatar, name and time at the top left; the bar at the trailing end.
+    // Avatar, name and time at the top left; the bar off the name's line, on the row.
     expect(header?.querySelector('[data-comment-time]')).toBeTruthy();
-    expect(header?.querySelector('[data-comment-bar]')).toBeTruthy();
+    expect(header?.querySelector('[data-comment-bar]')).toBeNull();
+    expect(reply?.querySelector(':scope > [data-comment-bar]')).toBeTruthy();
     expect(reply?.querySelector('[data-comment-actions]')).toBeNull();
     const list = rowEl('r-1')?.closest('[data-replies]');
     expect(list?.innerHTML ?? '').not.toContain('border-l');

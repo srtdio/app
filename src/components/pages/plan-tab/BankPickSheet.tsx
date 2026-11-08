@@ -431,14 +431,16 @@ export function BankPickSheet(props: {
         {...(multi !== undefined
           ? {
               footer: (
-                <Button
-                  variant="primary"
-                  data-plan-from-bank-done=""
-                  className="ml-auto"
-                  onClick={close}
-                >
-                  {bankMultiDoneLabel(multi.selected.size)}
-                </Button>
+                <div className="flex w-full justify-end">
+                  <Button
+                    variant="primary"
+                    shape="pill"
+                    data-plan-from-bank-done=""
+                    onClick={close}
+                  >
+                    {bankMultiDoneLabel(multi.selected.size)}
+                  </Button>
+                </div>
               ),
             }
           : {})}

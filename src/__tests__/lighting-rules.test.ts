@@ -250,7 +250,6 @@ describe('lighting rules', () => {
 
   it('every single-choice pick is the ink outline (flat look), switched instantly; idle options rest on the hairline', () => {
     for (const rel of [
-      'shell/Tabs.tsx',
       'support/BookCallSheet.tsx',
       'shell/WorkspaceSwitcher.tsx',
       'onboarding/OnboardingFlow.tsx',
@@ -267,7 +266,6 @@ describe('lighting rules', () => {
       expect(code, rel).not.toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
     }
     for (const rel of [
-      'shell/Tabs.tsx',
       'support/BookCallSheet.tsx',
       'shell/WorkspaceSwitcher.tsx',
       'onboarding/OnboardingFlow.tsx',
@@ -281,9 +279,11 @@ describe('lighting rules', () => {
       expect(code, rel).not.toContain('bg-panel-3 text-fg lit-well-soft');
       expect(code, rel).not.toContain('lit-chip');
     }
-    // The day picker keeps the ink fill for a picked day (a date, not a choice row).
+    // Settings tabs are the shared Chip (its CHIP_* edges); the day picker's
+    // picked day is the ink line, no fill (8 Nov 2026).
+    expect(src('shell/Tabs.tsx')).toContain('<Chip');
     const days = src('chat/PlanDayPickerSheet.tsx');
-    expect(days).toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
+    expect(days).not.toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
     expect(days).not.toContain('selectionSlideRef');
   });
 

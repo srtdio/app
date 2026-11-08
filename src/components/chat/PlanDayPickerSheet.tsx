@@ -92,17 +92,16 @@ export function PlanDayTiles(props: {
                   onClick={() => props.onPick(day)}
                   className={cn(
                     'relative flex min-h-16 flex-col items-center justify-center gap-px',
-                    // The pick is the ink fill (slides within the week); idle
-                    // days rest on the grey fill like every chip.
-                    on
-                      ? 'border-transparent bg-accent text-accent-fg hover:bg-accent lit-pill'
-                      : 'bg-panel-3 text-fg lit-well-soft',
+                    // Flat like every chip (8 Nov 2026): idle days rest on the
+                    // border-strong hairline in fg-2; the pick is the ink line
+                    // and fg ink. No fill either way.
+                    on ? 'border border-fg text-fg' : 'border border-border-strong text-fg-2',
                   )}
                 >
                   <span
                     className={cn(
                       SECTION_LABEL_INK,
-                      on ? 'text-accent-fg' : day === props.today ? 'text-accent' : 'text-fg-2',
+                      on ? 'text-fg' : day === props.today ? 'text-accent' : 'text-fg-2',
                     )}
                   >
                     {civilWeekdayShort(day)}
@@ -113,7 +112,7 @@ export function PlanDayTiles(props: {
                   <span
                     className={cn(
                       'font-mono text-xs tabular-nums',
-                      on ? 'text-accent-fg' : 'text-fg-2',
+                      on ? 'text-fg' : 'text-fg-2',
                     )}
                   >
                     {tileCaption(day, count)}
@@ -232,14 +231,11 @@ export function PlanDatesSheet(props: {
       onClose={props.onClose}
       title={PLAN_DATES_TITLE}
       footer={
-        <Button
-          variant="primary"
-          data-plan-dates-save=""
-          className="w-full md:w-auto"
-          onClick={save}
-        >
-          {PLAN_DATES_SAVE}
-        </Button>
+        <div className="flex w-full justify-end">
+          <Button variant="primary" shape="pill" data-plan-dates-save="" onClick={save}>
+            {PLAN_DATES_SAVE}
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-3">

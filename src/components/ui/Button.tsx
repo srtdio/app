@@ -13,10 +13,16 @@ export type ButtonVariant =
   /** Alias of 'secondary', kept for one release so older call sites compile. */
   | 'default';
 
+export type ButtonShape = 'default' | 'round' | 'pill';
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
-  /** 'round' renders a 44x44 circle (composer actions); default is the 8px-radius rectangle. */
-  shape?: 'default' | 'round';
+  /**
+   * 'round' renders a 44x44 circle (composer actions); 'pill' is the sheet
+   * primary action (Done / OK / Save: full radius, 24 side padding, same 44
+   * height, auto width); default is the 8px-radius rectangle.
+   */
+  shape?: ButtonShape;
   /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
   /**
@@ -57,15 +63,16 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   default: secondary,
 };
 
-const BUTTON_SHAPES: Record<'default' | 'round', string> = {
+const BUTTON_SHAPES: Record<ButtonShape, string> = {
   default: 'rounded-lg px-4',
   round: 'rounded-full w-11 px-0',
+  pill: 'rounded-full px-6',
 };
 
 /** The class string a Button renders; exported for the few anchors that must look like one. */
 export function buttonClass(
   variant: ButtonVariant = 'secondary',
-  shape: 'default' | 'round' = 'default',
+  shape: ButtonShape = 'default',
   className?: string,
 ): string {
   return cn(
@@ -134,5 +141,42 @@ function BusyArc() {
       trackClass="text-transparent"
       arcClass="text-current"
     />
+  );
+}
+
+/**
+ * The visible face of the outlined Clear pill: 36 tall (the chip face height),
+ * a border-strong hairline (3:1 edge rule), fg-2 ink, no fill. It sits inside
+ * the 44 tall ghost pill Button, so the tap box stays 44.
+ */
+export const CLEAR_PILL_FACE =
+  'inline-flex h-9 items-center rounded-full border border-border-strong px-4 text-fg-2';
+
+/**
+ * Clear (dismiss a toast, drop a reply/edit/about bar, remove a link preview,
+ * clear a chip filter or a date): the outlined pill. The shared ghost Button in
+ * the pill shape (44 tall hit, no padding of its own) around a 36 face with the
+ * border-strong hairline. `faceClassName` is for a tone that needs other ink
+ * (the error toast's accent-fg on red).
+ */
+export function ClearButton({
+  children = 'Clear',
+  className,
+  faceClassName,
+  ...props
+}: Omit<ButtonProps, 'variant' | 'shape'> & { faceClassName?: string | undefined }) {
+  return (
+    <Button
+      type="button"
+      {...props}
+      variant="ghost"
+      shape="pill"
+      data-clear-pill=""
+      className={cn('shrink-0 px-0 [&:disabled>span]:text-fg-3', className)}
+    >
+      <span data-clear-face="" className={cn(CLEAR_PILL_FACE, faceClassName)}>
+        {children}
+      </span>
+    </Button>
   );
 }

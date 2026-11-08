@@ -4233,6 +4233,34 @@ SCREENS.push(
     },
   },
   {
+    // New plan -> a concept on the plan's first day -> tap it: Edit concept
+    // with its day tiles, one picked (flat finish, 8 Nov 2026): idle tiles a
+    // hairline outline, the picked one an ink line, no fill.
+    name: 'plan-day-picker',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickTrayTile(page, 'plan');
+      const plans = page.getByRole('dialog', { name: 'Plans' });
+      await tap([plans.locator('[data-plan-pick-new]')], 'New plan');
+      const compose = page.locator('[data-plan-page="compose"]');
+      await tap([compose.locator('[data-plan-add-concept]')], 'Add concept');
+      const add = page.getByRole('dialog', { name: 'Add concept' });
+      await add.locator('[data-plan-concept-title]').fill('Opening reel');
+      await tap([add.locator('[data-plan-day-tile]').first()], 'first day');
+      await tap([add.locator('[data-plan-concept-save]')], 'Save concept');
+      await expect(add).toBeHidden();
+      const row = compose.locator('[data-plan-compose-item="concept"]').first();
+      await tap([row.locator('[data-plan-draft-concept-edit]')], 'Edit concept');
+      const sheet = page.getByRole('dialog', { name: 'Edit concept' });
+      const picked = sheet.locator('[data-plan-day-tile][aria-pressed="true"]');
+      await waitFor([picked], 'picked day');
+      await expect(picked).toHaveCount(1);
+      await picked.scrollIntoViewIfNeeded();
+    },
+  },
+  {
     // A common sheet's header (D4a): Rename file, the leading "<" (Back) on
     // the content edge, then the title; no X or Close.
     name: 'sheet-header-back',
@@ -4658,15 +4686,6 @@ SCREENS.push(
     url: '/plan',
     steps: async (page) => {
       await planTabReady(page);
-      await openTopbarSort(page);
-    },
-  },
-  {
-    name: 'activity-sort',
-    seed: creator,
-    url: '/activity',
-    steps: async (page) => {
-      await activityReady(page);
       await openTopbarSort(page);
     },
   },
@@ -5479,7 +5498,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'assets-sort',
   'plan-tab-sort',
   'plan-tab-bank-filter',
-  'activity-sort',
   'chat-list-sort',
   'activity-all-read',
   'palette-pick',

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { SortMenu } from '@/components/ui/SortMenu';
 import { useTopbarActions } from '@/components/shell/topbar-actions';
 import { ICON_SIZE, IconActivity, IconAt, IconTickDouble } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
@@ -25,9 +24,6 @@ import { POLL_CHANGE_SOURCE } from '@/lib/inbox/inbox-live';
 import { getFillCount } from '@/lib/use-fill-count';
 import {
   ACTIVITY_SORT_DEFAULT,
-  ACTIVITY_SORT_OPTIONS,
-  ACTIVITY_SORT_PAGE,
-  activitySort,
   EMPTY_LINES,
   activityPageKey,
   editKeptActivityPages,
@@ -68,7 +64,6 @@ import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/ke
 import { onSessionReadsHydrated } from '@/lib/session-read';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { useWorkspace } from '@/lib/workspace-context';
-import { useSort } from '@/lib/use-sort';
 import { env } from '@/lib/env';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
@@ -174,15 +169,9 @@ export function NotificationsPage() {
   const state = activityChip(keptChip);
   const untouched = useUntouched();
 
-  // The order (the top bar's sort): Newest first or Oldest first, persisted
-  // per page like the other sorts (src/lib/use-sort.ts); a stale value heals.
-  // Each order has its own kept page one (activityPageKey), read server-side
-  // in that order (keyset on created_at, id), so a switch paints a kept page.
-  const { value: storedSort, setValue: setSort } = useSort<ActivityDirection>(
-    ACTIVITY_SORT_PAGE,
-    ACTIVITY_SORT_DEFAULT,
-  );
-  const sort = activitySort(storedSort);
+  // The order: Newest first, always (the top bar has no sort, decided 7 Nov).
+  // Page one is read server-side in that order (keyset on created_at, id).
+  const sort: ActivityDirection = ACTIVITY_SORT_DEFAULT;
 
   // The chip's page one as the bell press or an earlier visit this session
   // read it: the first frame is the list, refreshed quietly behind it. Else
@@ -633,10 +622,10 @@ export function NotificationsPage() {
     revertRead,
   ]);
 
-  // The top bar (decision A): the sort, and Mark all read as the primary
-  // (IconTickDouble), for the active chip; at 0 unread the slot is empty (it
-  // keeps its width). The latest handler rides a ref so the published nodes
-  // change only when the sort or the unread state does.
+  // The top bar: Mark all read as the primary (IconTickDouble), for the
+  // active chip; at 0 unread the slot is empty (it keeps its width). No sort
+  // (decided 7 Nov). The latest handler rides a ref so the published node
+  // changes only when the unread state does.
   const chipUnread = useMemo(
     () => markAllTargets(items, state, nowMs).length,
     [items, state, nowMs],
@@ -644,17 +633,6 @@ export function NotificationsPage() {
   const markAllRef = useRef(handleMarkAll);
   markAllRef.current = handleMarkAll;
   const hasUnread = chipUnread > 0;
-  const sortNode = useMemo(
-    () => (
-      <SortMenu
-        options={ACTIVITY_SORT_OPTIONS}
-        value={sort}
-        onChange={setSort}
-        label="Sort activity"
-      />
-    ),
-    [sort, setSort],
-  );
   const markAllNode = useMemo(
     () =>
       hasUnread ? (
@@ -668,7 +646,7 @@ export function NotificationsPage() {
       ) : undefined,
     [hasUnread],
   );
-  useTopbarActions({ sort: sortNode, primary: markAllNode });
+  useTopbarActions({ primary: markAllNode });
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
   if (!listLoading) mark('activity:paint');
@@ -688,7 +666,7 @@ export function NotificationsPage() {
   return (
     <>
       {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page starts with the
-          chip row (sort and Mark all read live in the top bar). The h1 stays for
+          chip row (Mark all read lives in the top bar). The h1 stays for
           screen readers and e2e. */}
       <h1 tabIndex={-1} className="sr-only">
         {ACTIVITY_TITLE}

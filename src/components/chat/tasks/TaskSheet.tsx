@@ -335,53 +335,30 @@ function AddRow(props: {
 }
 
 /**
- * The chip line: five chips sized to their text (the picked one is always in
- * view); when the row is too narrow for the counts, the counts go and the
- * names stay. Measured before paint, again on resize.
+ * The chip line: five normal Chips (the shared face, 36 Cozy in a 44 tap) with
+ * their counts, gap-2, scrolling sideways with no scrollbar like Activity's row.
  */
 function ChipLine(props: {
   chip: TaskWhen;
   counts: Record<TaskWhen, number>;
   onChip: (chip: TaskWhen) => void;
 }): ReactElement {
-  const ref = useRef<HTMLDivElement>(null);
-  const [withCounts, setWithCounts] = useState(true);
-  const total = TASK_WHEN_CHIPS.map((c) => props.counts[c.key]).join(',');
-  // Any change to the counts tries them again; a resize too.
-  useLayoutEffect(() => {
-    setWithCounts(true);
-  }, [total]);
-  useLayoutEffect(() => {
-    const row = ref.current;
-    if (row === null || !withCounts) return;
-    const cut = [...row.children].some((c) => c.scrollWidth > c.clientWidth + 1);
-    if (cut) setWithCounts(false);
-  }, [withCounts, total]);
-  useEffect(() => {
-    const row = ref.current;
-    if (row === null || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setWithCounts(true));
-    ro.observe(row);
-    return () => ro.disconnect();
-  }, []);
   return (
     <div
-      ref={ref}
       data-task-chips=""
-      data-task-chip-counts={withCounts ? '' : undefined}
       role="tablist"
       aria-label="When"
-      className="flex shrink-0 gap-1 px-3 py-2"
+      className="flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {TASK_WHEN_CHIPS.map((c) => (
         <Chip
           key={c.key}
           label={c.label}
-          {...(withCounts ? { count: props.counts[c.key] } : {})}
+          count={props.counts[c.key]}
           tab
           selected={props.chip === c.key}
           data-task-when-chip={c.key}
-          className="min-w-0 flex-auto justify-center truncate whitespace-nowrap px-2"
+          className="shrink-0 whitespace-nowrap"
           onClick={() => props.onChip(c.key)}
         />
       ))}

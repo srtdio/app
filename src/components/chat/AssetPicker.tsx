@@ -263,15 +263,17 @@ export function AssetPicker(props: {
         />
       }
       footer={
-        <Button
-          variant="primary"
-          className="ml-auto"
-          disabled={selected.length === 0}
-          busy={resolving}
-          onClick={confirm}
-        >
-          {selected.length > 0 ? `Add (${selected.length})` : 'Add'}
-        </Button>
+        <div className="flex w-full justify-end">
+          <Button
+            variant="primary"
+            shape="pill"
+            disabled={selected.length === 0}
+            busy={resolving}
+            onClick={confirm}
+          >
+            {selected.length > 0 ? `Add (${selected.length})` : 'Add'}
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-3" data-asset-picker="">
