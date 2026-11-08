@@ -208,7 +208,9 @@ Permanent in-app event feed. Source of truth for what happened. The only permane
 | --- | --- |
 | Chips | All, Unread, Mentions, Briefs, Plans (single-select, in that order; no separate scope row; each filters server-side). Snoozed chip removed 7 Nov 2026. |
 | Order | Newest first; no sort control (removed 7 Nov 2026). |
-| Row menu | None (removed 7 Nov 2026). Tap opens and marks read. |
+| Row menu | None (removed 7 Nov 2026). |
+| Row tap | Opens Catch up with that entry first (8 Nov 2026); a grouped row opens its newest entry first, its other entries follow. |
+| Catch up | Slack-style cards over Activity (/activity?catchup=<entryId>): one card per notification; queue = the tapped entry, then every other unread entry newest first, snoozed out, fixed on open. Swipe right or "Mark as read" marks read (plus the chat's thread or read cursor); swipe left or "Keep unread" writes nothing; Undo (4 s) puts the last card back (inbox_mark_unread_ids + chat mark unread). Long-press Mark as read = mark all. Chat and post/brief comment cards take a reply (sending does not advance). End screen "Everything's sorted." Bar under the chips: "<N> unread" + Catch up, hidden at 0. In-app Activity and mention toasts open it. Decision 8 Nov 2026. |
 | Briefs chip | Brief created, brief closed, comments and mentions on briefs, posts created from a brief |
 | Own actions | The person who acted sees their own row ("You approved ..."), already read; never toasts or sounds |
 | New members | See only activity after they joined (from their welcome row) |
@@ -224,7 +226,8 @@ Permanent in-app event feed. Source of truth for what happened. The only permane
 - Post stage changes
 - Brief created, brief closed, post created from a brief
 - Asset uploaded, asset version added
-- @-mentions
+- @-mentions (a chat mention in a thread reads "mentioned you in a thread in <chat>")
+- A thread's first reply on a post, brief, plan or idea card: "<Actor> started a thread on <card title>" to every chat member except the sender and the mentioned (system / thread_started; All and Unread, not Mentions). Decision 8 Nov 2026.
 - Decision Records flagged
 - System events (asset removed)
 

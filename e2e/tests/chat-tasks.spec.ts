@@ -349,7 +349,7 @@ test("Close with changes still waiting saves them, then closes; the Add button a
   expectClean(network);
 });
 
-test('Notifications: an older task alert opens the chat with the sheet; Back closes it', async ({
+test('Notifications: an older task alert opens catch up at that alert; Mark as read saves it; Back returns', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -361,13 +361,17 @@ test('Notifications: an older task alert opens the chat with the sheet; Back clo
   await expect(row.locator('[data-activity-alert-icon="task"]')).toBeVisible();
   await row.locator('[data-activity-lead]').click();
 
-  const sheet = page.getByRole('dialog', { name: 'Tasks' });
-  await expect(sheet).toBeVisible({ timeout: 8000 });
-  await expect(page).toHaveURL(new RegExp(`channel=${encodeURIComponent(TASK_CHANNEL)}`));
+  // Catch up opens with that alert's card first (8 Nov 2026: every row tap).
+  await expect(page).toHaveURL(/[?&]catchup=/);
+  const card = page.locator('[data-catch-up-card]');
+  await expect(card).toBeVisible({ timeout: 8000 });
+  await expect(card).toContainText(TASK_DUE_TITLE);
+  await page.locator('[data-catch-up-read]').click();
+  await expect
+    .poll(() => network.rpcCalls.some((c) => c.name === 'inbox_mark_read_ids'))
+    .toBe(true);
   await page.goBack();
-  await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
-  await expect(page.locator('[data-msg-id]').first()).toBeVisible();
-  expect(network.rpcCalls.some((c) => c.name === 'inbox_mark_read')).toBe(true);
+  await expect(page.locator('[data-catch-up]')).toHaveCount(0);
   expectClean(network);
 });
 

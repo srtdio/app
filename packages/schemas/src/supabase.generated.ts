@@ -10545,6 +10545,10 @@ export type Database = {
         Args: { p_ids: string[]; p_trace_id: string; p_workspace_id: string }
         Returns: undefined
       }
+      inbox_mark_unread_ids: {
+        Args: { p_ids: string[]; p_trace_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
       inbox_self_entry: {
         Args: {
           p_entity_id: string

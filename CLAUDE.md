@@ -28,7 +28,7 @@ iPhone/WebKit visual checks: `pnpm test:e2e` (e2e/harness)
 
 Domain/DB suites live in `tests/<domain>/` and are NOT run by `pnpm test`. Each has its own config and CI workflow:
 
-- `pnpm exec vitest run --config tests/<domain>/vitest.config.ts` (domains: rls, auth, posts, briefs, comments, inbox, rpc, workspace, flags)
+- `pnpm exec vitest run --config tests/<domain>/vitest.config.ts` (domains: rls, auth, posts, briefs, comments, inbox, rpc, workspace, flags, catch-up)
 - Type-check a suite: `pnpm exec tsc -p tests/<domain>/tsconfig.json --noEmit`
 - DB-backed specs are gated with `describe.runIf(process.env.<DOMAIN>_SUITE === '1')`; the suite config sets that env var. Under the root config they auto-skip, so the default run stays DB-free.
 - The RLS suite's globalSetup boots a local ephemeral Supabase container (Supabase CLI) and applies `supabase/migrations/`; it never touches the live database.
@@ -130,6 +130,8 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Swipe: right = Reply, left = Delete on every message, comment and task row; one core (src/lib/chat/swipe-reply.ts); own and others' rows swipe the same. In chat, Reply opens the message's thread.
 - Square photos (8 Nov 2026): people, groups and workspaces are one rounded-square shape at every size (ui/Avatar avatarShapeClass, one rule). Guard: `src/__tests__/square-avatars.test.ts`.
 - Work chat (8 Nov 2026, Slack way): everyone on the left, no bubbles; a group head = square photo 32 + name + clock time, same sender within 5 min groups; own rows look the same (send states kept). Every reply is a thread (reply_to = root): the main chat shows top-level messages only, each root with a replies row (3 photos, "N replies", latest line, unread dot); no quote-reply in the main chat. Thread screen: "<", card title or "Thread" + chat name, "N replies", hint "Reply". Signals: alerts to thread participants only (6 or fewer members: everyone), "<Name> in thread:" list preview, "N threads" strip item, Threads sheet, "New" line (ink rule + New pill). Open rule: unread top level -> New line, else unread threads (known before first paint) -> Threads sheet. Long-press sheet: reactions, tiles Reply / Forward / Add to Tasks, rows Mark unread / Copy link / Copy text, then More actions. Guards: `src/__tests__/chat-threads-guards.test.ts`.
+- Thread view: no reply gesture or Reply action inside a thread. Swipe right does nothing, the sheet has no Reply, swipe left Delete stays; content starts at the top; the "N replies" divider carries Add to Tasks, Forward, More for the root. Guard: `src/__tests__/thread-view-no-reply.test.ts`.
+- Catch up: one card per notification; card swipe = X axis + rotate only. Max 6deg, the stack below never moves. /activity?catchup=<entryId>; every Activity row tap, the Catch up bar and the in-app Activity / mention toasts open it; the queue is fixed on open. Guard: `src/__tests__/catch-up-guards.test.ts`.
 - Behaviour: hide what a person can't do; Delete = UndoStrip; ⋯ menus = ActionMenu (Open, Copy link, others, Delete last); decisions only via PostDecisionBar; phone vs laptop via useIsLaptop; svh/dvh only.
 - Speed: first paint from what the device holds; no new await, hold, gate or read on a paint or tap path; parts are pure render.
 - Pinned exit bar: every HeaderBar with a back "<" on a screen that opens over the app stays pinned while the page scrolls (phone page mode: sticky at --shell-sticky-top, safe area kept). On the post screen the checkpoint progress row sits inside the pinned block under the bar.

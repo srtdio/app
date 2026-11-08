@@ -312,7 +312,9 @@ test.describe('iPhone, cards and threads', () => {
     await expectFocusedAtEnd(page);
   });
 
-  test('Reply inside the thread view focuses the view composer', async ({ page }) => {
+  test('inside the thread view the long-press sheet has no Reply (8 Nov 2026)', async ({
+    page,
+  }) => {
     await openMaya(page);
     await page.locator('[data-thread-open="replies"]', { hasText: '4 replies' }).click();
     const view = page.locator('[data-thread-view]');
@@ -322,12 +324,8 @@ test.describe('iPhone, cards and threads', () => {
     const member = view.locator('li[data-msg-id] [data-bubble]').last();
     await settle(page, member);
     await hold(page, member);
-    await menuReply(page);
-    const focused = await view
-      .locator('form textarea')
-      .evaluate((el) => document.activeElement === el);
-    expect(focused, 'thread view composer is document.activeElement').toBe(true);
-    await page.keyboard.type('hi');
-    await expect(view.locator('form textarea')).toHaveValue('hi');
+    const menu = page.getByRole('menu', { name: 'Message actions' });
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('[data-menu-item="reply"]')).toHaveCount(0);
   });
 });

@@ -10,7 +10,12 @@
 // callout).
 
 import type { ReactElement } from 'react';
-import { RailCurveGlyph } from '@/components/ui/icons';
+import { ICON_SIZE, IconForward, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
+import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
+import { IconButton } from '@/components/ui/IconButton';
+import { textRole } from '@/components/ui/Text';
+import { CHAT_GUTTER, TRAILING_PULL } from '@/components/ui/layout';
+import { ADD_TO_TASKS_LABEL, MORE_ACTIONS_LABEL } from '@/components/chat/MessageActionMenu';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -199,17 +204,77 @@ export function RepliesButtonRow(props: {
   );
 }
 
-/** The thread view's "N replies" line under its root: 12px muted, centred, not a button. */
-export function RepliesSeparatorRow(props: { label: string; through: boolean }): ReactElement {
+/** What the thread view's divider does to the ROOT message; an absent action is hidden. */
+export interface RootActions {
+  /** Add to Tasks: the long-press sheet's own Add to Tasks. */
+  onTasks?: (() => void) | undefined;
+  /** Forward: the Forward picker for the root. */
+  onForward?: (() => void) | undefined;
+  /** More actions: the root's long-press sheet. */
+  onMore?: (() => void) | undefined;
+}
+
+/**
+ * The thread view's "N replies" divider under its root (8 Nov 2026): a full
+ * width row between two hairlines (border-y), 44 tall at least, the count on
+ * the left in the label role (fg-2) and, on the right, three 44 icon buttons
+ * that act on the root: Add to Tasks, Forward, More actions (its long-press
+ * sheet). The last one is pulled out by 12 (TRAILING_PULL) so its glyph sits on
+ * the content edge. An action the person can't take is not drawn. Tokens
+ * only; light and dark at parity.
+ */
+export function RepliesSeparatorRow(props: {
+  label: string;
+  through: boolean;
+  actions?: RootActions | undefined;
+  coarse?: boolean | undefined;
+}): ReactElement {
+  const actions = props.actions ?? {};
   return (
     <li
-      role="separator"
       aria-label={props.label}
       data-thread-separator=""
-      className={cn('relative flex justify-center px-4 py-2', NO_TOUCH_SELECT)}
+      data-thread-replies-divider=""
+      className={cn(
+        'relative flex min-h-11 items-center gap-2 border-y border-border',
+        CHAT_GUTTER,
+        NO_TOUCH_SELECT,
+      )}
+      {...guardProps(props.coarse === true)}
     >
       {props.through ? <RailThrough /> : null}
-      <span className="text-sm text-fg-3">{props.label}</span>
+      <span className={textRole('label', 'min-w-0 flex-1 truncate text-fg-2')}>{props.label}</span>
+      <span className={cn('flex shrink-0 items-center', TRAILING_PULL)}>
+        {actions.onTasks !== undefined ? (
+          <IconButton
+            type="button"
+            label={ADD_TO_TASKS_LABEL}
+            data-thread-root-action="tasks"
+            onClick={actions.onTasks}
+          >
+            <IconTodo size={ICON_SIZE.control} />
+          </IconButton>
+        ) : null}
+        {actions.onForward !== undefined ? (
+          <IconButton
+            type="button"
+            label="Forward"
+            data-thread-root-action="forward"
+            onClick={actions.onForward}
+          >
+            <IconForward size={ICON_SIZE.control} />
+          </IconButton>
+        ) : null}
+        {actions.onMore !== undefined ? (
+          <ActionMenuTrigger
+            type="button"
+            edge="free"
+            label={MORE_ACTIONS_LABEL}
+            data-thread-root-action="more"
+            onClick={actions.onMore}
+          />
+        ) : null}
+      </span>
     </li>
   );
 }

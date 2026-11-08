@@ -228,19 +228,24 @@ test('3: Notifications -> chat mention -> back = Notifications', async ({ page }
   await expect(page).toHaveURL(/\/notifications$/);
 });
 
-test('4: Notifications -> chat mention card (marked read) -> back = Notifications', async ({
+test('4: Notifications -> chat mention card opens catch up; Mark as read saves; back = Notifications', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   await page.goto('/notifications');
   const mention = page.locator('[data-activity-event="mention"]', { hasText: MENTION_PREVIEW });
   await mention.locator('[data-activity-lead]').click();
-  await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
-  await expect(page).toHaveURL(/\/chat\?channel=/);
+  // A row tap opens catch up at that mention (one history step), never the chat.
+  await expect(page).toHaveURL(/\/notifications\?catchup=/);
+  await expect(page.locator('[data-catch-up-card]')).toBeVisible({ timeout: 8000 });
+  await page.locator('[data-catch-up-read]').click();
+  await expect
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'inbox_mark_read_ids').length)
+    .toBe(1);
   await page.goBack();
   await expect(page).toHaveURL(/\/notifications$/);
+  await expect(page.locator('[data-catch-up]')).toHaveCount(0);
   await expect(mention).toBeVisible();
-  expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(1);
   expectClean(network);
 });
 

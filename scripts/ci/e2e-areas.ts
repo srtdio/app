@@ -115,6 +115,8 @@ export const AREAS: Area[] = [
     name: 'notifications',
     entries: ['src/components/pages/NotificationsPage.tsx', 'src/components/pages/PlanPage.tsx'],
     routed: true,
+    // Catch up opens over Activity (/activity?catchup=).
+    ownedDirs: ['src/components/catch-up/', 'src/lib/catch-up/'],
     specs: [
       'activity-first-paint',
       'activity-plan',

@@ -1,7 +1,7 @@
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -49,7 +49,7 @@ import {
   marksWholeInbox,
   mergeFresh,
   msUntilZonedMidnight,
-  openAction,
+  fetchActivityEntry,
   unreadCount,
   updatesLabel,
   type ActivityDirection,
@@ -71,6 +71,16 @@ import { useOptionalToast } from '@/components/ui/toast';
 import { undoFailureTitle } from '@/lib/use-undoable-action';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { ActivityBoxes } from '@/components/pages/activity/ActivityBoxes';
+import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
+import { CATCH_UP, unreadHeading } from '@/lib/catch-up/copy';
+import { buildCatchUpQueue, groupHeadEntry, heldEntries } from '@/lib/catch-up/queue';
+import {
+  CATCH_UP_NEWEST,
+  CATCH_UP_PARAM,
+  catchUpReturnOf,
+  seedCatchUpEntry,
+  takeCatchUpSeed,
+} from '@/lib/catch-up/route';
 
 /** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
@@ -144,7 +154,12 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
 
 export function NotificationsPage() {
   const navigate = useNavigate();
-  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const catchUpParam = searchParams.get(CATCH_UP_PARAM);
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const { workspaceId, workspaces } = useWorkspace();
   // Today and Yesterday follow the workspace's timezone, not the device's.
   const tz = workspaces.find((row) => row.id === workspaceId)?.timezone ?? null;
   const newTrace = useNewTrace();
@@ -523,35 +538,29 @@ export function NotificationsPage() {
     [workspaceId, newTrace, editItems, revertRead, toast, loadMentionCount],
   );
 
-  // Open one entry by its tap rule (openAction): mark it read (optimistic, and
-  // reverted with a toast if the save fails), toast a
-  // deleted plan, then navigate to its link.
-  const handleOpenEntry = useCallback(
-    (entry: ActivityItem) => {
-      if (workspaceId === null) return;
-      const open = openAction(entry, workspaceKey, side);
-      if (open.markRead && entry.readAt === null) markEntriesRead([entry]);
-      if (open.toast !== null) toast?.show({ title: open.toast });
-      if (open.href !== null) navigate(open.href);
+  // A row tap opens catch up with THAT entry first (its card paints from the
+  // row the list holds); a group head opens its newest entry first and its
+  // other entries follow. One history step (push): Back closes catch up.
+  const openCatchUp = useCallback(
+    (entry: ActivityItem | null, follow: readonly ActivityItem[] = []) => {
+      if (entry !== null) seedCatchUpEntry(entry, follow);
+      const next = new URLSearchParams(searchParams);
+      next.set(CATCH_UP_PARAM, entry?.id ?? CATCH_UP_NEWEST);
+      setSearchParams(next);
     },
-    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
+    [searchParams, setSearchParams],
   );
-
-  // Open a thread: every unread entry in the group is marked read in one batch
-  // then it opens from `entry` (the card's groupOpenEntry:
-  // the newest entry that links to a comment, else the lead).
+  const handleOpenEntry = useCallback((entry: ActivityItem) => openCatchUp(entry), [openCatchUp]);
   const handleOpenGroup = useCallback(
-    (group: ActivityItem[], entry: ActivityItem) => {
-      if (workspaceId === null) return;
-      const open = openAction(entry, workspaceKey, side);
-      const unread = group.filter(
-        (e) => e.readAt === null && openAction(e, workspaceKey, side).markRead,
+    (group: ActivityItem[]) => {
+      const head = groupHeadEntry(group);
+      if (head === undefined) return;
+      openCatchUp(
+        head,
+        group.filter((e) => e.id !== head.id),
       );
-      markEntriesRead(unread);
-      if (open.toast !== null) toast?.show({ title: open.toast });
-      if (open.href !== null) navigate(open.href);
     },
-    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
+    [openCatchUp],
   );
 
   // The active chip only: mark its unread rows (no snooze, or one that has run
@@ -649,6 +658,103 @@ export function NotificationsPage() {
   useTopbarActions({ primary: markAllNode });
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  // Catch up (/activity?catchup=<entryId>): the queue is fixed when it opens
+  // (Slack): the tapped entry (the row or toast handed it over, else the
+  // list's copy, else one read by id for a cold link), then the unread
+  // entries the screen holds. New arrivals wait for next time.
+  const [catchUp, setCatchUp] = useState<{ param: string; queue: ActivityItem[] } | null>(null);
+  const fetchingEntryRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (catchUpParam === null) {
+      if (catchUp !== null) setCatchUp(null);
+      return;
+    }
+    if (catchUp?.param === catchUpParam || workspaceId === null || userId === null) return;
+    const held = heldEntries(
+      items,
+      peekActivityPage(activityPageKey(userId, workspaceId, 'unread', sort)),
+      peekActivityPage(activityPageKey(userId, workspaceId, 'all', sort)),
+    );
+    const fix = (tapped: ActivityItem | null, follow: readonly ActivityItem[] = []): void => {
+      mark('catch-up:queue');
+      setCatchUp({
+        param: catchUpParam,
+        queue: buildCatchUpQueue({ tapped, held, follow, nowMs: Date.now(), workspaceId }),
+      });
+    };
+    if (catchUpParam === CATCH_UP_NEWEST) {
+      if (listLoading) return;
+      fix(null);
+      return;
+    }
+    const seed = takeCatchUpSeed(catchUpParam);
+    if (seed !== undefined) {
+      fix(seed.item, seed.follow);
+      return;
+    }
+    const known = held.find((item) => item.id === catchUpParam);
+    if (known !== undefined) {
+      fix(known);
+      return;
+    }
+    if (fetchingEntryRef.current === catchUpParam) return;
+    fetchingEntryRef.current = catchUpParam;
+    const param = catchUpParam;
+    void fetchActivityEntry(supabase, workspaceId, param).then((res) => {
+      fetchingEntryRef.current = null;
+      if (searchParamsRef.current.get(CATCH_UP_PARAM) !== param) return;
+      if (!res.ok) logger.warn('catch-up: entry read failed', { error: res.error });
+      fix(res.ok ? res.data : null);
+    });
+    // `items` and `listLoading` matter only until the queue is fixed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catchUpParam, catchUp, workspaceId, userId, sort, items.length > 0]);
+
+  // Back, Esc and Done: return to where catch up was opened. A link from
+  // another screen (a toast) carries its return path; on Activity the param
+  // goes with replace (never a push). Untouched cards stay unread.
+  const closeCatchUp = useCallback(() => {
+    void loadMentionCount();
+    window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+    const back = catchUpReturnOf(location.state);
+    if (back !== null) {
+      navigate(back, { replace: true });
+      return;
+    }
+    const next = new URLSearchParams(searchParamsRef.current);
+    next.delete(CATCH_UP_PARAM);
+    setSearchParams(next, { replace: true });
+  }, [location.state, navigate, setSearchParams, loadMentionCount]);
+
+  // Catch up's decisions land in the list at once (and in every kept page).
+  const setReadAt = useCallback(
+    (ids: readonly string[], read: boolean) => {
+      if (ids.length === 0) return;
+      const set = new Set(ids);
+      const stamp = new Date().toISOString();
+      editItems((prev) =>
+        prev.map((item) =>
+          set.has(item.id) ? { ...item, readAt: read ? (item.readAt ?? stamp) : null } : item,
+        ),
+      );
+    },
+    [editItems],
+  );
+  const onCatchUpRead = useCallback((ids: readonly string[]) => setReadAt(ids, true), [setReadAt]);
+  const onCatchUpUnread = useCallback(
+    (ids: readonly string[]) => setReadAt(ids, false),
+    [setReadAt],
+  );
+  const onCatchUpAllRead = useCallback(() => {
+    void loadMentionCount();
+    window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+  }, [loadMentionCount]);
+  // Nothing to catch up on (no unread, nothing tapped): the param goes.
+  const emptyCatchUp = catchUp !== null && catchUp.queue.length === 0;
+  useEffect(() => {
+    if (emptyCatchUp) closeCatchUp();
+  }, [emptyCatchUp, closeCatchUp]);
+
   if (!listLoading) mark('activity:paint');
   // What the first frame painted (?paintlog): the kept or device-saved page,
   // or the loading line (nothing saved for this chip yet).
@@ -678,6 +784,35 @@ export function NotificationsPage() {
         totalUnread={totalUnread}
         mentionCount={mentionCount}
       />
+
+      {/* The Catch up bar: under the chips while anything is unread; gone at 0. */}
+      {totalUnread > 0 ? (
+        <div
+          data-activity-catch-up-bar=""
+          className={cn('flex min-h-11 items-center justify-between gap-3 pt-2', GUTTER)}
+        >
+          <Text as="h2" role="heading" className="min-w-0 truncate">
+            {unreadHeading(totalUnread)}
+          </Text>
+          <Button variant="primary" data-activity-catch-up="" onClick={() => openCatchUp(null)}>
+            {CATCH_UP}
+          </Button>
+        </div>
+      ) : null}
+
+      {catchUp !== null && catchUp.queue.length > 0 && workspaceId !== null && userId !== null ? (
+        <CatchUpScreen
+          key={catchUp.param}
+          queue={catchUp.queue}
+          workspaceId={workspaceId}
+          currentUserId={userId}
+          selfName={selfName}
+          onClose={closeCatchUp}
+          onRead={onCatchUpRead}
+          onUnread={onCatchUpUnread}
+          onAllRead={onCatchUpAllRead}
+        />
+      ) : null}
 
       {error && items.length === 0 ? (
         <LoadFailed onRetry={() => void loadActivity()} />

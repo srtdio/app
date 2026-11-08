@@ -133,7 +133,12 @@ import {
 } from '@/components/ui/ImageLightbox';
 import { ThreadViewFrame } from '@/components/chat/ThreadView';
 import { ThreadsSheet } from '@/components/chat/ThreadsSheet';
-import { RepliesRow, RepliesSeparatorRow, ThreadChipRow } from '@/components/chat/ThreadRail';
+import {
+  RepliesRow,
+  RepliesSeparatorRow,
+  ThreadChipRow,
+  type RootActions,
+} from '@/components/chat/ThreadRail';
 import { useChipBatch, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
   MessageActionMenu,
@@ -1369,9 +1374,21 @@ export function threadListItems(
   renderTask?: (row: Extract<ThreadRow, { kind: 'task' }>) => ReactElement,
   /** The last older page failed (FT41): its Retry; the row replaces Load older. */
   retryOlder?: () => void,
+  /**
+   * The thread view (8 Nov 2026): its content starts at the top, so the
+   * spacer takes no slack (no bottom-anchored gap). The main chat keeps the
+   * bottom pin.
+   */
+  topAligned = false,
 ): ReactElement[] {
   const items: ReactElement[] = [
-    <li key="thread-spacer" aria-hidden="true" data-thread-spacer="" className="mt-auto" />,
+    <li
+      key="thread-spacer"
+      aria-hidden="true"
+      data-thread-spacer=""
+      {...(topAligned ? { 'data-thread-top': '' } : {})}
+      className={topAligned ? undefined : 'mt-auto'}
+    />,
   ];
   if (retryOlder !== undefined && !loadingOlder) {
     items.push(olderLoadErrorRow(retryOlder));
@@ -1460,6 +1477,11 @@ interface MessageRowProps {
   reducedMotion: boolean;
   /** Swiped right past the threshold: the same reply path as the menu's Reply. */
   onSwipeReply: (message: ThreadMessage) => void;
+  /**
+   * Inside a thread view: no reply gesture. A right swipe is not taken at all
+   * (no movement, no icon); the left swipe (Delete) stays.
+   */
+  replyBlocked?: boolean;
   /** Swiped left past the threshold: the long-press menu's Delete (its sheet, confirm or Undo). */
   onSwipeDelete?: (message: ThreadMessage) => void;
   /** Whether the menu offers Delete on this message now (the left swipe's canTrigger). */
@@ -1522,6 +1544,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       direction: 'both',
       onReply: () => latest.current.onSwipeReply(latest.current.message),
       onLeft: () => latest.current.onSwipeDelete?.(latest.current.message),
+      takes: (side) => side !== 'right' || latest.current.replyBlocked !== true,
       canTrigger: (side) => {
         const ok = rowSwipeCanTrigger(side, latest.current.message, latest.current.canSwipeDelete);
         swipeIconShownRef.current = ok;
@@ -2760,6 +2783,29 @@ function ThreadBody(
     (m: ThreadMessage, index: number) => setViewer({ messageId: m.id, index }),
     [],
   );
+  // The thread view's divider acts on its ROOT exactly as the root's
+  // long-press sheet does: Add to Tasks, Forward, and More (the sheet itself).
+  // An action the sheet would not offer is not drawn.
+  const rootActionsFor = (m: ThreadMessage): RootActions => {
+    const live = m.state === 'sent' && m.deleted !== true;
+    const plan = isPlanMessage(m) || isIdeaMessage(m);
+    const addToTask = props.onAddToTask;
+    const forward = props.onForwardMessage;
+    return {
+      ...(addToTask !== undefined && live && !plan && taskTitleOf(m) !== ''
+        ? { onTasks: () => addToTask(m) }
+        : {}),
+      ...(forward !== undefined && canForward(m) && !plan
+        ? {
+            onForward: () => {
+              anchorSelection(m);
+              if (forward(m) !== true) selectionScroll.cancelEntry();
+            },
+          }
+        : {}),
+      ...(m.deleted !== true ? { onMore: () => onOpenRow(m, null, null) } : {}),
+    };
+  };
   const onSwipeReply = useStableCallback(props.onReply);
   // Swipe left: exactly the long-press menu's Delete (its rule, its sheet).
   const canSwipeDelete = useStableCallback(
@@ -3128,6 +3174,7 @@ function ThreadBody(
                       coarsePointer={coarsePointer}
                       reducedMotion={reducedMotion}
                       onSwipeReply={onSwipeReply}
+                      replyBlocked={props.threads?.viewRootId !== undefined}
                       onSwipeDelete={onSwipeDelete}
                       canSwipeDelete={canSwipeDelete}
                       onJumpToMessage={onJumpToMessage}
@@ -3181,7 +3228,12 @@ function ThreadBody(
                     />
                   ) : null}
                   {replies !== null && viewRoot ? (
-                    <RepliesSeparatorRow label={replies} through={plan.continues} />
+                    <RepliesSeparatorRow
+                      label={replies}
+                      through={plan.continues}
+                      coarse={coarsePointer}
+                      actions={rootActionsFor(row.message)}
+                    />
                   ) : null}
                   {props.reading?.seen?.messageId === row.message.id ? (
                     <SeenLine readAt={props.reading.seen.readAt} rail={plan.continues} />
@@ -3214,6 +3266,7 @@ function ThreadBody(
               ? (row) => <TaskEventLine key={row.key} line={row.line} ctx={taskCtx} />
               : undefined,
             olderFailed && props.loadingOlder !== true && win.start === 0 ? retryOlder : undefined,
+            props.threads?.viewRootId !== undefined,
           )}
         </ul>
         {unread !== undefined && unread !== null && pill !== 'unknown' ? (
@@ -3306,6 +3359,7 @@ function ThreadBody(
               menu.message.reactions.find((r) => r.mine)?.emoji === emoji,
             );
         }}
+        canReply={props.threads?.viewRootId === undefined}
         onReply={() => {
           if (menu) props.onReply(menu.message);
         }}

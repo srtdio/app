@@ -18,6 +18,10 @@ const h = vi.hoisted(() => ({
   fetchActivityEntries: vi.fn(),
   readActivityBadge: vi.fn(),
   markEntryRead: vi.fn(),
+  rpc: vi.fn<(...args: unknown[]) => Promise<{ data: null; error: null }>>(async () => ({
+    data: null,
+    error: null,
+  })),
 }));
 
 vi.mock('agora-chat', () => ({
@@ -27,6 +31,7 @@ vi.mock('@/lib/env', () => ({ env: {} }));
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
+    rpc: (...args: unknown[]) => h.rpc(...args),
     auth: { getSession: async () => ({ data: { session: null } }) },
   },
 }));
@@ -322,9 +327,18 @@ describe("Activity: the page's own write reaches device-saved chip pages", () =>
     render();
     await settle();
     const lead = document.querySelector<HTMLElement>('[data-activity-lead]');
+    // A tap opens catch up with that entry first; Mark as read on its card
+    // is the page's own write (optimistic, every kept page edited).
     act(() => lead?.click());
     await settle();
-    expect(h.markEntryRead).toHaveBeenCalledTimes(1);
+    const read = document.querySelector<HTMLElement>('[data-catch-up-read]');
+    expect(read).not.toBeNull();
+    act(() => read?.click());
+    await settle();
+    expect(h.rpc).toHaveBeenCalledWith(
+      'inbox_mark_read_ids',
+      expect.objectContaining({ p_ids: ['e1'] }),
+    );
     expect(peekActivityPage(MENTIONS_KEY)?.[0]?.readAt).toEqual(expect.any(String));
   });
 });

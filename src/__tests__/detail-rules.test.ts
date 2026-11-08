@@ -156,6 +156,7 @@ describe('detail rules: IconSend only sends a message or comment', () => {
     'pages/pcs/CaptionAnnotationComposer.tsx', // the caption comment sheet's Post (RowSend)
     'pages/pcs/PinAnnotationComposer.tsx', // the image pin comment sheet's Post (RowSend)
     'chat/PlanItemScreen.tsx', // the plan item comment box's send (RowSend)
+    'catch-up/CatchUpReply.tsx', // the catch-up card's reply send (RowSend)
   ]);
 
   it('IconSend appears only in the composer files', () => {

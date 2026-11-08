@@ -183,6 +183,11 @@ interface MessageActionMenuProps {
   onReact: (emoji: string) => void;
   onReply: () => void;
   /**
+   * Offers "Reply"; default true. False inside a thread view: every message
+   * there is already in the thread, so it has no Reply (no tile, no gesture).
+   */
+  canReply?: boolean;
+  /**
    * Offers "Reply privately" right under Reply (see canReplyPrivately: someone
    * else's message in a group, from a current member).
    */
@@ -264,6 +269,7 @@ type MenuItemProps = Pick<
   MessageActionMenuProps,
   | 'canCopy'
   | 'onReply'
+  | 'canReply'
   | 'canReplyPrivately'
   | 'replyPrivatelyName'
   | 'onReplyPrivately'
@@ -331,16 +337,17 @@ export function messageMenuItems(
   props: MenuItemProps,
   size: number = MENU_ICON_SIZE,
 ): MessageMenuItem[] {
-  const items: MessageMenuItem[] = [
-    {
+  const items: MessageMenuItem[] = [];
+  if (props.canReply !== false) {
+    items.push({
       kind: 'action',
       key: 'reply',
       label: 'Reply',
       icon: <IconReply size={size} />,
       group: 'tile',
       run: props.onReply,
-    },
-  ];
+    });
+  }
   if (props.canForward === true) {
     items.push({
       kind: 'action',

@@ -1347,6 +1347,36 @@ const RPC: Record<string, RpcHandler> = {
     return null;
   },
   inbox_mark_read: () => null,
+  // Catch up: entries read / back to unread by id (the caller's own), and Mark all read.
+  inbox_mark_read_ids: (args, tables) => {
+    const ids = new Set((args.p_ids as string[] | undefined) ?? []);
+    const now = new Date().toISOString();
+    for (const e of tables.inbox_entries ?? []) {
+      if (ids.has(String(e.id)) && e.user_id === ME && (e.read_at ?? null) === null)
+        e.read_at = now;
+    }
+    return null;
+  },
+  inbox_mark_unread_ids: (args, tables) => {
+    const ids = new Set((args.p_ids as string[] | undefined) ?? []);
+    for (const e of tables.inbox_entries ?? []) {
+      if (ids.has(String(e.id)) && e.user_id === ME) e.read_at = null;
+    }
+    return null;
+  },
+  inbox_mark_all_read: (args, tables) => {
+    const now = new Date().toISOString();
+    for (const e of tables.inbox_entries ?? []) {
+      if (
+        e.workspace_id === args.p_workspace_id &&
+        e.user_id === ME &&
+        (e.read_at ?? null) === null
+      ) {
+        e.read_at = now;
+      }
+    }
+    return null;
+  },
   // Notifications read state: snooze one entry.
   inbox_snooze: (args, tables) => {
     const row = (tables.inbox_entries ?? []).find((r) => r.id === args.p_entry_id);

@@ -31,6 +31,8 @@ import {
   deletedFilesBody,
   groupOpenEntry,
   isChatMention,
+  isThreadStarted,
+  THREAD_STARTED_EVENT,
   isWelcome,
   opensNothing,
   segmentSelfMentions,
@@ -118,7 +120,7 @@ export function groupHasUnread(group: readonly ActivityItem[]): boolean {
 export const UNREAD_DOT_CLASS = LIST_CARD_UNREAD_DOT;
 
 /** The kind an Activity card names in its one tag. */
-export type ActivityKind = 'Mention' | 'Post' | 'Brief' | 'Plan' | 'Reminder';
+export type ActivityKind = 'Mention' | 'Thread' | 'Post' | 'Brief' | 'Plan' | 'Reminder';
 
 /**
  * What one entry is, in one word: a reminder (a task's missed due time), a
@@ -131,6 +133,8 @@ export function activityKind(item: ActivityItem): ActivityKind | undefined {
   if (isWelcome(item)) return undefined;
   if (item.eventType === 'task_due') return 'Reminder';
   if (item.eventType === MENTION_EVENT_TYPE || isChatMention(item)) return 'Mention';
+  // A thread start wears the chat mention's tag, in its own word.
+  if (isThreadStarted(item)) return 'Thread';
   if (
     alert?.kind === 'plan' ||
     alert?.kind === 'bank' ||
@@ -238,7 +242,11 @@ const RETIRED_ICONS: Readonly<Record<string, ComponentType<IconProps>>> = {
 };
 
 /** The event types that are about a person: the picture is their photo. */
-const PERSON_EVENTS: ReadonlySet<string> = new Set([MENTION_EVENT_TYPE, 'invite']);
+const PERSON_EVENTS: ReadonlySet<string> = new Set([
+  MENTION_EVENT_TYPE,
+  THREAD_STARTED_EVENT,
+  'invite',
+]);
 
 /**
  * The picture (48), never blank: the thing the event is about (the post's

@@ -20,6 +20,10 @@ const h = vi.hoisted(() => ({
   fetchActivityEntries: vi.fn(),
   readActivityBadge: vi.fn(),
   markEntryRead: vi.fn(),
+  rpc: vi.fn<(...args: unknown[]) => Promise<{ data: null; error: null }>>(async () => ({
+    data: null,
+    error: null,
+  })),
   from: vi.fn(),
 }));
 
@@ -30,6 +34,7 @@ vi.mock('@/lib/env', () => ({ env: {} }));
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: (table: string) => h.from(table),
+    rpc: (...args: unknown[]) => h.rpc(...args),
     auth: { getSession: async () => ({ data: { session: null } }) },
   },
 }));
@@ -363,9 +368,18 @@ describe('Activity: a return paints the kept view', () => {
     render();
     await settle();
     const lead = document.querySelector<HTMLElement>('[data-activity-lead]');
+    // A tap opens catch up with that entry first; Mark as read on its card
+    // is the page's own write (optimistic, every kept page edited).
     act(() => lead?.click());
     await settle();
-    expect(h.markEntryRead).toHaveBeenCalledTimes(1);
+    const read = document.querySelector<HTMLElement>('[data-catch-up-read]');
+    expect(read).not.toBeNull();
+    act(() => read?.click());
+    await settle();
+    expect(h.rpc).toHaveBeenCalledWith(
+      'inbox_mark_read_ids',
+      expect.objectContaining({ p_ids: ['e1'] }),
+    );
     act(() => root?.unmount());
     vi.setSystemTime(new Date(Date.now() + READ_FRESH_MS + 1));
     const kept = peekActivityPage(activityPageKey('u1', 'w1', 'all', 'newest'));

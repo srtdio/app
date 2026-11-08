@@ -50,7 +50,7 @@ import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useToast } from '@/components/ui/toast';
 import { Avatar } from '@/components/ui/Avatar';
-import { entityHref, mapEntry } from '@/components/pages/activity/data';
+import { catchUpHref, type CatchUpReturnState } from '@/lib/catch-up/route';
 import {
   ACTIVITY_PATH,
   activityToneWanted,
@@ -125,6 +125,17 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   // The route on screen: new Activity rows never tone while Activity is open.
   const pathnameRef = useRef(location.pathname);
   pathnameRef.current = location.pathname;
+  const hereRef = useRef(`${location.pathname}${location.search}`);
+  hereRef.current = `${location.pathname}${location.search}`;
+  // A toast opens catch up with its entry first; Done and Back return here
+  // (on Activity itself, closing just drops the param).
+  const openCatchUpAt = (entryId: string): void => {
+    const here = hereRef.current;
+    const state: CatchUpReturnState | undefined = pathnameRef.current.startsWith(ACTIVITY_PATH)
+      ? undefined
+      : { catchUpReturn: here };
+    navigate(catchUpHref(entryId), state !== undefined ? { state } : {});
+  };
   openChatRef.current = location.pathname.startsWith('/chat')
     ? new URLSearchParams(location.search).get('channel')
     : null;
@@ -245,10 +256,6 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     pushTabAlert({ kind: 'activity', text: spec.title });
 
     const newest = pickNewest(newRows);
-    const href =
-      enriched.count === 1 && newest !== null
-        ? (entityHref(mapEntry(newest)) ?? ACTIVITY_PATH)
-        : ACTIVITY_PATH;
     toast.show({
       title: spec.title,
       ...(spec.description !== undefined ? { description: spec.description } : {}),
@@ -259,7 +266,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
           role="inline"
         />
       ),
-      onPress: () => navigate(href),
+      onPress: () => (newest !== null ? openCatchUpAt(newest.id) : navigate(ACTIVITY_PATH)),
     });
   };
 
@@ -302,6 +309,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     const spec = mentionToastFrom(rows, (id) => names.get(id)?.name ?? null);
     if (spec === null) return;
     const actor = spec.actorId !== null ? names.get(spec.actorId) : undefined;
+    const newestMention = pickNewest(rows);
     for (const row of rows) {
       const name = row.actor_user_id != null ? (names.get(row.actor_user_id)?.name ?? null) : null;
       pushTabAlert({ kind: 'chat', text: mentionTabText(name) });
@@ -316,7 +324,8 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
           role="inline"
         />
       ),
-      onPress: () => navigate(spec.href),
+      onPress: () =>
+        newestMention !== null ? openCatchUpAt(newestMention.id) : navigate(spec.href),
     });
   };
 
