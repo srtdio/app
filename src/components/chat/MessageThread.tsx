@@ -278,6 +278,8 @@ import {
   shareSnapshot,
   tasksSeenKey,
   writeTasksSeen,
+  DEFAULT_PRIORITY,
+  TASK_TITLE_MAX,
   type TaskEvent,
   type TaskLine,
 } from '@/lib/chat/tasks';
@@ -353,6 +355,7 @@ import { loadThreadReplyCounts } from '@/lib/chat/history';
 import { threadViewRows, useThreadView } from '@/lib/chat/use-thread-view';
 import {
   firstUnreadReply,
+  isTopLevel,
   latestReplyLine,
   loadThreadsForMe,
   localThreadReadAt,
@@ -360,9 +363,12 @@ import {
   rememberThreadRead,
   repliesInfoByRoot,
   repliesLabel,
+  markChatUnread,
+  markThreadUnread,
   setThreadRead,
   threadRootOf,
   withThreadRead,
+  withThreadUnread,
   type ThreadForMe,
 } from '@/lib/chat/thread-signals';
 import { applyEdit, applyReactionOp, markMessagesDeleted } from '@/lib/chat/thread';
@@ -418,6 +424,7 @@ import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import type { ChatConnection } from '@/lib/chat/types';
 import { errorText } from '@/lib/error-copy';
+import { chatMessageHref } from '@/lib/inbox/bell-types';
 
 interface MessageThreadProps {
   title: string;
@@ -919,6 +926,24 @@ export function nextVoiceIds(messages: readonly ThreadMessage[]): Map<string, st
 }
 
 /** Whether the menu may offer "Transcribe": a recorded message whose one attachment is audio. */
+/** L12: the longest task title a message gives (the spec's 280, capped by the table's 200). */
+export const TASK_FROM_MESSAGE_MAX = Math.min(280, TASK_TITLE_MAX);
+
+/**
+ * L12: a task's title from a message: its text (format stripped, first 280
+ * characters, capped by the table's limit); a file-only message uses the file
+ * name; empty when it has neither. Pure.
+ */
+export function taskTitleOf(
+  message: Pick<ThreadMessage, 'body' | 'attachments'>,
+): string {
+  const text = stripFormat(message.body).replace(/\s+/g, ' ').trim();
+  if (text !== '') return text.slice(0, TASK_FROM_MESSAGE_MAX).trim();
+  const file = message.attachments[0];
+  const name = file !== undefined ? file.name.trim() : '';
+  return name.slice(0, TASK_FROM_MESSAGE_MAX);
+}
+
 export function isTranscribable(
   message: Pick<ThreadMessage, 'attachments' | 'state' | 'deleted'>,
 ): boolean {
@@ -3905,6 +3930,12 @@ function ThreadBody(
      * in the thread screen, which shows its "N replies" separator instead.
      */
     repliesFor?: (message: ThreadMessage) => RepliesRowData | null;
+    /** L11: menu "Mark unread"; absent hides it. */
+    onMarkUnread?: (message: ThreadMessage) => void;
+    /** L12: menu "Add to Tasks"; absent hides it. */
+    onAddToTask?: (message: ThreadMessage) => void;
+    /** L13: menu "Copy link"; absent hides it. */
+    onCopyLink?: (message: ThreadMessage) => void;
     /** Menu "Transcribe" picked on a voice note; absent hides the row. */
     onTranscribe?: (message: ThreadMessage) => void;
     /**
@@ -5262,6 +5293,32 @@ function ThreadBody(
         }}
         onReply={() => {
           if (menu) props.onReply(menu.message);
+        }}
+        canMarkUnread={
+          menu !== null &&
+          props.onMarkUnread !== undefined &&
+          menu.message.state === 'sent' &&
+          menu.message.deleted !== true
+        }
+        onMarkUnread={() => {
+          if (menu) props.onMarkUnread?.(menu.message);
+        }}
+        canAddToTasks={
+          menu !== null &&
+          props.onAddToTask !== undefined &&
+          menu.message.state === 'sent' &&
+          menu.message.deleted !== true &&
+          !menuPlan &&
+          taskTitleOf(menu.message) !== ''
+        }
+        onAddToTasks={() => {
+          if (menu) props.onAddToTask?.(menu.message);
+        }}
+        canCopyLink={
+          menu !== null && props.onCopyLink !== undefined && menu.message.state === 'sent'
+        }
+        onCopyLink={() => {
+          if (menu) props.onCopyLink?.(menu.message);
         }}
         canReplyPrivately={menuReplyPrivately}
         replyPrivatelyName={menu !== null ? senderName(menu.message, props.profiles) : ''}
@@ -6790,11 +6847,29 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   ) {
     setFrozenUnread({ value: computedUnread });
   }
-  const unread: FirstUnread | null | undefined = !readingOn
-    ? undefined
-    : frozenUnread !== null
-      ? frozenUnread.value
-      : computedUnread;
+  // L11: a Mark unread on a main-chat message moves my "New" line above it.
+  const [markedUnread, setMarkedUnread] = useState<{ channelId: string; firstId: string } | null>(
+    null,
+  );
+  const markedHere = markedUnread !== null && markedUnread.channelId === channelId;
+  const markedFirst = markedHere
+    ? shownMessages.findIndex((m) => m.id === markedUnread.firstId)
+    : -1;
+  const unread: FirstUnread | null | undefined =
+    markedHere && markedFirst >= 0
+      ? {
+          kind: 'loaded',
+          firstId: markedUnread.firstId,
+          count: Math.max(
+            1,
+            shownMessages.slice(markedFirst).filter((m) => !m.mine && m.deleted !== true).length,
+          ),
+        }
+      : !readingOn
+        ? undefined
+        : frozenUnread !== null
+          ? frozenUnread.value
+          : computedUnread;
   // Pill tap: a loaded run jumps through the jump path; a run above the
   // loaded pages first pages back to the cursor message (5s bound), then jumps.
   // A miss leaves the pill as it is and shows nothing else.
@@ -7042,6 +7117,21 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           ).length,
         }
       : null;
+  // L13: a jump (deep link, search, Activity) to a thread reply opens its
+  // thread with that reply highlighted; the main chat never holds replies.
+  const jumpTarget = jumpRequest !== null ? known.get(jumpRequest.id) : undefined;
+  const jumpIsReply = jumpTarget !== undefined && !isTopLevel(jumpTarget);
+  const mainJump = jumpIsReply ? null : jumpRequest;
+  const [viewJump, setViewJump] = useState<{ id: string; seq: number } | null>(null);
+  const routedJumpRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (jumpRequest === null || jumpTarget === undefined || !jumpIsReply) return;
+    if (routedJumpRef.current === jumpRequest.seq) return;
+    routedJumpRef.current = jumpRequest.seq;
+    openThread(threadRootOf(jumpTarget));
+    setViewJump({ id: jumpTarget.id, seq: jumpRequest.seq });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpRequest, jumpIsReply]);
   // L3: a Talk about (a post's card) opens that card's thread, never a quote bar.
   useEffect(() => {
     if (aboutDraft === null) return;
@@ -7305,11 +7395,74 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           onReplyPrivatelyProp(message.senderUserId, quote);
         }
       : undefined;
+  // L11: Mark unread. A main-chat message moves my chat cursor to just
+  // before it (chat_mark_unread; the chat turns unread with its count in the
+  // chat list) and my "New" line moves above it; reading on does not move the
+  // cursor forward again until the chat is left. A thread reply moves the
+  // thread's read point (chat_thread_mark_unread). Private to me, from the
+  // database, so every device follows.
+  const markUnread = (message: ThreadMessage): void => {
+    if (channelId === undefined) return;
+    const traceId = generateTraceId();
+    if (isTopLevel(message)) {
+      setMarkedUnread({ channelId, firstId: message.id });
+      void markChatUnread({ client: supabase, channelId, messageId: message.id, traceId }).then(
+        (result) => {
+          if (!result.ok) {
+            logger.warn('chat: mark unread failed', { error: result.message });
+            toast.show({ title: errorText('mark this unread', null) });
+          }
+        },
+      );
+      return;
+    }
+    const rootId = threadRootOf(message);
+    rememberThreadRead(rootId, message.time - 1, true);
+    setThreadsForMe((prev) =>
+      prev !== null ? { ...prev, rows: withThreadUnread(prev.rows, rootId) } : prev,
+    );
+    void markThreadUnread({
+      client: supabase,
+      channelId,
+      rootId,
+      messageId: message.id,
+      traceId,
+    }).then((result) => {
+      if (!result.ok) {
+        logger.warn('chat: thread mark unread failed', { error: result.message });
+        toast.show({ title: errorText('mark this unread', null) });
+      }
+    });
+  };
+  // L12: Add to Tasks: one task in this chat's Tasks list from the message's
+  // text (a file-only message: the file name), default priority, through the
+  // task save proc (chat_task_save_batch).
+  const addToTask = (message: ThreadMessage): void => {
+    const title = taskTitleOf(message);
+    if (title === '') return;
+    const side = viewerSide.side === 'client' ? 'client' : 'agency';
+    void chatTasks
+      .saveBatch({ creates: [{ title, priority: DEFAULT_PRIORITY, side }], edits: [], deletes: [] })
+      .then((outcome) =>
+        toast.show({ title: outcome.ok ? 'Added to Tasks' : errorText('add to Tasks', null) }),
+      );
+  };
+  // L13: Copy link: the open-chat-at-message route (a reply opens its thread
+  // with the reply highlighted; membership is checked on open).
+  const copyLink = (message: ThreadMessage): void => {
+    if (channelId === undefined) return;
+    const url = `${currentOrigin() ?? ''}${chatMessageHref(channelId, message.id)}`;
+    void copyText(url).then((ok) => toast.show({ title: ok ? 'Link copied' : COPY_FAILED }));
+  };
   const bodyActions: Omit<
     ThreadBodyProps,
     'messages' | 'loading' | 'onReply' | 'jumpRequest' | 'threads'
   > = {
     layout,
+    ...(channelId !== undefined && notes !== true
+      ? { onMarkUnread: markUnread, onCopyLink: copyLink }
+      : {}),
+    ...(taskChannel !== null && !selecting ? { onAddToTask: addToTask } : {}),
     viewerUserId: props.currentUserId,
     mentions: props.mentions,
     workspaceId,
@@ -7480,7 +7633,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       <SearchWordsContext.Provider value={headerWords}>
         <ThreadBody
           {...bodyActions}
-          jumpRequest={jumpRequest}
+          jumpRequest={mainJump}
           {...(props.onEnsureLoaded !== undefined ? { onEnsureLoaded: props.onEnsureLoaded } : {})}
           messages={shownMessages}
           repliesFor={repliesFor}
@@ -7500,7 +7653,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             : {})}
           {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
           {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
-          {...(props.onNewestVisible !== undefined
+          {...(props.onNewestVisible !== undefined && !markedHere
             ? { onNewestVisible: props.onNewestVisible }
             : {})}
           {...(props.onToggleReaction !== undefined
@@ -7699,7 +7852,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           <ThreadBody
             {...bodyActions}
             {...(viewToggleReaction !== undefined ? { onToggleReaction: viewToggleReaction } : {})}
-            jumpRequest={null}
+            jumpRequest={viewJump !== null && viewJump.id !== view.rootId ? viewJump : null}
             messages={viewMessages}
             chipFor={chipFor}
             threads={viewThreads}
