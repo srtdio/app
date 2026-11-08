@@ -818,7 +818,9 @@ export function commentBarViolations(bars: readonly CommentBarGeom[]): string[] 
     const end = b.bar.x + b.bar.width;
     const rowEnd = b.row.x + b.row.width;
     if (Math.abs(end - rowEnd) > COMMENT_BAR_TOLERANCE_PX) {
-      out.push(`${b.label}: the bar ends ${Math.round((rowEnd - end) * 10) / 10}px before its row's end`);
+      out.push(
+        `${b.label}: the bar ends ${Math.round((rowEnd - end) * 10) / 10}px before its row's end`,
+      );
     }
     for (const near of b.around) {
       if (overlaps(b.bar, near.box)) out.push(`${b.label}: the bar covers ${near.label}`);

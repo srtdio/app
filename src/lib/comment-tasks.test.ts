@@ -65,7 +65,13 @@ describe('isAgencyRole / taskStateOf', () => {
 describe('commentBar: who sees what', () => {
   it("agency on someone else's comment: Reply, Resolve, To-do; no Edit, no Delete", () => {
     const bar = commentBar({ ...base, resolve: 'resolve', viewerIsAgency: true });
-    expect(bar).toEqual({ reply: true, resolve: 'resolve', todo: true, edit: false, delete: false });
+    expect(bar).toEqual({
+      reply: true,
+      resolve: 'resolve',
+      todo: true,
+      edit: false,
+      delete: false,
+    });
   });
 
   it('agency on its own comment: Edit and Delete too', () => {
@@ -110,7 +116,13 @@ describe('commentBar: who sees what', () => {
 describe('resolveSlot: exactly where resolving is allowed today', () => {
   it('a reply never resolves', () => {
     expect(
-      resolveSlot({ reply: true, point: false, isClient: false, resolved: false, confirmed: false }),
+      resolveSlot({
+        reply: true,
+        point: false,
+        isClient: false,
+        resolved: false,
+        confirmed: false,
+      }),
     ).toBeNull();
   });
 
@@ -127,16 +139,12 @@ describe('resolveSlot: exactly where resolving is allowed today', () => {
     expect(resolveSlot({ ...point, isClient: false, resolved: false, confirmed: false })).toBe(
       'resolve',
     );
-    expect(
-      resolveSlot({ ...point, isClient: false, resolved: true, confirmed: false }),
-    ).toBeNull();
+    expect(resolveSlot({ ...point, isClient: false, resolved: true, confirmed: false })).toBeNull();
     expect(resolveSlot({ ...point, isClient: true, resolved: true, confirmed: false })).toBe(
       'confirm',
     );
     expect(resolveSlot({ ...point, isClient: true, resolved: true, confirmed: true })).toBeNull();
-    expect(
-      resolveSlot({ ...point, isClient: true, resolved: false, confirmed: false }),
-    ).toBeNull();
+    expect(resolveSlot({ ...point, isClient: true, resolved: false, confirmed: false })).toBeNull();
   });
 });
 
@@ -242,7 +250,10 @@ describe('the To-do sheet', () => {
     expect(sameTarget({ kind: 'person', userId: ANA }, { kind: 'person', userId: ANA })).toBe(true);
     expect(sameTarget({ kind: 'person', userId: ANA }, { kind: 'me' })).toBe(false);
     expect(
-      sameTarget({ kind: 'group', channelId: 'g-1', name: 'A' }, { kind: 'group', channelId: 'g-1', name: 'B' }),
+      sameTarget(
+        { kind: 'group', channelId: 'g-1', name: 'A' },
+        { kind: 'group', channelId: 'g-1', name: 'B' },
+      ),
     ).toBe(true);
     expect(sameTarget(null, null)).toBe(true);
   });
@@ -268,7 +279,9 @@ describe('taskRoute + taskChannelId: person / Me / group', () => {
     const route = taskRoute({ kind: 'person', userId: 'u-zed' }, ctx);
     expect(route).toEqual({ kind: 'dm', userId: 'u-zed' });
     const ensureDm = vi.fn(async (id: string) => `dm-${id}`);
-    expect(await taskChannelId(route, { ensureDm, ensureNotes: async () => null })).toBe('dm-u-zed');
+    expect(await taskChannelId(route, { ensureDm, ensureNotes: async () => null })).toBe(
+      'dm-u-zed',
+    );
     expect(ensureDm).toHaveBeenCalledWith('u-zed');
   });
 
@@ -316,7 +329,9 @@ describe('taskRoute + taskChannelId: person / Me / group', () => {
       group_name: null,
     });
     expect(localTaskLink({ kind: 'me' }, ME, 'n', 't').assignee_user_id).toBe(ME);
-    expect(localTaskLink({ kind: 'group', channelId: 'g-1', name: 'Design' }, ME, 'g-1', 't')).toEqual({
+    expect(
+      localTaskLink({ kind: 'group', channelId: 'g-1', name: 'Design' }, ME, 'g-1', 't'),
+    ).toEqual({
       task_id: 't',
       channel_id: 'g-1',
       assignee_user_id: null,

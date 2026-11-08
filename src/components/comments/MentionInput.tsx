@@ -253,7 +253,6 @@ export function insertTextAtPoint(
   return { node, offset: text.length };
 }
 
-
 /** The chip a mention token renders as (the same one buildInitialContent builds). */
 function mentionChip(candidate: MentionCandidate): HTMLElement {
   const chip = document.createElement('span');

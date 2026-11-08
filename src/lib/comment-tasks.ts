@@ -198,7 +198,10 @@ export interface TaskPerson {
 }
 
 /** Agency-side members other than me (Me is its own chip), by name. Pure. */
-export function taskPeople(candidates: readonly MentionCandidate[], me: string | null): TaskPerson[] {
+export function taskPeople(
+  candidates: readonly MentionCandidate[],
+  me: string | null,
+): TaskPerson[] {
   const out: TaskPerson[] = [];
   const seen = new Set<string>();
   for (const c of candidates) {
@@ -259,11 +262,17 @@ export function taskRoute(
 ): TaskRoute {
   if (target.kind === 'group') return { kind: 'open', channelId: target.channelId };
   const userId = target.kind === 'me' ? ctx.me : target.userId;
-  if (userId === null || ctx.workspaceId === null || ctx.workspaceId === '') return { kind: 'none' };
+  if (userId === null || ctx.workspaceId === null || ctx.workspaceId === '')
+    return { kind: 'none' };
   if (userId === ctx.me) {
     return { kind: 'notes', channelId: notesChannelId(ctx.workspaceId, userId) };
   }
-  const route = personDmRoute({ userId, me: ctx.me, workspaceId: ctx.workspaceId, roster: ctx.roster });
+  const route = personDmRoute({
+    userId,
+    me: ctx.me,
+    workspaceId: ctx.workspaceId,
+    roster: ctx.roster,
+  });
   if (route.kind === 'open') return { kind: 'open', channelId: route.channelId };
   if (route.kind === 'ensure') return { kind: 'dm', userId };
   return { kind: 'none' };

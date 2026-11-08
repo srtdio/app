@@ -932,10 +932,7 @@ export async function assertWritingBox(page: Page, screenName: string): Promise<
       message: 'no [data-writing-box] on a writing box screen',
     });
   }
-  violations.push(
-    ...(await writingTrayViolations(page)),
-    ...(await replyBoxWidthViolations(page)),
-  );
+  violations.push(...(await writingTrayViolations(page)), ...(await replyBoxWidthViolations(page)));
   settleFindings(screenName, violations);
 }
 

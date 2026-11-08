@@ -231,7 +231,7 @@ afterEach(() => {
 });
 
 describe('checkpoint Resolve on the bar', () => {
-  it('resolves in one tap: the bar\'s Resolve, no note, Undo for 4s, then folds', async () => {
+  it("resolves in one tap: the bar's Resolve, no note, Undo for 4s, then folds", async () => {
     checkpointRows.current = [checkpoint('p-1', 1)];
     await mount(false);
 

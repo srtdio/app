@@ -152,7 +152,10 @@ import {
 function mentionDisplay(name: string | null): string {
   return name === null ? '' : `@${name}`;
 }
-import { buildResolveArgs, friendlyPointFreezeError } from '@/components/pages/pcs/checkpoint-controls';
+import {
+  buildResolveArgs,
+  friendlyPointFreezeError,
+} from '@/components/pages/pcs/checkpoint-controls';
 
 /** One caption_span annotation as it reads on a comment row. Optional surface:
  *  posts pass it, briefs never do, so the chips are post-only by construction. */
@@ -306,7 +309,6 @@ export const ROW_ACTION_CLASS = 'min-w-11 px-2 text-sm';
 
 /** Resolve's accessible name on a thread's action bar: one tap resolves. */
 export const CHECKPOINT_BOX_LABEL = 'Resolve';
-
 
 /** The fold control over a thread's older replies. Pure. */
 export function earlierRepliesLabel(count: number): string {

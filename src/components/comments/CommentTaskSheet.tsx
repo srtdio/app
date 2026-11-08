@@ -251,7 +251,9 @@ export function CommentTaskSheet(props: CommentTaskSheetProps): ReactElement {
                   label={group.name}
                   selected={target?.kind === 'group' && target.channelId === group.channelId}
                   data-task-target={group.channelId}
-                  onClick={() => pick({ kind: 'group', channelId: group.channelId, name: group.name })}
+                  onClick={() =>
+                    pick({ kind: 'group', channelId: group.channelId, name: group.name })
+                  }
                 />
               ))}
             </div>

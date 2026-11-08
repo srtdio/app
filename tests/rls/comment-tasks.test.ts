@@ -143,7 +143,10 @@ describe.runIf(RLS_SUITE)('comment_tasks + comment_task_create', () => {
       createArgs(secondCommentId, ctx.channelId, 'Client try'),
     );
     expect(res.error?.message ?? '').toContain('not allowed');
-    const link = await admin.from('comment_tasks').select('comment_id').eq('comment_id', secondCommentId);
+    const link = await admin
+      .from('comment_tasks')
+      .select('comment_id')
+      .eq('comment_id', secondCommentId);
     expect(link.data).toHaveLength(0);
   });
 
@@ -153,7 +156,10 @@ describe.runIf(RLS_SUITE)('comment_tasks + comment_task_create', () => {
       createArgs(secondCommentId, ctx.channelId, 'Outsider try'),
     );
     expect(res.error?.message ?? '').toContain('not a member');
-    const link = await admin.from('comment_tasks').select('comment_id').eq('comment_id', secondCommentId);
+    const link = await admin
+      .from('comment_tasks')
+      .select('comment_id')
+      .eq('comment_id', secondCommentId);
     expect(link.data).toHaveLength(0);
     const comment = await admin.from('comments').select('task_state').eq('id', secondCommentId);
     expect(comment.data?.[0]?.task_state).toBeNull();
@@ -174,7 +180,10 @@ describe.runIf(RLS_SUITE)('comment_tasks + comment_task_create', () => {
     expect(del.error).toBeNull();
     const comment = await admin.from('comments').select('task_state').eq('id', ctx.commentId);
     expect(comment.data?.[0]?.task_state).toBeNull();
-    const link = await admin.from('comment_tasks').select('comment_id').eq('comment_id', ctx.commentId);
+    const link = await admin
+      .from('comment_tasks')
+      .select('comment_id')
+      .eq('comment_id', ctx.commentId);
     expect(link.data).toHaveLength(0);
   });
 });

@@ -38,7 +38,14 @@ describe('Comments row actions', () => {
 
   it('the action bar is a 36 pill, hairline framed, riding half above the row', () => {
     const t = tokens(COMMENT_BAR_CLASS);
-    for (const want of ['flex', 'h-9', 'items-center', '-translate-y-1/2', 'border', 'rounded-lg']) {
+    for (const want of [
+      'flex',
+      'h-9',
+      'items-center',
+      '-translate-y-1/2',
+      'border',
+      'rounded-lg',
+    ]) {
       expect(t).toContain(want);
     }
     for (const bad of ['shadow', 'shadow-sm', 'backdrop-blur']) expect(t).not.toContain(bad);

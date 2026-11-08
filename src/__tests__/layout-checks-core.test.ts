@@ -739,7 +739,10 @@ describe('comment action bars (8 Nov 2026)', () => {
     );
     expect(
       commentBarViolations([
-        { ...good, around: [{ label: 'a time (5m)', box: { x: 300, y: 190, width: 30, height: 16 } }] },
+        {
+          ...good,
+          around: [{ label: 'a time (5m)', box: { x: 300, y: 190, width: 30, height: 16 } }],
+        },
       ]),
     ).toEqual(['comment-c1: the bar covers a time (5m)']);
   });

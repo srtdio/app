@@ -41,7 +41,10 @@ export const REPLY_LABEL = 'Reply';
 export const BAR_LABEL = 'Comment actions';
 
 /** Which control the resolve slot is (a plain thread's Resolve / Reopen, a checkpoint's Resolve or Confirm). */
-export type ResolveHook = 'data-comment-resolve' | 'data-checkpoint-box' | 'data-checkpoint-confirm';
+export type ResolveHook =
+  | 'data-comment-resolve'
+  | 'data-checkpoint-box'
+  | 'data-checkpoint-confirm';
 
 export interface CommentActionBarProps {
   bar: CommentBar;
@@ -88,7 +91,9 @@ export function CommentActionBar(props: CommentActionBarProps): ReactElement | n
           data-row-action="reply"
           data-bar-action="reply"
           {...(props.replyToReply === true ? { 'data-reply-to-reply': '' } : {})}
-          {...(props.replyInduction !== undefined ? { 'data-induction': props.replyInduction } : {})}
+          {...(props.replyInduction !== undefined
+            ? { 'data-induction': props.replyInduction }
+            : {})}
           aria-expanded={props.replyOpen === true}
           className={BAR_BUTTON_CLASS}
           onClick={props.onReply}

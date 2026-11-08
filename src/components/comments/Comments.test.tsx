@@ -1029,7 +1029,7 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
   });
 });
 
-describe('a point\'s bar: Edit and Delete for its author until frozen', () => {
+describe("a point's bar: Edit and Delete for its author until frozen", () => {
   const FROZEN = '2026-02-02T00:00:00.000Z';
 
   function point(partial: Partial<CommentRow>): CommentRow {
