@@ -200,6 +200,7 @@ import {
 import { SharedPostCards } from '@/components/chat/PostCard';
 import { ChatCardOwn } from '@/components/ui/ChatCard';
 import { ThreadViewFrame } from '@/components/chat/ThreadView';
+import { ThreadsSheet } from '@/components/chat/ThreadsSheet';
 import {
   RailElbow,
   RailThrough,
@@ -223,7 +224,7 @@ import { SharedPlanCards } from '@/components/chat/PlanCard';
 import { SharedIdeaCards, ideaTitleOf } from '@/components/chat/PlanItemCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
-import { ChatStatus } from '@/components/chat/StatusTicker';
+import { ChatStatus, ThreadsStripItem } from '@/components/chat/StatusTicker';
 import { planProgress, todayInZone } from '@/components/chat/plan-card';
 import { briefRoute } from '@/lib/chat/briefs';
 import { useOpenPosts, type UseOpenPosts } from '@/lib/chat/use-open-posts';
@@ -354,8 +355,10 @@ import {
 import { loadThreadReplyCounts } from '@/lib/chat/history';
 import { threadViewRows, useThreadView } from '@/lib/chat/use-thread-view';
 import {
+  chatOpenTarget,
   firstUnreadReply,
   isTopLevel,
+  threadsStripLabel,
   latestReplyLine,
   loadThreadsForMe,
   localThreadReadAt,
@@ -6053,6 +6056,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     }
     return null;
   }, [props.messages]);
+  // L6b: whether this chat's first page has painted, and the threads-for-me
+  // answer when it landed before that paint (only then may the chat open
+  // straight onto the Threads sheet; a later answer shows the strip item only).
+  const paintedRef = useRef<string | null>(null);
+  const earlyThreadsRef = useRef<{ channelId: string; rows: ThreadForMe[] } | null>(null);
+  const [threadsOpen, setThreadsOpen] = useState(false);
   useEffect(() => {
     if (channelId === undefined || props.notes === true) return;
     let live = true;
@@ -6061,6 +6070,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       if (!result.ok) {
         logger.warn('chat: threads for me read failed', { error: result.error.message });
         return;
+      }
+      if (paintedRef.current !== channelId) {
+        earlyThreadsRef.current = { channelId, rows: result.data };
       }
       setThreadsForMe({ channelId, rows: result.data });
     });
@@ -6851,15 +6863,14 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const [markedUnread, setMarkedUnread] = useState<{ channelId: string; firstId: string } | null>(
     null,
   );
-  const markedHere = markedUnread !== null && markedUnread.channelId === channelId;
-  const markedFirst = markedHere
-    ? shownMessages.findIndex((m) => m.id === markedUnread.firstId)
-    : -1;
+  const markedId = markedUnread !== null && markedUnread.channelId === channelId ? markedUnread.firstId : null;
+  const markedHere = markedId !== null;
+  const markedFirst = markedId !== null ? shownMessages.findIndex((m) => m.id === markedId) : -1;
   const unread: FirstUnread | null | undefined =
-    markedHere && markedFirst >= 0
+    markedId !== null && markedFirst >= 0
       ? {
           kind: 'loaded',
-          firstId: markedUnread.firstId,
+          firstId: markedId,
           count: Math.max(
             1,
             shownMessages.slice(markedFirst).filter((m) => !m.mine && m.deleted !== true).length,
@@ -6870,6 +6881,25 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         : frozenUnread !== null
           ? frozenUnread.value
           : computedUnread;
+  // L6b open rule (B), decided once as the first page paints: unread
+  // top-level messages open at the "New" line (as today); else unread threads
+  // (known before this paint) open straight onto the Threads sheet; else the
+  // chat opens as today. Never holds the paint.
+  useEffect(() => {
+    if (channelId === undefined || bodyLoading || paintedRef.current === channelId) return;
+    paintedRef.current = channelId;
+    const early = earlyThreadsRef.current;
+    const target = chatOpenTarget({
+      unreadTopLevel:
+        unread != null && (unread.kind === 'beyond' || unread.count > 0) ? 1 : 0,
+      threads: early !== null && early.channelId === channelId ? early.rows : null,
+      painted: false,
+    });
+    earlyThreadsRef.current = null;
+    if (target === 'threads' && initialMessageId === null) setThreadsOpen(true);
+    // Once per chat open, at the first paint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId, bodyLoading]);
   // Pill tap: a loaded run jumps through the jump path; a run above the
   // loaded pages first pages back to the cursor message (5s bound), then jumps.
   // A miss leaves the pill as it is and shows nothing else.
@@ -7252,6 +7282,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     ? deleteSelectionBlock(selected, selectable, serverNow(), notes)
     : null;
   const stripSlot = threadStripSlot({ chatPage, selecting });
+  // L5 (4): "N threads" + dot after the strip's items while a thread is unread.
+  const threadsStrip = myThreads !== null ? threadsStripLabel(myThreads) : null;
   // The status ticker: the workspace's shared plans current today on its
   // clock (every chat, shared here or not), then the bar.
   const statusOpenPlans = currentSharedPlans(
@@ -7628,6 +7660,13 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           }}
           briefRoute={briefRoute}
           locationKey={props.locationKey}
+          {...(threadsStrip !== null
+            ? {
+                trailing: (
+                  <ThreadsStripItem label={threadsStrip} onOpen={() => setThreadsOpen(true)} />
+                ),
+              }
+            : {})}
         />
       ) : null}
       <SearchWordsContext.Provider value={headerWords}>
@@ -7840,6 +7879,23 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               : {})}
           />
         </SearchWordsContext.Provider>
+      ) : null}
+      {myThreads !== null ? (
+        <ThreadsSheet
+          open={threadsOpen && !selecting}
+          onClose={() => setThreadsOpen(false)}
+          threads={myThreads}
+          loaded={known}
+          currentUserId={props.currentUserId ?? ''}
+          nameOf={profileNameFor}
+          photoOf={(userId) =>
+            userId !== null ? (props.profiles.get(userId)?.avatarUrl ?? undefined) : undefined
+          }
+          onOpenThread={(rootId) => {
+            setThreadsOpen(false);
+            openThread(rootId);
+          }}
+        />
       ) : null}
       {view !== null && viewParts !== null && viewThreads !== undefined ? (
         <ThreadViewFrame

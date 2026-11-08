@@ -23,9 +23,11 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactElement,
+  ReactNode,
 } from 'react';
 import { ICON_SIZE, IconCheck, IconChevronDown } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { LIST_CARD_UNREAD_DOT } from '@/components/ui/ListCard';
 import {
   DrawerPostSheet,
   NO_CALLOUT,
@@ -238,6 +240,8 @@ export function StatusTickerBar(props: {
   onPointerMove?: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerUp?: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerCancel?: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  /** L5 (4): an item after the existing ones ("N threads" + dot); absent: none. */
+  trailing?: ReactNode;
 }): ReactElement {
   const { bar } = props;
   const items = bar !== null && bar.kind === 'items' ? bar.items : null;
@@ -322,7 +326,8 @@ export function StatusTickerBar(props: {
         className={cn(BAR, 'gap-1 text-sm text-fg-3', NO_CALLOUT)}
       >
         <IconCheck size={ICON_SIZE.inline} className="shrink-0" />
-        <span>{NOTHING_OPEN_LINE}</span>
+        <span className="min-w-0 flex-1 truncate">{NOTHING_OPEN_LINE}</span>
+        {props.trailing}
       </div>
     );
   }
@@ -384,6 +389,7 @@ export function StatusTickerBar(props: {
           {TITLE_ELLIPSIS}
         </span>
       </div>
+      {props.trailing}
       <PressableRow
         inline
         type="button"
@@ -580,6 +586,8 @@ export function ChatStatus(props: {
   briefRoute: (id: string) => string;
   /** The router location key (absent outside a router: nothing is remembered). */
   locationKey?: string | undefined;
+  /** L5 (4): the "N threads" item after the existing ones; absent: none. */
+  trailing?: ReactNode;
 }): ReactElement {
   const { bar, channelId } = props;
   // The key this chat mounted at: memory restores only for that history entry.
@@ -907,6 +915,7 @@ export function ChatStatus(props: {
     <>
       <StatusTickerBar
         bar={bar}
+        trailing={props.trailing}
         open={target === 'open'}
         barRef={(el) => {
           barEl.current = el;
@@ -970,5 +979,30 @@ export function ChatStatus(props: {
         onClose={() => setPostSheet((prev) => (prev !== null ? { ...prev, open: false } : prev))}
       />
     </>
+  );
+}
+
+/**
+ * L5 (4): the status strip's "N threads" item with its ink dot, after the
+ * existing items, while chat_threads_for_me has an unread thread. Tapping it
+ * opens the Threads sheet (never the drawer). 44 tall hit, the strip's type.
+ */
+export function ThreadsStripItem(props: { label: string; onOpen: () => void }): ReactElement {
+  return (
+    <PressableRow
+      inline
+      type="button"
+      data-threads-strip=""
+      aria-label={`${props.label} unread. Open Threads`}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onOpen();
+      }}
+      className="-my-1 flex h-11 shrink-0 items-center gap-1 px-2 text-sm text-fg focus-visible:lit-focus"
+    >
+      <span className="whitespace-nowrap">{props.label}</span>
+      <span aria-hidden="true" data-threads-dot="" className={LIST_CARD_UNREAD_DOT} />
+    </PressableRow>
   );
 }
