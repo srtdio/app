@@ -102,7 +102,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Edges (L2): page 16 phone / 24 laptop (GUTTER), chat 12 (CHAT_GUTTER), sheets 16. Inside <= outside spacing.
 - Trailing rule: a trailing ⋮, chevron or X is a 44 box pulled out 12 (TRAILING_PULL) so its glyph sits on the content edge; leading back/close mirrors it (LEADING_PULL). Parts apply it, never call sites.
 - Lanes (ui/layout LANE\_\*): unread pill top centre, jump-to-latest bottom trailing above the composer, tip strip in flow above the composer; they never cover a title, a time or each other.
-- Exit: "<" for anything opening over the app; X (IconX) only to cancel an upload, remove an attached file, clear a typed query, or close the writing box format row. Bin to delete; "Clear" to clear or dismiss. One exit per panel. Guard: `src/__tests__/no-cross.test.ts`.
+- Exit: "<" for anything opening over the app; X (IconX) only to cancel an upload, remove an attached file, clear a typed query,. Bin to delete; "Clear" to clear or dismiss. One exit per panel. Guard: `src/__tests__/no-cross.test.ts`.
 - Top bar: search | sort | filled + | avatar via useTopbarActions; no search field on any screen; pickers search through CommandPalette pick mode.
 - Select: visible Select at the chip row end on every list + long-press; ui/SelectCheck is the only select circle.
 - Upload: ui/UploadRing on the item (X cancels) and ui/PendingChip for attached files; no bars, no % text.
@@ -131,6 +131,8 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Pinned exit bar: every HeaderBar with a back "<" on a screen that opens over the app stays pinned while the page scrolls (phone page mode: sticky at --shell-sticky-top, safe area kept). On the post screen the checkpoint progress row sits inside the pinned block under the bar.
 - Annotations are ink, never gold: caption highlight = fg underline + numbered ink circle; quote chip = fg rail + circle; photo pin = the checkpoint circle (resolved goes good). Agency pin = ink dot, no number.
 - Comment and slot composers = chat composer: leading "+" tray with Photos, File, Assets only; no paper clip. Personal notes composer hint stays "Note" (allowed exception).
+- Comments (8 Nov 2026, Linear way): one bordered action bar on the card's top edge, right, always visible: Reply, Resolve, To-do, Edit, hairline, Delete last (own only); no ⋯, no long-press menu, no role label. To-do makes a chat task (comment_task_create); tag under the body.
+- Plan item, concept, bank idea and Plan notes threads draw with chat's parts (MessageBubble, swipe core, MessageActionMenu, Not sent + Retry); never hand-build a plan comment row.
 - Checkpoints: one flat section (top hairline, 8 Nov 2026), threads split by hairlines; resolved points fold to one line at the bottom; numbers never change; replies fold to the latest.
 - Every UI change: light + dark parity, visual baselines + layout checks (e2e/visual/layout-checks.ts) updated in the same PR; data-induction targets keep the tour working.
 
