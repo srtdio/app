@@ -280,7 +280,7 @@ test('the Assets lightbox: every visible button is at least a 44x44 touch target
   expect(network.blocked).toEqual([]);
 });
 
-test('a 50-file Assets page asks for thumbnails only near the viewport, once each', async ({
+test('a 50-file Assets list asks for thumbnails only near the viewport, once each', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -316,8 +316,21 @@ test('a 50-file Assets page asks for thumbnails only near the viewport, once eac
   expect(atLoad).toBeGreaterThan(0);
   expect(atLoad).toBeLessThan(50);
   expect(new Set(thumbs).size).toBe(thumbs.length);
-  // Scrolling through the grid asks for the rest, once each.
+  // Scrolling through the grid asks for the rest, once each. The page loads
+  // one screen at a time (the fill count), so Load more brings in the next
+  // screen until all 50 are listed.
   const tiles = page.locator('[data-file-tile="pdf"]');
+  const more = page.locator('[data-assets-load-more]');
+  for (let guard = 0; guard < 20 && (await tiles.count()) < 50; guard += 1) {
+    const loaded = await tiles.count();
+    for (let n = 0; n < loaded; n += 2) {
+      await tiles.nth(n).scrollIntoViewIfNeeded();
+    }
+    await more.scrollIntoViewIfNeeded();
+    await more.click();
+    await expect.poll(() => tiles.count(), { timeout: 15_000 }).toBeGreaterThan(loaded);
+  }
+  await expect(tiles).toHaveCount(50);
   for (let n = 0; n < 50; n += 2) {
     await tiles.nth(n).scrollIntoViewIfNeeded();
   }
