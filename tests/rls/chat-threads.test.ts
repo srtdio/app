@@ -251,13 +251,16 @@ describe.runIf(RLS_SUITE)('chat threads: read points, Mark unread and threads fo
       }),
     );
     expect(res.error).toBeNull();
-    const counter = await adminGeneric
-      .from('chat_unread_counters')
-      .select('unread')
-      .eq('channel_id', dm)
-      .eq('user_id', alice.id);
-    expect(counter.error).toBeNull();
+    // The counter table is read through chat_unread_counts (no direct grant).
+    const counts = await clientFor(alice.id).rpc(
+      'chat_unread_counts',
+      procArgs({ p_workspace_id: wsA.id }),
+    );
+    expect(counts.error).toBeNull();
+    const row = ((counts.data ?? []) as { channel_id: string; unread: number }[]).find(
+      (r) => r.channel_id === dm,
+    );
     // bob's root counts; alice's own reply does not.
-    expect((counter.data as { unread: number }[] | null)?.[0]?.unread).toBe(1);
+    expect(row?.unread).toBe(1);
   });
 });
