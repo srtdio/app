@@ -38,6 +38,7 @@ const CHAT_SPECS = [
   'chat-viewer-no-dialog',
   'chat-imessage-threads',
   'chat-card-thread-title',
+  'chat-thread-root-actions',
   'chat-keyboard-gap',
   'chat-open-at-once',
   'chat-personal-notes',

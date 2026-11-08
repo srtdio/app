@@ -36,7 +36,7 @@ describe('Avatar roles', () => {
   it('has exactly five roles: inline 20, header 32, row 40, card 48 (the list row picture; 40 in Compact), profile 72', () => {
     expect(AVATAR_PX).toEqual({
       inline: 20,
-      stack: 24,
+      stack: 32,
       header: 32,
       row: 40,
       card: 48,

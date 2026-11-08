@@ -210,8 +210,8 @@ export interface RootActions {
   onTasks?: (() => void) | undefined;
   /** Forward: the Forward picker for the root. */
   onForward?: (() => void) | undefined;
-  /** More actions: the root's long-press sheet. */
-  onMore?: (() => void) | undefined;
+  /** More actions: the root's long-press sheet, anchored on the tapped button. */
+  onMore?: ((from: HTMLElement) => void) | undefined;
 }
 
 /**
@@ -271,7 +271,7 @@ export function RepliesSeparatorRow(props: {
             edge="free"
             label={MORE_ACTIONS_LABEL}
             data-thread-root-action="more"
-            onClick={actions.onMore}
+            onClick={(event) => actions.onMore?.(event.currentTarget)}
           />
         ) : null}
       </span>
@@ -282,7 +282,7 @@ export function RepliesSeparatorRow(props: {
 /**
  * L3 (8 Nov 2026): the replies row under a thread root in the main chat (the
  * work-chat layout, aligned under the root's text: photo 32 + gap 8). Up to 3
- * square photos (24) of the latest repliers, "N replies" (semibold), the
+ * square photos (32, legible like Slack's) of the latest repliers, "N replies" (semibold), the
  * latest reply's first line (fg-3, one line, truncates) and an 8px ink dot
  * while a reply is unread by me. The whole row is one 44 tall target that
  * opens the thread. Tokens only; light and dark at parity.
