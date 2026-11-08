@@ -90,7 +90,7 @@ describe('format rules', () => {
     expect(read('components/chat/message-body.tsx')).toContain('parseFormat(body)');
     // Blocks (lists, quotes) are the outer layer: whole bodies go through renderRich.
     expect(read('components/chat/message-body.tsx')).toContain('parseBlocks(body)');
-    expect(read('components/chat/MessageThread.tsx')).toContain('renderRich(body');
+    expect(read('components/chat/MessageThread.tsx') + read('components/chat/MessageBubble.tsx')).toContain('renderRich(body');
     // Plan comments are drawn by chat's own bubble (MessageThread's renderRich above).
     expect(read('components/chat/PlanItemThread.tsx')).toContain('<MessageBubble');
     expect(read('components/comments/Comments.tsx')).toMatch(/renderRich\(\s*body/);

@@ -125,6 +125,7 @@ function point(id: string, seq: number, extra: Partial<CommentRow> = {}): Commen
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',
@@ -196,11 +197,13 @@ describe('approver Confirm on a resolved checkpoint', () => {
     checkpointRows.current = [point('p-1', 1)];
     await mount(true);
 
-    // Before: the good-outline circle, and a 44px "Confirm" (the point stays
-    // whole while it waits on this approver).
+    // Before: the good-outline circle, and a 44px Confirm on the point's bar
+    // (icon only, named "Confirm checkpoint 1"; the point stays whole while it
+    // waits on this approver).
     const tap = confirmButton(1);
     expect(tap).toBeDefined();
-    expect(tap?.textContent).toContain('Confirm');
+    expect(tap?.closest('[data-comment-bar]')).toBeTruthy();
+    expect(tap?.hasAttribute('data-checkpoint-confirm')).toBe(true);
     expect(tap?.className).toContain('min-h-11');
     expect(tap?.className).toContain('min-w-11');
     expect(rowTick('p-1')).toBe('resolved');

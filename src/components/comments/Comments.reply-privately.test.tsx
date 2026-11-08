@@ -5,10 +5,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommentRow, CommentResult } from '@srtdio/comments';
 
-// Reply privately is dropped from post and brief comments (comment action bar,
-// 8 Nov 2026): no icon on any row, and a tap on the author's photo or name
-// opens the plain person card, never with the comment as a source. The bar
-// carries Reply, Resolve and To-do on someone else's comment.
+// Reply privately on post and brief comments (comment action bar, 8 Nov
+// 2026): the row's Reply privately icon is dropped (the bar carries Reply,
+// Resolve and To-do on someone else's comment). A tap on the author's photo
+// or name still opens the person card's inline message with the comment as
+// its source (no navigation), only on someone else's comment with a known
+// current author (never mine, a legacy author or a former member).
 
 type ListResult = CommentResult<CommentRow[]>;
 
@@ -181,20 +183,20 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('Reply privately is gone from comments', () => {
+describe('Reply privately on comments: no row icon, the author tap keeps it', () => {
   it("someone else's row: the bar is Reply, Resolve, To-do (agency), no Reply privately, no Copy", async () => {
     await mount();
     expect(barWords('c-other')).toEqual(['Reply', 'Resolve', 'To-do']);
     expect(barWords('c-other')).not.toContain(REPLY_PRIVATELY);
   });
 
-  it('no row anywhere carries a Reply privately control', async () => {
+  it('no row carries a Reply privately control', async () => {
     await mount();
     expect(host?.querySelector('[data-row-action="reply-privately"]') ?? null).toBeNull();
     expect(host?.textContent ?? '').not.toContain(REPLY_PRIVATELY);
   });
 
-  it('a tap on the author opens the person card with no comment source', async () => {
+  it('a tap on the author opens the inline message card with the comment as its source', async () => {
     await mount();
     const trigger = rowEl('c-other')?.querySelector<HTMLElement>(
       `[data-person-trigger="${OTHER}"]`,
@@ -205,7 +207,15 @@ describe('Reply privately is gone from comments', () => {
     expect(request?.userId).toBe(OTHER);
     expect(request?.view).toBe('card');
     expect(request?.trigger).toBe(trigger);
-    expect(request?.source ?? null).toBeNull();
+    expect(request?.source).toEqual({
+      kind: 'comment',
+      sourceId: 'c-other',
+      authorUserId: OTHER,
+      authorName: 'Omar Other',
+      excerpt: 'Can @mia check the hook?',
+      whereLabel: 'Spring launch',
+      link: { kind: 'comment', entityType: 'brief', entityId: 'brief-1', commentId: 'c-other' },
+    });
   });
 
   it('my own comment and a former member open the card with no source', async () => {

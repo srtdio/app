@@ -119,13 +119,14 @@ test('post comments swipe right to Reply and left to Delete (own only) @theme', 
   // Right on someone else's comment: its reply composer opens.
   await swipeRow(peer, 120);
   await expect(composerUnder(page, PEER_ID)).toBeVisible();
-  await expect(peer.locator('[data-row-action="reply"]')).toHaveText('Cancel');
+  // The bar's Reply reads open (aria-expanded), exactly as after a tap on it.
+  await expect(peer.locator('[data-row-action="reply"]')).toHaveAttribute('aria-expanded', 'true');
 
   // Right on the viewer's own comment: the same.
   await swipeRow(own, 120);
   await expect(composerUnder(page, OWN_ID)).toBeVisible();
 
-  // Left on the viewer's own comment: the ⋯ menu's Delete (Undo strip).
+  // Left on the viewer's own comment: the bar's Delete (Undo strip).
   await swipeRow(own, -120);
   await expect(page.locator('#post-comments').getByText(OWN_BODY)).toHaveCount(0);
   const strip = undoStrip(page, 'Comment deleted');

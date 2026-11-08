@@ -126,6 +126,7 @@ function row(id: string, author: string, body = 'Hello', legacy: string | null =
     resolved_version_id: null,
     sent_back_at: null,
     sent_back_by: null,
+    task_state: null,
     unaccepted_at: null,
     unaccepted_by: null,
     workspace_id: 'ws-1',

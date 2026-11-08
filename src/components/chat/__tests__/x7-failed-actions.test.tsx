@@ -57,7 +57,7 @@ describe('X7 FB5: failed own sends', () => {
   });
 
   it('the red alert beside a refused bubble is gone (it would retry)', () => {
-    const thread = source('../MessageThread.tsx');
+    const thread = source('../MessageThread.tsx') + source('../MessageBubble.tsx');
     expect(thread).toContain(
       'failed && mine && message.filesMissing !== true && canRetryFailed(message)',
     );

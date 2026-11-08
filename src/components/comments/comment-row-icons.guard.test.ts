@@ -3,8 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // Guard (8 Nov 2026, comment action bar): the row under a comment's body
-// (Reply / Reply privately / Copy) is gone. Reply privately and Copy are
-// dropped from comments; the bar carries Reply (IconReply), Resolve
+// (Reply / Reply privately / Copy) is gone. Copy and the Reply privately
+// icon are dropped from comments (a tap on the author still opens the person
+// card with the comment quoted); the bar carries Reply (IconReply), Resolve
 // (IconResolve), To-do (IconTodo), Edit (IconEdit) and Delete (IconTrash),
 // one icon per concept. IconReplyPrivately and IconCopy keep their meanings in
 // the chat (message menu); IconCheckCircle stays select mode and

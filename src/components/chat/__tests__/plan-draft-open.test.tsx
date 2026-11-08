@@ -357,7 +357,7 @@ describe('item 4: footer', () => {
     expect(chat).toContain(
       'cardJump={cardJump?.channelId === selected.channelId ? cardJump : null}',
     );
-    const thread = read('MessageThread.tsx');
+    const thread = read('MessageThread.tsx') + read('MessageBubble.tsx');
     expect(thread).toContain('cardJumpSeq.current = cardJump.seq;');
   });
 });

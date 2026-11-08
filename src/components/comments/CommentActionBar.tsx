@@ -179,9 +179,9 @@ export function CommentTaskTag(props: { tag: TaskTag }): ReactElement {
 function TaskTagLink(props: { tag: TaskTag; href: string }): ReactElement {
   const navigate = useNavigate();
   return (
-    // The 44 hit box puts the tag 12 under the body, as the static tag; its
-    // bottom 12 is given back so the row ends 12 under the tag.
-    <div data-comment-task-tag="" className="-mb-3 flex">
+    // The 44 hit box puts the tag 12 under the body, as the static tag, and
+    // stays whole in the flow so the next comment's bar never meets it.
+    <div data-comment-task-tag="" className="flex">
       <PressableRow
         inline
         type="button"

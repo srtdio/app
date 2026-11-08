@@ -132,6 +132,9 @@ import {
   type MentionPick,
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
+import { isFormerMember } from '@/lib/chat/mentions';
+import { canReplyPrivately, commentPrivateReplyDraft } from '@/lib/reply-privately';
+import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import {
   commentBar,
   commentTaskTag,
@@ -218,7 +221,8 @@ interface CommentsProps {
   postStage?: string;
   /**
    * The post or brief title the page already holds: the writing boxes'
-   * expanded title. Absent reads as this section's own heading.
+   * expanded title, and the where label on the person card's quote (a tap on
+   * a comment's author). Absent reads as this section's own heading.
    */
   whereLabel?: string;
 }
@@ -2622,6 +2626,36 @@ export function Comments({
     );
   }
 
+  // A tap on the author's photo or name opens the person card with this
+  // comment as its source (its context line and what its send carries), only
+  // on someone else's comment whose author is a known current member
+  // (canReplyPrivately). The row itself carries no Reply privately control.
+  // Built at tap time from what the row shows; no read.
+  function privateReplySource(
+    comment: CommentRow,
+    authorName: string,
+  ): (() => PrivateReplyDraft) | null {
+    const authorUserId = comment.author_user_id;
+    const show = canReplyPrivately({
+      authorUserId,
+      me: currentUserId,
+      authorName,
+      legacy: comment.legacy_author_name !== null,
+      former: authorName === FORMER_MEMBER || isFormerMember(workspaceId, authorUserId),
+    });
+    if (!show) return null;
+    return () =>
+      commentPrivateReplyDraft({
+        commentId: comment.id,
+        authorUserId,
+        authorName,
+        excerpt: commentCopyText(comment.body, handleOf),
+        whereLabel,
+        entityType,
+        entityId,
+      });
+  }
+
   /**
    * Who wrote a row, as every row shows it: the name ('' only until the
    * batched read answers; a gone person reads "Former member"), the photo, and
@@ -2636,6 +2670,7 @@ export function Comments({
     const name = comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? '';
     const avatarUrl = comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
     const authorId = comment.legacy_author_name === null ? comment.author_user_id : null;
+    const source = authorId !== null ? privateReplySource(comment, name) : null;
     const asPerson = (node: ReactNode, display: 'inline' | 'block', className?: string) =>
       authorId !== null && name !== '' ? (
         <PersonTrigger
@@ -2643,6 +2678,7 @@ export function Comments({
           name={name}
           avatarUrl={avatarUrl ?? null}
           {...(name === FORMER_MEMBER ? { former: true } : {})}
+          {...(source !== null ? { source } : {})}
           display={display}
           {...(className !== undefined ? { className } : {})}
         >

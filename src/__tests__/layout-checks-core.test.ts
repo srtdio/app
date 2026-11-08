@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  commentBarViolations,
   boxText,
   CHIP_FACE_BY_DENSITY,
   CHIP_FACE_PX,
@@ -707,5 +708,39 @@ describe('top bar, chip-row Select and upload checks', () => {
     ).toEqual([]);
     expect(uploadBarViolations([{ label: 'bar', box: box(0, 0, 200, 4) }], [])).toHaveLength(1);
     expect(uploadBarViolations([], ['Uploading, 40%'])).toHaveLength(1);
+  });
+});
+
+describe('comment action bars (8 Nov 2026)', () => {
+  const row = { x: 16, y: 200, width: 343, height: 120 };
+  const bar = { x: 359 - 178, y: 182, width: 178, height: 36 };
+  const button = (x: number) => ({ x, y: 178, width: 44, height: 44 });
+  const good = {
+    label: 'comment-c1',
+    bar,
+    row,
+    buttons: [button(181), button(225), button(269), button(313)],
+    around: [{ label: 'a time (2m)', box: { x: 120, y: 210, width: 24, height: 16 } }],
+  };
+
+  it('a bar half above its row, on its end, with 44 hits, passes', () => {
+    expect(commentBarViolations([good])).toEqual([]);
+  });
+
+  it('flags a small hit, a bar off the top edge, short of the end, or over a time', () => {
+    expect(
+      commentBarViolations([{ ...good, buttons: [{ x: 181, y: 182, width: 36, height: 36 }] }]),
+    ).toHaveLength(1);
+    expect(commentBarViolations([{ ...good, bar: { ...bar, y: 200 } }])[0]).toMatch(
+      /middle is 18px/,
+    );
+    expect(commentBarViolations([{ ...good, bar: { ...bar, x: bar.x - 12 } }])[0]).toMatch(
+      /ends 12px before/,
+    );
+    expect(
+      commentBarViolations([
+        { ...good, around: [{ label: 'a time (5m)', box: { x: 300, y: 190, width: 30, height: 16 } }] },
+      ]),
+    ).toEqual(['comment-c1: the bar covers a time (5m)']);
   });
 });

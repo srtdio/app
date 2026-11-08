@@ -38,7 +38,7 @@ import {
   type BubblePointerHandlers,
   type BubbleSwipe,
   type RowHold,
-} from '@/components/chat/MessageThread';
+} from '@/components/chat/MessageBubble';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { TEAM_ONLY_LABEL } from '@/components/chat/plan-card';
 import type { ChatProfile } from '@/lib/chat-reads';

@@ -12,6 +12,7 @@ import {
   lineHeightPx,
   chipRowViolations,
   chipViolations,
+  commentBarViolations,
   listCardViolations,
   MAX_ROLES_PER_PART,
   overlappingPairs,
@@ -29,6 +30,7 @@ import {
   type Box,
   type ChipGeom,
   type ChipRowGeom,
+  type CommentBarGeom,
   type EdgeItem,
   type LayoutDensity,
   type LayoutViolation,
@@ -83,7 +85,10 @@ import {
 //  10 upload screens (decision F, assertNoUploadBar): no visible progress bar
 //     and no % figure, only ui/UploadRing (its progressbar is sr-only) or Retry;
 //  11 writing box screens (ui/WritingBox, assertWritingBox): every row key and
-//     the send are 44 tall hits and the send ends inside the box.
+//     the send are 44 tall hits and the send ends inside the box;
+//  12 post screens (assertCommentBars, 8 Nov 2026): every comment's action bar
+//     is 44 hits, rides half above its row (its middle on the row's top edge),
+//     ends on the row's end and covers no time, name or title.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
@@ -751,6 +756,50 @@ export async function assertCommentTray(page: Page, screenName: string): Promise
   settleFindings(
     screenName,
     trayTileViolations(tiles).map((message) => ({ check: 'tray-tiles' as const, message })),
+  );
+}
+
+/**
+ * Check 12: every comment action bar ([data-comment-bar]) on the screen, as
+ * commentBarViolations reads it. Screens with no comments find none and pass.
+ */
+export async function assertCommentBars(page: Page, screenName: string): Promise<void> {
+  const bars: CommentBarGeom[] = await page.evaluate(() => {
+    const toBox = (el: Element): Box => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    const shown = (el: Element): boolean => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    };
+    const around = Array.from(
+      document.querySelectorAll(
+        '[data-comment-time], [data-comment-author], [data-group-meta], [data-comments-header] h3',
+      ),
+    ).filter(shown);
+    return Array.from(document.querySelectorAll('[data-comment-bar]'))
+      .filter(shown)
+      .map((bar, i) => {
+        const row = bar.closest('[data-comment-row]') ?? bar.parentElement ?? bar;
+        const id = bar.closest('[id^="comment-"]')?.id ?? `bar ${i + 1}`;
+        return {
+          label: id,
+          bar: toBox(bar),
+          row: toBox(row),
+          buttons: Array.from(bar.querySelectorAll('button')).filter(shown).map(toBox),
+          around: around
+            .filter((el) => !bar.contains(el))
+            .map((el) => ({
+              label: `${el.getAttribute('data-comment-time') !== null ? 'a time' : el.tagName === 'H3' ? 'the title' : 'a name'} (${el.textContent?.trim().slice(0, 24) ?? ''})`,
+              box: toBox(el),
+            })),
+        };
+      });
+  });
+  settleFindings(
+    screenName,
+    commentBarViolations(bars).map((message) => ({ check: 'comment-bar' as const, message })),
   );
 }
 

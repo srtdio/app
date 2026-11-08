@@ -78,7 +78,7 @@ describe('X7 FT39: delete a text message, then Undo', () => {
   });
 
   it('the menu Delete routes text to the Undo path and files to the confirm', () => {
-    const thread = source('../MessageThread.tsx');
+    const thread = source('../MessageThread.tsx') + source('../MessageBubble.tsx');
     expect(thread).toMatch(
       /if \(deleteHasUndo\(message\)\) deleteWithUndo\(message\);\s*else setDeleteOneFor\(message\);/,
     );

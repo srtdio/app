@@ -6,6 +6,7 @@ import {
   type HarnessNetwork,
 } from '../fixtures/harness-routes';
 import {
+  assertCommentBars,
   assertCommentTray,
   assertListCards,
   assertNoUploadBar,
@@ -4393,10 +4394,11 @@ function seedCommentPdf(network: HarnessNetwork): void {
   );
 }
 
-/** The post screen's checks after the shot: pinned bar, and the comment "+" tray. */
+/** The post screen's checks after the shot: pinned bar, comment bars, and the comment "+" tray. */
 async function postScreenChecks(page: Page): Promise<void> {
   const name = test.info().title.replace(/ @.*$/, '');
   await assertPinnedBarOnScroll(page, name);
+  await assertCommentBars(page, name);
   await assertCommentTray(page, name);
 }
 

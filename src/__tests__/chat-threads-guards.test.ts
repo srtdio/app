@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const THREAD = read('../components/chat/MessageThread.tsx');
+const THREAD = read('../components/chat/MessageThread.tsx') + read('../components/chat/MessageBubble.tsx');
 const CHAT_TYPE = read('../components/chat/chat-type.ts');
 
 describe('L1: no bubble classes in chat rows', () => {

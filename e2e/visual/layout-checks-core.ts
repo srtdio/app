@@ -275,7 +275,8 @@ export interface LayoutViolation {
     | 'topbar'
     | 'chip-row'
     | 'upload-bar'
-    | 'writing-box';
+    | 'writing-box'
+    | 'comment-bar';
   message: string;
 }
 
@@ -774,6 +775,53 @@ export function writingBoxViolations(boxes: readonly WritingBoxGeom[]): string[]
           `${box.label} send ends at ${Math.round(sendRight)}px, past the box (${Math.round(frameRight)}px)`,
         );
       }
+    }
+  }
+  return out;
+}
+
+/**
+ * A comment's action bar as measured (8 Nov 2026): the pill, the row it rides
+ * on ([data-comment-row]), its buttons' hit boxes, and the times, names and
+ * titles of everything around it (other rows, the section title).
+ */
+export interface CommentBarGeom {
+  label: string;
+  bar: Box;
+  row: Box;
+  buttons: Box[];
+  around: Array<{ label: string; box: Box }>;
+}
+
+/** How far the bar's middle may sit from its row's top edge, and its end from the row's end. */
+export const COMMENT_BAR_TOLERANCE_PX = 2;
+
+/**
+ * The comment bar rules: every button a 44 hit; the pill's middle on its
+ * row's top edge (half above it); its trailing end on the row's end; and it
+ * covers no time, name or title around it. Pure.
+ */
+export function commentBarViolations(bars: readonly CommentBarGeom[]): string[] {
+  const out: string[] = [];
+  for (const b of bars) {
+    for (const button of b.buttons) {
+      if (button.width < 44 - 0.5 || button.height < 44 - 0.5) {
+        out.push(`${b.label}: a bar button is ${boxText(button)}, not a 44 hit`);
+      }
+    }
+    const middle = b.bar.y + b.bar.height / 2;
+    if (Math.abs(middle - b.row.y) > COMMENT_BAR_TOLERANCE_PX) {
+      out.push(
+        `${b.label}: the bar's middle is ${Math.round((middle - b.row.y) * 10) / 10}px from its row's top, not on it`,
+      );
+    }
+    const end = b.bar.x + b.bar.width;
+    const rowEnd = b.row.x + b.row.width;
+    if (Math.abs(end - rowEnd) > COMMENT_BAR_TOLERANCE_PX) {
+      out.push(`${b.label}: the bar ends ${Math.round((rowEnd - end) * 10) / 10}px before its row's end`);
+    }
+    for (const near of b.around) {
+      if (overlaps(b.bar, near.box)) out.push(`${b.label}: the bar covers ${near.label}`);
     }
   }
   return out;

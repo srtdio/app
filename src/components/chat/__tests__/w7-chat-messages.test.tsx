@@ -123,7 +123,7 @@ describe('fix 1: the long-press menu, one level', () => {
 
 describe('fix 2: menu Delete opens the single-message confirm', () => {
   it('wires onDeleteMessage to the confirm, never to selection mode', () => {
-    const thread = source('../MessageThread.tsx');
+    const thread = source('../MessageThread.tsx') + source('../MessageBubble.tsx');
     expect(thread).not.toContain('onDeleteMessage: enterSelection');
     expect(thread).toContain('setDeleteOneFor(message)');
     expect(thread).toContain('deleteOneConfirm({');
@@ -202,7 +202,7 @@ describe('fix 4: personal notes', () => {
 describe('fix 5: the group info header icon', () => {
   it('FT46: no header Info icon (the identity tap opens Group info), never the gear', () => {
     expect(renderToStaticMarkup(<InfoGlyph />)).toContain('data-info-glyph');
-    const thread = source('../MessageThread.tsx');
+    const thread = source('../MessageThread.tsx') + source('../MessageBubble.tsx');
     expect(thread).not.toContain('IconSettings');
     expect(thread).not.toMatch(/label="Group info" onClick=\{props\.onOpenInfo\}>/);
   });
