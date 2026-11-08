@@ -21,6 +21,7 @@ import { MENTION_ME_PEER } from '@/components/chat/MessageBubble';
 import { activityKind } from '@/components/pages/activity/ActivityCard';
 import {
   alertBody,
+  WELCOME_BODY,
   segmentSelfMentions,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -103,7 +104,10 @@ function MessageRow(props: {
 function EntityBlock({ item }: { item: ActivityItem }): ReactElement | null {
   const kind = activityKind(item);
   // A post's caption, else an alert's second line (as its Activity row reads).
-  const words = item.caption ?? (item.alert != null ? alertBody(item.alert) : null);
+  const words =
+    item.caption ??
+    (item.alert != null ? alertBody(item.alert) : null) ??
+    (item.welcome != null ? WELCOME_BODY : null);
   if (kind === undefined && words === null) return null;
   return (
     <div data-catch-up-entity="" className="flex min-w-0 flex-col gap-2 border-b px-4 py-3">

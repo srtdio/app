@@ -78,6 +78,17 @@ describe('catch up copy', () => {
     expect(catchUpTitle(stage)).toBe('Watch launch');
   });
 
+  it('the welcome row names its workspace under the welcome line, never twice', () => {
+    const welcome = entry({
+      event_type: 'system',
+      entity_type: null,
+      entity_id: null,
+      payload: { kind: 'welcome', workspace_name: 'Northwind', platform: 'instagram' },
+    });
+    expect(catchUpTitle(welcome)).toBe('Northwind');
+    expect(catchUpKicker(welcome)).not.toBe(catchUpTitle(welcome));
+  });
+
   it('reply box hints only for chat and comment cards', () => {
     expect(catchUpReplyHint(threadMention)).toBe('Reply in thread');
     expect(catchUpReplyHint(started)).toBe('Reply in thread');

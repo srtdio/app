@@ -74,6 +74,8 @@ export function catchUpTitle(item: ActivityItem, threadName: string | null = nul
     case 'thread-started':
       return item.title !== null && item.title !== '' ? item.title : (threadName ?? THREAD_TITLE);
     default:
+      // The welcome row names its workspace (its kicker is the welcome line).
+      if (item.welcome != null) return item.welcome.workspaceName;
       if (item.title !== null && item.title !== '') return item.title;
       return item.alert?.itemTitle ?? item.alert?.planTitle ?? item.planTitle ?? cardTitle(item);
   }
