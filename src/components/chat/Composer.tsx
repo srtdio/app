@@ -463,9 +463,7 @@ export function EditingBar(props: { text: string; onCancel: () => void }): React
       author={EDITING_BAR_TITLE}
       preview={props.text}
       tone="warn"
-      trailing={
-        <ClearButton aria-label="Cancel editing" onClick={props.onCancel} />
-      }
+      trailing={<ClearButton aria-label="Cancel editing" onClick={props.onCancel} />}
     />
   );
 }
@@ -556,9 +554,7 @@ export function ReplyBar(props: {
       media={props.reply.deleted === true ? null : props.media}
       thumbSource={props.thumbSource}
       className={NO_TOUCH_SELECT}
-      trailing={
-        <ClearButton aria-label="Cancel reply" onClick={props.onCancel} />
-      }
+      trailing={<ClearButton aria-label="Cancel reply" onClick={props.onCancel} />}
     />
   );
 }
@@ -581,9 +577,7 @@ export function PrivateReplyBar(props: {
         preview={props.preview}
         oneLine
         className={NO_TOUCH_SELECT}
-        trailing={
-          <ClearButton aria-label="Cancel reply" onClick={props.onRemove} />
-        }
+        trailing={<ClearButton aria-label="Cancel reply" onClick={props.onRemove} />}
       />
     </div>
   );

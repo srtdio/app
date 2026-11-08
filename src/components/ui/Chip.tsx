@@ -174,11 +174,7 @@ export function Chip({
   return (
     <span data-chip-clearable="" className="inline-flex shrink-0 items-center gap-2">
       {chip}
-      <ClearButton
-        data-chip-clear=""
-        aria-label={`Clear ${label} filter`}
-        onClick={onClear}
-      />
+      <ClearButton data-chip-clear="" aria-label={`Clear ${label} filter`} onClick={onClear} />
     </span>
   );
 }

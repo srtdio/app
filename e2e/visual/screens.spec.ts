@@ -5070,7 +5070,9 @@ SCREENS.push(
       await tap([boxKey(chatBox(page), 'Aa')], 'Aa');
       const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
       await waitFor([row], 'format row');
-      const lead = isLaptop(page) ? '[data-row-key="aa"][aria-pressed="true"]' : '[data-row-key="close"]';
+      const lead = isLaptop(page)
+        ? '[data-row-key="aa"][aria-pressed="true"]'
+        : '[data-row-key="close"]';
       await waitFor([row.locator(lead)], isLaptop(page) ? 'Aa on' : 'Close formatting');
       await tap([row.locator('[data-row-key="bold"]')], 'Bold');
       await waitFor([row.locator('[data-row-key="bold"][aria-pressed="true"]')], 'Bold on');
