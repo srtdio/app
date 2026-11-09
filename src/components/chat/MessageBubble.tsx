@@ -1534,7 +1534,7 @@ export function MessageBubble(props: {
     NO_TOUCH_SELECT,
     head ? (props.afterLabel === true ? 'pt-0' : replyPlace ? 'pt-4' : 'pt-3') : 'pt-1',
     // Thread view: the root stacks its head over the full-width text; replies sit 12 from the photo.
-    rootPlace ? 'flex-col items-stretch' : 'flex-row',
+    rootPlace ? 'relative flex-col items-stretch' : 'flex-row',
     replyPlace && 'gap-3',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
@@ -1986,6 +1986,8 @@ export function MessageBubble(props: {
             'shrink-0 self-center text-fg-3 opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
             // An own row's tick passes under the smiley; the page fill keeps the glyph clear.
             rail?.role != null && mine && 'bg-bg',
+            // The thread root's stack: the smiley rides its head line, out of the flow.
+            rootPlace && 'absolute right-4 top-3',
           )}
         >
           <SmileyGlyph />
@@ -1993,7 +1995,11 @@ export function MessageBubble(props: {
       ) : textSelect && press?.onReact !== undefined && message.state === 'sent' ? (
         // The smiley's room stays while selecting text, so the row never
         // changes size (a pinned list would re-pin and scroll it away).
-        <span aria-hidden="true" data-react-slot="" className="h-11 w-11 shrink-0" />
+        <span
+          aria-hidden="true"
+          data-react-slot=""
+          className={cn('h-11 w-11 shrink-0', rootPlace && 'absolute right-4 top-3')}
+        />
       ) : null}
       {failed && mine && message.filesMissing === true ? (
         <IconButton
