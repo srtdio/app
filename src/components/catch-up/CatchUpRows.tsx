@@ -218,7 +218,7 @@ export function MessageRow(props: {
       hook={{ 'data-catch-up-message': row.id }}
     >
       {row.earlierCaption != null && row.earlierCaption !== '' ? (
-        <div data-catch-up-earlier="" className="flex flex-col gap-1 border-l-2 border-border-strong pl-3">
+        <div data-catch-up-earlier="" className="flex flex-col gap-1 border-l border-border-strong pl-3">
           <Text role="meta">Earlier caption</Text>
           <Text role="body" as="p" style={WRAP_ANYWHERE} className="text-fg-3">
             {row.earlierCaption}
@@ -368,8 +368,8 @@ export function DayLine(props: { at: string; timeZone: string | undefined; lapto
 export function BoneRows({ count = 3 }: { count?: number }): ReactElement {
   return (
     <ul data-catch-up-bones="" aria-hidden="true" className="flex flex-col py-2">
-      {Array.from({ length: count }, (_, i) => (
-        <li key={i} className={cn('flex gap-3 py-2', CATCH_UP_ROW_X)}>
+      {Array.from({ length: count }, (_, place) => `bone-${place}`).map((id) => (
+        <li key={id} className={cn('flex gap-3 py-2', CATCH_UP_ROW_X)}>
           <Bone lit="flat" className="h-8 w-8 shrink-0 rounded-lg" />
           <span className="flex min-w-0 flex-1 flex-col gap-2">
             <Bone lit="flat" className="h-4 w-1/3 rounded" />

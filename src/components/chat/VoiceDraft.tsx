@@ -148,7 +148,7 @@ export function RecordingRow(props: {
         className="shrink-0"
         onClick={props.onCancel}
       >
-        <IconX size={ICON_SIZE.control} />
+        <IconX size={ICON_SIZE.inline} />
       </Button>
       {/* justify-end: a full track drops its oldest bars off the left edge. */}
       <span
@@ -156,7 +156,7 @@ export function RecordingRow(props: {
         data-recording-track=""
         className="flex h-6 min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden"
       >
-        <span className="min-w-0 flex-1 border-t-2 border-dotted border-border-strong" />
+        <span className="min-w-0 flex-1 border-t border-dotted border-border-strong" />
         {liveBars(props.bars).map((bar) => (
           <Bar key={bar.key} scale={bar.scale} className="bg-fg" />
         ))}
@@ -243,8 +243,9 @@ export function VoiceNoteChip(props: {
         )}
       </span>
       <span aria-hidden="true" className="flex h-6 min-w-0 items-center gap-1 overflow-hidden">
-        {chipBars(props.peaks).map((scale, i) => (
-          <Bar key={i} scale={scale} className="bg-fg-3" />
+        {/* A bar's place in the waveform is its identity (the peaks never reorder). */}
+        {chipBars(props.peaks).map((scale, place) => (
+          <Bar key={`bar-${place}`} scale={scale} className="bg-fg-3" />
         ))}
       </span>
       <span className={textRole('meta', 'shrink-0')}>{clock}</span>
@@ -252,14 +253,17 @@ export function VoiceNoteChip(props: {
         type="button"
         aria-label="Remove voice note"
         data-voice-chip-remove=""
-        className="absolute -right-4 -top-4 grid h-11 w-11 place-items-center rounded-full focus-visible:lit-focus"
+        className="absolute -right-4 -top-4 rounded-full focus-visible:lit-focus"
         onClick={props.onRemove}
       >
-        <span
-          aria-hidden="true"
-          className="grid h-6 w-6 place-items-center rounded-full bg-fg text-bg"
-        >
-          <IconX size={ICON_SIZE.text} />
+        {/* The 44 hit box; the visible disc inside it is 24. */}
+        <span className="grid h-11 w-11 place-items-center">
+          <span
+            aria-hidden="true"
+            className="grid h-6 w-6 place-items-center rounded-full bg-fg text-bg"
+          >
+            <IconX size={ICON_SIZE.inline} />
+          </span>
         </span>
       </button>
     </div>

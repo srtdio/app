@@ -593,7 +593,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         onClick={inThread ? closeThread : close}
         className={CATCH_UP_ROUND_KEY}
       >
-        <IconChevronLeft size={ICON_SIZE.nav} />
+        <IconChevronLeft size={ICON_SIZE.control} />
       </IconButton>
       <div className="flex min-w-0 flex-1 flex-col items-center justify-center text-center">
         {barTitle !== null ? (
