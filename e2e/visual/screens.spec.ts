@@ -4924,10 +4924,13 @@ SCREENS.push(
     url: '/briefs',
     steps: async (page) => {
       await briefsReady(page);
-      await tap(
+      // aria-disabled (not disabled): taps still fire, but Playwright's
+      // actionability check counts it as not enabled, so force the click.
+      const blocked = await firstVisible(
         [page.locator('[data-topbar-plus][aria-disabled="true"][aria-label="New brief"]')],
         'blocked New brief',
       );
+      await blocked.click({ force: true });
       await waitFor([page.getByText('Briefs come from approvers.', { exact: true })], 'toast');
     },
   },
@@ -4937,10 +4940,13 @@ SCREENS.push(
     url: '/pipeline',
     steps: async (page) => {
       await pipelineReady(page);
-      await tap(
+      // aria-disabled (not disabled): taps still fire, but Playwright's
+      // actionability check counts it as not enabled, so force the click.
+      const blocked = await firstVisible(
         [page.locator('[data-topbar-plus][aria-disabled="true"][aria-label="New post"]')],
         'blocked New post',
       );
+      await blocked.click({ force: true });
       await waitFor([page.getByText('Posts come from creators.', { exact: true })], 'toast');
     },
   },

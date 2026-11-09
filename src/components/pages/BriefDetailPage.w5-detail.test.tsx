@@ -20,6 +20,8 @@ import {
   briefCopyLink,
   briefCopyText,
   briefFormatLabel,
+  briefMenuItems,
+  briefStatusAction,
   briefStatusLine,
   canCloseBrief,
   linkedPostsFor,
@@ -290,6 +292,25 @@ describe('Brief detail close', () => {
     await mount();
     expect(byLabel('More actions')).not.toBeNull();
     expect(statusAction()).toBeNull();
+  });
+
+  it('briefStatusAction: Reopen while closed, Close while open with rights, else none', () => {
+    const onCloseBrief = vi.fn();
+    const onReopenBrief = vi.fn();
+    const args = { onCloseBrief, onReopenBrief };
+    const reopen = briefStatusAction({ ...args, closed: true, canClose: false });
+    expect(reopen?.label).toBe('Reopen brief');
+    reopen?.onPress();
+    expect(onReopenBrief).toHaveBeenCalledTimes(1);
+    expect(briefStatusAction({ ...args, closed: true, canClose: true })?.id).toBe('reopen-brief');
+    const close = briefStatusAction({ ...args, closed: false, canClose: true });
+    expect(close?.label).toBe('Close brief');
+    close?.onPress();
+    expect(onCloseBrief).toHaveBeenCalledTimes(1);
+    expect(briefStatusAction({ ...args, closed: false, canClose: false })).toBeNull();
+    expect(
+      briefMenuItems({ onCopyLink: vi.fn(), onCopyBrief: vi.fn() }).map((i) => i.label),
+    ).toEqual(['Copy link', 'Copy brief']);
   });
 
   it('canCloseBrief: close, or close_own for the creator only', () => {
