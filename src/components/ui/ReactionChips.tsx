@@ -161,6 +161,8 @@ export interface ReactionChipsProps {
   onPick: (emoji: string) => void;
   /** Who reacted (long-press sheet, laptop hover); absent: neither. */
   who?: { load: ReactionWhoLoad; viewerId: string | null; targetId: string } | undefined;
+  /** Phone long-press: the host's own who-reacted sheet (chat's); absent: this row's sheet. */
+  onWho?: ((emoji: string) => void) | undefined;
   /** No reactions yet: still draw the smiley alone (catch up, which has no other way in). */
   addWhenEmpty?: boolean;
   /** Off: draw the chips only (no smiley; a row that cannot take a reaction). */
@@ -200,7 +202,15 @@ export function ReactionChips(props: ReactionChipsProps): ReactElement | null {
           onToggle={() => {
             if (canReact) props.onToggle(reaction.emoji);
           }}
-          onHold={who !== undefined && !hover ? () => setSheetFor(who.targetId) : null}
+          onHold={
+            hover
+              ? null
+              : props.onWho !== undefined
+                ? () => props.onWho?.(reaction.emoji)
+                : who !== undefined
+                  ? () => setSheetFor(who.targetId)
+                  : null
+          }
           hover={hover && who !== undefined}
           names={names?.get(reaction.emoji) ?? null}
           onHover={loadNames}

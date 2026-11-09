@@ -41,7 +41,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import type { PersonCardHint } from '@/lib/person-card';
-import { ReactionBadge } from '@/components/ui/ReactionBadge';
+import { ReactionChips, type ReactionChipsProps } from '@/components/ui/ReactionChips';
 import {
   ICON_SIZE,
   IconAlertTriangle,
@@ -71,7 +71,6 @@ import {
   BUBBLE_SHAPE,
   DATE_PILL_TYPE,
   NO_TOUCH_SELECT,
-  REACTION_EMOJI_TYPE,
   sized,
   TICK_ICON_BOX,
   type ChatLayout,
@@ -1179,9 +1178,6 @@ function SmileyGlyph(): ReactElement {
   return <IconSmile size={ICON_SIZE.control} />;
 }
 
-/** A row with a reaction badge makes room for its 17px overhang plus a gap. */
-export const REACTION_ROW_SPACE = 'mb-6';
-
 /**
  * A failed own send's alert: a 44x44 hit area outside the bubble on the side
  * away from the tail (left of own bubbles), vertically centred on it, the "!"
@@ -1207,9 +1203,12 @@ function railTop(head: boolean, afterLabel: boolean): string {
   return afterLabel ? 'top-0' : '-top-3';
 }
 
-/** The root's rail reaches down through the row's bottom padding (the reaction badge's room). */
+/**
+ * The root's rail reaches down to the row's bottom edge: past the bubble's box
+ * through the reaction chip row under it when there is one (8 + the 32 pill).
+ */
 function railBottom(hasReactions: boolean): string {
-  return hasReactions ? '-bottom-5' : 'bottom-0';
+  return hasReactions ? '-bottom-10' : 'bottom-0';
 }
 
 /**
@@ -1280,7 +1279,8 @@ function withRailPhoto(
  * after the text (an invisible spacer keeps the last line clear of it), as a
  * pill over a bare album, or in its own row under other content. A failed own
  * send reads "Not sent" under the bubble with a 44px red alert (Retry) beside
- * it, away from the tail; reactions hang as one small badge under the bubble.
+ * it, away from the tail; reactions sit under the message as ui/ReactionChips
+ * on its text column (8 below it), the smiley pill last.
  * On a laptop (fine pointer) a chevron fades in at the bubble's top-right and a
  * smiley beside it; touch keeps long-press and swipe. Rows in a run sit 2px
  * apart, runs 10px. Pure and hook-free: long-press wiring is owned by the
@@ -1315,7 +1315,8 @@ export function MessageBubble(props: {
   workspaceId?: string | null | undefined;
   /** The in-bubble meta; computed from the message when absent. */
   meta?: BubbleMeta;
-  onBadgeClick: () => void;
+  /** The reaction chips' taps (toggle, the drawer, who reacted); absent: the chips draw inert. */
+  reactionChips?: BubbleReactionChips | undefined;
   onRetry?: (messageId: string) => void;
   /** Deletes this failed own send (the "Not sent" line's Delete). */
   onDiscard?: (messageId: string) => void;
@@ -1386,7 +1387,6 @@ export function MessageBubble(props: {
   };
 }): ReactElement {
   const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, tail } = props;
-  const { onBadgeClick } = props;
   // Ideas: the row's own ids (the open bundle's rows carry them too).
   const sharedIdeaIds = message.sharedPlanItemIds ?? NO_PLAN_IDS;
   // Notes: a saved copy names its source instead of "Forwarded".
@@ -1426,8 +1426,6 @@ export function MessageBubble(props: {
     message.sharedBriefIds.length === 0 &&
     sharedPlanIds.length === 0 &&
     sharedIdeaIds.length === 0;
-  const totalReactions = message.reactions.reduce((sum, r) => sum + r.count, 0);
-  const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
   const fullMeta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
   // The name line carries the time (and own send state) on a head.
   const meta = bodyMetaOf(fullMeta, head);
@@ -1689,11 +1687,8 @@ export function MessageBubble(props: {
       data-state={message.state}
       data-selection={selection?.role}
       data-checked={checked ? '' : undefined}
-      // On the rail the badge's room is padding, so the row's box (and its
-      // piece of the rail) reaches the next row with no gap.
       className={cn(
         rowClass,
-        hasReactions && (rail?.role != null ? 'pb-6' : REACTION_ROW_SPACE),
         checked && 'isolate',
         // The whole row is the swipe's grab area (own rows as freely as others').
         swipe?.handlers !== undefined && SWIPE_ROW_TOUCH,
@@ -1949,16 +1944,6 @@ export function MessageBubble(props: {
                 </span>
               </PressableRow>
             ) : null}
-            {hasReactions ? (
-              <ReactionBadge label={reactionBadgeLabel(message.reactions)} onClick={onBadgeClick}>
-                <span aria-hidden="true" data-reaction-emoji="" className={REACTION_EMOJI_TYPE}>
-                  {distinctEmojis}
-                </span>
-                {totalReactions > 1 ? (
-                  <span className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>{totalReactions}</span>
-                ) : null}
-              </ReactionBadge>
-            ) : null}
           </div>,
           rail,
           railEdge,
@@ -1973,6 +1958,25 @@ export function MessageBubble(props: {
           />
         ) : fullMeta.status === 'failed' || fullMeta.status === 'files-missing' ? (
           <FailedLine status={fullMeta.status} />
+        ) : null}
+        {hasReactions ? (
+          // On the text column, 8 under the message (the column's 4 + 4); the
+          // thread root's stays above the strip (its 12 is the strip's margin).
+          <ReactionChips
+            className="mt-1"
+            reactions={message.reactions}
+            onToggle={(emoji) => props.reactionChips?.onToggle(emoji)}
+            onPick={(emoji) => props.reactionChips?.onPick(emoji)}
+            canReact={
+              props.reactionChips !== undefined &&
+              selection === undefined &&
+              message.state === 'sent'
+            }
+            who={props.reactionChips?.who}
+            {...(props.reactionChips?.onWho !== undefined && selection === undefined
+              ? { onWho: props.reactionChips.onWho }
+              : {})}
+          />
         ) : null}
       </div>
       {onReact !== undefined ? (
@@ -2014,15 +2018,13 @@ export function MessageBubble(props: {
   );
 }
 
-/**
- * The reaction badge's accessible name (FT44): each emoji with its count and
- * the total, then what a tap does. "Reactions: 👍 2, ❤️ 1. 3 in total. Show
- * who reacted". Pure.
- */
-export function reactionBadgeLabel(reactions: readonly { emoji: string; count: number }[]): string {
-  const total = reactions.reduce((sum, r) => sum + r.count, 0);
-  const each = reactions.map((r) => `${r.emoji} ${r.count}`).join(', ');
-  return `Reactions: ${each}. ${total} in total. Show who reacted`;
+/** A bubble's reaction chip taps: toggle mine, the drawer's pick, who reacted. */
+export interface BubbleReactionChips {
+  onToggle: (emoji: string) => void;
+  onPick: (emoji: string) => void;
+  who?: ReactionChipsProps['who'];
+  /** Phone long-press on a chip: the thread's own who-reacted sheet. */
+  onWho?: (emoji: string) => void;
 }
 
 /** The small "Forwarded" line above a forwarded message's body (own and incoming). */

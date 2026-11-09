@@ -68,7 +68,6 @@ function bubble(m: ThreadMessage, selectingText: boolean): ReactElement {
     layout: 'touch',
     viewerUserId: 'me',
     mentions: { peerUserId: null, onOpen: noop },
-    onBadgeClick: noop,
     selectingText,
     swipe: {},
     press: {

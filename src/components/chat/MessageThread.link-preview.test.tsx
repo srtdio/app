@@ -53,7 +53,6 @@ function bubble(body: string, mine = false): string {
         tail
         timeZone="UTC"
         layout="touch"
-        onBadgeClick={() => {}}
       />
     </MemoryRouter>,
   );

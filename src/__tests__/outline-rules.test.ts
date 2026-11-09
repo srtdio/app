@@ -94,7 +94,6 @@ const OUTLINE_NONE_ALLOW: ReadonlyMap<string, string> = new Map([
     'ui/HeaderBar.tsx',
     'the bar h1 (routeFocus) and a panel title column (titleProps tabIndex -1) take programmatic focus only',
   ],
-  ['chat/EmojiPicker.tsx', 'the search input: its label well draws focus-within:lit-focus'],
   ['chat/tasks/TaskRow.tsx', 'borderless inline title edit (CLAUDE.md text-field exception)'],
 ]);
 
@@ -431,7 +430,6 @@ describe('outline rules', () => {
 // ui/Input tone="search" (quiet well at rest; ink line, lit-focus and lift on
 // focus). Each exception with its reason.
 const SEARCH_TONE_ALLOW: ReadonlyMap<string, string> = new Map([
-  ['chat/EmojiPicker.tsx', 'a raw input inside its own label well (focus-within:lit-focus)'],
   ['cockpit/tabs.tsx', 'operator Cockpit logs search: outside the search-tone PR, follow-up'],
   ['pages/HelpPage.tsx', 'Help page search: outside the search-tone PR, follow-up'],
 ]);

@@ -69,6 +69,7 @@ import { supabase } from '@/lib/supabase';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
 import { useReactions, type ReactionsApi } from '@/lib/reactions/use-reactions';
+import { whoReactedFromRows } from '@/lib/reactions/reads';
 import type { ReactionSummary } from '@/lib/reactions/model';
 
 /** A comment shown in the thread: a recorded row, or a pending own one. */
@@ -458,6 +459,7 @@ function PlanCommentRow(props: {
   onReply: (() => void) | undefined;
   onRetry: ((id: string) => void) | undefined;
   onDiscard: ((id: string) => void) | undefined;
+  reactions: ReactionsApi;
 }): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLSpanElement>(null);
@@ -601,7 +603,20 @@ function PlanCommentRow(props: {
       }}
       {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
       {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
-      onBadgeClick={() => open(bubbleRect())}
+      reactionChips={{
+        onToggle: (emoji) => props.reactions.toggle(c.id, emoji),
+        onPick: (emoji) => props.reactions.pick(c.id, emoji),
+        who: {
+          targetId: c.id,
+          viewerId: props.me,
+          load: () =>
+            whoReactedFromRows(supabase, {
+              rows: props.reactions.rowsOf(c.id),
+              workspaceId: props.workspaceId,
+              known: (id) => props.profiles.get(id),
+            }),
+        },
+      }}
     />
   );
 }
@@ -808,6 +823,7 @@ export function PlanItemThread(props: {
               onReply={onReply}
               onRetry={props.onRetry}
               onDiscard={props.onDiscard}
+              reactions={reactions}
             />
           );
         })}

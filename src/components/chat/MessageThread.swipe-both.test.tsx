@@ -122,7 +122,6 @@ function render(
     tail: true,
     timeZone: 'UTC',
     layout: 'touch',
-    onBadgeClick: noop,
     press: {
       handlers: bubbleHandlers,
       onContextMenu: noop,

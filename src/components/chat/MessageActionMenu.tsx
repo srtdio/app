@@ -12,8 +12,6 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
-import { growFromTrigger, riseIn, trackDim } from '@/lib/motion';
-import { menuOrigin } from '@/components/ui/popover-classes';
 import { createPortal } from 'react-dom';
 import {
   ICON_SIZE,
@@ -33,24 +31,19 @@ import {
   IconTrash,
 } from '@/components/ui/icons';
 import { HeaderBar } from '@/components/ui/HeaderBar';
-import { Button } from '@/components/ui/Button';
-import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { MenuPopover } from '@/components/shell/MenuPopover';
-import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
-import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
-import { logger } from '@/lib/logger';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { DELETE_SELECTION_WINDOW_MS } from '@/lib/chat/forward';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import { cn } from '@/lib/cn';
 import { REMOVE_FILE_MENU_LABEL } from '@/lib/chat/remove-files';
-import { useModalFocus } from '@/lib/modal-focus';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
 import { REPLY_PRIVATELY, replyPrivatelyTo } from '@/lib/chat/private-reply';
 import { personFirstName } from '@/lib/person-card';
-import { errorText } from '@/lib/error-copy';
+import { AddReactionSheet } from '@/components/ui/ReactionChips';
 
 /** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
 // L9 (8 Nov 2026): ✅ replaces 👌. ✅ is a reaction only; it never means approval anywhere.
@@ -680,7 +673,7 @@ export function scrollFromPicker(target: EventTarget | null): boolean {
   return (
     typeof Element !== 'undefined' &&
     target instanceof Element &&
-    target.closest('[data-emoji-picker]') !== null
+    target.closest('[data-emoji-sheet]') !== null
   );
 }
 
@@ -708,335 +701,6 @@ export function menuClosesOnViewport(
   return kind === 'resize' || !scrollFromPicker(state.target);
 }
 
-/** The picker body's chunk (EmojiPicker.tsx plus the emoji data), loaded on demand. */
-export type EmojiPickerModule = typeof import('@/components/chat/EmojiPicker');
-
-let emojiPickerModule: EmojiPickerModule | null = null;
-let emojiPickerLoad: Promise<EmojiPickerModule> | null = null;
-
-/**
- * Start (once) loading the picker chunk; the menu calls it as it opens so "+"
- * opens with the grid ready. A failed load is forgotten so the next open
- * tries again.
- */
-export function loadEmojiPicker(
-  importer: () => Promise<EmojiPickerModule> = () => import('@/components/chat/EmojiPicker'),
-): Promise<EmojiPickerModule> {
-  emojiPickerLoad ??= importer().then(
-    (module) => {
-      emojiPickerModule = module;
-      return module;
-    },
-    (error: unknown) => {
-      emojiPickerLoad = null;
-      throw error;
-    },
-  );
-  return emojiPickerLoad;
-}
-
-/** The picker chunk when it has already arrived, else null. */
-export function loadedEmojiPicker(): EmojiPickerModule | null {
-  return emojiPickerModule;
-}
-
-/** Test seam: forget the loaded chunk. */
-export function resetEmojiPickerLoad(): void {
-  emojiPickerModule = null;
-  emojiPickerLoad = null;
-}
-
-/** The laptop popover's size (the touch sheet is 70dvh). */
-export const EMOJI_POPOVER_WIDTH = 352;
-export const EMOJI_POPOVER_HEIGHT = 400;
-
-/**
- * Where the laptop popover sits: above the anchor (the action menu) when there
- * is room, else below it, else pinned inside the viewport; aligned to the
- * anchor's left edge and kept 8px inside. Pure.
- */
-export function popoverPosition(
-  anchor: Pick<DOMRect, 'top' | 'bottom' | 'left'>,
-  viewport: { width: number; height: number },
-): { top: number; left: number } {
-  const above = anchor.top - EMOJI_POPOVER_HEIGHT - 8;
-  const below = anchor.bottom + 8;
-  const top =
-    above >= 8
-      ? above
-      : below + EMOJI_POPOVER_HEIGHT <= viewport.height - 8
-        ? below
-        : Math.max(8, viewport.height - EMOJI_POPOVER_HEIGHT - 8);
-  const left = Math.max(8, Math.min(anchor.left, viewport.width - EMOJI_POPOVER_WIDTH - 8));
-  return { top, left };
-}
-
-/** Anything focusable the picker's focus rules touch (an element, or a test fake). */
-export interface Focusable {
-  focus: (options?: FocusOptions) => void;
-}
-
-/** The picker dialog as its focus rules read it. */
-export interface PickerRoot extends Focusable {
-  querySelector: (selectors: string) => Focusable | null;
-}
-
-/**
- * Where focus lands when the picker opens: the search field on a laptop (once
- * the body has arrived), the sheet container on touch, never its search field,
- * so no keyboard pops up. Pure but for the lookup.
- */
-export function pickerInitialFocus(layout: ChatLayout, root: PickerRoot): Focusable {
-  if (layout === 'laptop') return root.querySelector('[data-emoji-search]') ?? root;
-  return root;
-}
-
-/**
- * The focus trap's Tab: the next (or previous) focusable inside the picker,
- * wrapping at either end; from outside the list (the container), the first or
- * last. Null when nothing inside can take focus. Pure.
- */
-export function nextTrapFocus<T>(
-  focusables: readonly T[],
-  active: T | null,
-  backwards: boolean,
-): T | null {
-  if (focusables.length === 0) return null;
-  const at = active === null ? -1 : focusables.indexOf(active);
-  if (at === -1) return (backwards ? focusables[focusables.length - 1] : focusables[0]) ?? null;
-  const next = (at + (backwards ? -1 : 1) + focusables.length) % focusables.length;
-  return focusables[next] ?? null;
-}
-
-/** Hand focus back to "+" when the picker closes (skipped when "+" left with the menu). */
-export function returnPickerFocus(plus: (Focusable & { isConnected: boolean }) | null): boolean {
-  if (plus === null || !plus.isConnected) return false;
-  plus.focus({ preventScroll: true });
-  return true;
-}
-
-/** The picker body's load failure line (never the raw error). */
-export const EMOJI_LOAD_FAILED = errorText('load emoji', null);
-
-/** What the picker shell shows under its frame. Pure. */
-export function pickerBodyState(
-  module: EmojiPickerModule | null,
-  failed: boolean,
-): 'ready' | 'failed' | 'loading' {
-  if (module !== null) return 'ready';
-  return failed ? 'failed' : 'loading';
-}
-
-/** The grid area when the picker chunk failed to load: the line and a 44x44 Retry. */
-export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElement {
-  return (
-    <div
-      data-emoji-failed=""
-      className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center"
-    >
-      <p className="text-base text-fg-3">{EMOJI_LOAD_FAILED}</p>
-      <Button
-        variant="ghost"
-        type="button"
-        data-emoji-retry=""
-        className="min-w-11"
-        onClick={props.onRetry}
-      >
-        Retry
-      </Button>
-    </div>
-  );
-}
-
-/**
- * The emoji picker's shell. Touch: a bottom sheet over a dim that rises
- * (riseIn, Y only, the dim tracking its position), the safe-area inset kept
- * clear. Laptop: a modal popover anchored to `anchor` that grows from it
- * (growFromTrigger). Never a fade. Both are drawn at their final size at once; the body
- * (EmojiPicker.tsx, a separate chunk) fills in when it arrives, so a "+" that
- * beats the chunk never jumps. Focus is trapped inside, lands on the search
- * field (laptop) or the sheet (touch), and returns to "+" on close. It closes
- * only on a pick (the caller), Escape, a tap on the dim or its close control.
- */
-export function EmojiPickerShell(props: {
-  open: boolean;
-  onClose: () => void;
-  onPick: (char: string) => void;
-  layout: ChatLayout;
-  /** The laptop popover's anchor (the menu's rect); ignored on touch. */
-  anchor: DOMRect | null;
-  /** The "+" that opened it: focus goes back there on close. */
-  returnFocus: RefObject<HTMLElement>;
-}): ReactElement | null {
-  const { open, onClose, layout, returnFocus } = props;
-  const [module, setModule] = useState<EmojiPickerModule | null>(loadedEmojiPicker);
-  const [failed, setFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const dimRef = useRef<HTMLButtonElement>(null);
-  const ready = module !== null;
-
-  // The chunk normally arrived while the menu was open; if not, wait for it
-  // here. A failure shows the retry line; Try again runs the import again.
-  useEffect(() => {
-    if (!open || module !== null) return;
-    let cancelled = false;
-    setFailed(false);
-    loadEmojiPicker().then(
-      (loaded) => {
-        if (!cancelled) setModule(loaded);
-      },
-      (error: unknown) => {
-        logger.warn('chat: emoji picker load failed', { error: String(error) });
-        if (!cancelled) setFailed(true);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [open, module, attempt]);
-  const retryLoad = (): void => setAttempt((n) => n + 1);
-
-  // Entrance on the first painted frame (drawn at rest; the move laid over it).
-  const anchorRef = useRef(props.anchor);
-  anchorRef.current = props.anchor;
-  useLayoutEffect(() => {
-    const el = dialogRef.current;
-    if (!open || el === null) return;
-    if (layout === 'laptop') {
-      const a = anchorRef.current;
-      growFromTrigger(
-        el,
-        menuOrigin(el, a !== null ? { x: a.left + a.width / 2, y: a.top + a.height / 2 } : null),
-      );
-      return;
-    }
-    trackDim(el, dimRef.current, riseIn(el));
-  }, [open, layout]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-      }
-    }
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [open, onClose]);
-
-  // Initial focus, and back to "+" on close.
-  useEffect(() => {
-    if (!open) return;
-    const plus = returnFocus.current;
-    return () => {
-      returnPickerFocus(plus);
-    };
-  }, [open, returnFocus]);
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!open || dialog === null) return;
-    // Laptop: once the body arrives the search field takes focus from the shell.
-    const active = document.activeElement;
-    if (
-      active !== null &&
-      active !== document.body &&
-      active !== dialog &&
-      dialog.contains(active)
-    ) {
-      return;
-    }
-    pickerInitialFocus(layout, dialog).focus({ preventScroll: true });
-  }, [open, ready, failed, layout]);
-  // FB2: the picker is a modal layer in X1's focus stack: Tab stays inside
-  // (only the top layer traps). Its own effect above already placed focus
-  // inside and returnPickerFocus hands it back to "+".
-  useModalFocus(dialogRef, open);
-
-  if (!open) return null;
-
-  const close = (
-    // Dismiss is the ghost "Clear" text Button (44 tall), never an X.
-    <Button
-      type="button"
-      variant="ghost"
-      aria-label="Close emoji picker"
-      data-emoji-close=""
-      className="shrink-0 px-3"
-      onClick={onClose}
-    >
-      Clear
-    </Button>
-  );
-  const body =
-    module !== null ? (
-      <module.EmojiPickerPanel onPick={props.onPick} layout={layout} trailing={close} />
-    ) : (
-      // The body's own rows at their own heights, empty until the chunk lands.
-      <>
-        <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
-          <div
-            aria-hidden="true"
-            className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 lit-well"
-          />
-          {close}
-        </div>
-        <div aria-hidden="true" className="h-11 shrink-0 border-b border-border lit-well" />
-        {failed ? (
-          <EmojiPickerLoadFailed onRetry={retryLoad} />
-        ) : (
-          <div data-emoji-loading="" className="min-h-0 flex-1" />
-        )}
-      </>
-    );
-  const dialogProps = {
-    ref: dialogRef,
-    role: 'dialog',
-    'aria-label': 'Emoji picker',
-    'aria-modal': true,
-    'aria-busy': pickerBodyState(module, failed) === 'loading',
-    tabIndex: -1,
-  } as const;
-
-  if (layout === 'laptop') {
-    const position = props.anchor !== null ? popoverPosition(props.anchor, viewportSize()) : null;
-    return createPortal(
-      <>
-        <div data-emoji-dismiss="" className="fixed inset-0 z-dialog" onClick={onClose} />
-        <div
-          {...dialogProps}
-          data-emoji-picker="laptop"
-          className="fixed z-dialog flex h-emoji w-emoji max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
-          style={{ top: position?.top ?? 8, left: position?.left ?? 8 }}
-        >
-          {body}
-        </div>
-      </>,
-      document.body,
-    );
-  }
-  return createPortal(
-    <div data-emoji-dismiss="" className="fixed inset-0 z-dialog">
-      <Backdrop
-        ref={dimRef}
-        aria-label="Close emoji picker"
-        onClick={onClose}
-        position="absolute"
-      />
-      <div
-        {...dialogProps}
-        data-emoji-picker="touch"
-        onClick={(e) => e.stopPropagation()}
-        className="absolute inset-x-0 bottom-0 flex h-[70dvh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay focus:outline-none"
-      >
-        {body}
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 /**
  * The message action menu, opened by long-press (touch), right-click, the
  * hover ⋯ control (pointer devices) or Enter / Space on a focused bubble. The
@@ -1055,17 +719,8 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const pickingRef = useRef(false);
   pickingRef.current = picking;
   const moreRef = useRef<HTMLButtonElement>(null);
-  const layout = useChatLayout();
   // Laptop: how far the popover lifts so its bottom stays on screen.
   const [lift, setLift] = useState(0);
-
-  // The picker's chunk starts loading as the menu opens, so "+" opens it ready.
-  useEffect(() => {
-    if (!open || loadedEmojiPicker() !== null) return;
-    loadEmojiPicker().catch((error: unknown) =>
-      logger.warn('chat: emoji picker preload failed', { error: String(error) }),
-    );
-  }, [open]);
 
   useEffect(() => {
     if (open) return;
@@ -1239,13 +894,11 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     </div>
   );
 
+  // "+": the one emoji drawer (ui/EmojiSheet) titled "Add reaction".
   const picker = active ? (
-    <EmojiPickerShell
+    <AddReactionSheet
       open={picking}
       onClose={() => setPicking(false)}
-      layout={layout}
-      returnFocus={moreRef}
-      anchor={containerRef.current?.getBoundingClientRect() ?? anchor}
       onPick={(emoji) =>
         pickReaction(emoji, {
           onReact,

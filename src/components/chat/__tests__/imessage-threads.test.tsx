@@ -92,7 +92,6 @@ function bubble(
       tail
       timeZone="UTC"
       layout="touch"
-      onBadgeClick={() => {}}
       threadMember={opts.member ?? false}
       rail={opts.rail}
       {...(opts.selecting === true
@@ -173,10 +172,13 @@ describe('member rows on the rail', () => {
     expect(out).not.toContain('Quoted text');
   });
 
-  it('a reaction badge row keeps its room as padding on the rail (no gap between rows)', () => {
+  it('a reacted row on the rail: chips in the row (no badge room), the rail runs through', () => {
     const reacted = { ...memberRow, reactions: [{ emoji: '👍', count: 1, mine: false }] };
-    expect(bubble(reacted, { member: true, rail: railFor('middle', {}) })).toContain('pb-6');
-    expect(bubble(reacted)).toContain('mb-6');
+    const onRail = bubble(reacted, { member: true, rail: railFor('middle', {}) });
+    expect(onRail).toContain('data-reaction-chips');
+    expect(onRail).toContain('data-rail="through"');
+    expect(onRail).not.toContain('pb-6');
+    expect(bubble(reacted)).not.toContain('mb-6');
   });
 
   it('an own row keeps its place and reaches across in CSS', () => {

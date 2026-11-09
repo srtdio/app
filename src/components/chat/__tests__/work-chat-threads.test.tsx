@@ -93,7 +93,6 @@ function bubbleHtml(
       timeZone: 'UTC',
       layout: 'touch',
       viewerUserId: 'me',
-      onBadgeClick: () => {},
     }),
   );
 }

@@ -46,12 +46,13 @@ describe('X7 FB2: modal chat pages own focus', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  it('Contact and Group info pages are ModalPanels; thread view and drawer use useModalFocus', () => {
+  it('Contact and Group info pages are ModalPanels; thread view uses useModalFocus, the drawer is a Sheet', () => {
     expect(source('../ContactSheet.tsx')).toContain('<ModalPanel');
     expect(source('../GroupInfoSheet.tsx')).toContain('<ModalPanel');
     expect(source('../ThreadView.tsx')).toContain('useModalFocus(rootRef, true');
     expect(source('../StatusTicker.tsx')).toContain('useModalFocus(panelRef,');
-    expect(source('../MessageActionMenu.tsx')).toContain('useModalFocus(dialogRef, open)');
+    // The reaction drawer is ui/EmojiSheet on ui/Sheet (its own modal focus).
+    expect(source('../MessageActionMenu.tsx')).toContain('<AddReactionSheet');
     expect(source('../MessageActionMenu.tsx')).not.toContain('onKeyDown: trapTab');
   });
 });
