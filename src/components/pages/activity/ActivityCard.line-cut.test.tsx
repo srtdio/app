@@ -48,9 +48,10 @@ describe('cutLine (pure)', () => {
 
   it('strips trailing punctuation before the marker', () => {
     const text = 'one, two, three, four, five, six, seven, eight, nine, ten';
+    // "one, two, three, four" + "… more" is 27 > 26: three words fit, the comma goes.
     const cut = cutLine(text, fitsBy(26, text));
     expect(cut?.endsWith(',')).toBe(false);
-    expect(cut).toBe('one, two, three, four');
+    expect(cut).toBe('one, two, three');
   });
 
   it('hiding only 1-2 words shows the text in full', () => {

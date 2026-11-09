@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/ListCard';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
-import { textRole } from '@/components/ui/Text';
+import { TEXT_ROLE, textRole } from '@/components/ui/Text';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail } from '@/components/media';
@@ -443,6 +443,9 @@ export function itemCardLines(group: readonly ActivityItem[]): ActivityItem[] {
 /** A no-break space: "… more" and the time never split across lines. */
 const NBSP = '\u00a0';
 
+/** The secondary role without its one-line truncate: the line wraps to 3 lines. */
+const LINE_BODY_ROLE = TEXT_ROLE.secondary.replace(/\btruncate\b/, '').trim();
+
 /** Lines a notification's text shows before "… more" (9 Nov 2026). */
 export const LINE_MAX_LINES = 3;
 
@@ -595,7 +598,7 @@ function EntryLine(props: {
       <p
         ref={ref}
         data-activity-line-body=""
-        className={textRole('secondary', 'min-w-0 flex-1 break-words text-fg-2')}
+        className={cn(LINE_BODY_ROLE, 'min-w-0 flex-1 break-words text-fg-2')}
       >
         <span
           aria-hidden="true"
