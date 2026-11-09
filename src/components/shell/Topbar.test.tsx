@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react';
 // The unit env is `node` with no DOM, so Topbar is invoked as a plain function
 // and its element tree walked (the SectionHeader/SortMenu test style in this
 // codebase). Topbar holds no hooks, so no renderer is needed.
-import { Topbar } from '@/components/shell/Topbar';
+import { WorkspaceNameText, Topbar } from '@/components/shell/Topbar';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Button } from '@/components/ui/Button';
 
@@ -85,7 +85,9 @@ describe('Topbar mobile workspace switcher', () => {
     expect(className(button)).toContain('md:hidden');
     // Touch target invariant: the tap area is at least 44px tall.
     expect(className(button)).toContain('min-h-11');
-    expect(texts(button)).toContain('Acme');
+    // The name rides WorkspaceNameText (one line beside Activity's pair).
+    const name = findAll(button, (el) => el.type === WorkspaceNameText)[0];
+    expect((name?.props as { name?: string } | undefined)?.name).toBe('Acme');
     // The name is bounded so search / avatar stay on a 375px screen.
     expect(className(button)).toMatch(/\bmax-w-48\b/);
   });

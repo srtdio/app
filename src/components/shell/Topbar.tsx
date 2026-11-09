@@ -59,6 +59,30 @@ export function TopbarSlots() {
   );
 }
 
+/**
+ * The phone's workspace name text. "<Brand> - <Platform>" can outgrow one
+ * line: it wraps to two short lines at word breaks. Beside Activity's Threads
+ * | Catch up pair (10 Nov 2026) it is one line instead, cut with an ellipsis
+ * but never under its first 8 characters (min-w-20; layout check 15 measures
+ * it at 390 and 375). Every other tab is unchanged. Its own component so
+ * Topbar itself stays hookless.
+ */
+export function WorkspaceNameText({ name }: { name: string }) {
+  const pair = useTopbarActionsValue().pair;
+  const withPair = pair !== undefined && pair !== null;
+  return (
+    <span
+      data-topbar-workspace-name=""
+      className={textRole(
+        'title',
+        withPair ? 'min-w-20 truncate' : 'min-w-0 line-clamp-2 break-words',
+      )}
+    >
+      {name}
+    </span>
+  );
+}
+
 interface TopbarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
   workspaceName: string | null;
@@ -125,11 +149,7 @@ export function Topbar({
           // starts on the 16 edge (the box is pulled out by its own inset).
           className="md:hidden -ml-4 min-w-0 max-w-48 text-left"
         >
-          {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
-              short lines at word breaks instead of clipping the platform. */}
-          <span className={textRole('title', 'min-w-0 line-clamp-2 break-words')}>
-            {workspaceName}
-          </span>
+          <WorkspaceNameText name={workspaceName} />
           <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
         </Button>
       )}

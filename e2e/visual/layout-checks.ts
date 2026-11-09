@@ -1965,6 +1965,11 @@ export function assertActivityTwinsPlan(
 // viewport (the workspace name truncates first).
 export const ACTIVITY_PAIR_W_PX = 112;
 export const ACTIVITY_PAIR_H_PX = 44;
+/** Below sm the pair goes icon + count: one fixed 56 x 44 box each (10 Nov 2026). */
+export const ACTIVITY_PAIR_COMPACT_W_PX = 56;
+export const ACTIVITY_PAIR_COMPACT_BELOW_PX = 640;
+/** The workspace name beside the pair keeps at least this many characters. */
+export const ACTIVITY_NAME_MIN_CHARS = 8;
 export const ACTIVITY_PAIR_GAP_PX = 8;
 
 interface PairBox {
@@ -2032,13 +2037,12 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
       ['Threads', threads],
       ['Catch up', catchUp],
     ] as const) {
-      if (
-        Math.abs(b.width - ACTIVITY_PAIR_W_PX) > 0.01 ||
-        Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01
-      ) {
-        out.push(
-          `${name} is ${b.width}x${b.height}, not the fixed ${ACTIVITY_PAIR_W_PX}x${ACTIVITY_PAIR_H_PX}`,
-        );
+      const wantW =
+        got.viewport < ACTIVITY_PAIR_COMPACT_BELOW_PX
+          ? ACTIVITY_PAIR_COMPACT_W_PX
+          : ACTIVITY_PAIR_W_PX;
+      if (Math.abs(b.width - wantW) > 0.01 || Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01) {
+        out.push(`${name} is ${b.width}x${b.height}, not the fixed ${wantW}x${ACTIVITY_PAIR_H_PX}`);
       }
       if (b.radius !== '8px') out.push(`${name} radius ${b.radius}, not 8px`);
       if (b.x + b.width > got.viewport + 0.5) out.push(`${name} ends past the viewport`);
@@ -2059,6 +2063,83 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
   if (got.scrollWidth > got.viewport) {
     out.push(`the page scrolls sideways (${got.scrollWidth} > ${got.viewport})`);
   }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/**
+ * Check 15, narrow phones (10 Nov 2026): at 390 and 375 wide, Activity's top
+ * bar fits. The workspace name shows at least its first 8 characters (then
+ * the ellipsis), Threads and Catch up are the icon + count boxes (56 x 44,
+ * one size), nothing overlaps and nothing scrolls sideways. Restores the
+ * viewport it found.
+ */
+export async function assertActivityTopbarNarrow(page: Page, screenName: string): Promise<void> {
+  const before = page.viewportSize();
+  const out: string[] = [];
+  for (const width of [390, 375]) {
+    await page.setViewportSize({ width, height: before?.height ?? 844 });
+    await page.waitForTimeout(100);
+    const got = await page.evaluate((minChars) => {
+      const name = document.querySelector('header [data-topbar-workspace-name]');
+      const boxes = ['[data-topbar-threads]', '[data-topbar-catch-up]'].map((sel) => {
+        const el = document.querySelector(`header ${sel}`);
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, width: r.width, height: r.height };
+      });
+      let shownChars = 0;
+      let nameRight = 0;
+      if (name !== null && name.firstChild !== null) {
+        const box = name.getBoundingClientRect();
+        nameRight = box.right;
+        const text = name.firstChild;
+        const total = (text.textContent ?? '').length;
+        const range = document.createRange();
+        for (let i = 1; i <= total; i += 1) {
+          range.setStart(text, 0);
+          range.setEnd(text, i);
+          if (range.getBoundingClientRect().right <= box.right + 0.5) shownChars = i;
+          else break;
+        }
+        if (total < minChars) shownChars = Math.max(shownChars, minChars);
+      }
+      return {
+        hasName: name !== null,
+        shownChars,
+        nameRight,
+        boxes,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewport: window.innerWidth,
+      };
+    }, ACTIVITY_NAME_MIN_CHARS);
+    const at = `${width} wide`;
+    if (!got.hasName) out.push(`${at}: no workspace name ([data-topbar-workspace-name])`);
+    else if (got.shownChars < ACTIVITY_NAME_MIN_CHARS) {
+      out.push(
+        `${at}: the workspace name shows ${got.shownChars} characters, under ${ACTIVITY_NAME_MIN_CHARS}`,
+      );
+    }
+    const [threads, catchUp] = got.boxes;
+    if (threads == null || catchUp == null) out.push(`${at}: no Threads | Catch up pair`);
+    else {
+      for (const b of [threads, catchUp]) {
+        if (
+          Math.abs(b.width - ACTIVITY_PAIR_COMPACT_W_PX) > 0.01 ||
+          Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01
+        ) {
+          out.push(
+            `${at}: a pair box is ${b.width}x${b.height}, not ${ACTIVITY_PAIR_COMPACT_W_PX}x${ACTIVITY_PAIR_H_PX}`,
+          );
+        }
+      }
+      if (got.nameRight > threads.left + 0.5) out.push(`${at}: the name runs under Threads`);
+    }
+    if (got.scrollWidth > got.viewport) out.push(`${at}: the page scrolls sideways`);
+  }
+  if (before !== null) await page.setViewportSize(before);
   settleFindings(
     screenName,
     out.map((message) => ({ check: 'topbar' as const, message })),

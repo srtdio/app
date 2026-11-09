@@ -197,6 +197,34 @@ describe('taps and the long-press', () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
+  it('Catch up at 0: greyed (aria-disabled), no action, the same box; above 0 it opens', async () => {
+    const open = vi.fn();
+    await mount(<CatchUpButton count={0} armed onOpen={open} onMarkAllRead={() => undefined} />);
+    expect(catchUp()?.getAttribute('aria-disabled')).toBe('true');
+    expect(catchUp()?.className).toContain('w-28');
+    act(() => catchUp()?.click());
+    expect(open).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="status"]')).toBeNull();
+    await mount(<CatchUpButton count={3} armed onOpen={open} onMarkAllRead={() => undefined} />);
+    expect(catchUp()?.hasAttribute('aria-disabled')).toBe(false);
+    act(() => catchUp()?.click());
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('the count pill is CountBadge tone on-fill, no placement class', async () => {
+    await mount(<ThreadsButton count={4} armed onOpen={() => undefined} />);
+    const pill = threads()?.querySelector('[data-count-badge]');
+    expect(pill?.getAttribute('data-count-badge')).toBe('on-fill');
+    expect(pill?.className).toContain('bg-accent-fg');
+    expect(pill?.className).toContain('text-accent');
+  });
+
+  it('phones: label hides, icon shows (icon + count, 56 wide)', async () => {
+    await mount(<ThreadsButton count={4} armed onOpen={() => undefined} />);
+    expect(threads()?.className).toContain('max-sm:w-14');
+    expect(threads()?.querySelector('svg')?.getAttribute('class') ?? '').toContain('max-sm:block');
+  });
+
   it('long-press Catch up: one row, Mark all as read, which marks all (no open)', async () => {
     vi.useFakeTimers();
     const open = vi.fn();

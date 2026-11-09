@@ -22,7 +22,13 @@ import {
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { IconPlus, IconTickDouble, ICON_SIZE } from '@/components/ui/icons';
+import {
+  IconActivity,
+  IconPlus,
+  IconReply,
+  IconTickDouble,
+  ICON_SIZE,
+} from '@/components/ui/icons';
 import { useOptionalToast } from '@/components/ui/toast';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { CATCH_UP } from '@/lib/catch-up/copy';
@@ -182,15 +188,13 @@ export function TopbarPlus({
 // centred. The workspace name truncates first; these never truncate. Only
 // Activity publishes them, so no other tab's bar moves.
 
-/** Threads' and Catch up's one box: fixed width, the same 1px border on both levels. */
-export const ACTIVITY_TOPBAR_BOX = 'relative w-28 shrink-0 border px-2';
-
 /**
- * The count pill (ui/CountBadge, 99+ cap) sits on the ink fill, so it takes
- * the fill's own colours inverted (ink-on-white in light, white-on-ink in
- * dark). Its 28 slot (min-w-7) holds "99+", so the box never grows.
+ * Threads' and Catch up's one box: fixed width, the same 1px border on both
+ * levels. Below sm (every phone) the full pair, search, avatar and the
+ * workspace name's first 8 characters cannot all fit (they need about 480),
+ * so the boxes go icon + count only, one fixed 56 x 44 box each.
  */
-export const ACTIVITY_TOPBAR_COUNT_ON_FILL = 'bg-accent-fg text-accent tabular-nums';
+export const ACTIVITY_TOPBAR_BOX = 'relative w-28 shrink-0 border px-2 max-sm:w-14 max-sm:px-1';
 
 /** The pulse: the ring scales out and back, 3 times, 1.4 s each (wipe + slow beats). */
 export const PULSE_CYCLE_MS = DUR_WIPE_MS + DUR_SLOW_MS;
@@ -284,13 +288,28 @@ interface PairButtonProps {
   armed: boolean;
   onClick: () => void;
   data: 'threads' | 'catch-up';
+  /** The phone (icon + count) form's glyph. */
+  icon: typeof IconReply;
+  /** At 0: greyed (aria-disabled), no action; the 44 target stays. */
+  dimAtZero?: boolean | undefined;
   gesture?: ReturnType<typeof useMenuGesture> | undefined;
 }
 
 /** One of the pair: the box, the label, the count pill (> 0) and the pulse ring. */
-function PairButton({ label, ariaLabel, count, armed, onClick, data, gesture }: PairButtonProps) {
+function PairButton({
+  label,
+  ariaLabel,
+  count,
+  armed,
+  onClick,
+  data,
+  icon: Icon,
+  dimAtZero,
+  gesture,
+}: PairButtonProps) {
   const ring = usePulseOnRise(count, armed);
   const on = count > 0;
+  const dim = !on && dimAtZero === true;
   return (
     <Button
       type="button"
@@ -298,6 +317,7 @@ function PairButton({ label, ariaLabel, count, armed, onClick, data, gesture }: 
       aria-label={ariaLabel}
       {...(data === 'threads' ? { 'data-topbar-threads': '' } : { 'data-topbar-catch-up': '' })}
       data-count={count}
+      {...(dim ? { 'aria-disabled': 'true' as const } : {})}
       {...(gesture !== undefined ? gesture.handlers : {})}
       onClick={() => {
         if (gesture?.consumeClickSuppression() === true) return;
@@ -305,7 +325,7 @@ function PairButton({ label, ariaLabel, count, armed, onClick, data, gesture }: 
       }}
       className={cn(
         ACTIVITY_TOPBAR_BOX,
-        on ? 'border-transparent' : 'border-border-strong text-fg',
+        on ? 'border-transparent' : dim ? 'border-border-strong' : 'border-border-strong text-fg',
       )}
     >
       <span
@@ -314,14 +334,15 @@ function PairButton({ label, ariaLabel, count, armed, onClick, data, gesture }: 
         data-topbar-pulse=""
         className="pointer-events-none absolute -inset-px scale-0 rounded-lg border border-fg"
       />
-      <span className="shrink-0 whitespace-nowrap">{label}</span>
+      <span className="shrink-0 whitespace-nowrap max-sm:hidden">{label}</span>
+      <Icon size={ICON_SIZE.control} className="hidden shrink-0 max-sm:block" />
       {on ? (
         <span
           aria-hidden="true"
           data-topbar-count=""
           className="inline-flex min-w-7 justify-center"
         >
-          <CountBadge count={count} className={ACTIVITY_TOPBAR_COUNT_ON_FILL} />
+          <CountBadge tone="on-fill" count={count} />
         </span>
       ) : null}
     </Button>
@@ -341,6 +362,7 @@ export function ThreadsButton(props: {
       count={props.count}
       armed={props.armed}
       data="threads"
+      icon={IconReply}
       onClick={() => {
         if (props.count > 0) props.onOpen();
       }}
@@ -377,6 +399,8 @@ export function CatchUpButton(props: {
         count={props.count}
         armed={props.armed}
         data="catch-up"
+        icon={IconActivity}
+        dimAtZero
         gesture={gesture}
         onClick={() => {
           if (props.count > 0) props.onOpen();

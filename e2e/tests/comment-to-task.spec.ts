@@ -87,14 +87,14 @@ test('an agency member turns a comment into a task for Me @theme', async ({ page
   seed(network);
   await openPost(page);
 
-  // The bar is always shown: Reply, Resolve, To-do on someone else's comment;
+  // The bar is always shown: Add reaction, Reply, Resolve, To-do on someone else's comment;
   // no Copy, no Reply privately, no role label, no ⋯.
   const bar = barOf(page);
   await expect(bar).toBeVisible();
   const names = await bar
     .locator('button')
     .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? ''));
-  expect(names).toEqual(['Reply', 'Resolve', 'To-do']);
+  expect(names).toEqual(['Add reaction', 'Reply', 'Resolve', 'To-do']);
   await expect(rowOf(page).locator('[data-row-action="copy"]')).toHaveCount(0);
   await expect(rowOf(page).getByRole('button', { name: 'Reply privately' })).toHaveCount(0);
 

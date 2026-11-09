@@ -7,6 +7,7 @@ import {
 } from '../fixtures/harness-routes';
 import {
   assertActivityTopbarPair,
+  assertActivityTopbarNarrow,
   assertCommentBars,
   assertCommentTray,
   assertThreadHeader,
@@ -6966,7 +6967,13 @@ SCREENS.push(
       await activityReady(page);
       await activityPairAt(page, { threads: 'on', catchUp: 0 });
     },
-    after: async (page) => assertActivityTopbarPair(page, 'activity-threads-new'),
+    after: async (page) => {
+      await assertActivityTopbarPair(page, 'activity-threads-new');
+      // Narrow phones (390, 375): the name keeps 8 characters, the pair goes icon + count.
+      if ((page.viewportSize()?.width ?? 0) < 768) {
+        await assertActivityTopbarNarrow(page, 'activity-threads-new');
+      }
+    },
   },
   {
     // Catch up's long-press (phone) / right-click (laptop): one row, Mark all

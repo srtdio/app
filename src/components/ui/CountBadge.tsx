@@ -4,8 +4,12 @@ import { pop, rollDigit, widenBadge } from '@/lib/motion';
 
 type CountBadgeProps =
   | {
-      /** 'unread' (default): the accent pill for unread or pending counts. */
-      tone?: 'unread';
+      /**
+       * 'unread' (default): the accent pill for unread or pending counts.
+       * 'on-fill': the same pill on an ink (primary) fill, its colours
+       * inverted (Activity's Threads and Catch up buttons, 10 Nov 2026).
+       */
+      tone?: 'unread' | 'on-fill';
       count: number;
       /** Placement only (the nav's absolute corner and panel ring); never size or colour. */
       className?: string;
@@ -22,6 +26,9 @@ type CountBadgeProps =
 
 const UNREAD_CLASS =
   'lit-badge inline-flex h-5 min-w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent px-1 text-xs font-semibold text-accent-fg';
+/** 'on-fill': the unread pill's colours inverted, to sit on a primary (ink) fill. */
+const ON_FILL_CLASS =
+  'lit-badge inline-flex h-5 min-w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-fg px-1 text-xs font-semibold tabular-nums text-accent';
 const SECTION_CLASS =
   'lit-pill inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border border-border-strong bg-panel-2 px-2 text-center font-mono text-sm font-medium tabular-nums text-fg';
 
@@ -55,10 +62,24 @@ export function CountBadge(props: CountBadgeProps) {
       </span>
     );
   }
-  return <UnreadBadge count={props.count} className={props.className} />;
+  return (
+    <UnreadBadge
+      count={props.count}
+      className={props.className}
+      onFill={props.tone === 'on-fill'}
+    />
+  );
 }
 
-function UnreadBadge({ count, className }: { count: number; className?: string | undefined }) {
+function UnreadBadge({
+  count,
+  className,
+  onFill,
+}: {
+  count: number;
+  className?: string | undefined;
+  onFill: boolean;
+}) {
   const badge = useRef<HTMLSpanElement>(null);
   const digits = useRef<HTMLSpanElement>(null);
   // The count at the last commit, and whether it has changed since mount.
@@ -90,7 +111,11 @@ function UnreadBadge({ count, className }: { count: number; className?: string |
   if (!(count > 0)) return null;
   const text = countBadgeText(count);
   return (
-    <span ref={badge} data-count-badge="" className={cn(UNREAD_CLASS, className)}>
+    <span
+      ref={badge}
+      data-count-badge={onFill ? 'on-fill' : ''}
+      className={cn(onFill ? ON_FILL_CLASS : UNREAD_CLASS, className)}
+    >
       {changed.current ? (
         <span ref={digits} className="inline-block">
           {text}
