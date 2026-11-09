@@ -271,14 +271,23 @@ async function vitest(args: string[]): Promise<StepResult> {
     ...new Set([...plain.matchAll(/^\s*FAIL\s+(\S+\.test\.tsx?)/gm)].map((m) => m[1] ?? '')),
   ].filter((f) => f !== '');
   if (failed.length === 0 || /Test Files\s+.*failed/.test(plain) === false) return first;
-  const again = await run('vitest (failed files alone)', bin('vitest'), ['run', ...failed]);
+  // Each failed file alone: a load timeout clears, a real failure stays and is
+  // named on its own (one real failure no longer hides a load-only one).
+  const alone = await Promise.all(
+    failed.map((f) => run(`vitest ${f} (alone)`, bin('vitest'), ['run', f])),
+  );
+  const real = alone.filter((r) => !r.ok);
+  const cleared = failed.filter((_, i) => alone[i]?.ok === true);
   return {
-    name: again.ok ? `vitest ${args[0]} (re-ran ${failed.length} alone)` : first.name,
-    ok: again.ok,
-    ms: first.ms + again.ms,
-    output: again.ok
-      ? `passed alone after a timeout under load: ${failed.join(' ')}`
-      : `${first.output}\n${again.output}`,
+    name: `vitest ${args[0]} (re-ran ${failed.length} alone, ${real.length} still fail)`,
+    ok: real.length === 0,
+    ms: first.ms + Math.max(0, ...alone.map((r) => r.ms)),
+    output: [
+      cleared.length > 0 ? `passed alone (load timeouts): ${cleared.join(' ')}` : '',
+      ...real.map((r) => r.output),
+    ]
+      .filter((s) => s !== '')
+      .join('\n'),
   };
 }
 
