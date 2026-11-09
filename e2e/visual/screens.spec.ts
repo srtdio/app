@@ -16,9 +16,11 @@ import {
   assertSameWidth,
   assertTopbarSlotsStill,
   assertWritingBox,
+  assertAlignment,
   assertCatchUpLayout,
   checkCatchUpComposer,
   checkLayout,
+  type AlignScope,
   readTopbarSlots,
 } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
@@ -815,11 +817,26 @@ function seedCatchUp(network: HarnessNetwork, opts: { mention?: boolean } = {}):
  * 5 lines + "+3 more"): the many-comments seed with its 42 oldest entries
  * dropped (its comments stay; Activity reads the entries).
  */
+/** Long comments (9 Nov 2026): one past 3 lines at every width, one just past 3 on a phone. */
+const LONG_COMMENT =
+  'Can we swap the hero photo for the warmer one from Tuesday, move the price line under the ' +
+  'headline, tighten the caption so it fits on two lines, and check the logo size on every ' +
+  'slide before this goes out? The second slide still reads a little busy to me.';
+const MID_COMMENT =
+  'The second slide still reads a little busy: could we drop the badge and give the product ' +
+  'shot more room on the left?';
+
 function seedEightComments(network: HarnessNetwork): void {
   seedCatchUpManyComments(network, NOW);
   const t = network.world.tables;
   const all = t.inbox_entries ?? [];
   t.inbox_entries = [...all.slice(0, all.length - 50), ...all.slice(all.length - 8)];
+  // Short AND long comments: the newest is long, the third newest mid length.
+  const comments = t.comments ?? [];
+  const newest = comments[comments.length - 1];
+  const third = comments[comments.length - 3];
+  if (newest !== undefined) newest.body = LONG_COMMENT;
+  if (third !== undefined) third.body = MID_COMMENT;
 }
 
 /**
@@ -1659,6 +1676,20 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 9 Nov 2026: a long comment's line unfolded in place ("… more" tapped,
+    // " less" shows; nothing navigates).
+    name: 'activity-line-more-open',
+    seed: creator,
+    extra: (network) => seedEightComments(network),
+    url: '/activity',
+    steps: async (page) => {
+      await waitFor([page.locator('[data-activity-line-more="more"]').first()], '… more');
+      await tap([page.locator('[data-activity-line-more="more"]').first()], '… more');
+      await waitFor([page.locator('[data-activity-line-more="less"]')], 'less');
+      await expect(page).toHaveURL(/\/activity/);
+    },
+  },
+  {
     // A chat thread card with replies: the mention's thread (root, replies,
     // the New line at the reply that mentions me).
     name: 'catch-up-thread-mention',
@@ -2050,6 +2081,60 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await waitFor([page.locator('[data-catch-up] [data-catch-up-card]')], 'catch up card');
       await waitFor([page.locator('[data-catch-up-error]')], 'card error');
+    },
+  },
+  {
+    // 9 Nov 2026: the one thread strip with replies ("4 replies", ink), the
+    // keys on the right; the root 12 over it, the replies 8 under it.
+    name: 'chat-thread-replies',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button')],
+        'replies row',
+      );
+      await waitFor([page.locator('[data-thread-view] [data-thread-strip="replies"]')], 'strip');
+    },
+  },
+  {
+    // Catch up's thread view with no replies: the shared strip reads "Reply
+    // in thread"; a tap focuses the reply box (checked after the shot).
+    name: 'catch-up-thread-empty',
+    seed: creator,
+    extra: (network) => seedCatchUpChatMain(network, NOW),
+    url: `/activity?catchup=${CU_CHAT_MAIN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-open-thread]').first()], 'open thread');
+      await waitFor([page.locator('[data-catch-up-thread] [data-thread-strip="empty"]')], 'strip');
+    },
+    after: async (page) => {
+      await page.locator('[data-thread-strip-focus]').click();
+      const focused = await page.evaluate(
+        () => document.activeElement?.closest('[data-catch-up-thread-reply]') !== null,
+      );
+      expect(focused, 'Reply in thread focuses the reply box').toBe(true);
+    },
+  },
+  {
+    // Catch up's thread view with replies: the shared strip "4 replies".
+    name: 'catch-up-thread-replies',
+    seed: creator,
+    extra: (network) => seedCatchUpGroupMain(network, NOW),
+    url: `/activity?catchup=${CU_GROUP_MAIN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-replies]', { hasText: '4 replies' })], '4 replies');
+      await waitFor(
+        [page.locator('[data-catch-up-thread] [data-thread-strip="replies"]')],
+        'strip',
+      );
+      await waitFor(
+        [page.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
+        'replies',
+      );
     },
   },
   {
@@ -6145,6 +6230,10 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   // A writing box screen: the row's keys are 44 tall, the send ends inside the box.
   if (WRITING_BOX_SCREENS.has(screen.name)) await assertWritingBox(page, screen.name);
   await checkLayout(page, screen.name);
+  // Alignment (CLAUDE.md, 9 Nov 2026): one text column, one right edge, hung
+  // photos, text off hairlines; measured on the screens that carry them.
+  const align = ALIGN_SCREENS[screen.name];
+  if (align !== undefined) await assertAlignment(page, screen.name, align);
   // A catch-up screen: 44 hits (bar keys 48), checkpoint circles on their
   // first line, no overlapping rows, the card on its own surface (check 13).
   if (screen.name.startsWith('catch-up-')) await assertCatchUpLayout(page, screen.name);
@@ -6159,6 +6248,19 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await screen.after?.(page);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
+
+// Check 14 (alignment rules 1, 2, 3, 5): the screens and the family each measures.
+const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
+  'activity-grouped-folded': 'activity',
+  'activity-grouped-unfolded': 'activity',
+  'activity-line-more-open': 'activity',
+  'chat-thread-screen': 'chat-thread',
+  'chat-thread-view-divider': 'chat-thread',
+  'chat-thread-replies': 'chat-thread',
+  'catch-up-thread-full': 'catch-up-thread',
+  'catch-up-thread-empty': 'catch-up-thread',
+  'catch-up-thread-replies': 'catch-up-thread',
+};
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
 // list, Activity, the Plan tab and its Bank): checkLayout's list-card rule
@@ -6327,6 +6429,11 @@ const LAPTOP_DARK_SCREENS = new Set([
   'catch-up-not-sent',
   'catch-up-error',
   'chat-thread-view-divider',
+  // Alignment, one thread strip, Activity lines (9 Nov 2026): phone and laptop, light and dark.
+  'activity-line-more-open',
+  'chat-thread-replies',
+  'catch-up-thread-empty',
+  'catch-up-thread-replies',
   // One search, the top bar and the chip row (decisions A to F): phone and
   // laptop, light and dark. The top bar of the six list screens is shot on
   // their base screens above (pipeline, briefs-approver, assets, plan-tab,

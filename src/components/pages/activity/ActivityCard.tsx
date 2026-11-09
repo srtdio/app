@@ -1,7 +1,15 @@
 import { stripFormat } from '@srtdio/comments';
 import { itemIn, itemOut, rememberCard, useMoveOnMount, usePresence } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
-import { useId, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
+import {
+  useId,
+  useLayoutEffect,
+  useState,
+  type ComponentType,
+  type MouseEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import {
   ListCard,
@@ -432,11 +440,113 @@ export function itemCardLines(group: readonly ActivityItem[]): ActivityItem[] {
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
+/** Lines a notification's text shows before "… more" (9 Nov 2026). */
+export const LINE_MAX_LINES = 3;
+
+/** "… more" hides fewer than this many words: the line shows in full instead. */
+const MIN_HIDDEN_WORDS = 3;
+
+/** Trailing punctuation a cut drops before "…". */
+const CUT_TRAIL = /[\s.,;:!?…\-–(\[{'"]+$/u;
+
 /**
- * One notification's line (44 tall, on the head's title column): a small
- * photo, the actor, the Activity line without the name, the time, the unread
- * dot. Read lines are muted with no dot. A tap opens ITS spot and marks only
- * it read.
+ * Where a line's text is cut (9 Nov 2026): null when the whole text fits, else
+ * the longest run of WHOLE words that fits with "… more" and the time,
+ * trailing punctuation stripped. Hiding only 1-2 words shows the text in full.
+ * `fits` answers for a candidate (null: the whole text, no marker). Pure.
+ */
+export function cutLine(text: string, fits: (candidate: string | null) => boolean): string | null {
+  if (fits(null)) return null;
+  const words = text.split(/\s+/).filter((w) => w !== '');
+  const at = (k: number): string => words.slice(0, k).join(' ').replace(CUT_TRAIL, '');
+  let lo = 0;
+  let hi = words.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fits(at(mid))) lo = mid;
+    else hi = mid - 1;
+  }
+  if (words.length - lo < MIN_HIDDEN_WORDS) return null;
+  return lo > 0 ? at(lo) : (words[0] ?? '');
+}
+
+/** The "… more" / " less" marker's look: muted, inline, 44 hit from its own box. */
+const LINE_MARKER =
+  'relative inline min-h-0 w-auto rounded-sm align-baseline text-fg-3 focus-visible:lit-focus';
+
+/**
+ * Measure a line on an off-screen clone at the paragraph's width (React's
+ * nodes are never touched): does the actor + candidate (+ "… more") + time fit
+ * in LINE_MAX_LINES lines?
+ */
+function measureFits(p: HTMLElement, text: string): (candidate: string | null) => boolean {
+  const lineHeight = Number.parseFloat(getComputedStyle(p).lineHeight);
+  const max = (Number.isFinite(lineHeight) ? lineHeight : 20) * LINE_MAX_LINES + 1;
+  const clone = p.cloneNode(true) as HTMLElement;
+  clone.removeAttribute('id');
+  clone.setAttribute('aria-hidden', 'true');
+  Object.assign(clone.style, {
+    position: 'absolute',
+    visibility: 'hidden',
+    pointerEvents: 'none',
+    left: '-10000px',
+    top: '0',
+    width: `${p.getBoundingClientRect().width}px`,
+  });
+  clone.querySelector('[data-activity-line-more]')?.remove();
+  const body = clone.querySelector<HTMLElement>('[data-activity-line-text]');
+  const marker = clone.querySelector<HTMLElement>('[data-activity-line-marker]');
+  return (candidate) => {
+    if (body === null) return true;
+    body.textContent = candidate ?? text;
+    if (marker !== null) marker.textContent = candidate === null ? '' : '… more';
+    document.body.appendChild(clone);
+    const h = clone.getBoundingClientRect().height;
+    clone.remove();
+    return h <= max;
+  };
+}
+
+/** The cut for a paragraph, re-measured when its width changes. */
+function useLineCut(text: string): {
+  ref: (el: HTMLParagraphElement | null) => void;
+  cut: string | null;
+} {
+  const [el, setEl] = useState<HTMLParagraphElement | null>(null);
+  const [cut, setCut] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (el === null) return undefined;
+    let width = -1;
+    const run = (): void => {
+      const w = el.getBoundingClientRect().width;
+      if (w === width) return;
+      width = w;
+      if (w <= 0) {
+        setCut(null);
+        return;
+      }
+      setCut(cutLine(text, measureFits(el, text)));
+    };
+    run();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(run);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, text]);
+  return { ref: setEl, cut };
+}
+
+/**
+ * One notification's line (9 Nov 2026) under its item head: a 20 photo hung
+ * in the picture column (its right edge on the head picture's right edge,
+ * 12 to the text), then one paragraph on the head's title column: the actor
+ * (medium, ink; muted when read), the text, the time (meta, nowrap) inline at
+ * the end. At most 3 lines: past that the text is cut at the last whole word
+ * with "… more" before the time; "… more" unfolds this line in place
+ * (" less" folds it). An 8px dot slot on the head's dot edge, kept when read
+ * so the text never shifts. The 44 tap comes from a hit overlay (12 above and
+ * below the text, half the 24 gap), never from padding. A tap opens its own
+ * spot and marks only it read. No reactions.
  */
 function EntryLine(props: {
   entry: ActivityItem;
@@ -448,43 +558,97 @@ function EntryLine(props: {
   const { entry } = props;
   const { actor, text, muted } = entryLineText(entry, props.side);
   const unread = entry.readAt === null;
+  const time = entryAgo(entry, props.nowMs, props.timeZone);
+  const [open, setOpen] = useState(false);
+  const { ref, cut } = useLineCut(text);
+  const shown = open || cut === null ? text : cut;
+  const toggle = (event: MouseEvent<HTMLElement>): void => {
+    event.stopPropagation();
+    setOpen((was) => !was);
+  };
   return (
-    <PressableRow
+    <div
       data-activity-line={entry.id}
       {...(unread ? { 'data-activity-line-unread': '' } : {})}
+      {...(cut !== null ? { 'data-activity-line-cut': open ? 'open' : 'folded' } : {})}
       onClick={() => props.onOpen(entry)}
-      className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
+      className="relative flex min-w-0 items-start"
     >
-      <Avatar
-        name={actor}
-        {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
-        role="inline"
-        decorative
+      <PressableRow
+        flat
+        insetFocus
+        data-activity-line-open=""
+        aria-label={`${actor} ${text} ${time}${unread ? ', unread' : ''}`}
+        className="absolute -inset-y-3 -left-8 right-0 w-auto"
       />
-      <span className={textRole('label', cn('shrink-0 truncate', !unread && 'text-fg-3'))}>
-        {actor}
-      </span>
-      <span
-        {...(muted ? { 'data-activity-line-gone': '' } : {})}
-        className={textRole(
-          'secondary',
-          cn('min-w-0 flex-1 truncate', (!unread || muted) && 'text-fg-3'),
-        )}
-      >
-        {text}
-      </span>
-      <span className={textRole('meta', 'shrink-0 whitespace-nowrap')}>
-        {entryAgo(entry, props.nowMs, props.timeZone)}
-      </span>
-      {unread ? (
-        <span
-          data-activity-line-dot=""
-          role="img"
-          aria-label="Unread"
-          className={LIST_CARD_UNREAD_DOT}
+      <span aria-hidden="true" data-activity-line-photo="" className="-ml-8 flex w-8 shrink-0">
+        <Avatar
+          name={actor}
+          {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
+          role="inline"
+          decorative
         />
-      ) : null}
-    </PressableRow>
+      </span>
+      <p
+        ref={ref}
+        data-activity-line-body=""
+        className={textRole('secondary', 'min-w-0 flex-1 break-words text-fg-2')}
+      >
+        <span
+          aria-hidden="true"
+          data-activity-line-actor=""
+          className={cn('font-medium', unread ? 'text-fg' : 'text-fg-3')}
+        >
+          {actor}
+        </span>{' '}
+        <span
+          aria-hidden="true"
+          data-activity-line-text=""
+          {...(muted ? { 'data-activity-line-gone': '' } : {})}
+          className={cn((!unread || muted) && 'text-fg-3')}
+        >
+          {shown}
+        </span>
+        <span className="whitespace-nowrap">
+          <span aria-hidden="true" data-activity-line-marker="" className="text-fg-3">
+            {cut === null ? '' : open ? ' ' : '… '}
+          </span>
+          {cut !== null ? (
+            <PressableRow
+              inline
+              data-activity-line-more={open ? 'less' : 'more'}
+              aria-expanded={open}
+              aria-label={open ? 'Show less of this update' : 'Show all of this update'}
+              onClick={toggle}
+              className={LINE_MARKER}
+            >
+              {open ? 'less' : 'more'}
+              <span
+                aria-hidden="true"
+                className="absolute -inset-x-2 top-1/2 h-11 -translate-y-1/2"
+              />
+            </PressableRow>
+          ) : null}
+        </span>{' '}
+        <span
+          aria-hidden="true"
+          data-activity-line-time=""
+          className={textRole('meta', 'whitespace-nowrap')}
+        >
+          {time}
+        </span>
+      </p>
+      <span data-activity-line-dot-slot="" className="ml-2 flex h-5 w-2 shrink-0 items-center">
+        {unread ? (
+          <span
+            data-activity-line-dot=""
+            role="img"
+            aria-label="Unread"
+            className={LIST_CARD_UNREAD_DOT}
+          />
+        ) : null}
+      </span>
+    </div>
   );
 }
 
@@ -615,7 +779,9 @@ export function ActivityCard({
       {lines.length > 0 ? (
         <div
           data-activity-lines=""
-          className={cn('flex min-w-0 flex-col pb-2', LIST_CARD_SUB_INSET)}
+          // 24 between lines (and 12 + 12 under the head): each line's 44 hit
+          // overlay reaches 12 past its text, so neighbours meet, never overlap.
+          className={cn('flex min-w-0 flex-col gap-6 py-3', LIST_CARD_SUB_INSET)}
         >
           {lines.slice(0, ACTIVITY_LINES_SHOWN).map(line)}
           {rest.rendered ? (
@@ -623,7 +789,7 @@ export function ActivityCard({
               ref={rest.ref}
               id={restId}
               data-activity-lines-rest=""
-              className="flex min-w-0 flex-col"
+              className="flex min-w-0 flex-col gap-6"
             >
               {lines.slice(ACTIVITY_LINES_SHOWN).map(line)}
             </div>

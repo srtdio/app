@@ -10,11 +10,11 @@
 // callout).
 
 import type { ReactElement } from 'react';
-import { ICON_SIZE, IconForward, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat, IconForward, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
 import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { textRole } from '@/components/ui/Text';
-import { CHAT_GUTTER, TRAILING_PULL } from '@/components/ui/layout';
+import { TRAILING_PULL } from '@/components/ui/layout';
 import { ADD_TO_TASKS_LABEL, MORE_ACTIONS_LABEL } from '@/components/chat/MessageActionMenu';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
@@ -214,36 +214,83 @@ export interface RootActions {
   onMore?: ((from: HTMLElement) => void) | undefined;
 }
 
+/** Where a thread strip sits: the host's row inset and photo-to-text gap (rule 1: label on the text column). */
+export const THREAD_STRIP_COLUMNS: Record<'chat' | 'catch-up', { x: string; gap: string }> = {
+  chat: { x: 'px-4', gap: 'gap-2' },
+  'catch-up': { x: 'px-4', gap: 'gap-3' },
+};
+
+/** The strip's label with no replies yet. */
+export const REPLY_IN_THREAD = 'Reply in thread';
+
+/** Keep focus where it is (the reply box) when the strip is pressed. */
+function keepFocus(event: { preventDefault: () => void }): void {
+  event.preventDefault();
+}
+
 /**
- * The thread view's "N replies" divider under its root (8 Nov 2026): a full
- * width row between two hairlines (border-y), 44 tall at least, the count on
- * the left in the label role (fg-2) and, on the right, three 44 icon buttons
- * that act on the root: Add to Tasks, Forward, More actions (its long-press
- * sheet). The last one is pulled out by 12 (TRAILING_PULL) so its glyph sits on
- * the content edge. An action the person can't take is not drawn. Tokens
- * only; light and dark at parity.
+ * The one thread strip (9 Nov 2026) under a thread's root, in chat's thread
+ * view and catch up's: a full width band between two hairlines, 44 tall at
+ * least, a faint fg tint (the catch-up name row's family; a token, so light
+ * and dark at parity). Left: a 32 icon column (chat bubble, fg-2) on the
+ * photo column, then the label on the message text column. No replies:
+ * "Reply in thread" (fg-2); a tap focuses the thread's reply box (pointerdown
+ * keeps focus off the strip so the keyboard opens). Replies: "N replies"
+ * (ink), not a target. Right: the root's keys (Add to Tasks, Forward, More),
+ * 44 each, the last pulled out by 12 (TRAILING_PULL) onto the content edge.
  */
 export function RepliesSeparatorRow(props: {
-  label: string;
+  /** "N replies", or null for none yet ("Reply in thread"). */
+  label: string | null;
   through: boolean;
   actions?: RootActions | undefined;
   coarse?: boolean | undefined;
+  family?: 'chat' | 'catch-up' | undefined;
+  /** No replies: focus the thread's reply box. */
+  onFocusReply?: (() => void) | undefined;
+  as?: 'li' | 'div' | undefined;
+  /** The host's spacing around the strip (12 above, 8 below its content). */
+  className?: string | undefined;
 }): ReactElement {
   const actions = props.actions ?? {};
+  const cols = THREAD_STRIP_COLUMNS[props.family ?? 'chat'];
+  const empty = props.label === null;
+  const label = props.label ?? REPLY_IN_THREAD;
+  const Tag = props.as ?? 'li';
+  const focusable = empty && props.onFocusReply !== undefined;
   return (
-    <li
-      aria-label={props.label}
+    <Tag
+      aria-label={label}
       data-thread-separator=""
       data-thread-replies-divider=""
+      data-thread-strip={empty ? 'empty' : 'replies'}
       className={cn(
-        'relative flex min-h-11 items-center gap-2 border-y border-border',
-        CHAT_GUTTER,
+        'relative flex min-h-11 items-center border-y border-border bg-fg/[0.03]',
+        cols.x,
         NO_TOUCH_SELECT,
+        props.className,
       )}
       {...guardProps(props.coarse === true)}
     >
       {props.through ? <RailThrough /> : null}
-      <span className={textRole('label', 'min-w-0 flex-1 truncate text-fg-2')}>{props.label}</span>
+      {focusable ? (
+        <PressableRow
+          flat
+          insetFocus
+          type="button"
+          data-thread-strip-focus=""
+          onPointerDown={keepFocus}
+          onMouseDown={keepFocus}
+          onClick={props.onFocusReply}
+          className={cn('flex min-w-0 flex-1 items-center', cols.gap, NO_TOUCH_SELECT)}
+        >
+          <StripLead label={label} empty />
+        </PressableRow>
+      ) : (
+        <span className={cn('flex min-w-0 flex-1 items-center', cols.gap)}>
+          <StripLead label={label} empty={empty} />
+        </span>
+      )}
       <span className={cn('flex shrink-0 items-center', TRAILING_PULL)}>
         {actions.onTasks !== undefined ? (
           <IconButton
@@ -275,7 +322,28 @@ export function RepliesSeparatorRow(props: {
           />
         ) : null}
       </span>
-    </li>
+    </Tag>
+  );
+}
+
+/** The strip's icon column (32, on the photo column) and its label (on the text column). */
+function StripLead(props: { label: string; empty: boolean }): ReactElement {
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        data-thread-strip-icon=""
+        className="flex w-8 shrink-0 justify-center text-fg-2"
+      >
+        <IconChat size={ICON_SIZE.control} />
+      </span>
+      <span
+        data-thread-strip-label=""
+        className={textRole('label', cn('min-w-0 truncate', props.empty ? 'text-fg-2' : 'text-fg'))}
+      >
+        {props.label}
+      </span>
+    </>
   );
 }
 

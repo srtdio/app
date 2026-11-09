@@ -1862,6 +1862,8 @@ interface ThreadBodyThreads {
   onOpen: (rootId: string) => void;
   /** The thread view: its root card (indented 29px, with the separator under it). */
   viewRootId?: string | undefined;
+  /** The thread view's strip with no replies: focus its reply box. */
+  onFocusReply?: (() => void) | undefined;
 }
 
 /**
@@ -2978,6 +2980,8 @@ function ThreadBody(
   // edge rows keep their true head, tail and day pill.
   const lead = props.messages[win.start - 1];
   const trail = props.messages[win.end];
+  // Set by the thread view's root row as it renders: the next row starts under the strip.
+  let afterStrip = false;
   const listRows = cropToWindow(
     threadRows(
       props.messages.slice(
@@ -3082,15 +3086,22 @@ function ThreadBody(
           {threadListItems(
             listRows,
             props.loadingOlder === true,
-            (row, afterLabel) => {
+            (row, afterLabelIn) => {
+              // The first reply under the thread strip: the strip carries the gap (8).
+              const afterLabel = afterLabelIn || afterStrip;
+              afterStrip = false;
               const plan = plans.get(row.message.id) ?? NO_RAIL;
               const chipRoot = plan.chipRoot;
               const viewRoot = threads?.viewRootId === row.message.id;
               const rootCard = isRootCard(row.message);
               // A left root card keeps its shifted place from its first paint,
               // so its first reply never moves it.
+              // 9 Nov 2026 (rule 1): the thread view's root keeps the text
+              // column (no 29px shift), so the strip's label lines up under it.
               const rowRail: RowRail | undefined =
-                threads !== undefined && (plan.role !== null || (rootCard && !row.message.mine))
+                threads !== undefined &&
+                !viewRoot &&
+                (plan.role !== null || (rootCard && !row.message.mine))
                   ? {
                       role: plan.role,
                       geometry: rowGeometry({
@@ -3107,10 +3118,10 @@ function ThreadBody(
               // L4: the thread screen's root (any message, not only a card)
               // heads the "N replies" separator; the main chat draws the
               // replies row instead (repliesFor).
-              const replies =
-                threads !== undefined && viewRoot
-                  ? replyCountLabel(threads.countOf(row.message.id))
-                  : null;
+              // 9 Nov 2026: the one thread strip shows at 0 too ("Reply in thread").
+              const strip = threads !== undefined && viewRoot;
+              const replies = strip ? replyCountLabel(threads.countOf(row.message.id)) : null;
+              if (strip) afterStrip = true;
               const repliesRow =
                 props.repliesFor !== undefined && props.selection === undefined
                   ? props.repliesFor(row.message)
@@ -3229,11 +3240,14 @@ function ThreadBody(
                       onOpen={() => repliesRow.onOpen()}
                     />
                   ) : null}
-                  {replies !== null && viewRoot ? (
+                  {strip ? (
                     <RepliesSeparatorRow
                       label={replies}
                       through={plan.continues}
                       coarse={coarsePointer}
+                      family="chat"
+                      className="mb-2 mt-3"
+                      onFocusReply={threads?.onFocusReply}
                       actions={rootActionsFor(row.message)}
                     />
                   ) : null}
@@ -5256,6 +5270,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           postOf: threadPostOf,
           onOpen: openThread,
           viewRootId: view.rootId,
+          onFocusReply: () => focusComposerInput(viewComposerInputRef.current),
         }
       : undefined;
   /** Swipe or menu Reply inside the view: the reply bar names that member. */
