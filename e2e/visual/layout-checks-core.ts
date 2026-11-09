@@ -277,7 +277,8 @@ export interface LayoutViolation {
     | 'upload-bar'
     | 'writing-box'
     | 'comment-bar'
-    | 'thread-header';
+    | 'thread-header'
+    | 'catch-up';
   message: string;
 }
 

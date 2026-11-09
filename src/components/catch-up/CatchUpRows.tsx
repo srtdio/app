@@ -140,7 +140,7 @@ export function LongText(props: { text: string; selfName: string | null }): Reac
         type="button"
         data-catch-up-more=""
         onClick={() => setOpen(true)}
-        className={textRole('secondary', 'min-h-11 text-fg-2 focus-visible:lit-focus')}
+        className={textRole('secondary', 'min-h-11 min-w-11 text-left text-fg-2 focus-visible:lit-focus')}
       >
         more
       </button>

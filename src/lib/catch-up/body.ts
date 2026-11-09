@@ -211,7 +211,7 @@ export function commentRows(
 ): CatchUpRow[] {
   const out: CatchUpRow[] = [];
   for (const c of comments) {
-    if (c.ledger_batch_id !== null) {
+    if (c.ledger_batch_id != null) {
       const last = out[out.length - 1];
       const point: CatchUpPoint = {
         id: c.id,
