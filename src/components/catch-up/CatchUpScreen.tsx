@@ -455,6 +455,20 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             body: send.text,
             attachmentAssetIds: files,
             replyToMessageId: target.threadRootId,
+            // A voice note reads back as a voice bubble (type, length, waveform).
+            ...(send.voice !== null
+              ? {
+                  attachmentMeta: {
+                    [send.voice.assetId]: {
+                      mime: send.voice.mime ?? 'audio/mp4',
+                      name: send.voice.name ?? 'Voice note',
+                      size: send.voice.size ?? 0,
+                      duration_ms: send.voice.durationMs,
+                      ...(send.voice.peaks !== undefined ? { peaks: send.voice.peaks } : {}),
+                    },
+                  },
+                }
+              : {}),
           }).then((res) => res.ok)
         : target.kind === 'comment'
           ? createComment(supabase, {

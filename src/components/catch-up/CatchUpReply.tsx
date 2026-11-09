@@ -171,13 +171,26 @@ export function catchUpSendOf(input: {
   body: string;
   ids: readonly string[];
   uploading: boolean;
-  voice: { state: 'uploading' | 'done' | 'failed'; assetId?: string; durationMs: number } | null;
+  voice: {
+    state: 'uploading' | 'done' | 'failed';
+    assetId?: string;
+    durationMs: number;
+    file?: File;
+    peaks?: number[] | undefined;
+  } | null;
 }): CatchUpSend | null {
   if (input.uploading) return null;
   if (input.voice !== null && input.voice.state !== 'done') return null;
   const voice =
     input.voice !== null && input.voice.assetId !== undefined
-      ? { assetId: input.voice.assetId, durationMs: input.voice.durationMs }
+      ? {
+          assetId: input.voice.assetId,
+          durationMs: input.voice.durationMs,
+          ...(input.voice.file !== undefined
+            ? { mime: input.voice.file.type, name: input.voice.file.name, size: input.voice.file.size }
+            : {}),
+          ...(input.voice.peaks !== undefined ? { peaks: [...input.voice.peaks] } : {}),
+        }
       : null;
   if (input.body === '' && input.ids.length === 0 && voice === null) return null;
   return { text: input.body, attachmentAssetIds: [...input.ids], voice };
@@ -266,6 +279,8 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
         : {
             state: voice.status.state,
             durationMs: voice.durationMs,
+            file: voice.file,
+            peaks: voice.peaks,
             ...(voice.status.state === 'done' ? { assetId: voice.status.assetId } : {}),
           },
   });

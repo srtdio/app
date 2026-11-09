@@ -8,7 +8,15 @@ export interface CatchUpSend {
   /** Files attached through the + tray (Photos, File, Assets), already uploaded. */
   attachmentAssetIds: string[];
   /** A recorded voice note (chat cards only), already uploaded; null when none. */
-  voice: { assetId: string; durationMs: number } | null;
+  voice: {
+    assetId: string;
+    durationMs: number;
+    /** The file's type, name, size and waveform: the chat bubble reads them back (attachment_meta). */
+    mime?: string;
+    name?: string;
+    size?: number;
+    peaks?: number[];
+  } | null;
 }
 
 /** Where the reply goes: a chat (main or thread) or an item's comments. */
