@@ -440,6 +440,9 @@ export function itemCardLines(group: readonly ActivityItem[]): ActivityItem[] {
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
+/** A no-break space: "… more" and the time never split across lines. */
+const NBSP = '\u00a0';
+
 /** Lines a notification's text shows before "… more" (9 Nov 2026). */
 export const LINE_MAX_LINES = 3;
 
@@ -499,7 +502,7 @@ function measureFits(p: HTMLElement, text: string): (candidate: string | null) =
   return (candidate) => {
     if (body === null) return true;
     body.textContent = candidate ?? text;
-    if (marker !== null) marker.textContent = candidate === null ? '' : '… more';
+    if (marker !== null) marker.textContent = candidate === null ? '' : `…${NBSP}more`;
     document.body.appendChild(clone);
     const h = clone.getBoundingClientRect().height;
     clone.remove();
@@ -540,7 +543,7 @@ function useLineCut(text: string): {
  * One notification's line (9 Nov 2026) under its item head: a 20 photo hung
  * in the picture column (its right edge on the head picture's right edge,
  * 12 to the text), then one paragraph on the head's title column: the actor
- * (medium, ink; muted when read), the text, the time (meta, nowrap) inline at
+ * (medium, ink; muted when read), the text, the time (meta, kept whole by no-break spaces) inline at
  * the end. At most 3 lines: past that the text is cut at the last whole word
  * with "… more" before the time; "… more" unfolds this line in place
  * (" less" folds it). An 8px dot slot on the head's dot edge, kept when read
@@ -609,33 +612,28 @@ function EntryLine(props: {
         >
           {shown}
         </span>
-        <span className="whitespace-nowrap">
-          <span aria-hidden="true" data-activity-line-marker="" className="text-fg-3">
-            {cut === null ? '' : open ? ' ' : '… '}
-          </span>
-          {cut !== null ? (
-            <PressableRow
-              inline
-              data-activity-line-more={open ? 'less' : 'more'}
-              aria-expanded={open}
-              aria-label={open ? 'Show less of this update' : 'Show all of this update'}
-              onClick={toggle}
-              className={LINE_MARKER}
-            >
-              {open ? 'less' : 'more'}
-              <span
-                aria-hidden="true"
-                className="absolute -inset-x-2 top-1/2 h-11 -translate-y-1/2"
-              />
-            </PressableRow>
-          ) : null}
-        </span>{' '}
-        <span
-          aria-hidden="true"
-          data-activity-line-time=""
-          className={textRole('meta', 'whitespace-nowrap')}
-        >
-          {time}
+        {/* No-break spaces keep "… more" and the time whole (never a nowrap box). */}
+        <span aria-hidden="true" data-activity-line-marker="" className="text-fg-3">
+          {cut === null ? '' : open ? NBSP : `…${NBSP}`}
+        </span>
+        {cut !== null ? (
+          <PressableRow
+            inline
+            data-activity-line-more={open ? 'less' : 'more'}
+            aria-expanded={open}
+            aria-label={open ? 'Show less of this update' : 'Show all of this update'}
+            onClick={toggle}
+            className={LINE_MARKER}
+          >
+            {open ? 'less' : 'more'}
+            <span
+              aria-hidden="true"
+              className="absolute -inset-x-2 top-1/2 h-11 -translate-y-1/2"
+            />
+          </PressableRow>
+        ) : null}{' '}
+        <span aria-hidden="true" data-activity-line-time="" className={textRole('meta')}>
+          {time.replace(/ /g, NBSP)}
         </span>
       </p>
       <span data-activity-line-dot-slot="" className="ml-2 flex h-5 w-2 shrink-0 items-center">

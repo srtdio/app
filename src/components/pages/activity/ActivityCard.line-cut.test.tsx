@@ -170,12 +170,12 @@ describe('Activity line: short, long, more, less, navigate', () => {
     expect(shown.length).toBeLessThan(LONG.length);
     expect(LONG.startsWith(shown)).toBe(true);
     expect(LONG.charAt(shown.length)).toBe(' ');
-    expect(q('[data-activity-line-marker]')?.textContent).toBe('… ');
+    expect(q('[data-activity-line-marker]')?.textContent).toBe('…\u00a0');
     const toggle = q<HTMLButtonElement>('[data-activity-line-more]');
     expect(toggle?.textContent).toBe('more');
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-    // The marker sits right before the time: nothing after it in its wrapper.
-    expect(toggle?.nextElementSibling).toBeNull();
+    // The marker sits right before the time.
+    expect(toggle?.nextElementSibling?.hasAttribute('data-activity-line-time')).toBe(true);
     const body = q<HTMLElement>('[data-activity-line-body]');
     expect(body?.textContent?.length ?? 0).toBeLessThanOrEqual(LINE_MAX_LINES * CHARS_PER_LINE);
   });
@@ -186,7 +186,7 @@ describe('Activity line: short, long, more, less, navigate', () => {
     expect(q('[data-activity-line-text]')?.textContent).toBe(LONG);
     const less = q<HTMLButtonElement>('[data-activity-line-more]');
     expect(less?.textContent).toBe('less');
-    expect(q('[data-activity-line-marker]')?.textContent).toBe(' ');
+    expect(q('[data-activity-line-marker]')?.textContent).toBe('\u00a0');
     expect(less?.getAttribute('aria-expanded')).toBe('true');
     act(() => less?.click());
     expect(q('[data-activity-line-more]')?.textContent).toBe('more');
