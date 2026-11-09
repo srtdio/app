@@ -7,6 +7,7 @@ import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/brief
 import type { Client, Result } from '@srtdio/rpc';
 // Relative, not `@/`: the briefs DB suite loads this module without the alias.
 import { andOrFilters, ilikeAnyFilter, serverSearchQuery, withAbort } from './search/server-search';
+import { getFillCount } from './use-fill-count';
 
 // The same status type BriefCard's BriefStatus is built from. Read off the
 // package here (type only) so this module imports nothing from components and
@@ -52,8 +53,13 @@ export function briefListParams(
  */
 export const BRIEF_NOTE_PARAM = 'note';
 
-/** Briefs per list page. */
-export const BRIEF_LIST_PAGE_SIZE = 100;
+/**
+ * Briefs per server page: one screen's worth of rows (getFillCount, read once
+ * per app load), so the first page and every Load more fill one screen.
+ */
+export function briefListPageSize(): number {
+  return getFillCount();
+}
 
 /**
  * Where the next briefs page starts: the last loaded row's (created_at, id),
@@ -184,6 +190,7 @@ async function listBriefRows(
   cursor?: BriefCursor,
   search = '',
   signal?: AbortSignal,
+  size: number = briefListPageSize(),
 ): Promise<Result<BriefRowsPage>> {
   const searched = serverSearchQuery(search);
   let query = client
@@ -197,16 +204,16 @@ async function listBriefRows(
     query
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
-      .limit(BRIEF_LIST_PAGE_SIZE + 1),
+      .limit(size + 1),
     signal,
   );
   if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
 
   const fetched: Brief[] = data ?? [];
-  const rows = fetched.slice(0, BRIEF_LIST_PAGE_SIZE);
+  const rows = fetched.slice(0, size);
   const last = rows[rows.length - 1];
   const next: BriefPageNext =
-    fetched.length > BRIEF_LIST_PAGE_SIZE && last !== undefined
+    fetched.length > size && last !== undefined
       ? {
           done: false,
           cursor: {
@@ -244,8 +251,9 @@ export async function listBriefsPage(
   cursor?: BriefCursor,
   search: string = cursor?.query ?? '',
   signal?: AbortSignal,
+  size: number = briefListPageSize(),
 ): Promise<Result<BriefPage>> {
-  const page = await listBriefRows(client, workspaceId, cursor, search, signal);
+  const page = await listBriefRows(client, workspaceId, cursor, search, signal, size);
   if (!page.ok) return page;
   const { rows, next } = page.data;
   const thumbnails = await firstImageByBrief(

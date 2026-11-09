@@ -1314,7 +1314,7 @@ export function CreatePostSheet({
   const headerActions = (
     <>
       <Button
-        variant="ghost"
+        variant="secondary"
         className="shrink-0"
         data-submit="draft"
         onClick={() => void handleSubmit('draft')}

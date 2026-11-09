@@ -93,7 +93,9 @@ export function RecentlyDeletedView({
         <div className="mt-4">
           <ErrorNote>{errorText('load deleted files', null)}</ErrorNote>
           <div className="mt-3">
-            <Button onClick={onRetry}>Retry</Button>
+            <Button variant="ghost" onClick={onRetry}>
+              Retry
+            </Button>
           </div>
         </div>
       ) : showBoxes ? (

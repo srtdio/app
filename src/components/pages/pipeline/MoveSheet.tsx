@@ -232,7 +232,9 @@ export function MoveSheetView({
           {!confirming && roleStatus === 'error' ? (
             <div data-role-error="" role="alert" className="flex items-center gap-3">
               <p className="flex-1 text-base text-fg-2">{ROLE_READ_ERROR}</p>
-              <Button onClick={() => onRetryRole?.()}>Retry</Button>
+              <Button variant="ghost" onClick={() => onRetryRole?.()}>
+                Retry
+              </Button>
             </div>
           ) : null}
           {confirming || actions.length === 0 ? null : (

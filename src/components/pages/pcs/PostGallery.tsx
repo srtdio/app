@@ -649,12 +649,12 @@ export function pinButton(
 ): ReactElement | null {
   if (onArmPin === undefined) return null;
   return pinArmedIndex === null ? (
-    <Button type="button" variant="secondary" data-add-pin="" onClick={() => onArmPin(active)}>
+    <Button type="button" variant="ghost" data-add-pin="" onClick={() => onArmPin(active)}>
       <IconPin size={ICON_SIZE.inline} />
       Add pin
     </Button>
   ) : (
-    <Button type="button" variant="secondary" data-cancel-pin="" onClick={() => onDisarmPin?.()}>
+    <Button type="button" variant="ghost" data-cancel-pin="" onClick={() => onDisarmPin?.()}>
       Cancel
     </Button>
   );
@@ -742,7 +742,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 data-gallery-add=""
                 disabled={saving || reordering}
                 onClick={model.onAdd}
-                variant="secondary"
+                variant="ghost"
               >
                 <IconPlus size={ICON_SIZE.inline} />
                 Add
@@ -752,7 +752,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 data-gallery-replace=""
                 disabled={saving || reordering || itemCount === 0}
                 onClick={model.onReplace}
-                variant="secondary"
+                variant="ghost"
               >
                 <IconSwitch size={ICON_SIZE.inline} />
                 Replace
@@ -763,7 +763,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 aria-pressed={reordering}
                 disabled={saving || (!reordering && itemCount < 2)}
                 onClick={model.onReorder}
-                variant="secondary"
+                variant="ghost"
               >
                 <IconGrip size={ICON_SIZE.inline} />
                 Reorder
@@ -779,7 +779,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
             onClick={model.onVersions}
             aria-label={`Versions, current version ${versionNumber}`}
             aria-haspopup="dialog"
-            variant="secondary"
+            variant="ghost"
             className="shrink-0 tabular-nums"
           >
             <IconHistory size={ICON_SIZE.inline} />

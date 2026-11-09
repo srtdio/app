@@ -31,7 +31,9 @@ export function LoadFailed({ onRetry }: { onRetry: () => void }) {
     <div role="alert" className="min-h-full w-full grid place-items-center bg-bg px-4">
       <div className="flex flex-col items-center gap-3 text-center">
         <p className="text-base text-fg-2">{LOAD_FAILED_TEXT}</p>
-        <Button onClick={onRetry}>Retry</Button>
+        <Button variant="ghost" onClick={onRetry}>
+          Retry
+        </Button>
       </div>
     </div>
   );

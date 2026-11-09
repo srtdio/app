@@ -579,7 +579,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     body =
       data.load.status === 'failed' ? (
         <div className="py-6">
-          <Button type="button" onClick={data.retry}>
+          <Button variant="ghost" type="button" onClick={data.retry}>
             Retry
           </Button>
         </div>
@@ -820,7 +820,6 @@ export function BankPlanItSheets(props: {
             </Button>
             <Button
               variant="primary"
-              shape="pill"
               type="button"
               data-bank-plan-it-go=""
               busy={props.busy}
@@ -857,7 +856,6 @@ export function BankPlanItSheets(props: {
             </Button>
             <Button
               variant="primary"
-              shape="pill"
               type="button"
               data-bank-make-plan=""
               busy={props.busy}
@@ -910,7 +908,6 @@ export function BankPlanItSheets(props: {
             </Button>
             <Button
               variant="primary"
-              shape="pill"
               type="button"
               data-bank-shared-go=""
               busy={props.busy}
@@ -955,7 +952,6 @@ export function BankShowSheet(props: {
           </Button>
           <Button
             variant="primary"
-            shape="pill"
             type="button"
             data-bank-show-go=""
             onClick={() => {

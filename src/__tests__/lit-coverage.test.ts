@@ -178,7 +178,6 @@ const BONE_LITS: readonly BoneLit[] = [
   'lit-pill',
   'lit-badge',
   'lit-chip',
-  'lit-btn-secondary',
   'lit-raised',
   'lit-bubble-own',
   'lit-bubble-other',

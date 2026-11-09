@@ -84,7 +84,10 @@ describe('PostGallery buttons', () => {
     expect(tags).toHaveLength(5);
     for (const tag of tags) {
       expectShared(tag);
-      expect(classOf(tag)).toContain('lit-btn-secondary');
+      // A row of 3+ actions is the Tool level: no fill, no border, no lighting.
+      expect(classOf(tag)).toContain('lit-hover');
+      expect(classOf(tag)).not.toContain('bg-fg/10');
+      expect(classOf(tag)).not.toContain('lit-btn-');
     }
   });
 
@@ -106,7 +109,7 @@ describe('PostGallery buttons', () => {
     const tag = buttonTags(html).find((t) => t.includes('data-see-preview'));
     expect(tag).toBeDefined();
     expectShared(tag!);
-    expect(classOf(tag!)).toContain('text-accent');
+    expect(classOf(tag!)).toContain('text-fg');
     expect(html).not.toContain('Tap to see full image');
   });
 

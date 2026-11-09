@@ -115,7 +115,7 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
     const confirm = els.find(
       (el) => (el.props as { 'data-stage-confirm'?: string })['data-stage-confirm'] === '',
     )!;
-    expect((confirm.props as { variant?: string }).variant).toBe('default');
+    expect((confirm.props as { variant?: string }).variant).toBe('primary');
     // Only the reject confirm passes destructive.
     expect(DECISIONS).toMatch(/reasonTarget === 'rejected'[\s\S]{0,200}destructive: true/);
   });

@@ -1,5 +1,5 @@
 // The Bank's data, shared by the phone list, the laptop side panel and the
-// laptop table (one hook in PlanTabPage). A page of 12 ideas (starred first,
+// laptop table (one hook in PlanTabPage). A page of fill-count ideas (starred first,
 // then the rest, in the sort's order; keyset cursor; Load more appends). The
 // first page of each filter is a session read (src/lib/session-read.ts): a
 // return paints the kept page on its first frame (also seeded from the

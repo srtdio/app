@@ -259,7 +259,7 @@ export function PipelineDateRangeCalendar({
         </div>
 
         <div className="mt-3 flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={onClear} className="flex-1">
+          <Button type="button" variant="ghost" onClick={onClear} className="flex-1">
             Clear
           </Button>
           <Button

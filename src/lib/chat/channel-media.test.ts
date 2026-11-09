@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
-  CHANNEL_MEDIA_PAGE_SIZE,
+  channelMediaPageSize,
   listChannelAttachments,
   listChannelLinks,
   splitMediaFiles,
@@ -9,6 +9,7 @@ import {
   toLinkItems,
 } from '@/lib/chat/channel-media';
 import { olderThanFilter } from '@/lib/chat/history';
+import { getFillCount } from '@/lib/use-fill-count';
 import { APP_ENTITY_ROUTES } from '@/lib/chat/message-links';
 
 interface Call {
@@ -65,9 +66,10 @@ describe('listChannelAttachments', () => {
       { method: 'not', args: ['attachment_asset_ids', 'is', null] },
       { method: 'order', args: ['created_at', { ascending: false }] },
       { method: 'order', args: ['id', { ascending: false }] },
-      { method: 'limit', args: [CHANNEL_MEDIA_PAGE_SIZE] },
+      { method: 'limit', args: [channelMediaPageSize()] },
     ]);
-    expect(CHANNEL_MEDIA_PAGE_SIZE).toBe(50);
+    // One screen a page: the fill count (no window here: its 6 floor), never 50.
+    expect(channelMediaPageSize()).toBe(getFillCount());
   });
 
   it('continues before the cursor with the (created_at, id) keyset', async () => {
@@ -175,7 +177,7 @@ describe('listChannelLinks', () => {
       { method: 'or', args: [olderThanFilter(CURSOR)] },
       { method: 'order', args: ['created_at', { ascending: false }] },
       { method: 'order', args: ['id', { ascending: false }] },
-      { method: 'limit', args: [50] },
+      { method: 'limit', args: [getFillCount()] },
     ]);
   });
 

@@ -336,7 +336,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     if (mode === 'dm') {
       return (
         <>
-          <Button disabled={busy} onClick={() => setMode('choose')}>
+          <Button variant="ghost" disabled={busy} onClick={() => setMode('choose')}>
             Back
           </Button>
           {missingLine()}
@@ -353,7 +353,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     }
     return (
       <>
-        <Button disabled={busy} onClick={() => setMode('choose')}>
+        <Button variant="ghost" disabled={busy} onClick={() => setMode('choose')}>
           Back
         </Button>
         {missingLine()}

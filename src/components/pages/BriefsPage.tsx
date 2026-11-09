@@ -4,7 +4,7 @@ import { appPresignCache } from '@/lib/shared-presign';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SortMenu } from '@/components/ui/SortMenu';
@@ -253,8 +253,8 @@ export const BRIEF_COUNTS_PAINT_WAIT_MS = 5_000;
 export const BRIEFS_LOAD_MORE_FAILED = errorText('load more briefs', null);
 
 /**
- * The Load more control under the list: the shared secondary Button (44 tall,
- * token classes only, so light and dark match), shown while loaded briefs are
+ * The Load more control under the list: the shared ui/LoadMore (Button level,
+ * left aligned, busy keeps its width), shown while loaded briefs are
  * still held back by the fill count (`hidden`) or another server page exists.
  * Pure (no hooks) so the show/hide rule is unit-tested directly.
  */
@@ -266,17 +266,8 @@ export function briefsLoadMore(
 ): ReactElement[] {
   if (next.done && hidden <= 0) return [];
   return [
-    <div key="load-more" className={cn(GUTTER, 'pb-6 flex justify-center')}>
-      <Button
-        variant="secondary"
-        type="button"
-        data-briefs-load-more=""
-        disabled={loadingMore}
-        aria-busy={loadingMore}
-        onClick={onLoadMore}
-      >
-        Load more
-      </Button>
+    <div key="load-more" className={cn(GUTTER, 'pb-6 flex flex-col')}>
+      <LoadMore data-briefs-load-more="" busy={loadingMore} onMore={onLoadMore} />
     </div>,
   ];
 }

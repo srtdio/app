@@ -1430,14 +1430,17 @@ export function PlanItemScreen(props: {
                   </IconButton>
                 </form>
               ) : (
-                <Chip
-                  variant="add"
-                  label={ADD_BUCKET_LABEL}
+                // An action, not a filter: a Tool (chips are filters only).
+                <Button
+                  type="button"
+                  variant="ghost"
                   data-plan-bucket-add=""
-                  dot={<IconPlus size={ICON_SIZE.inline} />}
                   disabled={picked === null}
                   onClick={() => setAddingBucket(true)}
-                />
+                >
+                  <IconPlus size={ICON_SIZE.inline} />
+                  {ADD_BUCKET_LABEL}
+                </Button>
               )}
             </div>
           ) : (
@@ -2238,7 +2241,7 @@ export function LinkActions(props: {
     <div className={cn('grid gap-2', props.mayLink ? 'grid-cols-2' : 'grid-cols-1')}>
       {props.mayLink ? (
         <Button
-          variant="secondary"
+          variant="ghost"
           data-plan-change-link=""
           disabled={props.busy}
           onClick={props.onLink}
@@ -2247,7 +2250,7 @@ export function LinkActions(props: {
         </Button>
       ) : null}
       <Button
-        variant="secondary"
+        variant="ghost"
         data-plan-unlink-post=""
         disabled={props.busy}
         onClick={props.onUnlink}
@@ -2333,7 +2336,7 @@ function ItemMedia(props: {
     return (
       <div data-plan-media="failed" className="flex min-h-18 items-center justify-between gap-3">
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
-        <Button data-plan-media-retry="" onClick={props.onRetry}>
+        <Button variant="ghost" data-plan-media-retry="" onClick={props.onRetry}>
           Retry
         </Button>
       </div>

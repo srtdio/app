@@ -3439,7 +3439,7 @@ export function threadLoadError(onRetry: (() => void) | undefined): ReactElement
         {...(onRetry !== undefined
           ? {
               action: (
-                <Button variant="primary" className="min-w-11" onClick={onRetry}>
+                <Button variant="ghost" className="min-w-11" onClick={onRetry}>
                   Retry
                 </Button>
               ),
@@ -3463,7 +3463,7 @@ export function threadLoadErrorRow(onRetry: (() => void) | undefined): ReactElem
     >
       <span>Couldn&apos;t load messages</span>
       {onRetry !== undefined ? (
-        <Button variant="secondary" className="min-w-11" onClick={onRetry}>
+        <Button variant="ghost" className="min-w-11" onClick={onRetry}>
           Retry
         </Button>
       ) : null}
@@ -3488,7 +3488,7 @@ export function olderLoadErrorRow(onRetry: () => void): ReactElement {
       className="flex items-center justify-center gap-3 px-4 py-2 text-base text-fg-2"
     >
       <span>{OLDER_LOAD_FAILED}</span>
-      <Button variant="secondary" className="min-w-11" onClick={onRetry}>
+      <Button variant="ghost" className="min-w-11" onClick={onRetry}>
         Retry
       </Button>
     </li>

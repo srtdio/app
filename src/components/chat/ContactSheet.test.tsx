@@ -5,7 +5,7 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
@@ -97,7 +97,7 @@ const view = (p: ContactSheetViewProps): ReactElement => ContactSheetView(p) as 
 const emptyTitles = (tree: ReactElement): string[] =>
   findAll(tree, (el) => el.type === EmptyState).map((el) => String(el.props.title));
 const loadMore = (tree: ReactElement) =>
-  findAll(tree, (el) => el.type === Button && 'data-load-more' in el.props);
+  findAll(tree, (el) => el.type === LoadMore && 'data-load-more' in el.props);
 
 describe('ContactSheetView page', () => {
   it('is a full-screen page, not a sheet', () => {
@@ -210,7 +210,7 @@ describe('ContactSheetView states', () => {
     const tree = view(props({ tab: 'links', onLoadMore, links: feed<ChannelLinkItem>([], true) }));
     const [button] = loadMore(tree);
     expect(button).toBeDefined();
-    (button?.props.onClick as () => void)();
+    (button?.props.onMore as () => void)();
     expect(onLoadMore).toHaveBeenCalledWith('links');
     expect(showLoadMore(FEED_LOADING)).toBe(false);
   });

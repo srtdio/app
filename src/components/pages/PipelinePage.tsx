@@ -419,7 +419,7 @@ export interface PipelineSurfaceProps {
   workspaceKey: string | null;
   /** The page's select mode: each card's long-press / right-click ticks it. */
   selectFor?: (postId: string) => ListCardSelect;
-  /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
+  /** sessionStorage key for the feed's Load more depth (keyed by the filter query). */
   shownKey: string;
   /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
   timeZone?: string;

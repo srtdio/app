@@ -38,6 +38,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
+import { getFillCount } from '@/lib/use-fill-count';
 import { Chip } from '@/components/ui/Chip';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -97,7 +99,6 @@ import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { formatCivilDayHeader } from '@/lib/plan-week';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
-  PICKER_PAGE_SIZE,
   buildLinkSections,
   buildPickerSections,
   linkSelection,
@@ -111,7 +112,6 @@ import {
   draftsAllowed,
   pickerReads,
   searchStageFilter,
-  shownOfLabel,
   type PickerMode,
   type PickerQuery,
   type PickerSection,
@@ -176,6 +176,15 @@ const PICKER_TITLES: Record<Exclude<PickerMode, 'inline'>, string> = {
   briefs: 'Share a brief',
   link: 'Link a post',
 };
+
+/**
+ * Page size for search results and each default section: one screen's worth
+ * of rows (getFillCount, read once per app load), so the first page and every
+ * Load more fill one screen.
+ */
+export function pickerPageSize(): number {
+  return getFillCount();
+}
 
 /** The header's search button per mode (the palette in pick mode). */
 export const PICKER_SEARCH_LABELS: Record<Exclude<PickerMode, 'inline'>, string> = {
@@ -293,7 +302,7 @@ export async function loadPickerSections(
     });
   }
   const page = (stage: 'review' | 'parked' | 'rejected' | 'draft') =>
-    listPostsForPickerPage(client, { workspaceId, stage, limit: PICKER_PAGE_SIZE });
+    listPostsForPickerPage(client, { workspaceId, stage, limit: pickerPageSize() });
   if (mode === 'drafts') {
     if (!allowDrafts) return { ok: true, data: EMPTY_SECTIONS };
     const drafts = await page('draft');
@@ -323,7 +332,7 @@ export async function loadPickerSections(
       workspaceId,
       stage: 'approved',
       enteredSince: since,
-      limit: PICKER_PAGE_SIZE,
+      limit: pickerPageSize(),
     }),
     posts ? page('parked') : Promise.resolve(null),
     posts ? page('rejected') : Promise.resolve(null),
@@ -380,10 +389,10 @@ export async function loadLinkSections(
           .lt('target_date', `${shiftDay(day, 2)}T00:00:00Z`)
           .order('created_at', { ascending: false })
           .order('id', { ascending: false })
-          .limit(PICKER_PAGE_SIZE)
+          .limit(pickerPageSize())
       : null;
   const [newest, sameDay] = await Promise.all([
-    listPostsForPickerPage(client, { workspaceId, limit: PICKER_PAGE_SIZE }),
+    listPostsForPickerPage(client, { workspaceId, limit: pickerPageSize() }),
     sameDayRead,
   ]);
   if (!newest.ok || (sameDay !== null && sameDay.error !== null)) {
@@ -441,7 +450,7 @@ export async function loadSearchPage(
     ...(params.query.number !== null ? { number: params.query.number } : {}),
     ...searchStageFilter(params.mode, params.allowDrafts),
     ...(params.cursor !== null ? { cursor: params.cursor } : {}),
-    limit: PICKER_PAGE_SIZE,
+    limit: pickerPageSize(),
     withCount: params.cursor === null,
   });
   if (!result.ok) {
@@ -936,7 +945,6 @@ export function PostPicker(props: PostPickerProps): ReactElement {
             {linkHint ? <ErrorNote>{LINK_PICK_FIRST_HINT}</ErrorNote> : null}
             <Button
               variant="primary"
-              shape="pill"
               data-picker-link-confirm=""
               className="self-end"
               onClick={confirmLink}
@@ -946,7 +954,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
           </div>
         ) : (
           <div className="flex w-full justify-end">
-            <Button variant="primary" shape="pill" data-picker-done="" onClick={done}>
+            <Button variant="primary" data-picker-done="" onClick={done}>
               {count > 0 ? `Done (${count})` : 'Done'}
             </Button>
           </div>
@@ -1111,7 +1119,7 @@ export function searchEmptyTitle(query: string): string {
 /** The briefs tab's empty line when no search or filter is narrowing it. */
 export const BRIEFS_EMPTY_COPY = 'Briefs show up here.';
 
-/** Search results: "<N> matches", the rows, and a "Load 50 more" row while more remain. */
+/** Search results: "<N> matches", the rows, and ui/LoadMore while more remain. */
 export function SearchResultsView(
   props: PostRowContext & {
     rows: PostPickerPageRow[];
@@ -1138,19 +1146,8 @@ export function SearchResultsView(
         <PostRow key={post.id} post={post} {...props} />
       ))}
       {hasMoreResults(props.rows.length, props.count) ? (
-        <li>
-          <PressableRow
-            type="button"
-            onClick={props.onLoadMore}
-            disabled={props.loadingMore}
-            flat
-            className="flex items-center justify-between gap-3 px-4 py-3 text-base font-medium text-accent mv-tint disabled:text-fg-3"
-          >
-            <span>{`Load ${PICKER_PAGE_SIZE} more`}</span>
-            <span className="text-sm font-normal tabular-nums text-fg-3">
-              {shownOfLabel(props.rows.length, props.count)}
-            </span>
-          </PressableRow>
+        <li className="flex flex-col px-4 py-2">
+          <LoadMore data-picker-load-more="" busy={props.loadingMore} onMore={props.onLoadMore} />
         </li>
       ) : null}
     </ul>

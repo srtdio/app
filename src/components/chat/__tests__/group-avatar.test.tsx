@@ -130,7 +130,7 @@ describe('group info page pure helpers', () => {
     // its accent fill.
     expect(editor).toContain('border-cutout-lg border-bg');
     expect(editor).not.toContain('outline-bg');
-    expect(editor).toContain('lit-btn-primary');
+    expect(editor).toContain('lit-badge');
     expect(editor).not.toContain('ring-bg');
     const member = hero(false);
     expect(member).toContain(`src="${PHOTO}"`);

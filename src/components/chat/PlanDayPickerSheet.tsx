@@ -229,7 +229,7 @@ export function PlanDatesSheet(props: {
       title={PLAN_DATES_TITLE}
       footer={
         <div className="flex w-full justify-end">
-          <Button variant="primary" shape="pill" data-plan-dates-save="" onClick={save}>
+          <Button variant="primary" data-plan-dates-save="" onClick={save}>
             {PLAN_DATES_SAVE}
           </Button>
         </div>

@@ -60,7 +60,7 @@ export function DeleteSheet(props: {
         </Button>
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           data-delete-choice="cancel"
           className="w-full md:w-auto"
           onClick={props.onClose}

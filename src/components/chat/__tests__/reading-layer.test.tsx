@@ -179,7 +179,8 @@ describe('T8 tray and emoji button by pointer', () => {
     // The shared round secondary Button recipe: 44 tall, 44 wide, a circle.
     expect(html).toContain('h-11');
     expect(html).toContain('rounded-full w-11 px-0');
-    expect(html).toContain('lit-btn-secondary bg-panel text-fg border');
+    expect(html).toContain('bg-fg/10 text-fg hover:bg-fg/15');
+    expect(html).not.toContain('lit-btn-');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('data-tray=""');
   });

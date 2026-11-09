@@ -344,7 +344,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'focus-visible:ring-overlay-fg disabled:text-overlay-fg-dim disabled:pointer-events-none',
     text:
       'inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
-      'text-overlay-fg bg-overlay-surface lit-media hover:bg-overlay-line focus-visible:outline-none ' +
+      'text-overlay-fg bg-overlay-surface hover:bg-overlay-line focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-overlay-fg',
   },
   surface: {
@@ -357,7 +357,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'lit-hover focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none',
     text:
       'inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
-      'text-fg bg-panel border lit-btn-secondary focus-visible:lit-focus',
+      'bg-fg/10 text-fg hover:bg-fg/15 focus-visible:lit-focus',
   },
 };
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
   BRIEF_FILTER_DEFAULT,
-  BRIEF_LIST_PAGE_SIZE,
+  briefListPageSize,
   briefKeysetFilter,
   briefListParams,
   briefPageFilter,
@@ -12,6 +12,9 @@ import {
   mergeBriefPages,
   parseBriefFilter,
 } from '@/lib/brief-list';
+
+/** One server page: the fill count (no window here, so its floor). */
+const BRIEF_PAGE = briefListPageSize();
 
 describe('parseBriefFilter (FT24, default Open)', () => {
   it('defaults to Open when the URL names no chip or an unknown one', () => {
@@ -81,7 +84,7 @@ function briefRows(start: number, count: number) {
 
 describe('listBriefsPage keyset paging', () => {
   it('reads one row past the page, ordered created_at desc then id desc, and hands back a cursor', async () => {
-    const rows = briefRows(0, BRIEF_LIST_PAGE_SIZE + 1);
+    const rows = briefRows(0, BRIEF_PAGE + 1);
     const { client, calls, reads } = recordingClient({
       briefs: [{ data: rows, error: null }],
       asset_attachments: [{ data: [], error: null }],
@@ -89,8 +92,8 @@ describe('listBriefsPage keyset paging', () => {
     const result = await listBriefsPage(client, 'w1');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.items).toHaveLength(BRIEF_LIST_PAGE_SIZE);
-    const last = rows[BRIEF_LIST_PAGE_SIZE - 1];
+    expect(result.data.items).toHaveLength(BRIEF_PAGE);
+    const last = rows[BRIEF_PAGE - 1];
     expect(result.data.next).toEqual({
       done: false,
       cursor: { createdAt: last?.created_at, id: last?.id },
@@ -103,16 +106,13 @@ describe('listBriefsPage keyset paging', () => {
       ['created_at', { ascending: false }],
       ['id', { ascending: false }],
     ]);
-    expect(briefCalls.find((c) => c.method === 'limit')?.args).toEqual([BRIEF_LIST_PAGE_SIZE + 1]);
+    expect(briefCalls.find((c) => c.method === 'limit')?.args).toEqual([BRIEF_PAGE + 1]);
     expect(briefCalls.some((c) => c.method === 'or')).toBe(false);
     // Two requests per page: the briefs read, then ONE thumbnails IN read.
     expect(reads).toEqual(['briefs', 'asset_attachments']);
     const inCalls = calls.filter((c) => c.table === 'asset_attachments' && c.method === 'in');
     expect(inCalls).toHaveLength(1);
-    expect(inCalls[0]?.args).toEqual([
-      'entity_id',
-      rows.slice(0, BRIEF_LIST_PAGE_SIZE).map((row) => row.id),
-    ]);
+    expect(inCalls[0]?.args).toEqual(['entity_id', rows.slice(0, BRIEF_PAGE).map((row) => row.id)]);
   });
 
   it('the second page filters strictly after the last row (created_at, id) with .or', async () => {
@@ -133,12 +133,9 @@ describe('listBriefsPage keyset paging', () => {
   });
 
   it('page one then page two merge with no duplicates', async () => {
-    const first = briefRows(0, BRIEF_LIST_PAGE_SIZE + 1);
-    const repeated = first[BRIEF_LIST_PAGE_SIZE - 1];
-    const second = [
-      ...(repeated !== undefined ? [repeated] : []),
-      ...briefRows(BRIEF_LIST_PAGE_SIZE, 3),
-    ];
+    const first = briefRows(0, BRIEF_PAGE + 1);
+    const repeated = first[BRIEF_PAGE - 1];
+    const second = [...(repeated !== undefined ? [repeated] : []), ...briefRows(BRIEF_PAGE, 3)];
     const { client } = recordingClient({
       briefs: [
         { data: first, error: null },
@@ -156,7 +153,7 @@ describe('listBriefsPage keyset paging', () => {
     const merged = mergeBriefPages(one.data.items, two.data.items);
     const ids = merged.map((brief) => brief.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(merged).toHaveLength(BRIEF_LIST_PAGE_SIZE + 3);
+    expect(merged).toHaveLength(BRIEF_PAGE + 3);
   });
 
   it('maps each brief to its first image from the one thumbnails read', async () => {
@@ -238,7 +235,7 @@ describe('listBriefsPage server search (title or objective ILIKE)', () => {
 
   it("a search page's cursor carries its query, and Load more continues that search", async () => {
     const first = recordingClient({
-      briefs: [{ data: briefRows(0, BRIEF_LIST_PAGE_SIZE + 1), error: null }],
+      briefs: [{ data: briefRows(0, BRIEF_PAGE + 1), error: null }],
     });
     const page = await listBriefsFirstPage(first.client, 'w1', 'reel');
     expect(page.ok).toBe(true);

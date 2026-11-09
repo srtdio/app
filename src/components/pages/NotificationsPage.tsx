@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { appPresignCache } from '@/lib/shared-presign';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { IconButton } from '@/components/ui/IconButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
@@ -146,7 +147,9 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
     <div className="px-4 md:px-6 mt-4">
       <ErrorNote>{ACTIVITY_LOAD_FAILED}</ErrorNote>
       <div className="mt-3">
-        <Button onClick={onRetry}>Retry</Button>
+        <Button variant="ghost" onClick={onRetry}>
+          Retry
+        </Button>
       </div>
     </div>
   );
@@ -887,10 +890,12 @@ export function NotificationsPage() {
           })}
 
           {hasMore ? (
-            <div className="mt-4 flex justify-center px-4 md:px-6">
-              <Button variant="ghost" onClick={() => void loadMore()} busy={loadingMore}>
-                Load more
-              </Button>
+            <div className="mt-4 flex flex-col px-4 md:px-6">
+              <LoadMore
+                data-activity-load-more=""
+                busy={loadingMore}
+                onMore={() => void loadMore()}
+              />
             </div>
           ) : null}
         </div>

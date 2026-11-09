@@ -94,7 +94,7 @@ describe('the Link button shows for the agency on any concept', () => {
     const [link] = buttons();
     expect(buttons()).toHaveLength(1);
     expect(link?.textContent).toBe(LINK_POST_LABEL);
-    expect(link?.className).toContain('lit-btn-secondary');
+    expect(link?.className).toContain('bg-fg/10');
     expect(link?.querySelector('svg')).not.toBeNull();
     act(() => link?.click());
     expect(onLink).toHaveBeenCalledTimes(1);
@@ -117,7 +117,7 @@ describe('the Link button shows for the agency on any concept', () => {
 });
 
 describe('Change and Unlink', () => {
-  it('a linked, approved concept shows "Change linked post" and "Unlink post"', () => {
+  it('a linked, approved concept shows "Change linked post" and "Unlink post" (inline Tools)', () => {
     const onLink = vi.fn();
     const onUnlink = vi.fn();
     mount(<LinkActions linked mayLink busy={false} onLink={onLink} onUnlink={onUnlink} />);
@@ -125,7 +125,10 @@ describe('Change and Unlink', () => {
       CHANGE_LINKED_POST_LABEL,
       UNLINK_POST_LABEL,
     ]);
-    for (const b of buttons()) expect(b.className).toContain('lit-btn-secondary');
+    for (const b of buttons()) {
+      expect(b.className).toContain('lit-hover');
+      expect(b.className).not.toContain('bg-fg/10');
+    }
     act(() => buttons()[0]?.click());
     act(() => buttons()[1]?.click());
     expect(onLink).toHaveBeenCalledTimes(1);

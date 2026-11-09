@@ -472,7 +472,7 @@ describe('tokens', () => {
     // A 32px badge inside a 2px canvas border (36 in all), overlapping the avatar edge.
     expect(badge).toContain('absolute -bottom-1 -right-1');
     expect(badge).toContain(
-      'flex h-9 w-9 items-center justify-center rounded-full border-2 border-bg bg-accent text-accent-fg lit-btn-primary',
+      'flex h-9 w-9 items-center justify-center rounded-full border-2 border-bg bg-accent text-accent-fg lit-badge',
     );
     expect(badge).toContain('width="16"');
     const actions = renderToStaticMarkup(

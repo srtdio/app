@@ -442,7 +442,8 @@ describe('load status', () => {
     const retry = (empty.props as { action: ReactElement }).action;
     // A Button: 44 tall by the design system.
     expect(retry.type).toBe(Button);
-    expect(retry.props).toMatchObject({ variant: 'primary', children: 'Retry' });
+    // Retry is a recover word: the Tool level.
+    expect(retry.props).toMatchObject({ variant: 'ghost', children: 'Retry' });
     (retry.props as { onClick: () => void }).onClick();
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

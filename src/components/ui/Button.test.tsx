@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
-import { Button, ClearButton, CLEAR_PILL_FACE, type ButtonVariant } from '@/components/ui/Button';
+import { Button, ClearButton, type ButtonVariant } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Chip } from '@/components/ui/Chip';
 
@@ -68,29 +68,37 @@ describe('Button design system', () => {
     expect(src).not.toMatch(/size\?: 'sm'/);
   });
 
-  it('maps each variant to its tokens', () => {
+  it('maps each variant to its level (9 Nov 2026): Main, Button, Tool', () => {
+    // MAIN: solid fill, rectangle, no lighting.
     expect(classOf({ variant: 'primary' })).toContain(
-      'lit-btn-primary bg-accent text-accent-fg hover:bg-accent-hover',
+      'bg-accent text-accent-fg hover:bg-accent-hover',
     );
-    expect(classOf({ variant: 'secondary' })).toContain(
-      'lit-btn-secondary bg-panel text-fg border',
-    );
-    expect(tokens(classOf({ variant: 'secondary' }))).not.toContain('border-border');
-    // Flat: no lit height. The focus line (focus-visible:lit-focus) and the
-    // lit-hover overlay are not heights.
-    const height = (cls: string) =>
-      tokens(cls).filter((c) => c.startsWith('lit-') && c !== 'lit-hover');
-    expect(height(classOf({ variant: 'ghost' }))).toEqual([]);
-    expect(height(classOf({ variant: 'link' }))).toEqual([]);
+    expect(classOf({ variant: 'success' })).toContain('bg-good-solid text-accent-fg');
+    expect(classOf({ variant: 'danger' })).toContain('bg-bad-solid text-accent-fg');
+    // BUTTON: soft grey fill, no border, fg ink.
+    const button = tokens(classOf({ variant: 'secondary' }));
+    expect(button).toEqual(expect.arrayContaining(['bg-fg/10', 'hover:bg-fg/15', 'text-fg']));
+    expect(button).not.toContain('border');
+    expect(button).not.toContain('bg-panel');
+    // TOOL: no fill, no border; link is ghost with fg ink (no accent tint).
+    for (const variant of ['ghost', 'link'] as const) {
+      const t = tokens(classOf({ variant }));
+      expect(t).toContain('lit-hover');
+      expect(t.some((c) => c.startsWith('bg-'))).toBe(false);
+      expect(t).not.toContain('border');
+    }
     expect(classOf({ variant: 'ghost' })).toContain('lit-hover text-fg-2 hover:text-fg');
-    expect(classOf({ variant: 'link' })).toContain('text-accent');
+    expect(tokens(classOf({ variant: 'link' }))).toContain('text-fg');
+    expect(classOf({ variant: 'link' })).not.toContain('accent');
     expect(classOf({ variant: 'link' })).toContain('!px-2');
-    expect(classOf({ variant: 'success' })).toContain(
-      'lit-btn-success lit-hover bg-good-solid text-accent-fg',
-    );
-    expect(classOf({ variant: 'danger' })).toContain(
-      'lit-btn-danger lit-hover bg-bad-solid text-accent-fg',
-    );
+  });
+
+  it('no lighting on any button: no lit-btn-* in any variant or shape', () => {
+    for (const variant of VARIANTS) {
+      for (const shape of ['default', 'round'] as const) {
+        expect(classOf({ variant, shape })).not.toMatch(/lit-btn-/);
+      }
+    }
   });
 
   it('hover keeps the light: no flat panel swap and no opacity', () => {
@@ -130,38 +138,26 @@ describe('Button design system', () => {
     expect(t).not.toContain('px-4');
   });
 
-  it('shape pill is the sheet primary: full radius, 24 side pad, the same 44 height, auto width', () => {
-    const t = tokens(classOf({ shape: 'pill', variant: 'primary' }));
-    expect(t).toContain('rounded-full');
-    expect(t).toContain('px-6');
-    expect(t).toContain('h-11');
-    expect(t).toContain('bg-accent');
-    expect(t).not.toContain('rounded-lg');
-    expect(t).not.toContain('px-4');
-    expect(t).not.toContain('w-full');
-    expect(t).not.toContain('w-11');
-  });
-
-  it('shape pill is additive: the default shape is unchanged', () => {
+  it('there is no pill shape: text buttons are the 8px rectangle', () => {
+    const src = readFileSync(fileURLToPath(new URL('./Button.tsx', import.meta.url)), 'utf8');
+    expect(src).toMatch(/export type ButtonShape = 'default' \| 'round';/);
     expect(tokens(classOf())).toContain('rounded-lg');
     expect(tokens(classOf())).toContain('px-4');
-    for (const variant of VARIANTS) {
-      expect(tokens(classOf({ variant, shape: 'pill' }))).toContain('mv-press');
-    }
   });
 
-  it('ClearButton is the outlined pill: ghost pill hit 44, a 36 border-strong face, fg-2 ink', () => {
+  it('ClearButton is a Tool: the word Clear, 44 tall, no outline, no fill, no pill', () => {
     const html = renderToStaticMarkup(<ClearButton aria-label="Clear it" onClick={() => {}} />);
     const tag = /<button[^>]*>/.exec(html)?.[0] ?? '';
-    expect(tag).toContain('rounded-full');
-    expect(tag).toContain('h-11');
-    expect(tag).toContain('data-clear-pill');
-    expect(tag).toContain('lit-hover');
-    expect(tag).not.toContain('bg-accent');
-    expect(CLEAR_PILL_FACE).toContain('h-9');
-    expect(CLEAR_PILL_FACE).toContain('border-border-strong');
-    expect(CLEAR_PILL_FACE).toContain('text-fg-2');
-    expect(html).toContain('>Clear</span></button>');
+    const t = tokens(/class="([^"]*)"/.exec(tag)?.[1] ?? '');
+    expect(t).toContain('h-11');
+    expect(t).toContain('rounded-lg');
+    expect(t).toContain('lit-hover');
+    expect(tag).toContain('data-clear-button');
+    expect(t).not.toContain('rounded-full');
+    expect(t.some((c) => c === 'border' || c.startsWith('border-'))).toBe(false);
+    expect(t.some((c) => c.startsWith('bg-'))).toBe(false);
+    expect(html).not.toContain('border');
+    expect(html).toContain('>Clear</button>');
   });
 
   it('danger and success fill with the solid tokens', () => {
@@ -356,6 +352,7 @@ describe('press (motion move 5): the shared mv-press class, never a call-site tr
       .className;
 
   it('Button (every variant and shape), IconButton and Chip carry mv-press', () => {
+    expect(tokens(classOf({ variant: 'primary', shape: 'round' }))).toContain('mv-press');
     for (const variant of VARIANTS) {
       expect(tokens(classOf({ variant }))).toContain('mv-press');
       expect(tokens(classOf({ variant, shape: 'round' }))).toContain('mv-press');

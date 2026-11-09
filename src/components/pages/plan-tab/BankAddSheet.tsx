@@ -158,7 +158,6 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
           primary={
             <Button
               variant="primary"
-              shape="pill"
               type="button"
               data-bank-add-go=""
               busy={busy}
@@ -261,7 +260,7 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
                     {u.status.state === 'error' ? u.status.message : u.file.name}
                   </span>
                   {u.status.state === 'error' ? (
-                    <Button type="button" onClick={() => controller.retry(u.id)}>
+                    <Button variant="ghost" type="button" onClick={() => controller.retry(u.id)}>
                       Retry
                     </Button>
                   ) : null}

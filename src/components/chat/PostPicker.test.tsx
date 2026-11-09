@@ -395,7 +395,7 @@ describe('search paging', () => {
     expect(next.ok && next.rows.map((r) => r.id)).toEqual(['p51']);
   });
 
-  it('renders "<N> matches" and "Load 50 more" with "<shown> of <N>" while more remain', () => {
+  it('renders "<N> matches" and the shared Load more (no count) while more remain', () => {
     const rows = Array.from({ length: 50 }, (_, i) => row(i + 1));
     const html = renderToStaticMarkup(
       <SearchResultsView
@@ -408,11 +408,13 @@ describe('search paging', () => {
       />,
     );
     expect(html).toContain('120 matches');
-    expect(html).toContain('Load 50 more');
-    expect(html).toContain('50 of 120');
+    expect(html).toContain('>Load more</button>');
+    expect(html).toContain('data-picker-load-more');
+    expect(html).not.toContain('Load 50 more');
+    expect(html).not.toContain('50 of 120');
   });
 
-  it('hides "Load 50 more" once every match is shown', () => {
+  it('hides Load more once every match is shown', () => {
     const html = renderToStaticMarkup(
       <SearchResultsView
         rows={[row(1)]}
@@ -424,7 +426,7 @@ describe('search paging', () => {
       />,
     );
     expect(html).toContain('1 match');
-    expect(html).not.toContain('Load 50 more');
+    expect(html).not.toContain('Load more');
   });
 });
 

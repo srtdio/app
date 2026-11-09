@@ -408,7 +408,6 @@ export function IdeaShareFlow(props: {
             </Button>
             <Button
               variant="primary"
-              shape="pill"
               type="button"
               data-idea-share-show=""
               className="md:order-3"

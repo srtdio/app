@@ -36,7 +36,8 @@ describe('PostDecisionBar buttons', () => {
       expect(a).toContain('h-11');
       expect(a).toContain('rounded-lg');
       expect(r).toContain('text-bad');
-      expect(r).toContain('lit-btn-secondary');
+      expect(r).toContain('bg-fg/10');
+      expect(r).not.toContain('lit-btn-');
       expect(r).not.toContain('bg-bad-solid');
       for (const c of [a, r]) {
         expect(c).not.toMatch(/\bh-(9|10|12)\b/);

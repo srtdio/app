@@ -84,7 +84,6 @@ export function PlanOpenSendSheet(props: {
           </Button>
           <Button
             variant="primary"
-            shape="pill"
             type="button"
             data-plan-open-send-go=""
             // Busy disables the button too, so a double tap never sends twice.

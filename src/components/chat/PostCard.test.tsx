@@ -459,8 +459,9 @@ describe('post sheet: Talk about', () => {
     const html = actions(() => {});
     expect(html).toMatch(/data-sheet-talk-about=""[^>]*>Talk about this post</);
     const talk = /<button[^>]*data-sheet-talk-about=""[^>]*>/.exec(html)?.[0] ?? '';
-    expect(talk).toContain('bg-accent-soft');
-    expect(talk).toContain('text-accent');
+    // A standalone action: the Button level (soft grey, fg ink, no accent tint).
+    expect(talk).toContain('bg-fg/10');
+    expect(talk).not.toContain('bg-accent-soft');
     expect(talk).toContain('h-11');
   });
 

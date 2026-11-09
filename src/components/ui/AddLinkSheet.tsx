@@ -70,7 +70,7 @@ export default function AddLinkSheet(props: {
         </Button>
       }
       primary={
-        <Button variant="primary" shape="pill" type="submit" form={formId} data-add-link-save="">
+        <Button variant="primary" type="submit" form={formId} data-add-link-save="">
           Save
         </Button>
       }

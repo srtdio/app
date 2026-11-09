@@ -52,6 +52,14 @@ const TRAY_SLIDE_PX = 8;
 
 type TileIcon = ComponentType<{ size?: number; className?: string }>;
 
+/**
+ * A tray tile's 44 circle face: part of a button, so no lighting (buttons are
+ * flat, 9 Nov 2026). Laptop (boxed): the panel with a hairline; touch: the
+ * panel-2 fill.
+ */
+const TRAY_TILE_BOXED = 'border bg-panel';
+const TRAY_TILE_FILLED = 'bg-panel-2';
+
 /** Every tray tile id, in display order. */
 export type TrayTileId =
   | 'photos'
@@ -375,7 +383,7 @@ export function TrayGrid(props: {
           <span
             className={cn(
               'relative flex h-11 w-11 items-center justify-center rounded-full text-fg',
-              boxed ? 'border bg-panel' : 'bg-panel-2 lit-btn-secondary',
+              boxed ? TRAY_TILE_BOXED : TRAY_TILE_FILLED,
             )}
           >
             <tile.Icon size={boxed ? ICON_SIZE.control : ICON_SIZE.tray} />

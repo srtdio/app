@@ -67,7 +67,7 @@ async function openPipeline(page: Page): Promise<void> {
   await expect(page.locator('[data-list-card]').first()).toBeVisible({ timeout: 15_000 });
   // The list shows BOARD_CAP (6) cards first; at 60 tall six no longer fill a
   // short iPad screen, so reveal more until the document overflows.
-  const more = page.getByRole('button', { name: /^Show \d+ more$/ });
+  const more = page.getByRole('button', { name: 'Load more' });
   for (let i = 0; i < 4; i += 1) {
     const overflows = await page.evaluate(() => {
       const doc = document.scrollingElement ?? document.documentElement;

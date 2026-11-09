@@ -57,7 +57,7 @@ export function PinAnnotationComposer({
       discard={COMMENT_DISCARD}
       busy={submitting}
       footer={
-        <Button disabled={submitting} onClick={onCancel}>
+        <Button variant="ghost" disabled={submitting} onClick={onCancel}>
           Cancel
         </Button>
       }

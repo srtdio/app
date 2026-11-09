@@ -163,7 +163,6 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         <div className="flex w-full justify-end">
           <Button
             variant="primary"
-            shape="pill"
             // Nothing picked yet is a choice not made, not a form error; while
             // sending the label stays with a spinner beside it.
             disabled={selected.size === 0}

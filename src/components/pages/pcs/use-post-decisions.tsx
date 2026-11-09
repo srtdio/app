@@ -232,7 +232,7 @@ export function StageReasonConfirm(props: {
             Cancel
           </Button>
           <Button
-            variant={props.destructive === true ? 'danger' : 'default'}
+            variant={props.destructive === true ? 'danger' : 'primary'}
             data-stage-confirm=""
             onClick={props.onConfirm}
           >

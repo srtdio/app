@@ -30,7 +30,7 @@ describe('Plan screen buttons (design system)', () => {
       expect(tag).toContain('rounded-lg');
       expect(tag).not.toMatch(OLD);
     }
-    expect(tags.find((t) => t.includes('data-plan-rename-done'))).toContain('text-accent');
+    expect(tags.find((t) => t.includes('data-plan-rename-done'))).toContain('text-fg');
     const cancel = tags.find((t) => t.includes('data-plan-rename-cancel')) ?? '';
     expect(cancel).toContain('aria-label="Cancel rename"');
     expect(cancel).toContain('lit-hover text-fg-2');

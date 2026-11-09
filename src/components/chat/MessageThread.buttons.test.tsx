@@ -41,15 +41,18 @@ describe('thread buttons', () => {
     for (const t of tags) expectOnSystem(t);
     const retry = tags.find((t) => t.includes('data-failed-line-retry')) ?? '';
     const del = tags.find((t) => t.includes('data-failed-delete')) ?? '';
-    expect(retry).toContain('text-accent');
+    expect(retry).toContain('text-fg');
+    expect(retry).not.toContain('text-accent');
     expect(del).toContain('text-bad');
   });
 
-  it('load error rows: the secondary Retry', () => {
+  it('load error rows: Retry is a Tool (ghost: no fill, no border)', () => {
     for (const row of [threadLoadErrorRow(noop), olderLoadErrorRow(noop)]) {
       const [retry] = buttons(renderToStaticMarkup(row));
       expectOnSystem(retry ?? '');
-      expect(retry).toContain('lit-btn-secondary');
+      expect(retry).toContain('lit-hover');
+      expect(retry).not.toContain('bg-fg/10');
+      expect(retry).not.toContain('lit-btn-');
     }
   });
 });

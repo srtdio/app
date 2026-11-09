@@ -117,7 +117,7 @@ export function withTaskEmbeds(
 /** The two entity kinds a comment may anchor to in the MVP. */
 export type CommentEntityType = 'post' | 'brief';
 
-/** Page size for both list and search reads. Fixed; not caller-tunable. */
+/** Default page size for list and search reads (the comment panel passes its own fill count to listComments). */
 export const PAGE_SIZE = 50;
 
 /**
@@ -259,8 +259,10 @@ export interface ListCommentsInput {
   resolved?: boolean;
   /** Filter to a single author_user_id. */
   author?: string;
-  /** Zero-based page index; PAGE_SIZE rows per page. */
+  /** Zero-based page index; `pageSize` rows per page. */
   page?: number;
+  /** Rows per page (the panel passes its screen's fill count); PAGE_SIZE when omitted. */
+  pageSize?: number;
 }
 
 /**
@@ -278,7 +280,8 @@ export async function listComments(
   input: ListCommentsInput,
 ): Promise<CommentResult<CommentRow[]>> {
   const page = Math.max(0, input.page ?? 0);
-  const start = page * PAGE_SIZE;
+  const size = Math.max(1, Math.floor(input.pageSize ?? PAGE_SIZE));
+  const start = page * size;
 
   let query = client
     .from('comments')
@@ -294,7 +297,7 @@ export async function listComments(
 
   const { data, error } = await query
     .order('created_at', { ascending: false })
-    .range(start, start + PAGE_SIZE - 1);
+    .range(start, start + size - 1);
 
   if (error) return { ok: false, error: transportError(error.message) };
   return { ok: true, data: withTaskEmbeds(data ?? []) };

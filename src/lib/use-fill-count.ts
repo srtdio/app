@@ -1,6 +1,6 @@
-// Fill the first screen, then load more (decided 7 Nov 2026). Every list shows
-// as many rows as the first screen holds, on every device, then "Show N more" /
-// Load more adds the same count again. No device is hard-coded: the number
+// Fill the first screen, then load more (decided 7 Nov 2026, reconfirmed 9 Nov).
+// Every list shows as many rows as the first screen holds, on every device,
+// then Load more (ui/LoadMore) adds the same count again. No device is hard-coded: the number
 // comes from the screen the app runs on, read ONCE per app load (no resize or
 // scroll listener, no element measuring, no await) and reused by every list.
 
@@ -68,6 +68,37 @@ export function getFillCount(): number {
   return stored;
 }
 
+/**
+ * Tiles the first page of a square-tile grid shows: the rows that fit the
+ * screen height (each tile as tall as one column of the grid's width) plus
+ * one, times the columns, kept in 6..40. Pure.
+ */
+export function tileFillCount(viewportH: number, gridW: number, columns: number): number {
+  const cols = Math.max(1, Math.floor(columns));
+  const tilePx = Math.max(1, gridW / cols);
+  const count = (Math.ceil(viewportH / tilePx) + 1) * cols;
+  if (!Number.isFinite(count)) return FILL_COUNT_FLOOR;
+  return Math.min(FILL_COUNT_CEILING, Math.max(FILL_COUNT_FLOOR, count));
+}
+
+const storedTiles = new Map<string, number>();
+
+/**
+ * One tile grid's fill count for this app load (read once per grid shape, then
+ * reused; no listener, no await): `columns` square tiles across a grid at most
+ * `maxGridPx` wide (the screen width when narrower, less the 16 gutters).
+ */
+export function getTileFillCount(columns: number, maxGridPx: number): number {
+  const key = `${columns}:${maxGridPx}`;
+  const hit = storedTiles.get(key);
+  if (hit !== undefined) return hit;
+  if (typeof window === 'undefined') return FILL_COUNT_FLOOR;
+  const gridW = Math.min(maxGridPx, window.innerWidth - 32);
+  const count = tileFillCount(window.innerHeight, gridW, columns);
+  storedTiles.set(key, count);
+  return count;
+}
+
 /** The fill count for this app load (one stored value; no listener, no state). */
 export function useFillCount(): number {
   return getFillCount();
@@ -77,4 +108,5 @@ export function useFillCount(): number {
 export function resetFillCountForTest(): void {
   stored = null;
   storedFor = undefined;
+  storedTiles.clear();
 }

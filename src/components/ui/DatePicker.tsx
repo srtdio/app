@@ -410,7 +410,6 @@ export function DatePicker({
                     <Button
                       type="button"
                       variant="primary"
-                      shape="pill"
                       data-date-done=""
                       onClick={() => setOpen(false)}
                     >

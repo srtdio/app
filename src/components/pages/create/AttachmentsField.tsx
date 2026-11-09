@@ -939,16 +939,17 @@ export function AttachmentsField({
   const addButtons = (
     <div className={cn('flex flex-wrap gap-2', dropzoneEmpty && 'justify-center')}>
       <Button
+        variant="ghost"
         type="button"
         disabled={dropzoneEmpty && pendingCount > 0}
         onClick={() => (dropzoneEmpty ? mediaInputRef : photoInputRef).current?.click()}
       >
         Photo
       </Button>
-      <Button type="button" onClick={() => docInputRef.current?.click()}>
+      <Button variant="ghost" type="button" onClick={() => docInputRef.current?.click()}>
         Document
       </Button>
-      <Button type="button" onClick={() => setLinkOpen((prev) => !prev)}>
+      <Button variant="ghost" type="button" onClick={() => setLinkOpen((prev) => !prev)}>
         <IconLink size={ICON_SIZE.inline} />
         Link
       </Button>

@@ -71,7 +71,7 @@ vi.mock('@/lib/workspace-members', async (importOriginal) => ({
   useMentionCandidates: () => ({ candidates: [] }),
 }));
 
-import { PAGE_SIZE } from '@srtdio/comments';
+import { getFillCount } from '@/lib/use-fill-count';
 import { Comments } from '@/components/comments/Comments';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -169,7 +169,8 @@ describe('Comments W3', () => {
   });
 
   it('a failed older page keeps the list and offers Retry at the bottom', async () => {
-    const full = Array.from({ length: PAGE_SIZE }, (_u, i) => row(`c-${i}`, `body ${i}`));
+    // A full page is one screen's worth (the panel pages by the fill count).
+    const full = Array.from({ length: getFillCount() }, (_u, i) => row(`c-${i}`, `body ${i}`));
     queue.push({ ok: true, data: full });
     queue.push({ ok: false, error: { code: 'unknown', message: 'fetch failed' } });
     await mount();

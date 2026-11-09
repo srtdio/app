@@ -215,6 +215,7 @@ const REQUIRED: readonly string[] = [
   'plan-share-draft-sheet',
   'plan-tab',
   'plan-tab-bank',
+  'plan-tab-bank-load-more',
   'plan-tab-bank-add',
   'plan-tab-bank-filter',
   'plan-tab-bank-filter-bucket-menu',

@@ -147,7 +147,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
         title="Booked"
         footer={
           <div className="flex w-full justify-end">
-            <Button variant="primary" shape="pill" onClick={onClose}>
+            <Button variant="primary" onClick={onClose}>
               Done
             </Button>
           </div>
@@ -169,7 +169,6 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
         <div className="flex w-full justify-end">
           <Button
             variant="primary"
-            shape="pill"
             // No time picked yet is a choice not made (like an unpicked radio),
             // not a form error; while sending the label stays with a spinner.
             disabled={slotAt === null}

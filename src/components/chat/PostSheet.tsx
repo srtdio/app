@@ -446,10 +446,10 @@ export function PostSheetExtras(props: PostSheetExtrasProps): ReactElement | nul
       {props.onTalkAbout !== undefined ? (
         <Button
           type="button"
-          variant="link"
+          variant="secondary"
           data-sheet-talk-about=""
           onClick={props.onTalkAbout}
-          className="w-full md:w-auto bg-accent-soft"
+          className="w-full md:w-auto"
         >
           {talkAboutLabel()}
         </Button>
@@ -677,7 +677,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     <div data-sheet-actions="" className="w-full">
       <Button
         type="button"
-        variant="secondary"
+        variant="ghost"
         onClick={() => setCommenting(false)}
         className="w-full md:w-auto"
       >

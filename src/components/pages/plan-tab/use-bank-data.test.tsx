@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Bank's data: a page of max(12, the screen's fill count) with a keyset cursor (starred first), Load
+// The Bank's data: a page of the screen's fill count with a keyset cursor (starred first), Load
 // more appends without duplicates, and a return paints the kept page on its
 // first frame (no read before paint).
 import { act } from 'react';
@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import type { Result } from '@srtdio/rpc';
 import {
-  BANK_PAGE_SIZE,
+  bankPageSize,
   bankKeysetFilter,
   bankPageOf,
   type BankIdea,
@@ -65,28 +65,31 @@ const rows = (prefix: string, n: number, starred = false): PlanItemRow[] =>
     row(`${prefix}${i}`, `2026-10-${String(28 - i).padStart(2, '0')}T00:00:00Z`, starred),
   );
 
+/** One Bank page (the fill count; no window here, so its floor). */
+const BANK_PAGE = bankPageSize();
+
 describe('a page and its cursor', () => {
   it('fills a first page with starred ideas, then the rest', () => {
-    const rest = rows('r', BANK_PAGE_SIZE + 1);
+    const rest = rows('r', BANK_PAGE + 1);
     const page = bankPageOf('active', null, rows('s', 2, true), rest);
-    expect(page.rows).toHaveLength(BANK_PAGE_SIZE);
+    expect(page.rows).toHaveLength(BANK_PAGE);
     expect(page.rows.slice(0, 2).map((r) => r.id)).toEqual(['s0', 's1']);
-    // The page's last row is the rest group's (BANK_PAGE_SIZE - 2)th.
-    const last = rest[BANK_PAGE_SIZE - 3]!;
+    // The page's last row is the rest group's (BANK_PAGE - 2)th.
+    const last = rest[BANK_PAGE - 3]!;
     expect(page.nextCursor).toEqual({
       starred: false,
-      after: { key: last.last_active_at, id: `r${BANK_PAGE_SIZE - 3}` },
+      after: { key: last.last_active_at, id: `r${BANK_PAGE - 3}` },
     });
   });
 
   it('stays in the starred group while it has more than a page', () => {
-    const page = bankPageOf('active', null, rows('s', BANK_PAGE_SIZE + 1, true), []);
+    const page = bankPageOf('active', null, rows('s', BANK_PAGE + 1, true), []);
     expect(page.nextCursor?.starred).toBe(true);
     expect(page.rows.every((r) => r.starred_at !== null)).toBe(true);
   });
 
   it('starts the rest from its start when the starred group filled the page exactly', () => {
-    const page = bankPageOf('active', null, rows('s', BANK_PAGE_SIZE, true), rows('r', 3));
+    const page = bankPageOf('active', null, rows('s', BANK_PAGE, true), rows('r', 3));
     expect(page.nextCursor).toEqual({ starred: false, after: null });
   });
 
@@ -182,18 +185,17 @@ describe('kept paint', () => {
 });
 
 describe('Bank page size fills the screen', () => {
-  it('the page limit is max(12, the fill count), read once per app load', () => {
-    expect(BANK_PAGE_SIZE).toBe(Math.max(12, getFillCount()));
-    expect(BANK_PAGE_SIZE).toBeGreaterThanOrEqual(12);
+  it('the page limit is exactly the fill count (no floor of its own), read once per app load', () => {
+    expect(bankPageSize()).toBe(getFillCount());
   });
 
-  it('a page holds exactly BANK_PAGE_SIZE ideas and reads one extra to know more remain', () => {
-    const many = Array.from({ length: BANK_PAGE_SIZE + 1 }, (_unused, i) => ({
+  it('a page holds exactly bankPageSize() ideas and reads one extra to know more remain', () => {
+    const many = Array.from({ length: BANK_PAGE + 1 }, (_unused, i) => ({
       id: `r${String(i).padStart(3, '0')}`,
       last_active_at: `2026-01-01T00:00:${String(59 - (i % 60)).padStart(2, '0')}Z`,
     }));
     const page = bankPageOf('active', null, [], many as never);
-    expect(page.rows).toHaveLength(BANK_PAGE_SIZE);
+    expect(page.rows).toHaveLength(BANK_PAGE);
     expect(page.nextCursor).not.toBeNull();
   });
 });

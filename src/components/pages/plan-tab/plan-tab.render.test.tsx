@@ -61,6 +61,7 @@ vi.mock('@/components/chat/PlanComposeScreen', () => ({
 vi.mock('@/components/media/Thumbnail', () => ({ Thumbnail: () => null }));
 
 import { PlanTabLoadMore } from '@/components/pages/plan-tab/PlanTabList';
+import { LoadMore } from '@/components/ui/LoadMore';
 import { ToastProvider } from '@/components/ui/toast';
 import { PlanTabPage } from '@/components/pages/PlanTabPage';
 import { civilToday } from '@/lib/plan-week';
@@ -250,11 +251,13 @@ describe('PlanTabPage', () => {
       expect(html.indexOf('data-plan-tab-load-more')).toBeGreaterThan(
         html.lastIndexOf('data-plan-tab-card'),
       );
-      // The shared Button: 44 tall, tokens only.
+      // The shared ui/LoadMore: the Button level, 44 tall, left aligned.
       expect(html).toMatch(/<button class="[^"]*min-h-11[^"]*"[^>]*data-plan-tab-load-more=""/);
       env.moreBusy = true;
       html = render();
-      expect(html).toMatch(/data-plan-tab-load-more="" disabled="" aria-busy="true"[^]*?Load more/);
+      expect(html).toMatch(
+        /data-plan-tab-load-more=""[^>]*disabled="" aria-busy="true"[^]*?Load more/,
+      );
       env.moreBusy = false;
       env.data = DATA;
       expect(render()).not.toContain('data-plan-tab-load-more');
@@ -307,17 +310,16 @@ describe('PlanTabPage', () => {
   it("Load more: the tap is the hook's loadMore; its label follows busy", () => {
     const onMore = vi.fn();
     const el = PlanTabLoadMore({ more: { busy: false, onMore } });
-    const props = el.props as { onClick: () => void; busy: boolean; children: string };
-    props.onClick();
+    // The shared part, never a hand-built Button.
+    expect(el.type).toBe(LoadMore);
+    const props = el.props as { onMore: () => void; busy: boolean };
+    props.onMore();
     expect(onMore).toHaveBeenCalledTimes(1);
     expect(props.busy).toBe(false);
-    expect(props.children).toBe('Load more');
+    expect(renderToStaticMarkup(el)).toContain('>Load more</button>');
     // Busy keeps the label (Button busy), never a 'Loading' swap.
-    const busy = PlanTabLoadMore({ more: { busy: true, onMore } }).props as {
-      busy: boolean;
-      children: string;
-    };
-    expect(busy.busy).toBe(true);
-    expect(busy.children).toBe('Load more');
+    const busyEl = PlanTabLoadMore({ more: { busy: true, onMore } });
+    expect((busyEl.props as { busy: boolean }).busy).toBe(true);
+    expect(renderToStaticMarkup(busyEl)).toMatch(/data-busy-label=""[^>]*>Load more</);
   });
 });

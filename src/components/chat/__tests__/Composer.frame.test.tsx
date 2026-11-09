@@ -114,7 +114,8 @@ describe('chat Composer on ui/Composer', () => {
   it('recording: the bin is a 44 danger circle on the left, send on the right, m:ss in the field', () => {
     const html = row({ kind: 'recording', elapsed: recordingElapsed(7) });
     expect(html).toContain('aria-label="Cancel recording"');
-    expect(html).toContain('lit-btn-danger');
+    expect(html).toContain('bg-bad-solid');
+    expect(html).not.toContain('lit-btn-');
     expect(html).not.toContain('data-plus');
     expect(html).toContain('Recording');
     expect(html).toContain('0:07');

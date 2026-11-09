@@ -28,7 +28,10 @@ import {
 } from '../../packages/test-utils/rls';
 import type { Database } from '../../packages/schemas/src/supabase.generated';
 import type { Client } from '../../packages/rpc/src/index';
-import { BRIEF_LIST_PAGE_SIZE, listBriefsPage, type BriefCursor } from '../../src/lib/brief-list';
+import { listBriefsPage, type BriefCursor } from '../../src/lib/brief-list';
+
+/** The page this suite walks: 100, so the tie straddles one page edge (the app pages by the fill count). */
+const BRIEF_LIST_PAGE_SIZE = 100;
 import { countBriefsByFilter } from '../../src/lib/brief-counts';
 
 const BRIEFS_SUITE = process.env.BRIEFS_SUITE === '1';
@@ -99,7 +102,14 @@ async function readAllPages(client: Client, workspaceId: string) {
   let cursor: BriefCursor | undefined;
   let pages = 0;
   for (;;) {
-    const result = await listBriefsPage(client, workspaceId, cursor);
+    const result = await listBriefsPage(
+      client,
+      workspaceId,
+      cursor,
+      cursor?.query ?? '',
+      undefined,
+      BRIEF_LIST_PAGE_SIZE,
+    );
     if (!result.ok) throw new Error(`listBriefsPage failed: ${result.error.message}`);
     pages += 1;
     expect(result.data.items.length).toBeLessThanOrEqual(BRIEF_LIST_PAGE_SIZE);

@@ -281,7 +281,7 @@ export function PostDetailsSheet({
         footer={
           isAgencySide ? (
             <div className="flex w-full justify-end">
-              <Button variant="primary" shape="pill" data-details-done="" onClick={done}>
+              <Button variant="primary" data-details-done="" onClick={done}>
                 Done
               </Button>
             </div>

@@ -20,7 +20,8 @@ import {
   linkDomain,
   listAssets,
   listAssetsPage,
-  ASSETS_PAGE_SIZE,
+  assetsPageSize,
+  ASSET_NAMING_READ_SIZE,
   assetKeysetFilter,
   getAssetItem,
   mergeAssetPages,
@@ -87,6 +88,9 @@ function assetRow(id: string, kind: string, over: Record<string, unknown> = {}) 
     ...over,
   };
 }
+
+/** One server page: the fill count (no window here, so its floor). */
+const ASSET_PAGE = assetsPageSize();
 
 describe('kind to tab mapping', () => {
   it('maps every server kind to exactly one non-All tab', () => {
@@ -257,7 +261,7 @@ function rowsFrom(start: number, count: number) {
 
 describe('listAssetsPage keyset paging', () => {
   it('reads one row past the page, orders uploaded_at desc then id desc, and hands back a cursor', async () => {
-    const rows = rowsFrom(0, ASSETS_PAGE_SIZE + 1);
+    const rows = rowsFrom(0, ASSET_PAGE + 1);
     const { client, calls, reads } = recordingClient({
       assets: [{ data: rows, error: null }],
       asset_attachments: [{ data: [], error: null }],
@@ -265,8 +269,8 @@ describe('listAssetsPage keyset paging', () => {
     const result = await listAssetsPage(client, 'ws-1');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.items).toHaveLength(ASSETS_PAGE_SIZE);
-    const last = rows[ASSETS_PAGE_SIZE - 1];
+    expect(result.data.items).toHaveLength(ASSET_PAGE);
+    const last = rows[ASSET_PAGE - 1];
     expect(result.data.next).toEqual({
       done: false,
       cursor: { uploadedAt: last?.uploaded_at, id: last?.id },
@@ -276,7 +280,7 @@ describe('listAssetsPage keyset paging', () => {
       ['uploaded_at', { ascending: false }],
       ['id', { ascending: false }],
     ]);
-    expect(assetCalls.find((c) => c.method === 'limit')?.args).toEqual([ASSETS_PAGE_SIZE + 1]);
+    expect(assetCalls.find((c) => c.method === 'limit')?.args).toEqual([ASSET_PAGE + 1]);
     // First page: no keyset filter.
     expect(assetCalls.some((c) => c.method === 'or')).toBe(false);
     // ONE request per page: attachments ride along as an embed.
@@ -335,13 +339,10 @@ describe('listAssetsPage keyset paging', () => {
   });
 
   it('page one then page two merge with no duplicates', async () => {
-    const first = rowsFrom(0, ASSETS_PAGE_SIZE + 1);
+    const first = rowsFrom(0, ASSET_PAGE + 1);
     // A file uploaded between the reads can surface twice: repeat page one's last row.
-    const repeated = first[ASSETS_PAGE_SIZE - 1];
-    const second = [
-      ...(repeated !== undefined ? [repeated] : []),
-      ...rowsFrom(ASSETS_PAGE_SIZE, 5),
-    ];
+    const repeated = first[ASSET_PAGE - 1];
+    const second = [...(repeated !== undefined ? [repeated] : []), ...rowsFrom(ASSET_PAGE, 5)];
     const { client } = recordingClient({
       assets: [
         { data: first, error: null },
@@ -359,17 +360,17 @@ describe('listAssetsPage keyset paging', () => {
     const merged = mergeAssetPages(one.data.items, two.data.items);
     const ids = merged.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(merged).toHaveLength(ASSETS_PAGE_SIZE + 5);
-    expect(merged.slice(0, ASSETS_PAGE_SIZE)).toEqual(one.data.items);
+    expect(merged).toHaveLength(ASSET_PAGE + 5);
+    expect(merged.slice(0, ASSET_PAGE)).toEqual(one.data.items);
   });
 
-  it('listAssets returns the first page only, as a plain list', async () => {
+  it('listAssets (upload naming, not a Load more list) returns one fixed read as a plain list', async () => {
     const { client } = recordingClient({
-      assets: [{ data: rowsFrom(0, ASSETS_PAGE_SIZE + 1), error: null }],
+      assets: [{ data: rowsFrom(0, ASSET_NAMING_READ_SIZE + 1), error: null }],
       asset_attachments: [{ data: [], error: null }],
     });
     const result = await listAssets(client, 'ws-1');
-    expect(result.ok && result.data).toHaveLength(ASSETS_PAGE_SIZE);
+    expect(result.ok && result.data).toHaveLength(ASSET_NAMING_READ_SIZE);
   });
 
   it('a failed read fails the page', async () => {

@@ -34,10 +34,7 @@ export function LinkButton({ url, className }: LinkButtonProps) {
       className={buttonClass(
         'secondary',
         'default',
-        cn(
-          'group max-w-full !justify-start no-underline hover:border-border-strong focus-visible:lit-focus',
-          className,
-        ),
+        cn('group max-w-full !justify-start no-underline focus-visible:lit-focus', className),
       )}
     >
       <span className="shrink-0 text-accent">

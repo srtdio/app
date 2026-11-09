@@ -83,10 +83,11 @@ describe('From bank branches', () => {
     });
   });
 
-  it('reads when it opens, never before; 12 a page with Load more', () => {
+  it('reads when it opens, never before; one screen (bankPageSize) a page with Load more', () => {
     const src = readFileSync(here('./BankPickSheet.tsx'), 'utf8');
     expect(src).toMatch(/useEffect\(\(\) => \{\s*if \(!open\) return;[\s\S]*?readFirst\(\);/);
     expect(src).toContain('PlanTabLoadMore');
+    expect(src.match(/bankPageSize\(\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
     expect(src).toContain("kind: 'undo'");
     expect(src).toContain('unplanBankIdea');
   });
