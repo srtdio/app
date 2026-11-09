@@ -82,7 +82,7 @@ function row(state: ComposerState, strip?: boolean): string {
 describe('chat Composer on ui/Composer', () => {
   it('renders through ui/WritingBox (chat mode), with no hand-built well left', () => {
     expect(SRC).toContain(
-      "import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';",
+      "import { RowKey, RowKeyHold, RowSend, WritingBox } from '@/components/ui/WritingBox';",
     );
     expect(FRAME).toContain('mode="chat"');
     expect(FRAME).toContain('strip={');
@@ -92,7 +92,9 @@ describe('chat Composer on ui/Composer', () => {
     // The emoji is the box's own row key (the emoji sheet), not a side slot.
     expect(FRAME).not.toContain('side={');
     expect(FRAME).toContain('send={');
-    expect(FRAME).toContain('discard={');
+    // Recording: the shared RecordingRow (chat/VoiceDraft) fills the pill.
+    expect(FRAME).toContain('recording={');
+    expect(FRAME).not.toContain('discard={');
     // The old recording well, voice-busy row and hand-built spinners are gone.
     expect(SRC).not.toContain('border border-border-strong bg-panel-2 px-3 lit-tint');
     expect(SRC).not.toContain('Sending voice note…');
@@ -121,8 +123,12 @@ describe('chat Composer on ui/Composer', () => {
     expect(html).toContain('0:07');
     expect(html.indexOf('Cancel recording')).toBeLessThan(html.indexOf('data-composer-field'));
     expect(html.indexOf('data-composer-field')).toBeLessThan(html.indexOf('aria-label="Send"'));
-    // The source wires the same: the bin in discard, stop-and-send in send.
-    expect(FRAME).toMatch(/variant="danger"\s+shape="round"\s+aria-label="Cancel recording"/);
+    // The chat composer itself now draws the shared recording row (X cancel,
+    // live track, m:ss, check = stop and keep; VoiceDraft.recording.test.tsx);
+    // ComposerFrame keeps the older row for any caller without one.
+    expect(FRAME).toContain('<RecordingRow');
+    expect(FRAME).toContain('elapsed={recordingElapsed(recorder.seconds)}');
+    expect(FRAME).toContain('onCancel={cancel}');
     expect(FRAME).toContain("{ kind: 'recording', elapsed: recordingElapsed(recorder.seconds) }");
   });
 
@@ -149,7 +155,8 @@ describe('chat Composer on ui/Composer', () => {
   });
 
   it('voice busy never collapses the row: the mic spins in the send slot', () => {
-    expect(FRAME).toMatch(/aria-label="Sending voice note"[\s\S]{0,80}\bbusy\b/);
+    // The busy RowSend keeps send's own width (label = its aria-label).
+    expect(FRAME).toMatch(/label="Sending voice note"[\s\S]{0,80}\bbusy\b/);
     expect(FRAME).toContain('voiceBusy || editBusy');
     const html = renderToStaticMarkup(
       <ComposerFrame
@@ -209,7 +216,8 @@ describe('chat Composer on ui/Composer', () => {
   it('the mic is a bare row key beside send in every state (typing too); send is RowSend', () => {
     expect(SRC).toMatch(/<RowKey\s+label="Record voice note"/);
     expect(FRAME).toContain('pillEnd={showMic ? micKey : undefined}');
-    expect(FRAME).toContain('mic={showMic ? micKey : undefined}');
+    // While a voice note sends the mic's slot is held (RowKeyHold) so the row keeps its width.
+    expect(FRAME).toContain('mic={showMic ? micKey : voiceBusy ? <RowKeyHold /> : undefined}');
     // The mic never takes send's place any more.
     expect(FRAME).not.toContain('showMic && laptopBox ? (');
   });

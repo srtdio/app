@@ -180,6 +180,13 @@ export const LIST_CARD_PREVIEW = textRole('secondary', 'min-w-0 flex-1 truncate'
 /** The unread dot: 8px, round, fg ink. */
 export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full bg-fg';
 
+/**
+ * Rows a card shows under itself (Activity's one line per notification) start on the
+ * card's text column: the density picture plus its 12 gap (48 + 12 = 60 Cozy
+ * and Calm, 40 + 12 = 52 Compact).
+ */
+export const LIST_CARD_SUB_INSET = 'pl-15 compact:pl-13';
+
 /** The list the rows stack in: rows touching, no divider (phone, and the chat list pane). */
 export const LIST_CARD_STACK = 'flex flex-col';
 
@@ -294,8 +301,8 @@ function clickCover(event: MouseEvent<HTMLElement>): void {
  *   2. preview (secondary, one line) then the one grey Tag then the unread dot;
  *      with no preview the tag sits on the right end, under the time.
  * No third line and no ⋮: a card's actions live on its list's select bar
- * (long-press / right-click selects). Every row is exactly 60 tall
- * (LIST_CARD_HEIGHT_PX); line 2 stays even when it is empty.
+ * (long-press / right-click selects). Every row is exactly the density height (listCardHeightPx); line 2 stays even when it
+ * is empty.
  */
 export function ListCard({
   picture,

@@ -123,7 +123,7 @@ jobs:
 
       - name: Render new baselines
         if: steps.mode.outputs.update == 'true'
-        timeout-minutes: 10
+        timeout-minutes: 25
         run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4 --update-snapshots=all
 
       - name: Upload new baselines

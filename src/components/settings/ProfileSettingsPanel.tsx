@@ -76,6 +76,7 @@ import {
   type CurrentProfile,
 } from '@/lib/use-current-profile';
 import { errorText } from '@/lib/error-copy';
+import { DISPLAY_NAME_MAX, NAME_TOO_LONG, isNameTooLong, nameCounter } from '@/lib/display-name';
 
 /** What a save does to the photo: leave it, replace it, or clear it. */
 type PhotoChange = { kind: 'keep' } | { kind: 'set'; url: string } | { kind: 'clear' };
@@ -284,8 +285,9 @@ export const PHOTO_VIEW_INITIAL: PhotoView = { previewUrl: null, removed: false,
 
 const SAVE_FALLBACK = 'save your profile';
 
-/** One readable line for a server / upload error. Pure. */
+/** One readable line for a server / upload error. A too-long name reads NAME_TOO_LONG. Pure. */
 export function profileErrorMessage(message: string): string {
+  if (isNameTooLong(message)) return NAME_TOO_LONG;
   const line = message.split('\n')[0]?.trim() ?? '';
   if (line.length === 0 || /^[a-z_]+$/.test(line)) return errorText(SAVE_FALLBACK, line);
   return line;
@@ -622,6 +624,12 @@ export function ProfileSettingsPanel(): React.ReactElement {
       });
       if (!result.ok) {
         logger.error('settings profile save failed', { error: result.error.message });
+        if (isNameTooLong(result.error)) {
+          // The server's cap (users_display_name_max25): the line sits under the name.
+          setNameError(NAME_TOO_LONG);
+          document.getElementById('settings-display-name')?.focus();
+          return;
+        }
         setFormError(profileErrorMessage(result.error.message));
         return;
       }
@@ -755,7 +763,8 @@ export function ProfileSettingsPanel(): React.ReactElement {
           name="name"
           autoComplete="name"
           value={fields.name}
-          maxLength={80}
+          maxLength={DISPLAY_NAME_MAX}
+          counter={nameCounter(fields.name)}
           placeholder="Your name"
           aria-invalid={nameError !== null}
           aria-describedby={nameError !== null ? 'settings-display-name-error' : undefined}

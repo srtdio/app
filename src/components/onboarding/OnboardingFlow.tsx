@@ -54,6 +54,13 @@ import { LEADING_PULL } from '@/components/ui/layout';
 import { Text } from '@/components/ui/Text';
 import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
+import {
+  DISPLAY_NAME_MAX,
+  NAME_TOO_LONG,
+  capDisplayName,
+  isNameTooLong,
+  nameCounter,
+} from '@/lib/display-name';
 import { cardPad, cardSurface } from '@/components/ui/Card';
 import { env } from '@/lib/env';
 import { errorText } from '@/lib/error-copy';
@@ -279,9 +286,10 @@ export function OnboardingFlow({
   // A new account's display_name is the email's local part (signup trigger), not
   // a real name: start blank then, so nobody becomes "connect" by default.
   const [name, setName] = useState(() => {
-    if (draft !== undefined) return draft.name;
+    // Capped: a draft or an older name never starts past what the save accepts.
+    if (draft !== undefined) return capDisplayName(draft.name);
     const current = profile?.display_name ?? '';
-    return current === email.split('@')[0] ? '' : current;
+    return current === email.split('@')[0] ? '' : capDisplayName(current);
   });
   const [username, setUsername] = useState(draft?.username ?? '');
   const [usernameEdited, setUsernameEdited] = useState(draft?.usernameEdited ?? false);
@@ -583,6 +591,12 @@ export function OnboardingFlow({
         setError("Couldn't save that username. Someone just took it, so pick another.");
         return;
       }
+      if (isNameTooLong(saved.error)) {
+        // The server's cap (users_display_name_max25): back to the name, line under it.
+        setIndex(steps.indexOf('name'));
+        setFieldErrors((prev) => ({ ...prev, name: NAME_TOO_LONG }));
+        return;
+      }
       logger.error('onboarding save failed', { error: saved.error.message });
       setError(errorText('save your name', saved.error));
       return;
@@ -855,7 +869,8 @@ export function OnboardingFlow({
             id="ob-name"
             name="name"
             autoComplete="name"
-            maxLength={80}
+            maxLength={DISPLAY_NAME_MAX}
+            counter={nameCounter(name)}
             placeholder="Your full name"
             value={name}
             {...fieldErrorProps(fieldErrors, 'name')}

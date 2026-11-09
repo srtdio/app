@@ -180,67 +180,41 @@ export function libraryChipKey(asset: Pick<LibraryAsset, 'versionId'>): string {
   return `lib-${asset.versionId}`;
 }
 
-export function CommentComposer({
-  onSubmit,
-  members,
-  canAttach,
-  uploadFile,
-  placeholder = 'Add a comment',
-  submitLabel = 'Post',
-  autoFocus = false,
-  initialBody,
-  submitAnchor,
-  onBodyChange,
-  onAttachmentCountChange,
-  expandTitle,
-}: CommentComposerProps): ReactElement {
-  const [body, setBody] = useState('');
-  // The MentionInput is contentEditable and uncontrolled; clearing the draft
-  // after a successful submit remounts it via this incrementing key.
-  const [composerKey, setComposerKey] = useState(0);
+/** The picked files and library picks of one writing box, and their uploads. */
+export interface CommentUploads {
+  pending: Pending[];
+  library: LibraryAsset[];
+  /** Upload chips then library chips, in render order. */
+  chipKeys: string[];
+  chipCount: number;
+  /** A picked file is still uploading (Send waits for none: it is disabled). */
+  uploading: boolean;
+  /** At least one finished upload or library pick. */
+  hasReady: boolean;
+  /** What a send carries: finished upload version ids, then the library picks. */
+  ids: string[];
+  /** Photos (imageOnly: precheckImage) or File (the full allowlist). */
+  addFiles: (list: FileList | null, imageOnly?: boolean) => Promise<void>;
+  retryPending: (id: string) => void;
+  removePending: (id: string) => void;
+  addLibrary: (picks: readonly LibraryAsset[]) => void;
+  removeLibrary: (versionId: string) => void;
+  /** After a send: the chips go (their previews are freed). */
+  clear: () => void;
+}
+
+/**
+ * The comment composers' upload flow as one hook (CommentComposer and the
+ * catch-up reply): each picked file is pre-checked, then uploaded at once
+ * through `uploadFile` (the asset pipeline, returning a VERSION id); a failure
+ * keeps its chip with Retry (unless the pre-check refused it). Library picks
+ * are already uploaded. Never throws.
+ */
+export function useCommentUploads(
+  uploadFile: ((file: File) => Promise<ChatAttachmentUpload>) | undefined,
+): CommentUploads {
   const [pending, setPending] = useState<Pending[]>([]);
-  // Library picks (Assets): already uploaded, sent by their current version id.
   const [library, setLibrary] = useState<LibraryAsset[]>([]);
-  // A new attach chip rises into place (itemIn) over its final state; chips
-  // render uploads then library picks, so the list's children line up with it.
-  const chipKeys = [...pending.map((item) => item.id), ...library.map(libraryChipKey)];
-  const freshChips = useFreshKeys(chipKeys);
-  const chipsRef = useRef<HTMLUListElement>(null);
-  useLayoutEffect(() => {
-    if (freshChips.size === 0) return;
-    chipKeys.forEach((key, index) => {
-      if (freshChips.has(key)) itemIn(chipsRef.current?.children[index] ?? null);
-    });
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // The library picker mounts on the first Assets tap only (nothing on paint),
-  // then stays mounted so it can slide out.
-  const [assetsMounted, setAssetsMounted] = useState(false);
-  const [assetsOpen, setAssetsOpen] = useState(false);
-  const layout = useChatLayout();
-  const trayId = useId();
-
-  // The chip count up to the parent (its Back guard); after commit, never on paint.
-  const chipCount = pending.length + library.length;
-  const onAttachmentCountRef = useRef(onAttachmentCountChange);
-  onAttachmentCountRef.current = onAttachmentCountChange;
-  useEffect(() => {
-    onAttachmentCountRef.current?.(chipCount);
-  }, [chipCount]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const editorRef = useRef<MentionInputHandle>(null);
-
-  const trimmed = body.trim();
-  const tooLong = body.length > MAX_BODY;
-  const uploading = pending.some((item) => item.status.state === 'uploading');
-  const hasReadyAttachment =
-    pending.some((item) => item.status.state === 'done') || library.length > 0;
-  const attachEnabled = canAttach && uploadFile !== undefined;
-  const canSubmit =
-    (trimmed.length > 0 || hasReadyAttachment) && !tooLong && !uploading && !submitting;
 
   // Upload one chip's file and settle its status; a failure keeps the chip
   // (with its file) so Retry can run it again.
@@ -304,9 +278,89 @@ export function CommentComposer({
     });
   }
 
-  function removeLibrary(versionId: string): void {
-    setLibrary((prev) => prev.filter((asset) => asset.versionId !== versionId));
+  function clear(): void {
+    for (const item of pending) {
+      if (item.previewUrl != null) URL.revokeObjectURL(item.previewUrl);
+    }
+    setPending([]);
+    setLibrary([]);
   }
+
+  return {
+    pending,
+    library,
+    chipKeys: [...pending.map((item) => item.id), ...library.map(libraryChipKey)],
+    chipCount: pending.length + library.length,
+    uploading: pending.some((item) => item.status.state === 'uploading'),
+    hasReady: pending.some((item) => item.status.state === 'done') || library.length > 0,
+    ids: attachmentIdsOf(pending, library),
+    addFiles,
+    retryPending,
+    removePending,
+    addLibrary: (picks) => setLibrary((prev) => mergeLibraryPicks(prev, picks)),
+    removeLibrary: (versionId) =>
+      setLibrary((prev) => prev.filter((asset) => asset.versionId !== versionId)),
+    clear,
+  };
+}
+
+export function CommentComposer({
+  onSubmit,
+  members,
+  canAttach,
+  uploadFile,
+  placeholder = 'Add a comment',
+  submitLabel = 'Post',
+  autoFocus = false,
+  initialBody,
+  submitAnchor,
+  onBodyChange,
+  onAttachmentCountChange,
+  expandTitle,
+}: CommentComposerProps): ReactElement {
+  const [body, setBody] = useState('');
+  // The MentionInput is contentEditable and uncontrolled; clearing the draft
+  // after a successful submit remounts it via this incrementing key.
+  const [composerKey, setComposerKey] = useState(0);
+  // Picked files (uploaded at once) and library picks (Assets: already
+  // uploaded, sent by their current version id): the shared upload flow.
+  const uploads = useCommentUploads(uploadFile);
+  const { pending, library, chipKeys, chipCount } = uploads;
+  // A new attach chip rises into place (itemIn) over its final state; chips
+  // render uploads then library picks, so the list's children line up with it.
+  const freshChips = useFreshKeys(chipKeys);
+  const chipsRef = useRef<HTMLUListElement>(null);
+  useLayoutEffect(() => {
+    if (freshChips.size === 0) return;
+    chipKeys.forEach((key, index) => {
+      if (freshChips.has(key)) itemIn(chipsRef.current?.children[index] ?? null);
+    });
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // The library picker mounts on the first Assets tap only (nothing on paint),
+  // then stays mounted so it can slide out.
+  const [assetsMounted, setAssetsMounted] = useState(false);
+  const [assetsOpen, setAssetsOpen] = useState(false);
+  const layout = useChatLayout();
+  const trayId = useId();
+
+  // The chip count up to the parent (its Back guard); after commit, never on paint.
+  const onAttachmentCountRef = useRef(onAttachmentCountChange);
+  onAttachmentCountRef.current = onAttachmentCountChange;
+  useEffect(() => {
+    onAttachmentCountRef.current?.(chipCount);
+  }, [chipCount]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<MentionInputHandle>(null);
+
+  const trimmed = body.trim();
+  const tooLong = body.length > MAX_BODY;
+  const attachEnabled = canAttach && uploadFile !== undefined;
+  const canSubmit =
+    (trimmed.length > 0 || uploads.hasReady) && !tooLong && !uploads.uploading && !submitting;
 
   // A tray tile: Photos / File open their pickers, Assets the library picker.
   // Nothing opens while a send is on its way.
@@ -331,16 +385,12 @@ export function CommentComposer({
       members.map((m) => ({ userId: m.id, username: m.username })),
     );
     const result = await onSubmit(linked, {
-      attachmentVersionIds: attachmentIdsOf(pending, library),
+      attachmentVersionIds: uploads.ids,
     });
     if (result.ok) {
-      for (const item of pending) {
-        if (item.previewUrl != null) URL.revokeObjectURL(item.previewUrl);
-      }
       setBody('');
       setComposerKey((key) => key + 1);
-      setPending([]);
-      setLibrary([]);
+      uploads.clear();
       setSubmitting(false);
       return;
     }
@@ -418,15 +468,15 @@ export function CommentComposer({
             <FileUploadChip
               key={item.id}
               item={item}
-              onRemove={() => removePending(item.id)}
-              onRetry={() => retryPending(item.id)}
+              onRemove={() => uploads.removePending(item.id)}
+              onRetry={() => uploads.retryPending(item.id)}
             />
           ))}
           {library.map((asset) => (
             <LibraryPickChip
               key={libraryChipKey(asset)}
               asset={asset}
-              onRemove={() => removeLibrary(asset.versionId)}
+              onRemove={() => uploads.removeLibrary(asset.versionId)}
             />
           ))}
         </ul>
@@ -442,7 +492,7 @@ export function CommentComposer({
         accept={UPLOAD_ACCEPT}
         className="sr-only"
         onChange={(event) => {
-          void addFiles(event.target.files);
+          void uploads.addFiles(event.target.files);
           event.target.value = '';
         }}
       />
@@ -454,7 +504,7 @@ export function CommentComposer({
         data-photo-input=""
         className="sr-only"
         onChange={(event) => {
-          void addFiles(event.target.files, true);
+          void uploads.addFiles(event.target.files, true);
           event.target.value = '';
         }}
       />
@@ -464,7 +514,7 @@ export function CommentComposer({
           <LazyAssetPicker
             open={assetsOpen}
             onClose={() => setAssetsOpen(false)}
-            onConfirm={(picks) => setLibrary((prev) => mergeLibraryPicks(prev, picks))}
+            onConfirm={uploads.addLibrary}
           />
         </Suspense>
       ) : null}

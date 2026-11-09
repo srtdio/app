@@ -1,23 +1,33 @@
-// Catch up's state: where in the fixed queue the person is, what they decided,
-// and the one Undo (4 s, like every Undo). Mark as read and Undo are
+// Catch up's state: where in the fixed queue of ITEMS the person is, what they
+// decided, and the one Undo (4 s, like every Undo). A decision covers every
+// entry of the item (one inbox_mark_read_ids call; Undo one
+// inbox_mark_unread_ids call). A skipped card (deleted, access lost, read on
+// another device) is marked read silently and never offered to Undo. Mark as read and Undo are
 // optimistic: the screen moves at once, the write runs behind it with its own
 // trace id, and a failure toasts and puts that card back (never a stuck
 // stack). Keep unread writes nothing.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ActivityItem } from '@/components/pages/activity/data';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
-import { markAllCatchUpRead, markCatchUpRead, undoCatchUpRead } from '@/lib/catch-up/writes';
+import {
+  markAllCatchUpRead,
+  markCatchUpRead,
+  markCatchUpSkipped,
+  undoCatchUpRead,
+} from '@/lib/catch-up/writes';
+import { unreadIdsOf, type CatchUpItem } from '@/lib/catch-up/queue';
 
 /** How long Undo stays offered after a decision (the app's Undo window). */
 export const CATCH_UP_UNDO_MS = 4000;
 
 /** One decision on a card. */
 export interface CatchUpDecision {
-  item: ActivityItem;
+  item: CatchUpItem;
   read: boolean;
+  /** Skipped silently: counts as gone through, never undone. */
+  skipped?: boolean;
 }
 
 /** What the screen's owner hears: entries now read or unread (the Activity list follows), and failures. */
@@ -36,7 +46,7 @@ export function nextIndex(queueLength: number, decisions: number): number {
   return Math.min(queueLength, Math.max(0, decisions));
 }
 
-export function useCatchUp(queue: readonly ActivityItem[], hooks: CatchUpHooks) {
+export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
   const [decisions, setDecisions] = useState<CatchUpDecision[]>([]);
   const [undoUntil, setUndoUntil] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -55,7 +65,7 @@ export function useCatchUp(queue: readonly ActivityItem[], hooks: CatchUpHooks) 
 
   /** Put the decision on `id` back (its write failed), only while it is still the last one. */
   const putBack = useCallback((id: string) => {
-    setDecisions((prev) => (prev[prev.length - 1]?.item.id === id ? prev.slice(0, -1) : prev));
+    setDecisions((prev) => (prev[prev.length - 1]?.item.key === id ? prev.slice(0, -1) : prev));
   }, []);
 
   const decide = useCallback(
@@ -66,10 +76,11 @@ export function useCatchUp(queue: readonly ActivityItem[], hooks: CatchUpHooks) 
       const now = Date.now();
       setNowMs(now);
       setUndoUntil(now + CATCH_UP_UNDO_MS);
-      // Keep unread writes nothing; an entry already read only moves on.
-      if (!read || item.readAt !== null) return;
+      // Keep unread writes nothing; an item with nothing unread only moves on.
+      const ids = unreadIdsOf(item);
+      if (!read || ids.length === 0) return;
       const h = hooksRef.current;
-      h.onRead([item.id]);
+      h.onRead(ids);
       const traceId = generateTraceId();
       void markCatchUpRead(supabase, {
         workspaceId: h.workspaceId,
@@ -79,30 +90,54 @@ export function useCatchUp(queue: readonly ActivityItem[], hooks: CatchUpHooks) 
       }).then((result) => {
         if (result.ok) return;
         logger.warn('catch-up: mark read failed', { trace_id: traceId, error: result.message });
-        hooksRef.current.onUnread([item.id]);
+        hooksRef.current.onUnread(ids);
         hooksRef.current.onFailed('mark as read');
-        putBack(item.id);
+        putBack(item.key);
       });
     },
     [queue, decisions.length, putBack],
   );
 
-  const canUndo = decisions.length > 0 && undoUntil > nowMs;
+  /** Skip the current card silently (deleted, access lost, read elsewhere): its entries read, no Undo. */
+  const skip = useCallback(
+    (key: string): void => {
+      const item = queue[decisions.length];
+      if (item === undefined || item.key !== key) return;
+      setDecisions((prev) => [...prev, { item, read: true, skipped: true }]);
+      const ids = unreadIdsOf(item);
+      if (ids.length === 0) return;
+      const h = hooksRef.current;
+      h.onRead(ids);
+      const traceId = generateTraceId();
+      void markCatchUpSkipped(supabase, { workspaceId: h.workspaceId, item, traceId }).then(
+        (result) => {
+          if (!result.ok) {
+            logger.warn('catch-up: skip read failed', { trace_id: traceId, error: result.message });
+          }
+        },
+      );
+    },
+    [queue, decisions.length],
+  );
+
+  const lastDecision = decisions[decisions.length - 1];
+  const canUndo = lastDecision !== undefined && lastDecision.skipped !== true && undoUntil > nowMs;
 
   const undo = useCallback((): void => {
     const last = decisions[decisions.length - 1];
-    if (last === undefined || undoUntil <= Date.now()) return;
+    if (last === undefined || last.skipped === true || undoUntil <= Date.now()) return;
     setDecisions((prev) => prev.slice(0, -1));
     setUndoUntil(0);
-    if (!last.read || last.item.readAt !== null) return;
+    const ids = unreadIdsOf(last.item);
+    if (!last.read || ids.length === 0) return;
     const h = hooksRef.current;
-    h.onUnread([last.item.id]);
+    h.onUnread(ids);
     const traceId = generateTraceId();
     void undoCatchUpRead(supabase, { workspaceId: h.workspaceId, item: last.item, traceId }).then(
       (result) => {
         if (result.ok) return;
         logger.warn('catch-up: undo failed', { trace_id: traceId, error: result.message });
-        hooksRef.current.onRead([last.item.id]);
+        hooksRef.current.onRead(ids);
         hooksRef.current.onFailed('undo');
       },
     );
@@ -113,7 +148,7 @@ export function useCatchUp(queue: readonly ActivityItem[], hooks: CatchUpHooks) 
     const rest = queue.slice(decisions.length);
     if (rest.length === 0) return;
     const h = hooksRef.current;
-    const unread = rest.filter((item) => item.readAt === null).map((item) => item.id);
+    const unread = rest.flatMap(unreadIdsOf);
     setDecisions((prev) => [...prev, ...rest.map((item) => ({ item, read: true }))]);
     setUndoUntil(0);
     h.onRead(unread);
@@ -136,10 +171,11 @@ export function useCatchUp(queue: readonly ActivityItem[], hooks: CatchUpHooks) 
     next,
     /** Cards still to go, the current one included ("<N> left"). */
     left: Math.max(0, queue.length - index),
-    /** How many cards were gone through (the end screen's count). */
-    wentThrough: decisions.length,
+    /** How many cards were gone through (the end screen's count; skipped cards left out). */
+    wentThrough: decisions.filter((d) => d.skipped !== true).length,
     done: queue.length > 0 && index >= queue.length,
     decide,
+    skip,
     undo,
     canUndo,
     markAll,

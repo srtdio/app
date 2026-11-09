@@ -136,9 +136,10 @@ test(
 
     // All: the plan alert, in the bell's words.
     await page.getByRole('button', { name: 'All', exact: true }).click();
-    await expect(card(page, 'plan_opened')).toContainText(
-      `${PEER_NAME} opened ${PLAN_ALERT_TITLE} for approvers`,
-    );
+    // 9 Nov 2026: the plan's card names the plan; the alert is its own line.
+    await expect(
+      page.locator('[data-activity-card-cell]', { has: card(page, 'plan_opened') }),
+    ).toContainText(new RegExp(`${PEER_NAME}\\s*Opened ${PLAN_ALERT_TITLE} for approvers`));
     const scheme = testInfo.project.use.colorScheme ?? 'dark';
     await page.screenshot({ path: testInfo.outputPath(`notifications-${scheme}.png`) });
     expectClean(network);

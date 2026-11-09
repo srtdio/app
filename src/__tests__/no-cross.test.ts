@@ -35,6 +35,10 @@ export const X_ALLOWED: readonly string[] = [
   'components/ui/icons.tsx',
   'components/ui/UploadRing.tsx',
   'components/ui/PendingChip.tsx',
+  // The voice note pieces (9 Nov 2026, catch-up rebuild): the recording row's
+  // round X cancels the recording; the kept note's chip X removes the attached
+  // note (an attached file, like ui/PendingChip's).
+  'components/chat/VoiceDraft.tsx',
 ];
 
 /** ui/WritingBox may use IconX only inside its phone format row's close key. */

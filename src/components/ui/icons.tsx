@@ -464,6 +464,17 @@ export function IconCarousel(props: IconProps) {
   );
 }
 
+/** Hide keyboard (Slack parity): a keyboard with key dots and a spacebar, a chevron down under it. */
+export function IconKeyboardHide(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={3} y={3} width={18} height={12} rx={2} />
+      <path d="M7 7h.01M10 7h.01M14 7h.01M17 7h.01M7 9.5h.01M10 9.5h.01M14 9.5h.01M17 9.5h.01M9 12h6" />
+      <path d="M9.5 18l2.5 2.5 2.5-2.5" />
+    </Svg>
+  );
+}
+
 export function IconVideo(props: IconProps) {
   return <Hero icon={FilmIcon} {...props} />;
 }

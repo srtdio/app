@@ -10,6 +10,11 @@
 //            inside its bottom edge (no +, no send, no X).
 //   caption  emoji and a plain "@" only; no formatting of any kind.
 //
+// restPill (the catch-up reply): chat or comment rests as the pill on every
+// layout. `attachments` (a kept voice note, files) wait inside the open card
+// above the text. While recording, a caller's `recording` row (chat/VoiceDraft
+// RecordingRow) fills the pill in place of the field and keys.
+//
 // The card's bottom row: + , Aa, emoji, @ ... mic, send. The mic sits beside
 // send in every state, typing included. Aa swaps the row for the format row.
 // Laptop: Aa (on: pressed again it closes the row), Bold, Italic, Underline,
@@ -55,7 +60,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { ComposerFrame, type ComposerState } from '@/components/ui/Composer';
 import {
   ICON_SIZE,
@@ -173,6 +178,15 @@ function scrollUpBy(el: HTMLElement, dy: number): void {
 /** Keep the field focused (and the keyboard up) when a row key is pressed. */
 function keepFocus(e: PointerEvent | MouseEvent): void {
   e.preventDefault();
+}
+
+/**
+ * A row key's 36 slot held empty (aria-hidden): a state that hides a key (the
+ * mic while a voice note sends) keeps the row's width (states keep their
+ * footprint).
+ */
+export function RowKeyHold(): ReactElement {
+  return <span aria-hidden="true" data-row-key-hold="" className="inline-flex h-11 w-9 shrink-0" />;
 }
 
 /**
@@ -331,9 +345,28 @@ export interface WritingBoxProps {
   expandTitle?: ReactNode;
   /** Bars above the box (reply, About, edit, private reply), unchanged. */
   strip?: ReactNode;
-  /** Chat recording / sending (the recording row is ComposerFrame's, unchanged). */
+  /** Chat recording / sending. */
   state?: ComposerState;
+  /**
+   * While recording: the row the pill holds in place of the field and keys
+   * (chat/VoiceDraft RecordingRow: X cancel, the live track, m:ss, check).
+   * Absent: the older ComposerFrame recording row (dot, "Recording", m:ss,
+   * discard, send).
+   */
+  recording?: ReactNode;
+  /** The older recording row's bin (ComposerFrame); unused with `recording`. */
   discard?: ReactNode;
+  /**
+   * What waits inside the open box above the text (a kept voice note, picked
+   * files): shown in the card, and holding the card open while present.
+   */
+  attachments?: ReactNode;
+  /**
+   * Rest as the pill (+, the hint centred, the mic for chat) on every layout
+   * and in comment mode too (the catch-up reply); focus, text or an
+   * attachment opens the card as usual.
+   */
+  restPill?: boolean;
   /** Laptop: the card always (chat), ignoring the phone pill. Defaults to useIsLaptop. */
   laptop?: boolean;
   className?: string;
@@ -359,10 +392,14 @@ export function WritingBox(props: WritingBoxProps) {
     expandTitle,
     strip,
     state = { kind: 'idle' },
+    recording,
     discard,
+    attachments,
+    restPill = false,
     className,
     invalid = false,
   } = props;
+  const hasAttachments = attachments !== undefined && attachments !== null && attachments !== false;
   const isLaptopHook = useIsLaptop();
   const laptop = props.laptop ?? isLaptopHook;
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -615,8 +652,40 @@ export function WritingBox(props: WritingBoxProps) {
     setExpanded(false);
   };
 
+  if (state.kind === 'recording' && recording !== undefined && recording !== null) {
+    // Recording: the pill holds the caller's recording row (X cancel, the live
+    // track, m:ss, check), the strip stays above. The field is not drawn; its
+    // text lives with the caller and comes back after.
+    return (
+      <div
+        data-writing-box=""
+        data-mode={mode}
+        data-shape="recording"
+        data-composer=""
+        data-composer-state="recording"
+        className={cn(
+          'relative flex w-full min-w-0 max-w-full flex-col gap-2 [contain:inline-size]',
+          className,
+        )}
+      >
+        {strip !== undefined && strip !== null ? (
+          <div data-composer-strip="" className="flex min-w-0 flex-col gap-2 empty:hidden">
+            {strip}
+          </div>
+        ) : null}
+        <div
+          data-writing-frame=""
+          data-writing-recording=""
+          className="lit-well flex min-h-11 min-w-0 max-w-full items-center overflow-x-clip rounded-full border bg-panel-2"
+        >
+          {recording}
+        </div>
+      </div>
+    );
+  }
+
   if (state.kind === 'recording') {
-    // Recording keeps today's row exactly (dot, "Recording", m:ss, bin, stop).
+    // No recording row given: the older row (dot, "Recording", m:ss, bin, stop).
     return (
       <ComposerFrame
         input={input}
@@ -632,9 +701,15 @@ export function WritingBox(props: WritingBoxProps) {
   const shape: 'pill' | 'line' | 'card' | 'field' =
     mode === 'field' || mode === 'caption'
       ? 'field'
-      : expanded || formatOpen || focused || hasText || trayOpen || state.kind !== 'idle'
+      : expanded ||
+          formatOpen ||
+          focused ||
+          hasText ||
+          hasAttachments ||
+          trayOpen ||
+          state.kind !== 'idle'
         ? 'card'
-        : mode === 'chat' && !laptop
+        : restPill || (mode === 'chat' && !laptop)
           ? 'pill'
           : mode === 'chat'
             ? 'card'
@@ -844,6 +919,12 @@ export function WritingBox(props: WritingBoxProps) {
     >
       {/* The + tray's slot: the top of this same box (ComposerTray draws into it). */}
       <div ref={setTraySlot} data-writing-tray-slot="" className="min-w-0 empty:hidden" />
+      {/* What waits in the open box (a kept voice note, files), above the text. */}
+      {shape === 'card' && hasAttachments ? (
+        <div data-writing-attachments="" className="flex min-w-0 flex-wrap gap-2 pt-2">
+          {attachments}
+        </div>
+      ) : null}
       {/* The + at rest: the chat pill and the comment line keep it beside the field. */}
       {shape === 'pill' || shape === 'line' ? leading : null}
       <div

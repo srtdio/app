@@ -1,7 +1,10 @@
-// Guard (CLAUDE.md): "Catch up: one card per notification; card swipe = X
+// Guard (CLAUDE.md, 9 Nov 2026): "Catch up: one card per item; card swipe = X
 // axis + rotate only." The catch-up sources never move a card on Y, the lean
-// is capped at 6deg, and the queue is keyed per inbox entry (never a digest
-// group).
+// is capped at 6deg, and the queue is keyed per ITEM (every entry of a post,
+// brief, plan item, idea, chat or thread rides one card). Cards live only in
+// Catch up (an Activity row opens the real place), are read only (no edit, no
+// resolve), carry the name row menu without Mute or Star, Mark as read is
+// never green, and the card surface differs from the page in both themes.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -60,7 +63,7 @@ describe('catch-up guards', () => {
     expect(deg).toBe(6);
   });
 
-  it('one card per notification: the queue holds entries, never groups', () => {
+  it('one card per item: two comments on one post are one card', () => {
     const row = (id: string, entityId: string) =>
       mapEntry({
         id,
@@ -80,20 +83,54 @@ describe('catch-up guards', () => {
         payload: {},
         actor_user_id: null,
       });
-    // Two comments on the same post are two cards (Activity groups them; catch up never does).
     const queue = buildCatchUpQueue({
       tapped: null,
-      held: [row('a', 'p1'), row('bb', 'p1')],
+      held: [row('a', 'p1'), row('bb', 'p1'), row('c', 'p2')],
       nowMs: 0,
       workspaceId: 'ws',
     });
-    expect(queue.map((i) => i.id)).toEqual(['bb', 'a']);
-    const queueSrc = FILES.find((f) => f.rel === 'lib/catch-up/queue.ts')?.src ?? '';
-    expect(queueSrc).not.toMatch(/groupDigest|entityKey/);
+    expect(queue.map((i) => i.key)).toEqual(['post:p1', 'post:p2']);
+    expect(queue[0]?.entries.map((e) => e.id)).toEqual(['bb', 'a']);
+  });
+
+  it('cards live only in Catch up: an Activity row tap opens the real place', () => {
+    const page = readFileSync(join(SRC, 'components/pages/NotificationsPage.tsx'), 'utf8');
+    expect(page).not.toMatch(/\(entry: ActivityItem\) => openCatchUp\(entry\)/);
+    expect(page).toContain('onClick={() => openCatchUp(null)}');
+  });
+
+  it('read-only cards: no edit, resolve or delete write in catch up', () => {
+    const offenders = FILES.filter(({ src }) =>
+      /\b(editComment|resolveComment|deleteComment|comment_resolve|post_update)\b/.test(src),
+    ).map((f) => f.rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it('the name row menu: Open and Copy link, never Mute or Star; Mark as read is never green', () => {
+    const all = FILES.map((f) => f.src).join('\n');
+    expect(all).not.toMatch(/['"`](Mute|Star)['"`]/);
+    expect(all).not.toMatch(/variant="success"/);
+    const screen = FILES.find((f) => f.rel === 'components/catch-up/CatchUpScreen.tsx')?.src ?? '';
+    expect(screen).toContain("label: 'Copy link'");
+    expect(screen).toContain('openLabel(item.kind)');
+  });
+
+  it('card and page are distinct surfaces in both themes', () => {
+    const css = readFileSync(join(SRC, 'index.css'), 'utf8');
+    const bg = (selector: string): string =>
+      new RegExp(`${selector.replace(/[.]/g, '\\.')}\\s*\\{[^}]*background-color:\\s*([^;]+);`)
+        .exec(css)?.[1]
+        ?.trim() ?? '';
+    const light = { card: bg('\n  .catch-up-card'), page: bg('\n  .catch-up-page') };
+    const dark = { card: bg('.dark .catch-up-card'), page: bg('.dark .catch-up-page') };
+    expect(light.card).not.toBe('');
+    expect(dark.card).not.toBe('');
+    expect(light.card).not.toBe(light.page);
+    expect(dark.card).not.toBe(dark.page);
   });
 
   it('CLAUDE.md carries the rule', () => {
     const md = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
-    expect(md).toContain('Catch up: one card per notification; card swipe = X axis + rotate only.');
+    expect(md).toContain('Catch up: one card per item; card swipe = X axis + rotate only.');
   });
 });

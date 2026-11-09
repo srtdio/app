@@ -90,16 +90,20 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
   it('the card title is the heading role, one truncated line', () => {
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
     const title = document.querySelector('[data-list-card-title]');
-    expect(title?.textContent).toBe('Asha Rao commented on Q3 Launch');
+    // 9 Nov 2026: the head names the item; the notification is its own line.
+    expect(title?.textContent).toBe('Q3 Launch');
     expectRole(title as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
     expect(title?.className).not.toMatch(/leading-\[/);
   });
 
-  it('the preview is the secondary role, one truncated line', () => {
+  it('the head preview ("N new") and each line are the secondary role, one truncated line', () => {
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
-    const preview = byText('Looks good to me');
+    const preview = byText('1 new');
     expectRole(preview, ['text-md', 'text-fg-2', 'truncate']);
-    expect(preview.className).not.toContain('line-clamp-2');
+    // A comment line reads the comment text (locked 9 Nov 2026).
+    const line = byText('Looks good to me');
+    expectRole(line, ['text-md', 'truncate']);
+    expect(line.className).not.toContain('line-clamp-2');
   });
 
   it('the time is the meta role: mono, tabular, fg-3', () => {

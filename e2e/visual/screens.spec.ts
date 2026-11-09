@@ -16,6 +16,8 @@ import {
   assertSameWidth,
   assertTopbarSlotsStill,
   assertWritingBox,
+  assertCatchUpLayout,
+  checkCatchUpComposer,
   checkLayout,
   readTopbarSlots,
 } from './layout-checks';
@@ -72,6 +74,41 @@ import {
   YOUTUBE_TITLE,
 } from '../fixtures/link-previews';
 import { PPTX_MIME } from '../fixtures/office-files';
+import {
+  CU_BLANK_LINES_ENTRY,
+  CU_BRIEF_ENTRY,
+  CU_CHAT_MAIN_ENTRY,
+  CU_EMOJI_ENTRY,
+  CU_FEEDBACK_ENTRY,
+  CU_FEEDBACK_POST,
+  CU_GROUP_MAIN_ENTRY,
+  CU_IDEA_ENTRY,
+  CU_LINK_ENTRY,
+  CU_LONG_CAPTION_ENTRY,
+  CU_LONG_NAME_ENTRY,
+  CU_LONG_TITLE_ENTRY,
+  CU_MANY_ENTRY,
+  CU_PLAN_ENTRY,
+  CU_REST_ENTRY,
+  CU_TEXT_ENTRY,
+  CU_VIDEO_ENTRY,
+  seedCatchUpBankIdea,
+  seedCatchUpBlankLines,
+  seedCatchUpBrief,
+  seedCatchUpChatMain,
+  seedCatchUpEmoji,
+  seedCatchUpFeedback,
+  seedCatchUpGroupMain,
+  seedCatchUpLongCaption,
+  seedCatchUpLongLink,
+  seedCatchUpLongName,
+  seedCatchUpLongTitle,
+  seedCatchUpManyComments,
+  seedCatchUpPlanItem,
+  seedCatchUpRest,
+  seedCatchUpTextOnly,
+  seedCatchUpVideo,
+} from '../fixtures/catch-up-data';
 import { seedTasks, TASK_CHANNEL } from '../fixtures/tasks-data';
 import { installMediaSearch, type MediaKind } from '../fixtures/search-data';
 import {
@@ -685,15 +722,16 @@ function seedBankActivity(network: HarnessNetwork): void {
   ];
 }
 
-// Catch up (8 Nov screens): a mention in the "Thread crew" post-card thread,
-// that thread's start on the post, and a comment on a post, all unread, on
-// top of the fixture world's DM mention.
+// Catch up (9 Nov 2026 rebuild: one card per ITEM): a mention in the "Thread
+// crew" post-card thread, that thread's start on the post (both ride the one
+// thread card), and a comment on a post, all unread, on top of the fixture
+// world's DM mention. The other cards' worlds live in fixtures/catch-up-data.ts.
 const CATCH_UP_MENTION = '0190f1c0-0000-7000-8000-00000000c001';
 const CATCH_UP_STARTED = '0190f1c0-0000-7000-8000-00000000c002';
 const CATCH_UP_COMMENT = '0190f1c0-0000-7000-8000-00000000c003';
 const CATCH_UP_COMMENT_ID = '0190f1c0-0000-7000-8000-00000000c0c3';
 
-function seedCatchUp(network: HarnessNetwork): void {
+function seedCatchUp(network: HarnessNetwork, opts: { mention?: boolean } = {}): void {
   const t = network.world.tables;
   const root = THREAD_IDS.gr ?? '';
   const reply = THREAD_IDS.gd ?? '';
@@ -714,16 +752,17 @@ function seedCatchUp(network: HarnessNetwork): void {
     created_at: new Date(NOW - minsAgo * 60_000).toISOString(),
     ...row,
   });
+  const mention = entry(CATCH_UP_MENTION, 1, {
+    actor_user_id: COLLEAGUE_A,
+    event_type: 'mention',
+    entity_type: 'chat_channel',
+    entity_id: THREAD_GROUP,
+    scope: 'groups',
+    tier: 'urgent',
+    payload: { message_id: reply, thread_root_id: root },
+  });
   (t.inbox_entries ??= []).push(
-    entry(CATCH_UP_MENTION, 1, {
-      actor_user_id: COLLEAGUE_A,
-      event_type: 'mention',
-      entity_type: 'chat_channel',
-      entity_id: THREAD_GROUP,
-      scope: 'groups',
-      tier: 'urgent',
-      payload: { message_id: reply, thread_root_id: root },
-    }),
+    ...(opts.mention === false ? [] : [mention]),
     entry(CATCH_UP_STARTED, 2, {
       actor_user_id: COLLEAGUE_B,
       event_type: 'system',
@@ -760,23 +799,98 @@ function seedCatchUp(network: HarnessNetwork): void {
     resolved_at: null,
     resolved_by: null,
     unaccepted_by: null,
+    // The card reads the ledger columns (the harness answers every column).
+    ledger_batch_id: null,
+    ledger_seq: null,
+    closed_at: null,
+    accepted_at: null,
     created_at: new Date(NOW - 3 * 60_000).toISOString(),
     edited_at: null,
     deleted_at: null,
   });
 }
 
-/** Catch up open on one entry, its card painted (a chat card waits for its messages). */
-async function catchUpReady(page: Page, chat: boolean): Promise<void> {
-  await waitFor([page.locator('[data-catch-up] [data-catch-up-card]')], 'catch up card');
-  if (chat) await waitFor([page.locator('[data-catch-up-message]').first()], 'catch up messages');
+/**
+ * One post with exactly 8 unread comment notifications (Activity's item card:
+ * 5 lines + "+3 more"): the many-comments seed with its 42 oldest entries
+ * dropped (its comments stay; Activity reads the entries).
+ */
+function seedEightComments(network: HarnessNetwork): void {
+  seedCatchUpManyComments(network, NOW);
+  const t = network.world.tables;
+  const all = t.inbox_entries ?? [];
+  t.inbox_entries = [...all.slice(0, all.length - 50), ...all.slice(all.length - 8)];
 }
 
-/** Hold a swipe on the card mid-way (`dx` px), the pointer kept down for the shot. */
-async function holdSwipe(page: Page, dx: number): Promise<void> {
+/**
+ * Catch up open on one card with its body painted: the read rows
+ * ([data-catch-up-rows]), never the Bone rows that hold the footprint while
+ * the batched read runs.
+ */
+async function catchUpReady(page: Page): Promise<void> {
+  const card = page.locator('[data-catch-up] [data-catch-up-card]');
+  await waitFor([card], 'catch up card');
+  await waitFor([card.locator('[data-catch-up-rows]')], 'catch up rows');
+}
+
+/** The open card's reply box (CatchUpReply). */
+const catchUpReply = (page: Page): Locator =>
+  page.locator('[data-catch-up] [data-catch-up-card] [data-catch-up-reply]');
+
+/** The card's context strip opened (its reading window shows). */
+async function openCatchUpStrip(page: Page): Promise<void> {
+  await catchUpReady(page);
+  await tap([page.locator('[data-catch-up-strip-toggle]')], 'context strip');
+  await waitFor([page.locator('[data-catch-up-strip-window]')], 'strip window');
+}
+
+/** The reply box's + tray open (Photos, File, Assets). */
+async function openCatchUpTray(page: Page): Promise<void> {
+  await catchUpReady(page);
+  await tap(
+    [catchUpReply(page).getByRole('button', { name: 'Add attachment', exact: true })],
+    'reply + key',
+  );
+  // In the reply box, or page-wide (the phone editor may lift the box to <body>).
+  await waitFor(
+    [catchUpReply(page).locator('[data-tray]'), page.locator('[data-tray]')],
+    'reply tray',
+  );
+  await page.mouse.move(0, 0);
+}
+
+/** A recording running in the card's reply box (the stub microphone). */
+async function catchUpRecording(page: Page): Promise<void> {
+  await catchUpReady(page);
+  await tap(
+    [
+      page.locator('[data-catch-up-mic] button'),
+      catchUpReply(page).getByRole('button', { name: 'Record voice note', exact: true }),
+    ],
+    'reply mic',
+  );
+  await waitFor([page.locator('[data-catch-up-recording]')], 'recording row');
+}
+
+/** Type into the reply box and send it (the send's proc is refused: "Not sent"). */
+async function catchUpSendRefused(page: Page, text: string): Promise<void> {
+  await catchUpReady(page);
+  await tap([page.locator('[data-catch-up-reply-input]')], 'reply box');
+  await page.keyboard.type(text);
+  await tap([catchUpReply(page).getByRole('button', { name: 'Send', exact: true })], 'Send');
+  await waitFor([page.locator('[data-catch-up-not-sent]')], 'Not sent');
+}
+
+/**
+ * Hold a swipe on the card mid-way in `dir`, the pointer kept down for the
+ * shot. The travel is a share of the card width: past the tint at 15%, short
+ * of the decision at 30%.
+ */
+async function holdSwipe(page: Page, dir: 1 | -1): Promise<void> {
   const card = page.locator('[data-catch-up] [data-catch-up-card]');
   const box = await card.boundingBox();
   if (box === null) throw new Error('catch up card has no box');
+  const dx = dir * Math.round(box.width * 0.22);
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 3;
   await page.mouse.move(x, y);
@@ -1521,71 +1635,100 @@ const SCREENS: Screen[] = [
     steps: async (page) => waitFor([page.locator('[data-activity-catch-up-bar]')], 'catch up bar'),
   },
   {
-    // Catch up's first card: a mention in a thread (kicker "Thread in <chat>").
+    // 9 Nov 2026: one card per item, one line per notification. A post with 8
+    // unread comments: the head ("8 new"), 5 lines and "+3 more".
+    name: 'activity-grouped-folded',
+    seed: creator,
+    extra: (network) => seedEightComments(network),
+    url: '/activity',
+    steps: async (page) => {
+      await waitFor([page.locator('[data-activity-lines] [data-activity-line]')], 'lines');
+      await waitFor([page.locator('[data-activity-more][aria-expanded="false"]')], '+3 more');
+    },
+  },
+  {
+    // The same card unfolded: all 8 lines and "Show less".
+    name: 'activity-grouped-unfolded',
+    seed: creator,
+    extra: (network) => seedEightComments(network),
+    url: '/activity',
+    steps: async (page) => {
+      await tap([page.locator('[data-activity-more]')], '+3 more');
+      await waitFor([page.locator('[data-activity-more][aria-expanded="true"]')], 'Show less');
+      await waitFor([page.locator('[data-activity-lines-rest] [data-activity-line]')], 'rest');
+    },
+  },
+  {
+    // A chat thread card with replies: the mention's thread (root, replies,
+    // the New line at the reply that mentions me).
     name: 'catch-up-thread-mention',
     seed: creator,
     extra: seedCatchUp,
     url: `/activity?catchup=${CATCH_UP_MENTION}`,
-    steps: async (page) => catchUpReady(page, true),
+    steps: catchUpReady,
   },
   {
-    // A thread start on a post: the card block above the replies.
+    // The same thread opened from its thread start alone (no mention): the
+    // New line at the first reply.
     name: 'catch-up-thread-started',
     seed: creator,
-    extra: seedCatchUp,
+    extra: (network) => seedCatchUp(network, { mention: false }),
     url: `/activity?catchup=${CATCH_UP_STARTED}`,
     steps: async (page) => {
-      await catchUpReady(page, true);
-      await waitFor([page.locator('[data-catch-up-thread-card]')], 'thread card block');
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-card] [data-new-line]')], 'New line');
     },
   },
   {
-    // A post comment: the Activity line as kicker, the post, the comment, Reply.
+    // A post card from a comment: name row, the strip (closed), the comment.
     name: 'catch-up-comment',
     seed: creator,
     extra: seedCatchUp,
     url: `/activity?catchup=${CATCH_UP_COMMENT}`,
     steps: async (page) => {
-      await catchUpReady(page, false);
-      await waitFor([page.locator('[data-catch-up-note]')], 'comment text');
+      await catchUpReady(page);
+      await waitFor([page.locator(`[data-catch-up-message="${CATCH_UP_COMMENT_ID}"]`)], 'comment');
     },
   },
   {
-    // Swipe right past half the threshold: the green Mark as read tint.
+    // Swipe right past half the threshold: the ink Mark as read tint.
     name: 'catch-up-swipe-read',
     seed: creator,
     extra: seedCatchUp,
     hold: true,
     url: `/activity?catchup=${CATCH_UP_MENTION}`,
     steps: async (page) => {
-      await catchUpReady(page, true);
-      await holdSwipe(page, 90);
+      await catchUpReady(page);
+      await holdSwipe(page, 1);
     },
   },
   {
-    // Swipe left: the ink Keep unread tint.
+    // Swipe left: the soft Keep unread tint.
     name: 'catch-up-swipe-keep',
     seed: creator,
     extra: seedCatchUp,
     hold: true,
     url: `/activity?catchup=${CATCH_UP_MENTION}`,
     steps: async (page) => {
-      await catchUpReady(page, true);
-      await holdSwipe(page, -90);
+      await catchUpReady(page);
+      await holdSwipe(page, -1);
     },
   },
   {
-    // Typing in the reply box: phone hides the bar and the buttons and shows
-    // hide-keyboard and the green check; laptop keeps the buttons.
+    // Typing in the reply box: phone hides the bar's Undo and the buttons and
+    // shows Hide keyboard and the ink check; laptop keeps the buttons.
     name: 'catch-up-typing',
     seed: creator,
     extra: seedCatchUp,
     hold: true,
     url: `/activity?catchup=${CATCH_UP_MENTION}`,
     steps: async (page) => {
-      await catchUpReady(page, true);
+      await catchUpReady(page);
       await tap([page.locator('[data-catch-up-reply-input]')], 'reply box');
-      await waitFor([page.locator('[data-catch-up-typing-read]')], 'typing check');
+      await page.keyboard.type('On it');
+      if (!isLaptop(page)) {
+        await waitFor([page.locator('[data-catch-up-typing-read]')], 'typing check');
+      }
     },
   },
   {
@@ -1595,7 +1738,7 @@ const SCREENS: Screen[] = [
     extra: seedCatchUp,
     url: `/activity?catchup=${CATCH_UP_COMMENT}`,
     steps: async (page) => {
-      await catchUpReady(page, false);
+      await catchUpReady(page);
       const end = page.locator('[data-catch-up-end]');
       for (let n = 0; n < 40 && (await end.count()) === 0; n += 1) {
         const read = page.locator('[data-catch-up-read]');
@@ -1603,6 +1746,310 @@ const SCREENS: Screen[] = [
         await page.waitForTimeout(300);
       }
       await waitFor([end], 'catch up end');
+    },
+  },
+  {
+    // A post card at rest: name row, the strip closed ("Caption · 5
+    // pictures", due, first line), two comments (one with "1 reply"), the
+    // reply pill, Keep unread | Mark as read.
+    name: 'catch-up-rest',
+    seed: creator,
+    extra: (network) => seedCatchUpRest(network, NOW),
+    url: `/activity?catchup=${CU_REST_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-strip] img')], 'strip thumbnail');
+      await waitFor([page.locator('[data-catch-up-replies]')], '1 reply');
+    },
+  },
+  {
+    // The rest card's strip open on the carousel: the big picture with 1/5.
+    name: 'catch-up-carousel',
+    seed: creator,
+    extra: (network) => seedCatchUpRest(network, NOW),
+    url: `/activity?catchup=${CU_REST_ENTRY}`,
+    steps: async (page) => {
+      await openCatchUpStrip(page);
+      await waitFor([page.locator('[data-catch-up-strip-picture]', { hasText: '1/5' })], '1/5');
+    },
+  },
+  {
+    // The carousel's big picture tapped: the lightbox over catch up.
+    name: 'catch-up-lightbox',
+    seed: creator,
+    extra: (network) => seedCatchUpRest(network, NOW),
+    url: `/activity?catchup=${CU_REST_ENTRY}`,
+    steps: async (page) => {
+      await openCatchUpStrip(page);
+      await tap([page.locator('[data-catch-up-strip-picture]')], 'strip picture');
+      await waitFor([page.getByRole('dialog', { name: 'Image viewer' })], 'lightbox');
+    },
+  },
+  {
+    // The name row tapped: the card's menu (Open post, Copy link).
+    name: 'catch-up-menu',
+    seed: creator,
+    extra: (network) => seedCatchUpRest(network, NOW),
+    hold: true,
+    url: `/activity?catchup=${CU_REST_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-name-row-button]')], 'name row');
+      await waitFor(menuRow(page, /Copy link/), 'card menu');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // The comment card's reply box with its + tray open (Photos, File, Assets).
+    name: 'catch-up-tray-comment',
+    seed: creator,
+    extra: (network) => seedCatchUpRest(network, NOW),
+    hold: true,
+    url: `/activity?catchup=${CU_REST_ENTRY}`,
+    steps: openCatchUpTray,
+  },
+  {
+    // The chat card's reply box with its + tray open.
+    name: 'catch-up-tray-chat',
+    seed: creator,
+    extra: seedCatchUp,
+    hold: true,
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    steps: openCatchUpTray,
+  },
+  {
+    // The chat card's mic tapped: the recording row in the reply box (the
+    // stub microphone; the running clock is masked).
+    name: 'catch-up-recording',
+    seed: creator,
+    extra: seedCatchUp,
+    prepare: stubRecorder,
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    mask: (page) => [page.locator('[data-catch-up-recording]').getByText(/^\d+:\d{2}$/)],
+    steps: catchUpRecording,
+  },
+  {
+    // Stop and keep: the voice note waits in the box as a chip, its upload
+    // held in flight (the ring, no bar).
+    name: 'catch-up-voice-chip',
+    seed: creator,
+    extra: seedCatchUp,
+    prepare: stubUploadingVoice,
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    steps: async (page) => {
+      await catchUpRecording(page);
+      // Over MIN_VOICE_NOTE_MS, so the note is kept and not dropped.
+      await page.waitForTimeout(1_100);
+      await tap(
+        [page.getByRole('button', { name: 'Stop and keep voice note', exact: true })],
+        'Stop and keep',
+      );
+      await waitFor([page.locator('[data-catch-up-voice-chip]')], 'voice chip');
+    },
+  },
+  {
+    // The main chat's "4 replies" tapped: the thread full screen (bar
+    // "Thread" over the chat, the root, "N replies", the replies, Reply in thread).
+    name: 'catch-up-thread-full',
+    seed: creator,
+    extra: (network) => seedCatchUpGroupMain(network, NOW),
+    url: `/activity?catchup=${CU_GROUP_MAIN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-replies]', { hasText: '4 replies' })], '4 replies');
+      await waitFor(
+        [page.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
+        'replies',
+      );
+      await waitFor([page.locator('[data-catch-up-thread-title]')], 'Thread title');
+    },
+  },
+  {
+    // A one-message chat (chat-main): one DM message that mentions me.
+    name: 'catch-up-chat-main',
+    seed: creator,
+    extra: (network) => seedCatchUpChatMain(network, NOW),
+    url: `/activity?catchup=${CU_CHAT_MAIN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-mention-me]')], 'my @name lit');
+    },
+  },
+  {
+    // A comment by a 25-character name: one line, truncating before the time.
+    name: 'catch-up-long-name',
+    seed: creator,
+    extra: (network) => seedCatchUpLongName(network, NOW),
+    url: `/activity?catchup=${CU_LONG_NAME_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor(
+        [page.locator('[data-catch-up-name]', { hasText: 'Bartholomew' })],
+        'long name',
+      );
+    },
+  },
+  {
+    // A 90-character post title: the name row truncates it on one line.
+    name: 'catch-up-long-title',
+    seed: creator,
+    extra: (network) => seedCatchUpLongTitle(network, NOW),
+    url: `/activity?catchup=${CU_LONG_TITLE_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor(
+        [page.locator('[data-catch-up-title]', { hasText: 'Autumn lookbook carousel' })],
+        'title',
+      );
+    },
+  },
+  {
+    // A 1,200-character caption, the strip open: the reading window scrolls itself.
+    name: 'catch-up-long-caption',
+    seed: creator,
+    extra: (network) => seedCatchUpLongCaption(network, NOW),
+    url: `/activity?catchup=${CU_LONG_CAPTION_ENTRY}`,
+    steps: openCatchUpStrip,
+  },
+  {
+    // A comment of 34 emoji (wraps inside the text column).
+    name: 'catch-up-emoji',
+    seed: creator,
+    extra: (network) => seedCatchUpEmoji(network, NOW),
+    url: `/activity?catchup=${CU_EMOJI_ENTRY}`,
+    steps: catchUpReady,
+  },
+  {
+    // A comment with a 120-character unbroken link: a short label, never overflowing.
+    name: 'catch-up-long-link',
+    seed: creator,
+    extra: (network) => seedCatchUpLongLink(network, NOW),
+    url: `/activity?catchup=${CU_LINK_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-link]')], 'link');
+    },
+  },
+  {
+    // A comment with 10 blank lines inside: folded, never a tall gap.
+    name: 'catch-up-blank-lines',
+    seed: creator,
+    extra: (network) => seedCatchUpBlankLines(network, NOW),
+    url: `/activity?catchup=${CU_BLANK_LINES_ENTRY}`,
+    steps: catchUpReady,
+  },
+  {
+    // 50 new comments on one post: the newest page (older rows load on scroll
+    // up, one Bone row above), placed by the fill rule.
+    name: 'catch-up-many-comments',
+    seed: creator,
+    extra: (network) => seedCatchUpManyComments(network, NOW),
+    url: `/activity?catchup=${CU_MANY_ENTRY}`,
+    steps: catchUpReady,
+  },
+  {
+    // A video post: the strip's thumbnail carries the play mark ("Caption · Video").
+    name: 'catch-up-video',
+    seed: creator,
+    extra: (network) => seedCatchUpVideo(network, NOW),
+    url: `/activity?catchup=${CU_VIDEO_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-strip]', { hasText: 'Video' })], 'video strip');
+    },
+  },
+  {
+    // A text-only post: the strip reads "Caption" with the first line, no thumbnail.
+    name: 'catch-up-text-only',
+    seed: creator,
+    extra: (network) => seedCatchUpTextOnly(network, NOW),
+    url: `/activity?catchup=${CU_TEXT_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-strip]')], 'strip');
+    },
+  },
+  {
+    // The text-only post's caption open in the strip's reading window.
+    name: 'catch-up-caption-open',
+    seed: creator,
+    extra: (network) => seedCatchUpTextOnly(network, NOW),
+    url: `/activity?catchup=${CU_TEXT_ENTRY}`,
+    steps: openCatchUpStrip,
+  },
+  {
+    // A plan item card: "Plan · Week of 19 Oct", its notes, the plan comments.
+    name: 'catch-up-plan-item',
+    seed: creator,
+    extra: (network) => seedCatchUpPlanItem(network, NOW),
+    url: `/activity?catchup=${CU_PLAN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-kind="plan-item"]')], 'plan item card');
+    },
+  },
+  {
+    // A bank idea card: "Idea · Bank", a colleague's comment.
+    name: 'catch-up-bank-idea',
+    seed: creator,
+    extra: (network) => seedCatchUpBankIdea(network, NOW),
+    url: `/activity?catchup=${CU_IDEA_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-kind="idea"]')], 'idea card');
+    },
+  },
+  {
+    // A brief created for me with no due day: "Brief", no due words, the event row.
+    name: 'catch-up-brief-no-due',
+    seed: creator,
+    extra: (network) => seedCatchUpBrief(network, NOW),
+    url: `/activity?catchup=${CU_BRIEF_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-event]')], 'brief event row');
+    },
+  },
+  {
+    // A feedback batch with mixed states: three numbered points (the resolved
+    // one folded), a comment and the stage change, on one post card.
+    name: 'catch-up-feedback',
+    seed: creator,
+    extra: (network) => seedCatchUpFeedback(network, NOW),
+    url: `/activity?catchup=${CU_FEEDBACK_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      const card = page.locator(`[data-catch-up-card="post:${CU_FEEDBACK_POST}"]`);
+      await waitFor([card.locator('[data-catch-up-point]')], 'points');
+      await waitFor([page.locator('[data-catch-up-event]')], 'stage change row');
+    },
+  },
+  {
+    // Offline send failure: the chat send and comment create procs refused,
+    // a reply typed and sent on the thread card: "Not sent" with Retry.
+    name: 'catch-up-not-sent',
+    seed: creator,
+    extra: (network) => {
+      seedCatchUp(network);
+      network.refuseRpc.add('chat_message_send');
+      network.refuseRpc.add('comment_create');
+    },
+    url: `/activity?catchup=${CATCH_UP_MENTION}`,
+    steps: async (page) => catchUpSendRefused(page, 'Posting it at noon'),
+  },
+  {
+    // A failed read: the posts read fails, so the post card shows its error
+    // state with Retry (the reply box and buttons stay usable).
+    name: 'catch-up-error',
+    seed: creator,
+    extra: (network) => {
+      seedCatchUpTextOnly(network, NOW);
+      network.failTable.add('posts');
+    },
+    url: `/activity?catchup=${CU_TEXT_ENTRY}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-catch-up] [data-catch-up-card]')], 'catch up card');
+      await waitFor([page.locator('[data-catch-up-error]')], 'card error');
     },
   },
   {
@@ -3592,6 +4039,15 @@ async function startRecording(page: Page): Promise<void> {
   await waitFor([page.locator('[data-composer-state="recording"]')], 'recording composer');
 }
 
+/** The recording row's check: stop and keep; the note waits in the box as a chip. */
+async function keepRecording(page: Page): Promise<void> {
+  await tap(
+    [page.getByRole('button', { name: 'Stop and keep voice note', exact: true })],
+    'Stop and keep',
+  );
+  await waitFor([dmComposer(page).locator('[data-voice-chip]')], 'kept voice note chip');
+}
+
 /** Types a line into the DM composer and sends it. */
 async function sendInDm(page: Page, body: string): Promise<void> {
   await openDm(page);
@@ -3623,32 +4079,34 @@ const PENDING_BODY = 'Sending the cut now';
 
 SCREENS.push(
   {
-    // The composer while a voice note records: the bin in the leading slot,
-    // the red dot, "Recording" and the elapsed time (masked: it ticks), and
-    // Stop and send in the send slot.
+    // The composer while a voice note records (chat/VoiceDraft RecordingRow):
+    // round X cancel, the dotted track with the live bars, the elapsed time
+    // (the track and time masked: they tick), and the round check (stop and
+    // keep).
     name: 'chat-composer-recording',
     seed: creator,
     prepare: stubRecorder,
     url: '/chat',
-    mask: (page) => [page.locator('[data-composer-field]').getByText(/^\d+:\d{2}$/)],
+    mask: (page) => [
+      page.locator('[data-recording-track]'),
+      page.locator('[data-recording-elapsed]'),
+    ],
     steps: startRecording,
   },
   {
-    // Stop and send: the voice note on its way, the spinner in the send slot
-    // at the stop button's width.
+    // Stop and keep, then Send: the kept note on its way, the spinner in the
+    // send slot at send's own width.
     name: 'chat-voice-sending',
     seed: creator,
     prepare: stubRecorder,
     url: '/chat',
     steps: async (page) => {
       await startRecording(page);
-      // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+      // Over MIN_VOICE_NOTE_MS, so the recording is kept and not dropped.
       await page.waitForTimeout(1_100);
+      await keepRecording(page);
       await assertSameWidth(sendSlot(page), async () => {
-        await tap(
-          [page.getByRole('button', { name: 'Stop and send voice note', exact: true })],
-          'Stop and send',
-        );
+        await tap([dmComposer(page).locator('[data-row-send]')], 'Send');
         await expect(
           page.getByRole('button', { name: 'Sending voice note', exact: true }),
         ).toHaveAttribute('aria-busy', 'true');
@@ -4023,12 +4481,10 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await startRecording(page);
-      // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+      // Over MIN_VOICE_NOTE_MS, so the recording is kept and not dropped.
       await page.waitForTimeout(1_100);
-      await tap(
-        [page.getByRole('button', { name: 'Stop and send voice note', exact: true })],
-        'Stop and send',
-      );
+      await keepRecording(page);
+      await tap([dmComposer(page).locator('[data-row-send]')], 'Send');
       const note = await firstVisible([page.getByTestId('voice-uploading')], 'voice uploading');
       await waitFor([note.locator('[data-voice-bars]')], 'voice bars');
       const ring = await firstVisible([note.locator('[data-upload-ring]')], 'voice upload ring');
@@ -5575,6 +6031,9 @@ SCREENS.push(
   },
 );
 
+/** Catch-up screens with the reply at rest under comments: checkCatchUpComposer runs on each. */
+const CATCH_UP_REST_SCREENS = new Set(['catch-up-rest']);
+
 /** The writing box screens: check 11 (the row's keys and the send) runs on each. */
 const WRITING_BOX_SCREENS = new Set([
   'chat-box-focused',
@@ -5586,6 +6045,8 @@ const WRITING_BOX_SCREENS = new Set([
   'post-comment-box',
   'brief-field-row',
   'post-caption-box',
+  'catch-up-tray-comment',
+  'catch-up-tray-chat',
 ]);
 
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
@@ -5684,6 +6145,11 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   // A writing box screen: the row's keys are 44 tall, the send ends inside the box.
   if (WRITING_BOX_SCREENS.has(screen.name)) await assertWritingBox(page, screen.name);
   await checkLayout(page, screen.name);
+  // A catch-up screen: 44 hits (bar keys 48), checkpoint circles on their
+  // first line, no overlapping rows, the card on its own surface (check 13).
+  if (screen.name.startsWith('catch-up-')) await assertCatchUpLayout(page, screen.name);
+  // The reply at rest: the pill's field centred, its left on the photo column.
+  if (CATCH_UP_REST_SCREENS.has(screen.name)) await checkCatchUpComposer(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
     animations: 'disabled',
@@ -5713,6 +6179,8 @@ const LIST_CARD_SCREENS = new Set([
   'chat-list-select',
   'notifications',
   'activity-bank',
+  'activity-grouped-folded',
+  'activity-grouped-unfolded',
   'plan-tab',
   'plan-tab-live',
   'plan-tab-ended',
@@ -5829,6 +6297,35 @@ const LAPTOP_DARK_SCREENS = new Set([
   'catch-up-swipe-keep',
   'catch-up-typing',
   'catch-up-end',
+  // Catch up rebuild (9 Nov 2026: one card per item): phone and laptop, light and dark.
+  'activity-grouped-folded',
+  'activity-grouped-unfolded',
+  'catch-up-rest',
+  'catch-up-carousel',
+  'catch-up-lightbox',
+  'catch-up-menu',
+  'catch-up-tray-comment',
+  'catch-up-tray-chat',
+  'catch-up-recording',
+  'catch-up-voice-chip',
+  'catch-up-thread-full',
+  'catch-up-chat-main',
+  'catch-up-long-name',
+  'catch-up-long-title',
+  'catch-up-long-caption',
+  'catch-up-emoji',
+  'catch-up-long-link',
+  'catch-up-blank-lines',
+  'catch-up-many-comments',
+  'catch-up-video',
+  'catch-up-text-only',
+  'catch-up-caption-open',
+  'catch-up-plan-item',
+  'catch-up-bank-idea',
+  'catch-up-brief-no-due',
+  'catch-up-feedback',
+  'catch-up-not-sent',
+  'catch-up-error',
   'chat-thread-view-divider',
   // One search, the top bar and the chip row (decisions A to F): phone and
   // laptop, light and dark. The top bar of the six list screens is shot on

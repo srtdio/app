@@ -50,6 +50,7 @@ import {
   marksWholeInbox,
   mergeFresh,
   msUntilZonedMidnight,
+  openAction,
   fetchActivityEntry,
   unreadCount,
   updatesLabel,
@@ -74,7 +75,7 @@ import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { ActivityBoxes } from '@/components/pages/activity/ActivityBoxes';
 import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
 import { CATCH_UP, unreadHeading } from '@/lib/catch-up/copy';
-import { buildCatchUpQueue, groupHeadEntry, heldEntries } from '@/lib/catch-up/queue';
+import { buildCatchUpQueue, heldEntries, type CatchUpItem } from '@/lib/catch-up/queue';
 import {
   CATCH_UP_NEWEST,
   CATCH_UP_PARAM,
@@ -162,7 +163,7 @@ export function NotificationsPage() {
   const catchUpParam = searchParams.get(CATCH_UP_PARAM);
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
-  const { workspaceId, workspaces } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   // Today and Yesterday follow the workspace's timezone, not the device's.
   const tz = workspaces.find((row) => row.id === workspaceId)?.timezone ?? null;
   const newTrace = useNewTrace();
@@ -541,9 +542,8 @@ export function NotificationsPage() {
     [workspaceId, newTrace, editItems, revertRead, toast, loadMentionCount],
   );
 
-  // A row tap opens catch up with THAT entry first (its card paints from the
-  // row the list holds); a group head opens its newest entry first and its
-  // other entries follow. One history step (push): Back closes catch up.
+  // Catch up opens only from the Catch up button (cards live only in Catch
+  // up, 9 Nov 2026). One history step (push): Back closes catch up.
   const openCatchUp = useCallback(
     (entry: ActivityItem | null, follow: readonly ActivityItem[] = []) => {
       if (entry !== null) seedCatchUpEntry(entry, follow);
@@ -553,17 +553,33 @@ export function NotificationsPage() {
     },
     [searchParams, setSearchParams],
   );
-  const handleOpenEntry = useCallback((entry: ActivityItem) => openCatchUp(entry), [openCatchUp]);
-  const handleOpenGroup = useCallback(
-    (group: ActivityItem[]) => {
-      const head = groupHeadEntry(group);
-      if (head === undefined) return;
-      openCatchUp(
-        head,
-        group.filter((e) => e.id !== head.id),
-      );
+  // A row tap opens the real place at the exact comment or message
+  // (openAction): mark it read (optimistic, reverted with a toast), toast a
+  // deleted plan, then navigate.
+  const handleOpenEntry = useCallback(
+    (entry: ActivityItem) => {
+      if (workspaceId === null) return;
+      const open = openAction(entry, workspaceKey, side);
+      if (open.markRead && entry.readAt === null) markEntriesRead([entry]);
+      if (open.toast !== null) toast?.show({ title: open.toast });
+      if (open.href !== null) navigate(open.href);
     },
-    [openCatchUp],
+    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
+  );
+  // A grouped card's head: every unread entry of the group read in one batch,
+  // then the group's newest comment opens (groupOpenEntry, chosen by the card).
+  const handleOpenGroup = useCallback(
+    (group: ActivityItem[], entry: ActivityItem) => {
+      if (workspaceId === null) return;
+      const open = openAction(entry, workspaceKey, side);
+      const unread = group.filter(
+        (e) => e.readAt === null && openAction(e, workspaceKey, side).markRead,
+      );
+      if (unread.length > 0) markEntriesRead(unread);
+      if (open.toast !== null) toast?.show({ title: open.toast });
+      if (open.href !== null) navigate(open.href);
+    },
+    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
   // The active chip only: mark its unread rows (no snooze, or one that has run
@@ -665,7 +681,7 @@ export function NotificationsPage() {
   // (Slack): the tapped entry (the row or toast handed it over, else the
   // list's copy, else one read by id for a cold link), then the unread
   // entries the screen holds. New arrivals wait for next time.
-  const [catchUp, setCatchUp] = useState<{ param: string; queue: ActivityItem[] } | null>(null);
+  const [catchUp, setCatchUp] = useState<{ param: string; queue: CatchUpItem[] } | null>(null);
   const fetchingEntryRef = useRef<string | null>(null);
   useEffect(() => {
     if (catchUpParam === null) {
@@ -682,7 +698,14 @@ export function NotificationsPage() {
       mark('catch-up:queue');
       setCatchUp({
         param: catchUpParam,
-        queue: buildCatchUpQueue({ tapped, held, follow, nowMs: Date.now(), workspaceId }),
+        queue: buildCatchUpQueue({
+          tapped,
+          held,
+          follow,
+          nowMs: Date.now(),
+          workspaceId,
+          selfId: userId,
+        }),
       });
     };
     if (catchUpParam === CATCH_UP_NEWEST) {
@@ -690,11 +713,15 @@ export function NotificationsPage() {
       fix(null);
       return;
     }
+    // One card per item: the card needs every entry of the tapped item the list
+    // holds, so a deep link waits for the list (as the newest link does); a
+    // handed-over seed paints at once with what the opener held.
     const seed = takeCatchUpSeed(catchUpParam);
     if (seed !== undefined) {
       fix(seed.item, seed.follow);
       return;
     }
+    if (listLoading) return;
     const known = held.find((item) => item.id === catchUpParam);
     if (known !== undefined) {
       fix(known);
@@ -711,7 +738,7 @@ export function NotificationsPage() {
     });
     // `items` and `listLoading` matter only until the queue is fixed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catchUpParam, catchUp, workspaceId, userId, sort, items.length > 0]);
+  }, [catchUpParam, catchUp, workspaceId, userId, sort, items.length > 0, listLoading]);
 
   // Back, Esc and Done: return to where catch up was opened. A link from
   // another screen (a toast) carries its return path; on Activity the param
@@ -742,6 +769,16 @@ export function NotificationsPage() {
       );
     },
     [editItems],
+  );
+  // The card menu's "Open ...": the real place at the comment; catch up closes
+  // (the push replaces the catch-up step, so Back returns to Activity).
+  const openPlaceFromCatchUp = useCallback(
+    (href: string) => {
+      void loadMentionCount();
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      navigate(href, { replace: true });
+    },
+    [navigate, loadMentionCount],
   );
   const onCatchUpRead = useCallback((ids: readonly string[]) => setReadAt(ids, true), [setReadAt]);
   const onCatchUpUnread = useCallback(
@@ -808,9 +845,13 @@ export function NotificationsPage() {
           key={catchUp.param}
           queue={catchUp.queue}
           workspaceId={workspaceId}
+          workspaceKey={workspaceKey}
           currentUserId={userId}
           selfName={selfName}
+          side={side}
+          timeZone={tz ?? undefined}
           onClose={closeCatchUp}
+          onOpenPlace={openPlaceFromCatchUp}
           onRead={onCatchUpRead}
           onUnread={onCatchUpUnread}
           onAllRead={onCatchUpAllRead}

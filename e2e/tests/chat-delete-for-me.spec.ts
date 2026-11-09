@@ -355,9 +355,12 @@ test('an own voice note uploading: the ring in the play slot, the real bars at r
 
   await page.getByRole('button', { name: 'Record voice note', exact: true }).click();
   await expect(page.locator('[data-composer-state="recording"]')).toBeVisible();
-  // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+  // Over MIN_VOICE_NOTE_MS, so the recording is kept and not dropped.
   await page.waitForTimeout(1_100);
-  await page.getByRole('button', { name: 'Stop and send voice note', exact: true }).click();
+  // The check stops and keeps (the note waits in the box as a chip); Send sends it.
+  await page.getByRole('button', { name: 'Stop and keep voice note', exact: true }).click();
+  await expect(page.locator('[data-voice-chip]')).toBeVisible();
+  await page.locator('form:has([data-voice-chip]) [data-row-send]').click();
 
   const note = page.getByTestId('voice-uploading');
   await expect(note).toBeVisible();

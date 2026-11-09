@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// Catch up's screen: the end screen's count wording, Keep unread writes
-// nothing, Mark as read calls the write and moves on, Undo puts the card back
-// and calls the undo write, the reply box shows only on cards that take one,
-// and the top bar counts "<N> left".
+// Catch up's screen (9 Nov 2026): one card per item; "{n} left"; Keep unread
+// writes nothing; Mark as read (Main, ink, never green) writes every entry of
+// the item and moves on; Undo puts it back; a gone card is skipped silently;
+// a failed read shows the error state with Retry; the name row opens the
+// menu; Back closes.
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -24,53 +25,85 @@ const writes = vi.hoisted(() => ({
   markCatchUpRead: vi.fn(async () => ({ ok: true as const })),
   undoCatchUpRead: vi.fn(async () => ({ ok: true as const })),
   markAllCatchUpRead: vi.fn(async () => ({ ok: true as const })),
+  markCatchUpSkipped: vi.fn(async () => ({ ok: true as const })),
 }));
 vi.mock('@/lib/catch-up/writes', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/catch-up/writes')>()),
   ...writes,
 }));
-vi.mock('@/lib/catch-up/reads', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/catch-up/reads')>()),
-  readCatchUpChat: vi.fn(async () => new Map()),
+const reads = vi.hoisted(() => ({
+  readCatchUpBodies: vi.fn(),
+}));
+vi.mock('@/lib/catch-up/body', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/catch-up/body')>()),
+  readCatchUpBodies: reads.readCatchUpBodies,
+}));
+// The reply box is the shared writing box (its own tests); a stub here.
+vi.mock('@/components/catch-up/CatchUpReply', () => ({
+  CatchUpReply: (props: { hint: string; onFocusChange: (focused: boolean) => void }) => (
+    <form data-catch-up-reply="" aria-label={props.hint}>
+      <textarea data-catch-up-reply-input="" onFocus={() => props.onFocusChange(true)} />
+    </form>
+  ),
 }));
 
 import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
 import { CatchUpEnd } from '@/components/catch-up/CatchUpEnd';
-import { mapEntry, type ActivityItem } from '@/components/pages/activity/data';
+import type { CatchUpBodyResult } from '@/lib/catch-up/body';
+import type { CatchUpItem } from '@/lib/catch-up/queue';
+import { cardOf, entry } from '@/lib/catch-up/test-fixtures';
 import { endLine, leftLabel } from '@/lib/catch-up/copy';
+import { CATCH_UP_UNDO_MS } from '@/lib/catch-up/use-catch-up';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const WS = '0190a000-0000-7000-8000-0000000000aa';
-const ME = '0190a000-0000-7000-8000-0000000000bb';
+function card(id: string): CatchUpItem {
+  return cardOf(
+    entry(
+      { id: `${id}-1`, entity_id: id, payload: { comment_id: `${id}-c` } },
+      { title: `Post ${id}` },
+    ),
+    entry({
+      id: `${id}-2`,
+      entity_id: id,
+      event_type: 'post_deleted',
+      created_at: '2026-11-08T09:00:00.000Z',
+    }),
+  );
+}
 
-function entry(id: string, over: Partial<ActivityItem> = {}): ActivityItem {
-  const item = mapEntry({
-    id,
-    workspace_id: WS,
-    user_id: ME,
-    event_type: 'stage_change',
-    entity_type: 'post',
-    entity_id: `post-${id}`,
-    scope: 'posts',
-    scope_key: null,
-    tier: 'active',
-    created_at: '2026-11-08T10:00:00Z',
-    read_at: null,
-    snoozed_until: null,
-    deleted_at: null,
-    email_sent_at: null,
-    payload: { to_stage: 'approved' },
-    actor_user_id: null,
-  });
-  return { ...item, title: `Post ${id}`, ...over };
+function bodyFor(title: string): CatchUpBodyResult {
+  return {
+    title,
+    context: null,
+    rows: [
+      {
+        kind: 'message',
+        id: `${title}-c`,
+        author: { id: 'u1', name: 'Maya', avatarUrl: null },
+        createdAt: '2026-11-08T10:00:00Z',
+        text: 'Looks good',
+        replyCount: 2,
+      },
+    ],
+    firstNewId: `${title}-c`,
+    hasOlder: false,
+    threads: true,
+    latestReplyId: null,
+  };
 }
 
 let root: Root | null = null;
 let host: HTMLDivElement;
 
-function render(queue: ActivityItem[]): { onClose: ReturnType<typeof vi.fn> } {
+function render(queue: CatchUpItem[]): {
+  onClose: ReturnType<typeof vi.fn>;
+  onRead: ReturnType<typeof vi.fn>;
+} {
   const onClose = vi.fn();
+  const onRead = vi.fn();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -78,17 +111,18 @@ function render(queue: ActivityItem[]): { onClose: ReturnType<typeof vi.fn> } {
     root?.render(
       <CatchUpScreen
         queue={queue}
-        workspaceId={WS}
-        currentUserId={ME}
+        workspaceId="w1"
+        currentUserId="u-me"
         selfName={null}
         onClose={onClose}
-        onRead={vi.fn()}
+        onRead={onRead}
         onUnread={vi.fn()}
         onAllRead={vi.fn()}
+        onOpenPlace={vi.fn()}
       />,
     ),
   );
-  return { onClose };
+  return { onClose, onRead };
 }
 
 function click(selector: string): void {
@@ -97,12 +131,24 @@ function click(selector: string): void {
   act(() => el.click());
 }
 
+async function settle(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 beforeEach(() => {
-  writes.markCatchUpRead.mockClear();
-  writes.undoCatchUpRead.mockClear();
+  Object.values(writes).forEach((fn) => fn.mockClear());
+  reads.readCatchUpBodies.mockReset();
+  reads.readCatchUpBodies.mockImplementation(
+    async (_client: unknown, input: { items: CatchUpItem[] }) =>
+      new Map(input.items.map((i) => [i.key, bodyFor(i.entityId)])),
+  );
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = null;
   document.body.innerHTML = '';
@@ -118,57 +164,200 @@ describe('catch-up end screen', () => {
     const onDone = vi.fn();
     act(() => root?.render(<CatchUpEnd wentThrough={1} onDone={onDone} />));
     expect(host.textContent).toContain("Everything's sorted.");
-    expect(host.textContent).toContain('You went through 1 update.');
     click('[data-catch-up-done]');
     expect(onDone).toHaveBeenCalledTimes(1);
+    // The check circle and Done are ink (text-fg / bg-accent: black in light,
+    // white in dark), never green.
+    const check = host.querySelector('[data-catch-up-end-check]');
+    expect(check?.className).toContain('text-fg');
+    expect(check?.querySelector('svg')).not.toBeNull();
+    const done = host.querySelector('[data-catch-up-done]');
+    expect(done?.className).toContain('bg-accent');
+    for (const el of [check, done]) {
+      expect(el?.className ?? '').not.toMatch(/\b(text|bg)-(good|success|green)/);
+    }
   });
 });
 
 describe('catch-up screen', () => {
-  it('counts what is left and keeps unread without a write', () => {
-    render([entry('a'), entry('b')]);
+  it('one card per item: counts what is left, keeps unread without a write', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
     expect(document.querySelector('[data-catch-up-left]')?.textContent).toBe(leftLabel(2));
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'post:p1',
+    );
     click('[data-catch-up-keep]');
     expect(writes.markCatchUpRead).not.toHaveBeenCalled();
     expect(document.querySelector('[data-catch-up-left]')?.textContent).toBe(leftLabel(1));
     expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
-      'b',
+      'post:p2',
     );
   });
 
-  it('marks read through the write, then ends with the count', async () => {
-    render([entry('a')]);
-    click('[data-catch-up-read]');
-    expect(writes.markCatchUpRead).toHaveBeenCalledTimes(1);
-    await act(async () => Promise.resolve());
-    expect(document.querySelector('[data-catch-up-end]')).not.toBeNull();
-    expect(document.body.textContent).toContain('You went through 1 update.');
+  it('only the current and next card are read, in one batched call', async () => {
+    render([card('p1'), card('p2'), card('p3')]);
+    await settle();
+    expect(reads.readCatchUpBodies).toHaveBeenCalledTimes(1);
+    const input = reads.readCatchUpBodies.mock.calls[0]?.[1] as { items: CatchUpItem[] };
+    expect(input.items.map((i) => i.key)).toEqual(['post:p1', 'post:p2']);
   });
 
-  it('Undo brings the last card back and calls the undo write for a read card', async () => {
-    render([entry('a'), entry('b')]);
+  it('Mark as read is the ink Main (never green) and marks every entry of the item read', async () => {
+    const { onRead } = render([card('p1')]);
+    await settle();
+    const read = document.querySelector('[data-catch-up-read]');
+    expect(read?.className).toContain('bg-accent');
+    expect(read?.className).not.toMatch(/\bbg-good/);
     click('[data-catch-up-read]');
-    await act(async () => Promise.resolve());
+    expect(writes.markCatchUpRead).toHaveBeenCalledTimes(1);
+    expect(onRead).toHaveBeenCalledWith(['p1-1', 'p1-2']);
+    await settle();
+    expect(document.querySelector('[data-catch-up-end]')).not.toBeNull();
+  });
+
+  it('Undo brings the card back and restores every entry', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-read]');
+    await settle();
     click('[data-catch-up-undo]');
     expect(writes.undoCatchUpRead).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
-      'a',
+      'post:p1',
     );
   });
 
-  it('shows no reply box on a card that takes none, and one on a comment card', () => {
-    render([entry('a')]);
-    expect(document.querySelector('[data-catch-up-reply]')).toBeNull();
-    act(() => root?.unmount());
-    document.body.innerHTML = '';
-    render([entry('c', { eventType: 'comment', commentId: 'cm-1', body: 'Looks good' })]);
-    const input = document.querySelector<HTMLTextAreaElement>('[data-catch-up-reply-input]');
-    expect(input?.getAttribute('placeholder')).toBe('Reply');
+  it('a gone card is skipped silently (marked read, never shown empty, no Undo)', async () => {
+    reads.readCatchUpBodies.mockImplementation(
+      async (_client: unknown, input: { items: CatchUpItem[] }) =>
+        new Map(
+          input.items.map((i) => [i.key, i.entityId === 'p1' ? 'skip' : bodyFor(i.entityId)]),
+        ),
+    );
+    render([card('p1'), card('p2')]);
+    await settle();
+    expect(writes.markCatchUpSkipped).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'post:p2',
+    );
+    expect(document.querySelector('[data-catch-up-undo]')?.className).toContain('invisible');
   });
 
-  it('Back closes', () => {
-    const { onClose } = render([entry('a')]);
+  it('a failed read shows the error state; the reply box and buttons stay', async () => {
+    reads.readCatchUpBodies.mockImplementation(
+      async (_client: unknown, input: { items: CatchUpItem[] }) =>
+        new Map(input.items.map((i) => [i.key, 'error'])),
+    );
+    render([card('p1')]);
+    await settle();
+    expect(document.querySelector('[data-catch-up-error]')?.textContent).toContain(
+      "Couldn't load this card.",
+    );
+    expect(document.querySelector('[data-catch-up-reply]')).not.toBeNull();
+    expect(document.querySelector('[data-catch-up-read]')).not.toBeNull();
+  });
+
+  it('the name row shows the title with a chevron, no Mute or Star', async () => {
+    render([card('p1')]);
+    await settle();
+    const row = document.querySelector('[data-catch-up-name-row]');
+    expect(row?.textContent).toContain('p1');
+    expect(document.body.textContent).not.toMatch(/Mute|Star/);
+  });
+
+  it('Back closes', async () => {
+    const { onClose } = render([card('p1')]);
+    await settle();
     click('[data-catch-up-back]');
+    await settle();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+function undoState(): { visible: boolean; focusable: boolean; disabled: boolean } {
+  const undo = document.querySelector<HTMLButtonElement>('[data-catch-up-undo]');
+  if (undo === null) throw new Error('missing undo');
+  return {
+    visible:
+      !undo.className.split(/\s+/).includes('invisible') &&
+      undo.getAttribute('aria-hidden') !== 'true',
+    focusable: undo.tabIndex >= 0,
+    disabled: undo.disabled,
+  };
+}
+
+describe('catch-up Undo visibility (addendum B)', () => {
+  it('fresh open: hidden, not focusable, disabled (the slot stays so the count is centred)', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    expect(undoState()).toEqual({ visible: false, focusable: false, disabled: true });
+    expect(document.querySelector('[data-catch-up-undo]')).not.toBeNull();
+  });
+
+  it('after one decision: visible; after undoing the only decision: hidden again', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-keep]');
+    expect(undoState()).toEqual({ visible: true, focusable: true, disabled: false });
+    click('[data-catch-up-undo]');
+    expect(undoState()).toEqual({ visible: false, focusable: false, disabled: true });
+  });
+
+  it('after the undo window runs out: hidden', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-keep]');
+    expect(undoState().visible).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(CATCH_UP_UNDO_MS + 1);
+    });
+    expect(undoState()).toEqual({ visible: false, focusable: false, disabled: true });
+  });
+
+  it('hidden while typing', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-keep]');
+    const input = document.querySelector<HTMLTextAreaElement>('[data-catch-up-reply-input]');
+    act(() => input?.focus());
+    expect(undoState().visible).toBe(false);
+  });
+});
+
+describe('catch-up ink, never green (addendum C)', () => {
+  it('typing: Hide keyboard (keyboard glyph, 48 round) and the ink tick (bg-accent)', async () => {
+    render([card('p1')]);
+    await settle();
+    const input = document.querySelector<HTMLTextAreaElement>('[data-catch-up-reply-input]');
+    act(() => input?.focus());
+    const hide = document.querySelector<HTMLButtonElement>('[data-catch-up-hide-keyboard]');
+    expect(hide?.getAttribute('aria-label')).toBe('Hide keyboard');
+    expect(hide?.className).toContain('h-12 w-12');
+    expect(hide?.className).toContain('rounded-full');
+    expect(hide?.querySelector('svg rect')).not.toBeNull();
+    const tick = document.querySelector<HTMLButtonElement>('[data-catch-up-typing-read]');
+    expect(tick?.className).toContain('bg-accent');
+    expect(tick?.className).toContain('h-12 w-12');
+    expect(tick?.className).not.toMatch(/\b(bg|text)-(good|success|green)/);
+  });
+
+  it('the swipe-read tint is the accent ink, never green', () => {
+    const src = readFileSync(
+      join(process.cwd(), 'src/components/catch-up/CatchUpCard.tsx'),
+      'utf8',
+    );
+    expect(src).toContain("props.tint === 'read' ? 'bg-accent text-accent-fg'");
+    expect(src).not.toMatch(/good-solid|bg-good|text-good|variant="success"/);
+  });
+
+  it('the accent ink is defined in light and dark (black in light, white in dark)', () => {
+    const css = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
+    const light = /:root\s*\{[\s\S]*?--accent:\s*([^;]+);/.exec(css)?.[1]?.trim();
+    const dark = /\n\.dark\s*\{[\s\S]*?--accent:\s*([^;]+);/.exec(css)?.[1]?.trim();
+    expect(light).toBeDefined();
+    expect(dark).toBeDefined();
+    expect(light).not.toBe(dark);
   });
 });

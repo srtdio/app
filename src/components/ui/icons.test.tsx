@@ -31,6 +31,7 @@ const DOCUMENTED = [
   'IconCalendarClock',
   'IconCamera',
   'IconCarousel',
+  'IconKeyboardHide',
   'IconChat',
   'IconCheck',
   'IconCheckCircle',

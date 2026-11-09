@@ -777,17 +777,27 @@ describe('voice notes under 1 second are discarded', () => {
     expect(await sendVoiceRecording(recording(1200), onSend, undefined, null)).toBe('refused');
   });
 
-  it('stopSend toasts the short copy and always resets voiceBusy in finally', async () => {
+  it('sending the kept note toasts the short copy and always resets voiceBusy in finally', async () => {
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const source = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
-    const body = source.slice(source.indexOf('async function stopSend'));
+    const body = source.slice(source.indexOf('async function sendDraft'));
     const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
-    expect(fn).toContain(
-      "if (outcome === 'too-short') toast.show({ title: VOICE_TOO_SHORT_COPY });",
-    );
+    expect(fn).toContain('toast.show({ title: VOICE_TOO_SHORT_COPY });');
     expect(fn).toMatch(/finally \{\s+setVoiceBusy\(false\);\s+\}/);
     expect(fn).not.toContain('recorder.seconds');
+  });
+
+  it('the check stops and keeps: a too-short recording toasts, never sends', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const source = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
+    const body = source.slice(source.indexOf('async function stopKeep'));
+    const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
+    expect(fn).toContain('saveVoiceDraft(channelId, rec)');
+    expect(fn).toContain('setLocalNote(rec);');
+    expect(fn).toContain('toast.show({ title: VOICE_TOO_SHORT_COPY });');
+    expect(fn).not.toContain('sendVoiceRecording');
   });
 });
 

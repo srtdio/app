@@ -274,6 +274,10 @@ export function ComposerTray(props: {
         aria-expanded={open}
         aria-controls={trayId}
         onClick={() => setOpen(!open)}
+        // In a writing box a press must not move focus: focusing the + reshapes
+        // the box (pill to card) between press and release, so the click lands
+        // off the button.
+        onPointerDown={props.compact === true ? preventDefault : undefined}
         className={
           props.compact === true ? 'w-9 min-w-9 items-stretch py-1 hover:bg-transparent' : undefined
         }

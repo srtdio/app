@@ -1,5 +1,7 @@
 // Catch up's writes. Each is idempotent and carries its own trace id (minted
-// by the caller at the tap). Mark as read: the entry (inbox_mark_read_ids),
+// by the caller at the tap). A card is an ITEM: Mark as read marks EVERY
+// unread entry of it in one inbox_mark_read_ids call; Undo restores them all
+// in one inbox_mark_unread_ids call. Mark as read: the entries,
 // plus the chat's own read point for a chat card (a thread: chat_thread_read_set
 // to the newest reply; the main chat: the read cursor at the message). Undo of
 // a read: the entry back to unread (inbox_mark_unread_ids) and the same
@@ -14,6 +16,7 @@ import type { ActivityItem } from '@/components/pages/activity/data';
 import { setReadCursorRecord } from '@/lib/chat/record';
 import { markChatUnread, markThreadUnread, setThreadRead } from '@/lib/chat/thread-signals';
 import { catchUpCardKind } from '@/lib/catch-up/copy';
+import { unreadIdsOf, type CatchUpItem } from '@/lib/catch-up/queue';
 
 type Functions = Database['public']['Functions'];
 
@@ -67,7 +70,7 @@ function both(a: CatchUpWrite, b: CatchUpWrite): CatchUpWrite {
 }
 
 /**
- * Mark one entry read, and its chat point for a chat card. `latestReplyId` is
+ * Mark every unread entry of one item read, and its chat point for a chat card. `latestReplyId` is
  * the newest reply the card read (a thread is read to it); the message itself
  * when unknown.
  */
@@ -75,14 +78,17 @@ export async function markCatchUpRead(
   client: Client,
   input: {
     workspaceId: string;
-    item: ActivityItem;
+    item: CatchUpItem;
     latestReplyId?: string | null;
     traceId: string;
   },
 ): Promise<CatchUpWrite> {
-  const point = chatPointOf(input.item);
+  const point = chatPointOf(input.item.lead);
+  const ids = unreadIdsOf(input.item);
   const [entry, chat] = await Promise.all([
-    entryProc(client, 'inbox_mark_read_ids', input.workspaceId, [input.item.id], input.traceId),
+    ids.length > 0
+      ? entryProc(client, 'inbox_mark_read_ids', input.workspaceId, ids, input.traceId)
+      : Promise.resolve<CatchUpWrite>({ ok: true }),
     point === null
       ? Promise.resolve<CatchUpWrite>({ ok: true })
       : point.rootId !== null
@@ -103,14 +109,17 @@ export async function markCatchUpRead(
   return both(entry, chat);
 }
 
-/** Undo a Mark as read: the entry unread again, and the same message unread in its chat. */
+/** Undo a Mark as read: every entry of the item unread again, and the same message unread in its chat. */
 export async function undoCatchUpRead(
   client: Client,
-  input: { workspaceId: string; item: ActivityItem; traceId: string },
+  input: { workspaceId: string; item: CatchUpItem; traceId: string },
 ): Promise<CatchUpWrite> {
-  const point = chatPointOf(input.item);
+  const point = chatPointOf(input.item.lead);
+  const ids = unreadIdsOf(input.item);
   const [entry, chat] = await Promise.all([
-    entryProc(client, 'inbox_mark_unread_ids', input.workspaceId, [input.item.id], input.traceId),
+    ids.length > 0
+      ? entryProc(client, 'inbox_mark_unread_ids', input.workspaceId, ids, input.traceId)
+      : Promise.resolve<CatchUpWrite>({ ok: true }),
     point === null
       ? Promise.resolve<CatchUpWrite>({ ok: true })
       : point.rootId !== null
@@ -141,4 +150,14 @@ export async function markAllCatchUpRead(
     p_trace_id: input.traceId,
   });
   return res.ok ? { ok: true } : { ok: false, message: res.error.message };
+}
+
+/** Skip a card silently (deleted, access lost): its entries read, nothing else. */
+export async function markCatchUpSkipped(
+  client: Client,
+  input: { workspaceId: string; item: CatchUpItem; traceId: string },
+): Promise<CatchUpWrite> {
+  const ids = unreadIdsOf(input.item);
+  if (ids.length === 0) return { ok: true };
+  return entryProc(client, 'inbox_mark_read_ids', input.workspaceId, ids, input.traceId);
 }

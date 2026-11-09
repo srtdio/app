@@ -93,7 +93,11 @@ import {
 //     its full column width and no clipping ancestor cuts its sides;
 //  12 post screens (assertCommentBars, 8 Nov 2026): every comment's action bar
 //     is 44 hits, rides half above its row (its middle on the row's top edge),
-//     ends on the row's end and covers no time, name or title.
+//     ends on the row's end and covers no time, name or title;
+//  13 catch-up screens (assertCatchUpLayout, 9 Nov 2026): every control a 44
+//     hit (the bar's keys 48), each checkpoint circle on its text's first
+//     line and the point text on the message text column, no card row over a
+//     sibling, the card on a surface of its own over the page tone.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
@@ -970,6 +974,53 @@ export async function assertWritingBox(page: Page, screenName: string): Promise<
 }
 
 /**
+ * Check 11c: the catch-up reply at rest (CatchUpReply, ui/WritingBox
+ * restPill). The pill ([data-catch-up-reply] [data-writing-frame]) holds its
+ * field's placeholder on its vertical centre (the one-row textarea's centre
+ * within 1px of the pill's), and its left edge sits on the card's photo
+ * column (within 1px of the first [data-catch-up-message] photo's left edge).
+ * Call on a catch-up screen with the reply at rest (not focused).
+ */
+export async function checkCatchUpComposer(page: Page, screenName: string): Promise<void> {
+  const geom = await page.evaluate(() => {
+    const frame = document.querySelector('[data-catch-up-reply] [data-writing-frame]');
+    const field = document.querySelector('[data-catch-up-reply] [data-catch-up-reply-input]');
+    const photo =
+      document.querySelector('[data-catch-up-message] [data-avatar-kind]') ??
+      document.querySelector('[data-catch-up-message] img');
+    const rect = (el: Element | null) => {
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    return { frame: rect(frame), field: rect(field), photo: rect(photo) };
+  });
+  const violations: LayoutViolation[] = [];
+  const add = (message: string): void => {
+    violations.push({ check: 'writing-box', message });
+  };
+  if (geom.frame === null || geom.field === null) {
+    add('no catch-up reply pill ([data-catch-up-reply] [data-writing-frame]) or its field');
+  } else {
+    const pillMid = geom.frame.y + geom.frame.height / 2;
+    const fieldMid = geom.field.y + geom.field.height / 2;
+    if (Math.abs(pillMid - fieldMid) > 1) {
+      add(
+        `catch-up reply placeholder off centre: field centre ${fieldMid.toFixed(1)} vs pill centre ${pillMid.toFixed(1)}`,
+      );
+    }
+    if (geom.photo === null) {
+      add('no [data-catch-up-message] photo to line the catch-up reply up with');
+    } else if (Math.abs(geom.frame.x - geom.photo.x) > 1) {
+      add(
+        `catch-up reply pill left ${geom.frame.x.toFixed(1)} is not on the photo column ${geom.photo.x.toFixed(1)}`,
+      );
+    }
+  }
+  settleFindings(screenName, violations);
+}
+
+/**
  * Check 11a: an open + tray is the top of its writing box (8 Nov 2026). The
  * tray ([data-tray]) sits inside the box's frame ([data-writing-frame]), at
  * its top and within its sides, in flow; it draws no fill, edge (bar its
@@ -1071,4 +1122,198 @@ export async function replyBoxWidthViolations(page: Page): Promise<LayoutViolati
     return out;
   });
   return messages.map((message) => ({ check: 'writing-box' as const, message }));
+}
+
+/** The catch-up bar's round keys ("<" and Undo): 48 x 48. */
+const CATCH_UP_BAR_KEY_PX = 48;
+/** Every other catch-up control's hit box. */
+const CATCH_UP_HIT_PX = 44;
+/** The writing box row keys' hit width (36 circle on a 44 tall hit, CLAUDE.md "Composer rows"). */
+const CATCH_UP_ROW_KEY_WIDTH_PX = 36;
+
+/**
+ * Check 13: a catch-up screen ([data-catch-up], 9 Nov 2026). Throws (strict)
+ * with every finding:
+ *   a every visible control (button, a, [role=button]) inside [data-catch-up]
+ *     has a hit box of at least 44 x 44 (its box, grown by an absolute
+ *     ::before / ::after hit layer); the bar's keys ([data-catch-up-bar])
+ *     48 x 48; the writing box's row keys ([data-composer-key],
+ *     [data-row-send], keys in [data-writing-row]) 36 wide x 44 tall. Inline
+ *     text runs (a link inside a sentence: display inline) and the message
+ *     text that opens its thread ([data-catch-up-open-thread], the text block
+ *     itself) are text targets, not controls, and are left out (WCAG 2.5.8's
+ *     inline exception);
+ *   b each feedback point's checkpoint circle ([data-catch-up-point-circle],
+ *     the 44 box) is centred within 1px of its text's first line centre (text
+ *     top + its padding-top 12 + half its 20 line, i.e. 22px down), and the
+ *     point text ([data-catch-up-point-text]) starts within 1px of the
+ *     message text column (a [data-catch-up-message] / [data-catch-up-points]
+ *     row's text column, after the 32 photo column and the 12 gap);
+ *   c no row of a card's list ([data-catch-up-rows], the thread's
+ *     [data-catch-up-thread-replies]) and no part of a card (its in-flow
+ *     children: name row, strip, body, reply) overlaps a sibling by more
+ *     than 1px;
+ *   d the card ([data-catch-up-card]) paints a background of its own that
+ *     differs from the page tone it sits on ([data-catch-up-box]).
+ * The end screen (no card) runs (a) only.
+ */
+export async function assertCatchUpLayout(page: Page, screenName: string): Promise<void> {
+  const messages = await page.evaluate(
+    (px: { bar: number; hit: number; rowKey: number }): string[] => {
+      const out: string[] = [];
+      const root = document.querySelector('[data-catch-up]');
+      if (root === null) return ['no [data-catch-up] on a catch-up screen'];
+      const shown = (el: Element): boolean => {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 1 || r.height <= 1) return false;
+        const s = getComputedStyle(el);
+        if (s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none') {
+          return false;
+        }
+        return el.closest('[aria-hidden="true"], [inert]') === null;
+      };
+      const label = (el: Element): string => {
+        const hook = Array.from(el.attributes).find(
+          (a) => a.name.startsWith('data-') && a.name !== 'data-state',
+        );
+        const aria = el.getAttribute('aria-label');
+        const text = (el.textContent ?? '').trim().slice(0, 24);
+        return `${el.tagName.toLowerCase()}${hook !== undefined ? `[${hook.name}]` : ''}${
+          aria !== null ? `[aria-label="${aria}"]` : text !== '' ? ` "${text}"` : ''
+        }`;
+      };
+      const px2 = (value: string): number | null =>
+        value.endsWith('px') ? parseFloat(value) : null;
+      // The control's hit box: its own box, grown by an absolute pseudo hit layer.
+      const hitBox = (el: Element): { width: number; height: number } => {
+        const r = el.getBoundingClientRect();
+        let left = r.left;
+        let right = r.right;
+        let top = r.top;
+        let bottom = r.bottom;
+        for (const pseudo of ['::before', '::after']) {
+          const s = getComputedStyle(el, pseudo);
+          if (s.content === 'none' || s.content === 'normal' || s.position !== 'absolute') continue;
+          const l = px2(s.left);
+          const rt = px2(s.right);
+          const t = px2(s.top);
+          const b = px2(s.bottom);
+          if (l !== null) left = Math.min(left, r.left + l);
+          if (rt !== null) right = Math.max(right, r.right - rt);
+          if (t !== null) top = Math.min(top, r.top + t);
+          if (b !== null) bottom = Math.max(bottom, r.bottom - b);
+        }
+        return { width: right - left, height: bottom - top };
+      };
+
+      // (a) hit boxes.
+      for (const el of Array.from(root.querySelectorAll('button, a[href], [role="button"]'))) {
+        if (!shown(el)) continue;
+        if (getComputedStyle(el).display === 'inline') continue;
+        if (el.closest('[data-catch-up-open-thread]') === el) continue;
+        const { width, height } = hitBox(el);
+        const inBar = el.closest('[data-catch-up-bar]') !== null;
+        const rowKey =
+          // The compact + (ComposerTray, data-plus) is a row key too (CLAUDE.md "Composer rows").
+          el.matches('[data-composer-key], [data-row-send], [data-plus]') ||
+          el.closest('[data-writing-row]') !== null;
+        const minW = inBar ? px.bar : rowKey ? px.rowKey : px.hit;
+        const minH = inBar ? px.bar : px.hit;
+        if (width < minW - 0.5 || height < minH - 0.5) {
+          out.push(
+            `${label(el)} hit box ${Math.round(width)}x${Math.round(height)} under ${minW}x${minH}`,
+          );
+        }
+      }
+
+      // (b) feedback points: the circle on the first text line, the text on the message column.
+      const column = (() => {
+        const row = root.querySelector('[data-catch-up-message], [data-catch-up-points]');
+        const text = row?.children[1] ?? null;
+        return text !== null && shown(text) ? text.getBoundingClientRect().left : null;
+      })();
+      for (const point of Array.from(root.querySelectorAll('[data-catch-up-point]'))) {
+        if (!shown(point)) continue;
+        const id = point.getAttribute('data-catch-up-point') ?? '';
+        const circle = point.querySelector('[data-catch-up-point-circle]');
+        const text = point.querySelector('[data-catch-up-point-text]');
+        if (circle === null || text === null) {
+          out.push(`point ${id}: no circle or text`);
+          continue;
+        }
+        const c = circle.getBoundingClientRect();
+        const t = text.getBoundingClientRect();
+        const ts = getComputedStyle(text);
+        const lineHeight = px2(ts.lineHeight) ?? 20;
+        const firstLine = t.top + (px2(ts.paddingTop) ?? 0) + lineHeight / 2;
+        const centre = c.top + c.height / 2;
+        if (Math.abs(centre - firstLine) > 1) {
+          const at = `${centre.toFixed(1)} vs ${firstLine.toFixed(1)}`;
+          out.push(`point ${id}: the circle is not centred on the first text line (${at})`);
+        }
+        if (column !== null && Math.abs(t.left - column) > 1) {
+          const at = `${t.left.toFixed(1)} vs ${column.toFixed(1)}`;
+          out.push(`point ${id}: the text is not on the message text column (${at})`);
+        }
+      }
+
+      // (c) siblings never overlap.
+      const inFlow = (el: Element): boolean => {
+        const p = getComputedStyle(el).position;
+        return p !== 'absolute' && p !== 'fixed';
+      };
+      const groups: Array<{ name: string; parent: Element }> = [];
+      // A held swipe leans the card (rotate): its boxes overlap by design, so
+      // the overlap check runs only on a card at rest (no swipe tint).
+      const leaning = root.querySelector('[data-catch-up-tint]') !== null;
+      for (const card of Array.from(root.querySelectorAll('[data-catch-up-card]'))) {
+        if (leaning) break;
+        const key = card.getAttribute('data-catch-up-card') ?? '';
+        groups.push({ name: `card ${key}`, parent: card });
+      }
+      for (const list of Array.from(
+        leaning
+          ? []
+          : root.querySelectorAll('[data-catch-up-rows], [data-catch-up-thread-replies]'),
+      )) {
+        groups.push({ name: 'rows', parent: list });
+      }
+      for (const group of groups) {
+        if (!shown(group.parent)) continue;
+        const kids = Array.from(group.parent.children).filter((el) => shown(el) && inFlow(el));
+        for (let i = 0; i < kids.length; i += 1) {
+          for (let j = i + 1; j < kids.length; j += 1) {
+            const a = kids[i];
+            const b = kids[j];
+            if (a === undefined || b === undefined) continue;
+            const ra = a.getBoundingClientRect();
+            const rb = b.getBoundingClientRect();
+            const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+            const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+            if (w > 1 && h > 1) {
+              out.push(`${group.name}: ${label(a)} overlaps ${label(b)} by ${Math.round(h)}px`);
+            }
+          }
+        }
+      }
+
+      // (d) the card's own surface on the page tone.
+      const box = root.querySelector('[data-catch-up-box]');
+      const card = root.querySelector('[data-catch-up-card]');
+      if (box !== null && card !== null && shown(card)) {
+        const cardBg = getComputedStyle(card).backgroundColor;
+        const boxBg = getComputedStyle(box).backgroundColor;
+        const clear = cardBg === 'transparent' || cardBg === 'rgba(0, 0, 0, 0)';
+        if (clear || cardBg === boxBg) {
+          out.push(`the card's background (${cardBg}) does not differ from the page's (${boxBg})`);
+        }
+      }
+      return out;
+    },
+    { bar: CATCH_UP_BAR_KEY_PX, hit: CATCH_UP_HIT_PX, rowKey: CATCH_UP_ROW_KEY_WIDTH_PX },
+  );
+  settleFindings(
+    screenName,
+    messages.map((message) => ({ check: 'catch-up' as const, message })),
+  );
 }

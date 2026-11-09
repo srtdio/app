@@ -281,7 +281,8 @@ describe('X7 FT42: leaving the chat mid-recording', () => {
     expect(composer).toContain(
       'onUnmountRecording: (rec) => {\n      saveVoiceDraft(channelId, rec);',
     );
-    expect(composer).toContain('<VoiceDraftBar');
+    // The kept draft waits inside the open writing box as the shared chip.
+    expect(composer).toContain('<VoiceNoteChipPlayer');
     expect(composer).toContain('void restoreVoiceDraft(channelId);');
     expect(composer).toContain("setDraftAsk('replace')");
   });
