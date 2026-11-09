@@ -22,6 +22,9 @@ import {
   checkLayout,
   type AlignScope,
   readTopbarSlots,
+  assertActivityTwinsPlan,
+  readActivityBoxes,
+  readListTwin,
 } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
@@ -840,6 +843,73 @@ function seedEightComments(network: HarnessNetwork): void {
   if (third !== undefined) third.body = MID_COMMENT;
 }
 
+/** A long post title for the "3 new" row: the name truncates, the chip never does. */
+const LONG_ACTIVITY_TITLE =
+  'Autumn knitwear carousel for the weekend sale with the warmer hero photo and new price line';
+
+/**
+ * Activity's three sections (10 Nov 2026), and nothing else in the feed:
+ * Weekend sale with `saleCount` unread comments today ("8 new" by default), a
+ * long-titled post with 3 unread comments yesterday ("3 new"), and a read
+ * post three days back (Earlier, no chip). A phone's first page holds 10
+ * (Calm) to 11 (Cozy) entries, so the rows screens take 5 on Weekend sale and
+ * every section lands on page one in every density.
+ */
+function seedActivitySections(network: HarnessNetwork, saleCount = 8): void {
+  seedEightComments(network);
+  const t = network.world.tables;
+  const entries = (t.inbox_entries ?? []).slice(-saleCount);
+  const sale = entries[entries.length - 1];
+  const postOf = (id: unknown): Row | undefined => (t.posts ?? []).find((p) => p.id === id);
+  const salePost = postOf(sale?.entity_id);
+  if (sale === undefined || salePost === undefined) throw new Error('no Weekend sale entry');
+  const day = 86_400_000;
+  const clone = (n: number, title: string, at: number, count: number, read: boolean): void => {
+    const postId = `0190d8f0-0000-7000-8000-0000000000${n}0`;
+    (t.posts ??= []).push({ ...salePost, id: postId, number: 90 + n, title });
+    for (let k = 0; k < count; k += 1) {
+      const commentId = `0190d8f0-0000-7000-8000-0000000000${n}${k + 1}`;
+      const createdAt = new Date(at - k * 60_000).toISOString();
+      (t.comments ??= []).push({
+        ...((t.comments ?? []).find((c) => c.entity_id === salePost.id) ?? {}),
+        id: commentId,
+        entity_id: postId,
+        body: `Round ${k + 1}: tighten the caption and swap the hero.`,
+        created_at: createdAt,
+      });
+      entries.push({
+        ...sale,
+        id: `0190d8f1-0000-7000-8000-0000000000${n}${k + 1}`,
+        entity_id: postId,
+        payload: { comment_id: commentId },
+        created_at: createdAt,
+        read_at: read ? new Date(NOW - day).toISOString() : null,
+      });
+    }
+  };
+  clone(1, LONG_ACTIVITY_TITLE, NOW - day, 3, false);
+  clone(2, 'Spring lookbook', NOW - 3 * day, 1, true);
+  t.inbox_entries = entries;
+}
+
+/** The rows screens' feed: every section on page one in every density. */
+const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 5);
+
+/**
+ * Activity's sections painted (below the fold on a phone): Today and
+ * Yesterday with their rows, Earlier too when `earlier` (the 8-new feed holds
+ * 12 entries, past a phone's first page).
+ */
+async function activitySectionsReady(page: Page, earlier = true): Promise<void> {
+  await waitFor([page.locator('[data-activity-new-chip]').first()], 'N new');
+  for (const key of earlier ? ['today', 'yesterday', 'earlier'] : ['today', 'yesterday']) {
+    await expect(
+      page.locator(`[data-activity-section="${key}"] [data-list-card]`).first(),
+      `${key} section`,
+    ).toBeAttached();
+  }
+}
+
 /**
  * Catch up open on one card with its body painted: the read rows
  * ([data-catch-up-rows]), never the Bone rows that hold the footprint while
@@ -1645,51 +1715,16 @@ const SCREENS: Screen[] = [
       waitFor([page.locator('[data-activity-event="bank_idea_planned"]')], 'bank activity'),
   },
   {
-    // Activity's Catch up bar under the chips: "<N> unread" and Catch up.
-    name: 'activity-catch-up-bar',
+    // Activity twins Plan (10 Nov 2026): Today / Yesterday / Earlier, one
+    // ui/ListCard row per item; "8 new" on Weekend sale, a long title with
+    // "3 new" (the name truncates, the chip never does), a read item Earlier.
+    name: 'activity-sections',
     seed: creator,
-    extra: seedCatchUp,
-    url: '/activity',
-    steps: async (page) => waitFor([page.locator('[data-activity-catch-up-bar]')], 'catch up bar'),
-  },
-  {
-    // 9 Nov 2026: one card per item, one line per notification. A post with 8
-    // unread comments: the head ("8 new"), 5 lines and "+3 more".
-    name: 'activity-grouped-folded',
-    seed: creator,
-    extra: (network) => seedEightComments(network),
+    extra: seedActivitySections,
     url: '/activity',
     steps: async (page) => {
-      await waitFor([page.locator('[data-activity-lines] [data-activity-line]')], 'lines');
-      await waitFor([page.locator('[data-activity-more][aria-expanded="false"]')], '+3 more');
-    },
-  },
-  {
-    // The same card unfolded: all 8 lines and "Show less".
-    name: 'activity-grouped-unfolded',
-    seed: creator,
-    extra: (network) => seedEightComments(network),
-    url: '/activity',
-    steps: async (page) => {
-      await tap([page.locator('[data-activity-more]')], '+3 more');
-      await waitFor([page.locator('[data-activity-more][aria-expanded="true"]')], 'Show less');
-      await waitFor([page.locator('[data-activity-lines-rest] [data-activity-line]')], 'rest');
-    },
-  },
-  {
-    // 9 Nov 2026: a long comment's line unfolded in place ("… more" tapped,
-    // " less" shows; nothing navigates).
-    name: 'activity-line-more-open',
-    seed: creator,
-    extra: (network) => seedEightComments(network),
-    url: '/activity',
-    steps: async (page) => {
-      await waitFor([page.locator('[data-activity-line-more="more"]').first()], '… more');
-      // "… more" unfolds in place: the URL (the Activity route) never changes.
-      const before = page.url();
-      await tap([page.locator('[data-activity-line-more="more"]').first()], '… more');
-      await waitFor([page.locator('[data-activity-line-more="less"]')], 'less');
-      expect(page.url()).toBe(before);
+      await waitFor([page.locator('[data-activity-new-chip]', { hasText: '8 new' })], '8 new');
+      await activitySectionsReady(page, isLaptop(page));
     },
   },
   {
@@ -3001,34 +3036,31 @@ for (const density of ['compact', 'calm'] as const) {
   });
 }
 
-// Activity's grouped card in each density (9 Nov 2026; check 14 measures the
-// density's exact gaps): the Cozy screens boot in Cozy explicitly, Compact and
-// Calm are their twins.
-const ACTIVITY_DENSITY_SCREENS = [
-  'activity-grouped-folded',
-  'activity-grouped-unfolded',
-  'activity-line-more-open',
-] as const;
-for (const base of ACTIVITY_DENSITY_SCREENS) {
-  const screen = SCREENS.find((s) => s.name === base);
-  if (screen === undefined) throw new Error(`no ${base} screen`);
-  const steps = screen.steps;
-  screen.prepare = withDensity('cozy');
-  screen.steps = async (page) => {
-    await steps(page);
-    await expectDensity(page, 'cozy');
+// Activity's rows in each density (10 Nov 2026, Activity twins Plan): the
+// Cozy screen boots in Cozy explicitly, Compact and Calm are its twins.
+const activityRowsSteps =
+  (density: VisualDensity) =>
+  async (page: Page): Promise<void> => {
+    await activitySectionsReady(page);
+    await expectDensity(page, density);
   };
-  for (const density of ['compact', 'calm'] as const) {
-    SCREENS.push({
-      ...screen,
-      name: `${base}-${density}`,
-      prepare: withDensity(density),
-      steps: async (page) => {
-        await steps(page);
-        await expectDensity(page, density);
-      },
-    });
-  }
+SCREENS.push({
+  name: 'activity-rows',
+  seed: creator,
+  extra: seedActivityRows,
+  prepare: withDensity('cozy'),
+  url: '/activity',
+  steps: activityRowsSteps('cozy'),
+});
+for (const density of ['compact', 'calm'] as const) {
+  SCREENS.push({
+    name: `activity-rows-${density}`,
+    seed: creator,
+    extra: seedActivityRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: activityRowsSteps(density),
+  });
 }
 
 // The New chat sheet with New group blocked by the groups-per-workspace rule
@@ -6327,15 +6359,6 @@ async function capture(screen: Screen, page: Page): Promise<void> {
 
 // Check 14 (alignment rules 1, 2, 3, 5): the screens and the family each measures.
 const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
-  'activity-grouped-folded': 'activity',
-  'activity-grouped-unfolded': 'activity',
-  'activity-line-more-open': 'activity',
-  'activity-grouped-folded-compact': 'activity',
-  'activity-grouped-unfolded-compact': 'activity',
-  'activity-line-more-open-compact': 'activity',
-  'activity-grouped-folded-calm': 'activity',
-  'activity-grouped-unfolded-calm': 'activity',
-  'activity-line-more-open-calm': 'activity',
   'chat-thread-screen': 'chat-thread',
   'chat-thread-view-divider': 'chat-thread',
   'chat-thread-replies': 'chat-thread',
@@ -6366,12 +6389,10 @@ const LIST_CARD_SCREENS = new Set([
   'chat-list-select',
   'notifications',
   'activity-bank',
-  'activity-grouped-folded',
-  'activity-grouped-unfolded',
-  'activity-grouped-folded-compact',
-  'activity-grouped-unfolded-compact',
-  'activity-grouped-folded-calm',
-  'activity-grouped-unfolded-calm',
+  'activity-sections',
+  'activity-rows',
+  'activity-rows-compact',
+  'activity-rows-calm',
   'plan-tab',
   'plan-tab-live',
   'plan-tab-ended',
@@ -6480,7 +6501,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'activity-chip-mentions',
   'plan-tab-chip-past',
   // Catch up and the thread view redo: phone and laptop, light and dark.
-  'activity-catch-up-bar',
   'catch-up-thread-mention',
   'catch-up-thread-started',
   'catch-up-comment',
@@ -6489,8 +6509,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'catch-up-typing',
   'catch-up-end',
   // Catch up rebuild (9 Nov 2026: one card per item): phone and laptop, light and dark.
-  'activity-grouped-folded',
-  'activity-grouped-unfolded',
   'catch-up-rest',
   'catch-up-carousel',
   'catch-up-lightbox',
@@ -6518,15 +6536,13 @@ const LAPTOP_DARK_SCREENS = new Set([
   'catch-up-not-sent',
   'catch-up-error',
   'chat-thread-view-divider',
-  // Alignment, one thread strip, Activity lines (9 Nov 2026): phone and laptop, light and dark.
-  'activity-line-more-open',
-  // Activity in each density (9 Nov 2026): phone and laptop, light and dark.
-  'activity-grouped-folded-compact',
-  'activity-grouped-unfolded-compact',
-  'activity-line-more-open-compact',
-  'activity-grouped-folded-calm',
-  'activity-grouped-unfolded-calm',
-  'activity-line-more-open-calm',
+  // Alignment and one thread strip (9 Nov 2026): phone and laptop, light and dark.
+  // Activity twins Plan in each density (10 Nov 2026): phone and laptop, light and dark.
+  'activity-sections',
+  'activity-rows',
+  'activity-rows-compact',
+  'activity-rows-calm',
+  'boxes-activity',
   'chat-thread-replies',
   'catch-up-thread-empty',
   'catch-up-thread-replies',
@@ -6620,4 +6636,43 @@ const TABLET_SCREENS = new Set([
 ]);
 for (const screen of SCREENS.filter((s) => TABLET_SCREENS.has(s.name))) {
   test(`${screen.name} @tablet`, async ({ page }) => capture(screen, page));
+}
+
+// Check 15 (10 Nov 2026, Activity twins Plan): in each density, Activity's
+// rows, sections and headings are measured against the Plan tab's on the same
+// page (row height, picture x, title x, time right edge, chips to the first
+// heading, heading to rows, a section's last row to the next heading, the
+// heading's computed style); the "N new" chip (height by density, 8 after
+// the name, the primary Button's ink); none of the retired hooks; and the
+// loading boxes' first heading and first row land on the same pixel (0 delta).
+// No screenshot (the shots are activity-rows*).
+for (const density of ['compact', 'cozy', 'calm'] as const) {
+  test(`activity twins plan (${density})`, async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await page.routeWebSocket(
+      (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+      () => undefined,
+    );
+    const network = await installHarnessNetwork(page);
+    Object.assign(network.world, buildWorld(NOW));
+    seedAudit(network, creator, NOW);
+    seedTab(network);
+    seedActivityRows(network);
+    await withDensity(density)(network, page);
+    await installDeletedRoutes(page, network);
+    // Activity's read is held from the start, so no prefetch lands before its boxes paint.
+    const hold = network.holdTable('inbox_entries');
+    await page.goto('/plan');
+    await planTabReady(page);
+    await expectDensity(page, density);
+    const plan = await readListTwin(page, 'plan');
+    await page.goto('/activity');
+    await waitFor([page.locator('[data-activity-boxes]')], 'activity boxes');
+    const boxes = await readActivityBoxes(page);
+    hold.release();
+    await activitySectionsReady(page);
+    const activity = await readListTwin(page, 'activity');
+    assertActivityTwinsPlan(`activity twins plan (${density})`, plan, activity, boxes);
+    expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+  });
 }

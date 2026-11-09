@@ -1,6 +1,5 @@
 import { test, type Locator, type Page } from '@playwright/test';
 import {
-  ACTIVITY_GAPS_BY_DENSITY,
   alignmentViolations,
   boxText,
   clipBox,
@@ -1322,21 +1321,12 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
 }
 
 /** Which family the alignment check measures on a screen. */
-export type AlignScope = 'activity' | 'chat-thread' | 'catch-up-thread' | 'chat-replies-row';
+export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row';
 
 /**
  * Check 14 (9 Nov 2026, CLAUDE.md "Alignment"): measures rules 1, 2, 3 and 5
  * on the screen as shot and fails on a breach (a screenshot alone is not
  * proof).
- * - activity: each item card: the head title, its preview and every line's
- *   paragraph start on one x (rule 1); each line's 20 photo ends on the head
- *   picture's right edge, 12 to the text (rule 2); the head time, the head's
- *   kind tag and every line's dot slot end on one x (rule 3); the gaps are the
- *   density's EXACT values (ACTIVITY_GAPS_BY_DENSITY, <html data-density>):
- *   head card to its first line, line to line, the last line to "+N more";
- *   no line ends with the time alone on its last line. The page: each day
- *   label to its first card, and a day's last card (its last text box) to the
- *   next day label.
  * - chat-thread / catch-up-thread (9 Nov 2026, EXACT +-1): the root's 40
  *   photo and its text at x16 (the written rule 1 exception: root text and
  *   strip label on the 16 gutter), its last line 12 over the strip's top
@@ -1354,7 +1344,7 @@ export async function assertAlignment(
   scope: AlignScope,
 ): Promise<void> {
   const families: AlignFamily[] = await page.evaluate(
-    ({ which, gapsByDensity }): AlignFamily[] => {
+    ({ which }): AlignFamily[] => {
       const shown = (el: Element | null): el is Element => {
         if (el === null) return false;
         const r = el.getBoundingClientRect();
@@ -1381,135 +1371,6 @@ export async function assertAlignment(
         return Number.isFinite(left) ? { left, top, bottom } : null;
       };
       const out: AlignFamily[] = [];
-      if (which === 'activity') {
-        const density = document.documentElement.dataset.density;
-        const want =
-          density === 'compact' || density === 'calm' ? gapsByDensity[density] : gapsByDensity.cozy;
-        const box = (el: Element): DOMRect => el.getBoundingClientRect();
-        const cells = Array.from(document.querySelectorAll('[data-activity-card-cell]'));
-        cells.forEach((cell, c) => {
-          const head = cell.querySelector('[data-activity-item-head]');
-          const title = head?.querySelector('[data-list-card-title]') ?? null;
-          if (head === null || !shown(title)) return;
-          const f: AlignFamily = {
-            label: `activity card ${c + 1} (${density ?? 'cozy'})`,
-            textLefts: [{ label: 'head title', x: title.getBoundingClientRect().left }],
-            rightEdges: [],
-            hung: [],
-            gaps: [],
-            loneTimes: [],
-          };
-          const preview = head.querySelector('[data-list-card-preview]');
-          if (shown(preview)) {
-            f.textLefts.push({ label: 'head line 2', x: preview.getBoundingClientRect().left });
-          }
-          const time = head.querySelector('[data-list-card-time]');
-          if (shown(time)) f.rightEdges.push({ label: 'head time', x: box(time).right });
-          const tag = head.querySelector('[data-list-card-tag]');
-          if (shown(tag)) f.rightEdges.push({ label: 'head tag', x: box(tag).right });
-          const picture = head.querySelector('[data-list-card-picture]');
-          const pictureRight = shown(picture) ? box(picture).right : null;
-          let prevBottom: number | null = null;
-          const lines = Array.from(cell.querySelectorAll('[data-activity-line]')).filter(shown);
-          lines.forEach((line, i) => {
-            const body = line.querySelector('[data-activity-line-body]');
-            if (!shown(body)) return;
-            const b = box(body);
-            f.textLefts.push({ label: `line ${i + 1}`, x: b.left });
-            const slot = line.querySelector('[data-activity-line-dot-slot]');
-            if (shown(slot)) f.rightEdges.push({ label: `line ${i + 1} dot`, x: box(slot).right });
-            const photo = line.querySelector('[data-activity-line-photo] > *');
-            if (shown(photo) && pictureRight !== null) {
-              f.hung?.push({
-                label: `line ${i + 1}`,
-                photoRight: box(photo).right,
-                pictureRight,
-                textLeft: b.left,
-              });
-            }
-            if (prevBottom === null) {
-              f.gaps.push({
-                label: 'head card to line 1',
-                gap: b.top - box(head).bottom,
-                equals: want.headToLine,
-              });
-            } else {
-              f.gaps.push({
-                label: `line ${i} to line ${i + 1}`,
-                gap: b.top - prevBottom,
-                equals: want.lineToLine,
-              });
-            }
-            prevBottom = b.bottom;
-            // A lone time: the time's first box starts a visual line of the paragraph.
-            const t = line.querySelector('[data-activity-line-time]');
-            const first = t !== null ? Array.from(t.getClientRects())[0] : undefined;
-            if (
-              first !== undefined &&
-              Math.abs(first.left - b.left) <= 1 &&
-              b.height > first.height + 1
-            ) {
-              f.loneTimes?.push(`line ${i + 1}`);
-            }
-          });
-          const more = cell.querySelector('[data-activity-more]');
-          if (shown(more) && prevBottom !== null) {
-            f.gaps.push({
-              label: 'last line to "+N more"',
-              gap: box(more).top - prevBottom,
-              equals: want.lineToLine,
-            });
-          }
-          if (lines.length > 0) out.push(f);
-        });
-        // The page: day label to its first card; a day's last text to the next label.
-        const days: AlignFamily = {
-          label: `activity days (${density ?? 'cozy'})`,
-          textLefts: [],
-          rightEdges: [],
-          gaps: [],
-        };
-        const heads = Array.from(document.querySelectorAll('[data-activity-bucket-head]')).filter(
-          shown,
-        );
-        /** The lowest text box of a day: a line, "+N more", else the card itself. */
-        const dayBottom = (list: Element): number => {
-          let bottom = -Infinity;
-          for (const child of Array.from(list.children).filter(shown)) {
-            const texts = Array.from(
-              child.querySelectorAll('[data-activity-line-body], [data-activity-more]'),
-            ).filter(shown);
-            const cards =
-              texts.length > 0 ? texts : [child.querySelector('[data-list-card]') ?? child];
-            for (const t of cards) bottom = Math.max(bottom, box(t).bottom);
-          }
-          return bottom;
-        };
-        heads.forEach((h, d) => {
-          const label = h.querySelector('h2');
-          const list = h.parentElement?.querySelector('[data-activity-list]') ?? null;
-          if (!shown(label) || list === null) return;
-          const first = Array.from(list.children).find(shown);
-          const name = (label.textContent ?? '').trim();
-          if (first !== undefined) {
-            days.gaps.push({
-              label: `${name} label to its first card`,
-              gap: box(first).top - box(label).bottom,
-              equals: want.labelToCard,
-            });
-          }
-          const next = heads[d + 1]?.querySelector('h2');
-          if (shown(next ?? null) && next !== undefined && next !== null) {
-            days.gaps.push({
-              label: `${name} last card to the ${(next.textContent ?? '').trim()} label`,
-              gap: box(next).top - dayBottom(list),
-              equals: want.dayToLabel,
-            });
-          }
-        });
-        if (days.gaps.length > 0) out.push(days);
-        return out;
-      }
       if (which === 'chat-replies-row') {
         // The main chat's replies rows: photos, count, time, dot; no reply text.
         const rowsHere = Array.from(document.querySelectorAll('[data-replies-row]')).filter(shown);
@@ -1681,10 +1542,279 @@ export async function assertAlignment(
       out.push(f);
       return out;
     },
-    { which: scope, gapsByDensity: ACTIVITY_GAPS_BY_DENSITY },
+    { which: scope },
   );
   settleFindings(
     screenName,
     alignmentViolations(families).map((message) => ({ check: 'alignment' as const, message })),
+  );
+}
+
+// Check 15 (10 Nov 2026, Activity twins Plan): Activity's list measured
+// against the Plan tab's, both read on the page as painted.
+
+/** A list as painted: its chips, sections, headings, first row and chips. */
+export interface ListTwinGeom {
+  density: string;
+  /** The first filter chip's bottom edge. */
+  chipBottom: number | null;
+  /** The list's own gap between sections (computed row-gap). */
+  listGap: number;
+  headings: Array<{ text: string; top: number; bottom: number; style: string }>;
+  sections: Array<{ headingBottom: number; firstRowTop: number; lastRowBottom: number }>;
+  row: {
+    height: number;
+    pictureLeft: number;
+    pictureRight: number;
+    titleLeft: number;
+    timeRight: number;
+  } | null;
+  rowHeights: number[];
+  /** Activity's "N new" chips: box, the name's right edge, colours and the row. */
+  chips: Array<{
+    text: string;
+    height: number;
+    left: number;
+    nameRight: number;
+    rowHeight: number;
+    bg: string;
+    fg: string;
+    border: string;
+  }>;
+  /** The primary Button's fill and text (bg-accent / text-accent-fg) as computed here. */
+  ink: { bg: string; fg: string };
+  /** Retired Activity hooks still in the DOM (lines, bucket heads, the catch-up bar). */
+  oldHooks: number;
+}
+
+/** Read the Plan tab's or Activity's list geometry (check 15). */
+export async function readListTwin(page: Page, kind: 'plan' | 'activity'): Promise<ListTwinGeom> {
+  return page.evaluate((which): ListTwinGeom => {
+    const sel =
+      which === 'plan'
+        ? {
+            list: '[data-plan-tab-list]',
+            section: '[data-plan-tab-section]',
+            chip: '[data-plan-tab-when]',
+          }
+        : {
+            list: '[data-activity-list]',
+            section: '[data-activity-section]',
+            chip: '[data-activity-chips] > :first-child',
+          };
+    const shown = (el: Element | null): el is Element => {
+      if (el === null) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const rect = (el: Element): DOMRect => el.getBoundingClientRect();
+    const list = document.querySelector(sel.list);
+    const chip = document.querySelector(sel.chip);
+    const sections = Array.from(document.querySelectorAll(sel.section)).filter(shown);
+    const headings: ListTwinGeom['headings'] = [];
+    const parts: ListTwinGeom['sections'] = [];
+    for (const section of sections) {
+      const h = section.querySelector(':scope > h2');
+      const rows = Array.from(section.querySelectorAll('[data-list-card]')).filter(shown);
+      if (!shown(h) || rows.length === 0) continue;
+      const cs = getComputedStyle(h);
+      headings.push({
+        text: (h.textContent ?? '').trim(),
+        top: rect(h).top,
+        bottom: rect(h).bottom,
+        style: [
+          cs.fontSize,
+          cs.fontWeight,
+          cs.textTransform,
+          cs.letterSpacing,
+          cs.lineHeight,
+          cs.color,
+        ].join(' '),
+      });
+      parts.push({
+        headingBottom: rect(h).bottom,
+        firstRowTop: Math.min(...rows.map((r) => rect(r).top)),
+        lastRowBottom: Math.max(...rows.map((r) => rect(r).bottom)),
+      });
+    }
+    const rowsAll = Array.from(document.querySelectorAll(`${sel.list} [data-list-card]`)).filter(
+      shown,
+    );
+    const first = rowsAll[0];
+    const part = (q: string): Element | null => first?.querySelector(q) ?? null;
+    const picture = part('[data-list-card-picture]');
+    const title = part('[data-list-card-title]');
+    const time = part('[data-list-card-time]');
+    const probe = document.createElement('span');
+    probe.className = 'bg-accent text-accent-fg';
+    document.body.appendChild(probe);
+    const ink = { bg: getComputedStyle(probe).backgroundColor, fg: getComputedStyle(probe).color };
+    probe.remove();
+    const chips = Array.from(document.querySelectorAll('[data-activity-new-chip]'))
+      .filter(shown)
+      .map((c) => {
+        const cs = getComputedStyle(c);
+        const name = c.parentElement?.querySelector('[data-activity-name]') ?? null;
+        const row = c.closest('[data-list-card]');
+        return {
+          text: (c.textContent ?? '').trim(),
+          height: rect(c).height,
+          left: rect(c).left,
+          nameRight: name !== null ? rect(name).right : Number.NaN,
+          rowHeight: row !== null ? rect(row).height : Number.NaN,
+          bg: cs.backgroundColor,
+          fg: cs.color,
+          border: cs.borderTopStyle === 'none' ? '0' : cs.borderTopWidth,
+        };
+      });
+    return {
+      density: document.documentElement.dataset.density ?? 'cozy',
+      chipBottom: shown(chip) ? rect(chip).bottom : null,
+      listGap: list !== null ? Number.parseFloat(getComputedStyle(list).rowGap) || 0 : 0,
+      headings,
+      sections: parts,
+      row:
+        first !== undefined && shown(picture) && shown(title) && shown(time)
+          ? {
+              height: rect(first).height,
+              pictureLeft: rect(picture).left,
+              pictureRight: rect(picture).right,
+              titleLeft: rect(title).left,
+              timeRight: rect(time).right,
+            }
+          : null,
+      rowHeights: rowsAll.map((r) => rect(r).height),
+      chips,
+      ink,
+      oldHooks: document.querySelectorAll(
+        '[data-activity-line], [data-activity-bucket-head], [data-activity-catch-up-bar]',
+      ).length,
+    };
+  }, kind);
+}
+
+/** Activity's loading boxes as painted: the heading bone's line and the first box. */
+export async function readActivityBoxes(
+  page: Page,
+): Promise<{ headingTop: number; firstRowTop: number } | null> {
+  return page.evaluate(() => {
+    const heading = document.querySelector('[data-activity-boxes] [data-activity-heading-box]');
+    const row = document.querySelector('[data-activity-boxes] [data-activity-box]');
+    if (heading === null || row === null) return null;
+    return {
+      headingTop: heading.getBoundingClientRect().top,
+      firstRowTop: row.getBoundingClientRect().top,
+    };
+  });
+}
+
+/** The "N new" chip's height per density (Compact 16 / Cozy 18 / Calm 20). */
+const NEW_CHIP_HEIGHT_PX: Readonly<Record<string, number>> = { compact: 16, cozy: 18, calm: 20 };
+
+/** Check 15's rules over the two lists (and Activity's boxes). Pure. */
+export function activityTwinViolations(
+  plan: ListTwinGeom,
+  activity: ListTwinGeom,
+  boxes: { headingTop: number; firstRowTop: number } | null,
+): string[] {
+  const out: string[] = [];
+  const same = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+  const r1 = (n: number): number => Math.round(n * 10) / 10;
+  const eq = (label: string, a: number, b: number): void => {
+    if (!same(a, b)) out.push(`${label}: Activity ${r1(a)} vs Plan ${r1(b)}`);
+  };
+  if (plan.row === null) out.push('Plan shows no row to measure');
+  if (activity.row === null) out.push('Activity shows no row to measure');
+  if (plan.row !== null && activity.row !== null) {
+    eq('row height', activity.row.height, plan.row.height);
+    eq('picture left', activity.row.pictureLeft, plan.row.pictureLeft);
+    eq('picture right', activity.row.pictureRight, plan.row.pictureRight);
+    eq('title x', activity.row.titleLeft, plan.row.titleLeft);
+    eq('time right edge', activity.row.timeRight, plan.row.timeRight);
+  }
+  for (const h of activity.rowHeights) {
+    if (activity.row !== null && !same(h, activity.row.height)) {
+      out.push(`an Activity row is ${r1(h)} tall, not ${r1(activity.row.height)}`);
+    }
+  }
+  const pHead = plan.headings[0];
+  const aHead = activity.headings[0];
+  if (pHead === undefined) out.push('Plan shows no section heading');
+  if (aHead === undefined) out.push('Activity shows no section heading');
+  if (pHead !== undefined && aHead !== undefined) {
+    if (aHead.style !== pHead.style) {
+      out.push(`heading style: Activity "${aHead.style}" vs Plan "${pHead.style}"`);
+    }
+    if (plan.chipBottom !== null && activity.chipBottom !== null) {
+      eq(
+        'chips to the first heading',
+        aHead.top - activity.chipBottom,
+        pHead.top - plan.chipBottom,
+      );
+    }
+  }
+  const pSec = plan.sections[0];
+  const aSec = activity.sections[0];
+  if (pSec !== undefined && aSec !== undefined) {
+    eq(
+      'heading to its first row',
+      aSec.firstRowTop - aSec.headingBottom,
+      pSec.firstRowTop - pSec.headingBottom,
+    );
+  }
+  // A section's last row to the next heading: Plan's measured gap, else its list gap.
+  const planNext = plan.headings[1];
+  const planGap =
+    pSec !== undefined && planNext !== undefined ? planNext.top - pSec.lastRowBottom : plan.listGap;
+  activity.sections.forEach((sec, i) => {
+    const next = activity.headings[i + 1];
+    if (next !== undefined)
+      eq(`section ${i + 1} last row to the next heading`, next.top - sec.lastRowBottom, planGap);
+  });
+  if (activity.headings.length < 2) out.push('Activity shows fewer than 2 sections to space');
+  const want = NEW_CHIP_HEIGHT_PX[activity.density] ?? NEW_CHIP_HEIGHT_PX.cozy ?? 18;
+  if (activity.chips.length === 0) out.push('Activity shows no "N new" chip');
+  for (const c of activity.chips) {
+    if (!same(c.height, want))
+      out.push(`"${c.text}" is ${r1(c.height)} tall, not ${want} (${activity.density})`);
+    if (!same(c.left - c.nameRight, 8))
+      out.push(`"${c.text}" sits ${r1(c.left - c.nameRight)} after the name, not 8`);
+    if (activity.row !== null && !same(c.rowHeight, activity.row.height)) {
+      out.push(
+        `the row with "${c.text}" is ${r1(c.rowHeight)} tall, not ${r1(activity.row.height)}`,
+      );
+    }
+    if (c.bg !== activity.ink.bg || c.fg !== activity.ink.fg) {
+      out.push(
+        `"${c.text}" is ${c.bg} / ${c.fg}, not the primary Button's ${activity.ink.bg} / ${activity.ink.fg}`,
+      );
+    }
+    if (c.border !== '0' && c.border !== '0px') out.push(`"${c.text}" has a ${c.border} border`);
+  }
+  if (activity.oldHooks > 0) out.push(`${activity.oldHooks} retired Activity hooks still render`);
+  if (boxes === null) out.push('Activity painted no loading boxes');
+  if (boxes !== null && aHead !== undefined && aSec !== undefined) {
+    const headDelta = aHead.top - boxes.headingTop;
+    const rowDelta = aSec.firstRowTop - boxes.firstRowTop;
+    if (!same(headDelta, 0))
+      out.push(`loading to landed: the first heading moves ${r1(headDelta)}px`);
+    if (!same(rowDelta, 0)) out.push(`loading to landed: the first row moves ${r1(rowDelta)}px`);
+  }
+  return out;
+}
+
+/** Check 15: settle Activity's twin findings (strict fails, report annotates). */
+export function assertActivityTwinsPlan(
+  label: string,
+  plan: ListTwinGeom,
+  activity: ListTwinGeom,
+  boxes: { headingTop: number; firstRowTop: number } | null,
+): void {
+  settleFindings(
+    label,
+    activityTwinViolations(plan, activity, boxes).map((message) => ({
+      check: 'alignment' as const,
+      message,
+    })),
   );
 }
