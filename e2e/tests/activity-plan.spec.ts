@@ -49,9 +49,12 @@ function viewAsClient(network: HarnessNetwork): void {
 
 const planPage = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]`);
 
-/** The Notifications card (ui/ListCard) that names `title`; a click lands on its one button. */
+/**
+ * The Activity item card that names `title` (9 Nov 2026: the head names the
+ * item, each notification is its own line under it).
+ */
 function card(page: Page, title: string) {
-  return page.locator('[data-activity-id]').filter({ hasText: title }).first();
+  return page.locator('[data-activity-card-cell]').filter({ hasText: title }).first();
 }
 
 test('agency: a plan_comment row is a Notifications card (All); a tap opens the item at the comment', async ({
@@ -68,8 +71,7 @@ test('agency: a plan_comment row is a Notifications card (All); a tap opens the 
   await page.goto('/notifications');
   const row = card(page, PLAN_CONCEPT_TITLE);
   await expect(row).toBeVisible({ timeout: 15_000 });
-  await expect(row).toContainText(`${PEER_NAME} commented on ${PLAN_CONCEPT_TITLE}`);
-  await expect(row).toContainText(ACTIVITY_PLAN_COMMENT_BODY);
+  await expect(row).toContainText(new RegExp(`${PEER_NAME}\\s*Commented on ${PLAN_CONCEPT_TITLE}`));
   await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(1);
 
   // No Plans chip (Activity's chips are All, Unread, Mentions): All lists it.
@@ -80,7 +82,7 @@ test('agency: a plan_comment row is a Notifications card (All); a tap opens the 
 
   // The tap opens the real place at the comment (9 Nov 2026: catch-up cards
   // live only in Catch up) and marks the row read.
-  await row.click();
+  await row.locator('[data-activity-lead]').click();
   await expect(page).not.toHaveURL(/[?&]catchup=/);
   await expect(page).toHaveURL(new RegExp(`item=${PLAN_CONCEPT_ITEM}`));
   await expect
@@ -117,9 +119,11 @@ test('client: a plan_review row is a Notifications card; a tap opens the post it
 
   await page.goto('/notifications');
   const row = card(page, POST_TITLE);
-  await expect(row).toContainText(`Maya Chen approved ${POST_TITLE}`, { timeout: 15_000 });
+  await expect(row).toContainText(new RegExp(`Maya Chen\\s*Approved ${POST_TITLE}`), {
+    timeout: 15_000,
+  });
 
-  await row.click();
+  await row.locator('[data-activity-lead]').click();
   await expect(page).not.toHaveURL(/[?&]catchup=/);
   await expect(page).toHaveURL(new RegExp(`item=${PLAN_POST_ITEM}`));
 
