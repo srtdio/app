@@ -1322,7 +1322,7 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
 }
 
 /** Which family the alignment check measures on a screen. */
-export type AlignScope = 'activity' | 'chat-thread' | 'catch-up-thread';
+export type AlignScope = 'activity' | 'chat-thread' | 'catch-up-thread' | 'chat-replies-row';
 
 /**
  * Check 14 (9 Nov 2026, CLAUDE.md "Alignment"): measures rules 1, 2, 3 and 5
@@ -1337,11 +1337,16 @@ export type AlignScope = 'activity' | 'chat-thread' | 'catch-up-thread';
  *   no line ends with the time alone on its last line. The page: each day
  *   label to its first card, and a day's last card (its last text box) to the
  *   next day label.
- * - chat-thread / catch-up-thread: the thread strip's label starts on the
- *   root's (and the replies') text column (rule 1); the strip's trailing key
- *   glyph ends on the strip's content edge (rule 3); the root's text ends 12
- *   above the strip's top hairline and the first reply starts 8 under it
- *   (rule 5 and the strip spec).
+ * - chat-thread / catch-up-thread (9 Nov 2026, EXACT +-1): the root's 40
+ *   photo and its text at x16 (the written rule 1 exception: root text and
+ *   strip label on the 16 gutter), its last line 12 over the strip's top
+ *   hairline, the replies strip's label at x16 with no icon, the last key's
+ *   glyph 16 in from the strip's right (374 on a phone), the first reply's
+ *   name 8 under the strip, every reply's name and text at x60, 16 from a
+ *   reply's last line to the next reply's name.
+ * - chat-replies-row: every replies row in the main chat: no reply text node,
+ *   the last reply's time shown, 8 between photos, count, time and dot, the
+ *   row's target at least 44 tall.
  */
 export async function assertAlignment(
   page: Page,
@@ -1505,7 +1510,63 @@ export async function assertAlignment(
         if (days.gaps.length > 0) out.push(days);
         return out;
       }
-      // A thread view: the root, the strip, the replies.
+      if (which === 'chat-replies-row') {
+        // The main chat's replies rows: photos, count, time, dot; no reply text.
+        const rowsHere = Array.from(document.querySelectorAll('[data-replies-row]')).filter(shown);
+        if (rowsHere.length === 0) {
+          return [
+            {
+              label: 'chat replies row',
+              textLefts: [],
+              rightEdges: [],
+              gaps: [{ label: 'no replies row shown', gap: -1, min: 0 }],
+            },
+          ];
+        }
+        rowsHere.forEach((row, n) => {
+          const f: AlignFamily = {
+            label: `replies row ${n + 1}`,
+            textLefts: [],
+            rightEdges: [],
+            gaps: [],
+          };
+          const button = row.querySelector('button') ?? row;
+          f.gaps.push({
+            label: 'row height (44 target)',
+            gap: button.getBoundingClientRect().height,
+            min: 44,
+          });
+          const latest = row.querySelector('[data-replies-latest]');
+          if (latest !== null) {
+            f.gaps.push({ label: 'a reply text node shows (none allowed)', gap: -1, min: 0 });
+          }
+          const photos = row.querySelector('[data-replies-photos]');
+          const count = row.querySelector('[data-replies-count]');
+          const time = row.querySelector('[data-replies-time]');
+          const dot = row.querySelector('[data-replies-dot]');
+          if (!shown(time) || (time.textContent ?? '').trim() === '') {
+            f.gaps.push({ label: 'the last reply time is missing', gap: -1, min: 0 });
+          }
+          const chain = [photos, count, time, dot].filter(shown);
+          for (let i = 1; i < chain.length; i += 1) {
+            const a = chain[i - 1] as Element;
+            const b = chain[i] as Element;
+            const name = (el: Element): string =>
+              el === photos ? 'photos' : el === count ? 'count' : el === time ? 'time' : 'dot';
+            f.gaps.push({
+              label: `${name(a)} to ${name(b)}`,
+              gap: b.getBoundingClientRect().left - a.getBoundingClientRect().right,
+              equals: 8,
+            });
+          }
+          out.push(f);
+        });
+        return out;
+      }
+      // A thread view (9 Nov 2026, EXACT): the root (40 photo at x16, its text
+      // full width at x16), 12 from its last line to the strip, the strip
+      // label at x16, 8 to the first reply's name, replies' text at x60, 16
+      // between replies, the last key's glyph on the content edge (374 phone).
       const catchUp = which === 'catch-up-thread';
       const strip = document.querySelector(
         catchUp
@@ -1523,56 +1584,100 @@ export async function assertAlignment(
         ];
       }
       const s = strip.getBoundingClientRect();
+      // The thread's left edge: the strip is a full width band.
+      const x0 = s.left;
       const rowSel = catchUp ? '[data-catch-up-message]' : 'li[data-msg-id]';
-      const textSel = catchUp ? '[data-catch-up-name]' : '[data-sender-line], [data-msg-body]';
       const host =
         strip.closest(catchUp ? '[data-catch-up-thread]' : '[data-thread-view]') ?? document;
       const rows = Array.from(host.querySelectorAll(rowSel)).filter(shown);
       const above = rows.filter((r) => r.getBoundingClientRect().bottom <= s.top + 0.5);
       const below = rows.filter((r) => r.getBoundingClientRect().top >= s.bottom - 0.5);
       const root = above.pop();
-      const label = strip.querySelector('[data-thread-strip-label]');
       const f: AlignFamily = { label: `${which}`, textLefts: [], rightEdges: [], gaps: [] };
-      const column = root?.querySelector(textSel) ?? null;
-      if (shown(column))
-        f.textLefts.push({ label: 'root text', x: column.getBoundingClientRect().left });
-      if (shown(label))
-        f.textLefts.push({ label: 'strip label', x: label.getBoundingClientRect().left });
-      below.slice(0, 3).forEach((r, i) => {
-        const t = r.querySelector(textSel);
-        if (shown(t))
-          f.textLefts.push({ label: `reply ${i + 1} text`, x: t.getBoundingClientRect().left });
-      });
-      // Rule 3: the trailing key's glyph on the strip's content edge.
-      const keys = Array.from(strip.querySelectorAll('[data-thread-root-action]')).filter(shown);
-      const lastKey = keys.pop();
-      if (lastKey !== undefined) {
-        const pad = Number.parseFloat(getComputedStyle(strip).paddingRight) || 0;
-        f.rightEdges.push({ label: 'strip content edge', x: s.right - pad });
-        const glyph = lastKey.querySelector('svg');
-        if (shown(glyph))
-          f.rightEdges.push({ label: 'last key glyph', x: glyph.getBoundingClientRect().right });
+      const at = (label: string, x: number, want: number): void => {
+        f.gaps.push({ label: `${label} x`, gap: x - x0, equals: want });
+      };
+      /** A row's text: chat's body; catch up's last paragraph. */
+      const textOf = (row: Element): Element | null =>
+        catchUp
+          ? (Array.from(row.querySelectorAll('p')).filter(shown).pop() ?? null)
+          : row.querySelector('[data-msg-body]');
+      /** A row's last content line: chat's bubble, catch up's last paragraph. */
+      const lastOf = (row: Element): Element | null =>
+        catchUp ? textOf(row) : row.querySelector('[data-bubble]');
+      const nameOf = (row: Element): Element | null =>
+        row.querySelector(catchUp ? '[data-catch-up-name]' : '[data-sender-line]');
+      if (root === undefined) {
+        f.gaps.push({ label: 'no root above the strip', gap: -1, min: 0 });
+      } else {
+        const photo = root.querySelector('[data-avatar-role]');
+        if (shown(photo)) {
+          const p = photo.getBoundingClientRect();
+          at('root photo', p.left, 16);
+          f.gaps.push({ label: 'root photo size', gap: p.width, equals: 40 });
+        } else f.gaps.push({ label: 'no root photo', gap: -1, min: 0 });
+        const text = textOf(root);
+        const t = text !== null && shown(text) ? textBox(text) : null;
+        if (t !== null) at('root text', t.left, 16);
+        else f.gaps.push({ label: 'no root text', gap: -1, min: 0 });
+        const last = lastOf(root);
+        if (shown(last)) {
+          f.gaps.push({
+            label: 'root last line to strip hairline',
+            gap: s.top - last.getBoundingClientRect().bottom,
+            equals: 12,
+          });
+        }
       }
-      // Rule 5: the root's text 12 over the top hairline; replies start 8 under it.
-      if (root !== undefined) {
-        const t = textBox(root);
-        if (t !== null)
-          f.gaps.push({ label: 'root text to strip hairline', gap: s.top - t.bottom, min: 12 });
+      const label = strip.querySelector('[data-thread-strip-label]');
+      if (strip.getAttribute('data-thread-strip') === 'replies' && shown(label)) {
+        const t = textBox(label);
+        if (t !== null) at('strip label', t.left, 16);
+        if (strip.querySelector('[data-thread-strip-icon]') !== null) {
+          f.gaps.push({ label: 'an icon on the replies strip', gap: -1, min: 0 });
+        }
+      }
+      // The trailing key's glyph on the strip's content edge (16 in).
+      const keys = Array.from(strip.querySelectorAll('[data-thread-root-action]')).filter(shown);
+      const glyph = keys.pop()?.querySelector('svg') ?? null;
+      if (shown(glyph)) {
         f.gaps.push({
-          label: 'root row to strip',
-          gap: s.top - root.getBoundingClientRect().bottom,
-          equals: catchUp ? 4 : 12,
+          label: 'last key glyph to the strip edge',
+          gap: s.right - glyph.getBoundingClientRect().right,
+          equals: 16,
         });
       }
       const firstReply = below[0];
       if (firstReply !== undefined) {
-        // Chat: the reply row's box (the strip carries the 8); catch up: the row's photo column.
-        const top = catchUp
-          ? (firstReply.firstElementChild?.getBoundingClientRect().top ??
-            firstReply.getBoundingClientRect().top)
-          : firstReply.getBoundingClientRect().top;
-        f.gaps.push({ label: 'strip to first reply', gap: top - s.bottom, equals: 8 });
+        const name = nameOf(firstReply);
+        if (shown(name)) {
+          f.gaps.push({
+            label: 'strip to first reply name',
+            gap: name.getBoundingClientRect().top - s.bottom,
+            equals: 8,
+          });
+        }
       }
+      below.slice(0, 4).forEach((r, i) => {
+        const text = textOf(r);
+        const t = text !== null && shown(text) ? textBox(text) : null;
+        if (t !== null) at(`reply ${i + 1} text`, t.left, 60);
+        const name = nameOf(r);
+        if (shown(name)) {
+          const n = textBox(name);
+          if (n !== null) at(`reply ${i + 1} name`, n.left, 60);
+        }
+        const next = below[i + 1];
+        const nextName = next !== undefined ? nameOf(next) : null;
+        const last = lastOf(r);
+        if (i < 3 && shown(nextName) && shown(last)) {
+          f.gaps.push({
+            label: `reply ${i + 1} to reply ${i + 2}`,
+            gap: nextName.getBoundingClientRect().top - last.getBoundingClientRect().bottom,
+            equals: 16,
+          });
+        }
+      });
       out.push(f);
       return out;
     },

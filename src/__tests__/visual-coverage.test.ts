@@ -362,6 +362,9 @@ const REQUIRED: readonly string[] = [
   'catch-up-thread-empty',
   'catch-up-thread-replies',
   'chat-thread-replies',
+  // Thread times and the replies row (9 Nov 2026).
+  'chat-replies-row-today',
+  'chat-replies-row-older',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */

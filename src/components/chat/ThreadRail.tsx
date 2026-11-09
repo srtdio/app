@@ -13,7 +13,7 @@ import type { ReactElement } from 'react';
 import { ICON_SIZE, IconChat, IconForward, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
 import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
-import { textRole } from '@/components/ui/Text';
+import { Text, textRole } from '@/components/ui/Text';
 import { TRAILING_PULL } from '@/components/ui/layout';
 import { ADD_TO_TASKS_LABEL, MORE_ACTIONS_LABEL } from '@/components/chat/MessageActionMenu';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -326,8 +326,21 @@ export function RepliesSeparatorRow(props: {
   );
 }
 
-/** The strip's icon column (32, on the photo column) and its label (on the text column). */
+/**
+ * The strip's lead (9 Nov 2026). Replies: "N replies" semibold ink on the 16
+ * gutter, no icon. None: the bubble icon (32 column) and "Reply in thread".
+ */
 function StripLead(props: { label: string; empty: boolean }): ReactElement {
+  if (!props.empty) {
+    return (
+      <span
+        data-thread-strip-label=""
+        className={textRole('label', 'min-w-0 truncate font-semibold text-fg')}
+      >
+        {props.label}
+      </span>
+    );
+  }
   return (
     <>
       <span
@@ -337,10 +350,7 @@ function StripLead(props: { label: string; empty: boolean }): ReactElement {
       >
         <IconChat size={ICON_SIZE.control} />
       </span>
-      <span
-        data-thread-strip-label=""
-        className={textRole('label', cn('min-w-0 truncate', props.empty ? 'text-fg-2' : 'text-fg'))}
-      >
+      <span data-thread-strip-label="" className={textRole('label', 'min-w-0 truncate text-fg-2')}>
         {props.label}
       </span>
     </>
@@ -348,17 +358,19 @@ function StripLead(props: { label: string; empty: boolean }): ReactElement {
 }
 
 /**
- * L3 (8 Nov 2026): the replies row under a thread root in the main chat (the
+ * The replies row under a thread root in the main chat (9 Nov 2026; the
  * work-chat layout, aligned under the root's text: photo 32 + gap 8). Up to 3
- * square photos (32, legible like Slack's) of the latest repliers, "N replies" (semibold), the
- * latest reply's first line (fg-3, one line, truncates) and an 8px ink dot
- * while a reply is unread by me. The whole row is one 44 tall target that
+ * square photos (32) of the latest repliers, newest first, "N replies"
+ * (semibold ink, never truncates), the last reply's time (rowWhen, fg-3, the
+ * first thing to truncate) and an 8px ink dot while a reply is unread by me;
+ * 8 between each. No reply text. The whole row is one 44 tall target that
  * opens the thread. Tokens only; light and dark at parity.
  */
 export function RepliesRow(props: {
   label: string;
   repliers: readonly { id: string; name: string; src?: string | undefined }[];
-  line: string;
+  /** The last reply's time ("Today at 10:12 AM"); '' hides it. */
+  time: string;
   unread: boolean;
   coarse: boolean;
   onOpen: () => void;
@@ -374,9 +386,9 @@ export function RepliesRow(props: {
         inline
         type="button"
         data-thread-open="replies"
-        aria-label={`${props.label}${props.unread ? ', unread' : ''}. Open thread`}
+        aria-label={`${props.label}${props.time !== '' ? `, last reply ${props.time}` : ''}${props.unread ? ', unread' : ''}. Open thread`}
         onClick={props.onOpen}
-        className={cn('flex min-w-0 max-w-full items-center gap-2 px-2', NO_TOUCH_SELECT)}
+        className={cn('flex min-h-11 min-w-0 max-w-full items-center gap-2 px-2', NO_TOUCH_SELECT)}
       >
         {props.repliers.length > 0 ? (
           <span data-replies-photos="" className="flex shrink-0 items-center gap-1">
@@ -394,9 +406,12 @@ export function RepliesRow(props: {
         <span data-replies-count="" className="shrink-0 text-md font-semibold text-fg">
           {props.label}
         </span>
-        {props.line !== '' ? (
-          <span data-replies-latest="" className="min-w-0 truncate text-md text-fg-3">
-            {props.line}
+        {props.time !== '' ? (
+          <span
+            data-replies-time=""
+            className="min-w-0 truncate font-mono text-sm tabular-nums text-fg-3"
+          >
+            {props.time}
           </span>
         ) : null}
         {props.unread ? (
@@ -404,5 +419,40 @@ export function RepliesRow(props: {
         ) : null}
       </PressableRow>
     </li>
+  );
+}
+
+/**
+ * A thread view's root head in catch up (9 Nov 2026; chat's root draws the
+ * same in MessageBubble threadPlace 'root'): the 40 square photo on the 16
+ * gutter, 12 to the name (line 1) over its threadWhen 'date' time (line 2).
+ * The root's text sits full width below it, on the gutter too.
+ */
+export function ThreadRootHead(props: {
+  name: string;
+  avatarUrl: string | null;
+  when: string;
+  dateTime: string;
+}): ReactElement {
+  return (
+    <div data-thread-root-head="" className="flex min-w-0 items-center gap-3">
+      <Avatar
+        role="row"
+        name={props.name}
+        {...(props.avatarUrl !== null ? { src: props.avatarUrl } : {})}
+        decorative
+      />
+      <span className="flex min-w-0 flex-col">
+        <span
+          data-sender-name=""
+          className={textRole('label', 'min-w-0 truncate font-semibold text-fg')}
+        >
+          {props.name}
+        </span>
+        <Text role="meta" as="time" dateTime={props.dateTime} data-sender-time="">
+          {props.when}
+        </Text>
+      </span>
+    </div>
   );
 }

@@ -266,7 +266,7 @@ describe('MessageThread window: the list wiring', () => {
     expect(rowJsx).not.toMatch(/=\{\{/);
     expect(rowJsx).not.toContain('function');
     // Object props come from the per-row caches.
-    expect(rowJsx).toContain('meta={rowCaches.meta(id, row.meta)}');
+    expect(rowJsx).toContain('meta={rowCaches.meta(id, rowMeta)}');
     expect(rowJsx).toContain('rail={rowCaches.rail(id, rowRail)}');
     expect(rowJsx).toContain('postRefs={rowCaches.postRefs(id, {');
     expect(rowJsx).toContain('selection: rowCaches.selection(id, {');

@@ -46,7 +46,7 @@ afterEach(() => {
 });
 
 describe('RepliesSeparatorRow: the one strip', () => {
-  it('band: two hairlines, 44 tall, the fg tint, icon column w-8 then the label', () => {
+  it('band: two hairlines, 44 tall, the fg tint; replies: no icon, the label semibold ink first', () => {
     const out = renderToStaticMarkup(
       <ul>
         <RepliesSeparatorRow label="2 replies" through={false} />
@@ -55,16 +55,26 @@ describe('RepliesSeparatorRow: the one strip', () => {
     expect(out).toContain('border-y border-border');
     expect(out).toContain('min-h-11');
     expect(out).toContain('bg-fg/[0.03]');
-    expect(out).toContain('data-thread-strip-icon');
-    expect(out).toMatch(/data-thread-strip-icon[^>]*class="[^"]*w-8/);
+    expect(out).not.toContain('data-thread-strip-icon');
+    expect(out).toMatch(/data-thread-strip-label[^>]*class="[^"]*font-semibold/);
     expect(out).toContain('data-thread-strip="replies"');
   });
 
-  it('label column = the host text column: chat 16 + 32 + 8, catch up 16 + 32 + 12', () => {
+  it('none: the bubble icon (w-8) then "Reply in thread"', () => {
+    const out = renderToStaticMarkup(
+      <ul>
+        <RepliesSeparatorRow label={null} through={false} />
+      </ul>,
+    );
+    expect(out).toMatch(/data-thread-strip-icon[^>]*class="[^"]*w-8/);
+    expect(out).toContain('Reply in thread');
+  });
+
+  it('the strip label sits on the 16 gutter (rule 1 exception); replies on the 60 text column', () => {
     expect(THREAD_STRIP_COLUMNS.chat).toEqual({ x: 'px-4', gap: 'gap-2' });
     expect(THREAD_STRIP_COLUMNS['catch-up']).toEqual({ x: 'px-4', gap: 'gap-3' });
-    // The hosts' rows: chat 'px-4' + 'gap-2'; catch up px-4 + gap-3.
-    expect(src('components/chat/MessageBubble.tsx')).toContain("'group flex items-start gap-2'");
+    // Replies: chat 'px-4' + 32 + gap-3 (threadPlace 'reply'); catch up px-4 + 32 + gap-3.
+    expect(src('components/chat/MessageBubble.tsx')).toContain("replyPlace && 'gap-3'");
     expect(src('components/catch-up/CatchUpRows.tsx')).toContain("'flex gap-3 py-2'");
   });
 

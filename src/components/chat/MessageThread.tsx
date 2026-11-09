@@ -100,7 +100,7 @@ import {
   transcribeVoiceNote,
   useVoiceRecord,
 } from '@/lib/chat/transcript-store';
-import { formatAgo } from '@/lib/time';
+import { formatAgo, rowWhen, threadWhen } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   HEADER_LINE_TYPE,
@@ -271,7 +271,6 @@ import {
   firstUnreadReply,
   isTopLevel,
   threadsStripLabel,
-  latestReplyLine,
   loadThreadsForMe,
   localThreadReadAt,
   mainChatMessages,
@@ -1489,6 +1488,8 @@ interface MessageRowProps {
   postRefs?: BubblePostRefs | undefined;
   /** A member of a card's thread (no quote, no chip). */
   threadMember?: boolean | undefined;
+  /** The thread view's root or reply geometry (MessageBubble threadPlace); absent in the main chat. */
+  threadPlace?: 'root' | 'reply' | undefined;
   /** The row's piece of the thread rail. */
   rail?: RowRail | undefined;
   /** A voice-only row: the voice note right below from the same sender. */
@@ -1705,6 +1706,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       onOpenImage={(index) => props.onOpenImage(props.message, index)}
       postRefs={props.postRefs}
       threadMember={props.threadMember}
+      threadPlace={props.threadPlace}
       rail={props.rail}
       onBadgeClick={() => {
         const onOpenReactions = props.onOpenReactions;
@@ -1891,7 +1893,8 @@ export function listRailPlans(
 export interface RepliesRowData {
   label: string;
   repliers: { id: string; name: string; src?: string | undefined }[];
-  line: string;
+  /** The last reply's time (rowWhen): "Today at 10:12 AM". */
+  time: string;
   unread: boolean;
   onOpen: () => void;
 }
@@ -3087,7 +3090,9 @@ function ThreadBody(
             listRows,
             props.loadingOlder === true,
             (row, afterLabelIn) => {
-              // The first reply under the thread strip: the strip carries the gap (8).
+              // The first reply under the thread strip: the strip carries the gap (8),
+              // and it always heads (photo, name, time) under the strip.
+              const firstUnderStrip = afterStrip;
               const afterLabel = afterLabelIn || afterStrip;
               afterStrip = false;
               const plan = plans.get(row.message.id) ?? NO_RAIL;
@@ -3120,6 +3125,15 @@ function ThreadBody(
               // replies row instead (repliesFor).
               // 9 Nov 2026: the one thread strip shows at 0 too ("Reply in thread").
               const strip = threads !== undefined && viewRoot;
+              // 9 Nov 2026: the thread view's root and replies (threadWhen times).
+              const inView = threads?.viewRootId !== undefined;
+              const threadPlace = inView ? (viewRoot ? 'root' : 'reply') : undefined;
+              const rowMeta = inView
+                ? {
+                    ...row.meta,
+                    time: threadWhen(row.message.time, viewRoot ? 'date' : 'relative'),
+                  }
+                : row.meta;
               const replies = strip ? replyCountLabel(threads.countOf(row.message.id)) : null;
               if (strip) afterStrip = true;
               const repliesRow =
@@ -3173,14 +3187,14 @@ function ThreadBody(
                       presignEnabled={props.presignEnabled}
                       showTicks={props.showTicks}
                       isGroup={props.isGroup}
-                      head={row.head}
+                      head={row.head || firstUnderStrip}
                       tail={row.tail}
                       afterLabel={afterLabel}
                       layout={props.layout}
                       viewerUserId={props.viewerUserId}
                       mentions={rowMentions}
                       workspaceId={props.workspaceId}
-                      meta={rowCaches.meta(id, row.meta)}
+                      meta={rowCaches.meta(id, rowMeta)}
                       onOpen={onOpenRow}
                       onOpenImage={onOpenImage}
                       hoverMenu={hoverMenu}
@@ -3205,6 +3219,7 @@ function ThreadBody(
                         onTalkAboutFocus: onTalkAboutFocusRow,
                       })}
                       threadMember={props.hideQuotes === true || memberOf?.(row.message) != null}
+                      threadPlace={threadPlace}
                       rail={rowCaches.rail(id, rowRail)}
                       {...(props.selection !== undefined
                         ? {
@@ -3234,7 +3249,7 @@ function ThreadBody(
                     <RepliesRow
                       label={repliesRow.label}
                       repliers={repliesRow.repliers}
-                      line={repliesRow.line}
+                      time={repliesRow.time}
                       unread={repliesRow.unread}
                       coarse={coarsePointer}
                       onOpen={() => repliesRow.onOpen()}
@@ -5158,7 +5173,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         const src = props.profiles.get(id)?.avatarUrl;
         return { id, name: profileNameFor(id), ...(src != null ? { src } : {}) };
       }),
-      line: latestReplyLine(info.last, profileNameFor(info.last?.senderUserId ?? null)),
+      // The same loaded rows as the count: it moves with every reply, no read.
+      time: info.last !== null ? rowWhen(info.last.time) : '',
       unread: info.unread,
       onOpen: () => openThread(message.id),
     };

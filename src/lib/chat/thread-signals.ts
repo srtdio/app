@@ -1,7 +1,6 @@
 // Work-chat threads (Slack way, 8 Nov 2026): every reply is a thread. The
 // main chat shows only top-level messages; a root carries a replies row (up to
-// 3 latest repliers, "N replies", the latest reply's first line, an unread
-// dot). This module holds the four thread procs' client wrappers and the pure
+// 3 latest repliers, "N replies", the last reply's time, an unread dot). This module holds the four thread procs' client wrappers and the pure
 // rules every surface reads: which rows are top level, the replies row data,
 // the open rule (B), the participant rule for alerts, the chat list and alert
 // copy, and the per-device thread read point that places the "New" line.
@@ -11,7 +10,7 @@ import { stripFormat } from '@srtdio/comments';
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable, withReadTimeout } from '@/lib/chat-reads';
-import { replyPreview, type ThreadMessage } from '@/lib/chat/thread';
+import type { ThreadMessage } from '@/lib/chat/thread';
 
 type Functions = Database['public']['Functions'];
 type ThreadForMeRow = Functions['chat_threads_for_me']['Returns'][number];
@@ -228,16 +227,6 @@ export function firstLineOf(body: string): string {
       .split('\n')
       .find((l) => l.trim() !== '') ?? '';
   return line.trim();
-}
-
-/** The replies row's latest line: "Leo: Done, it reads well now." Pure. */
-export function latestReplyLine(
-  last: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds'> | null,
-  name: string,
-): string {
-  if (last === null) return '';
-  const text = firstLineOf(last.body);
-  return `${name}: ${text !== '' ? text : replyPreview(last)}`;
 }
 
 /** L5 (2): the chat list preview when the newest message is a thread reply. Pure. */
