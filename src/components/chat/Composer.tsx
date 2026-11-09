@@ -18,7 +18,7 @@ import type {
   SyntheticEvent,
 } from 'react';
 import { logger } from '@/lib/logger';
-import { Button, ClearButton } from '@/components/ui/Button';
+import { ClearButton } from '@/components/ui/Button';
 import { composerHint } from '@/components/ui/Composer';
 import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { useIsLaptop } from '@/lib/use-is-laptop';
@@ -29,7 +29,6 @@ import {
   IconFile,
   IconMic,
   IconSend,
-  IconTrash,
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { isCoarsePointer } from '@/lib/use-is-laptop';
@@ -39,8 +38,6 @@ import {
   useAudioRecorder,
   type RecordingResult,
 } from '@/lib/chat/use-audio-recorder';
-import { readHeader, rememberRecorderMime, voiceFileType } from '@/lib/chat/audio-sniff';
-import { voicePeaks } from '@/lib/chat/voice-peaks';
 import { ComposerTray, draftTileEnabled } from '@/components/chat/ComposerTray';
 import { planTileEnabled } from '@/components/chat/plan-card';
 import { AssetPicker } from '@/components/chat/AssetPicker';
@@ -150,7 +147,14 @@ import {
   saveVoiceDraft,
   useVoiceDraft,
 } from '@/lib/chat/voice-draft';
-import { StopRecordingDialog, VoiceDraftBar, leaveAfterGuard } from '@/components/chat/VoiceDraft';
+import {
+  RecordingRow,
+  StopRecordingDialog,
+  VoiceNoteChipPlayer,
+  leaveAfterGuard,
+  prepareVoiceNote,
+  useRecordingBars,
+} from '@/components/chat/VoiceDraft';
 import { isSendKeydown } from '@/lib/chat/send-key';
 import { pickedSizeFields, readPickedSize } from '@/lib/chat/media-size';
 import { errorText } from '@/lib/error-copy';
@@ -870,18 +874,13 @@ export async function sendVoiceRecording(
   /** Reply privately: the DM's quote rides the voice note too. */
   privateReply: PrivateReply | null = null,
 ): Promise<'too-short' | 'sent' | 'refused'> {
-  if (rec === null || rec.blob.size === 0 || rec.durationMs < MIN_VOICE_NOTE_MS) {
-    return 'too-short';
-  }
-  // Type and name from the bytes, not the recorder's say-so.
-  const { type, name } = voiceFileType(await readHeader(rec.blob), rec.recorderMime, rec.mime);
-  const file = new File([rec.blob], name, { type });
-  rememberRecorderMime(file, rec.recorderMime);
-  // Peaks from the finished file, capped at 1s; none on any failure.
-  const peaks = await voicePeaks(file);
+  // Typed and named from the bytes, with its peaks (VoiceDraft prepareVoiceNote,
+  // the path the catch-up reply shares); null when too short.
+  const note = await prepareVoiceNote(rec);
+  if (note === null) return 'too-short';
   const taken = dispatchSend(onSend, {
     text: '',
-    attachments: [voiceNoteAttachment(file, rec.durationMs, upload, peaks)],
+    attachments: [voiceNoteAttachment(note.file, note.durationMs, upload, note.peaks)],
     sharedPostIds: [],
     reply,
     sharedBriefIds: [],
@@ -1111,6 +1110,16 @@ export function Composer(props: ComposerProps): ReactElement {
     },
   });
   const voiceDraft = useVoiceDraft(channelId);
+  // A composer with no chat id (a thread's) keeps its kept note here; with a
+  // chat id the note is the chat's voice draft (it survives leaving).
+  const [localNote, setLocalNote] = useState<RecordingResult | null>(null);
+  const keptNote: RecordingResult | null = useMemo(
+    () => (voiceDraft !== null ? draftRecording(voiceDraft) : localNote),
+    [voiceDraft, localNote],
+  );
+  // The check is stopping the recorder (its last chunk is on its way).
+  const [stopping, setStopping] = useState(false);
+  const liveBarCount = useRecordingBars(recorder.recording, recorder.seconds);
   // After a reload the draft comes back from IndexedDB when it was copied there.
   useEffect(() => {
     void restoreVoiceDraft(channelId);
@@ -1159,16 +1168,24 @@ export function Composer(props: ComposerProps): ReactElement {
   }, [channelId, library]);
 
   const canAttach = props.uploadFile !== undefined && !props.disabled && editing === undefined;
+  // The message itself (text, files, shared cards) can go.
+  const messageSendable = composerCanSend({
+    disabled: props.disabled || resolvingLinks,
+    text,
+    fileCount: pending.length + library.length,
+    sharedPostCount: sharedPosts.length,
+    sharedBriefCount: sharedBriefs.length,
+  });
+  // A kept voice note waits in the box (the check on the recording row, or a
+  // draft kept from leaving mid-recording): Send sends it.
+  const voiceSendable =
+    keptNote !== null &&
+    editing === undefined &&
+    !props.disabled &&
+    !voiceBusy &&
+    !recorder.recording;
   const canSend =
-    editing !== undefined
-      ? !props.disabled && !editBusy
-      : composerCanSend({
-          disabled: props.disabled || resolvingLinks,
-          text,
-          fileCount: pending.length + library.length,
-          sharedPostCount: sharedPosts.length,
-          sharedBriefCount: sharedBriefs.length,
-        });
+    editing !== undefined ? !props.disabled && !editBusy : messageSendable || voiceSendable;
 
   // Write the draft back as it changes (not while editing: the map keeps the
   // draft typed before the edit, which is what leaving the edit restores).
@@ -1410,6 +1427,10 @@ export function Composer(props: ComposerProps): ReactElement {
       submitEdit(editing);
       return;
     }
+    // The kept voice note goes first (it reads the reply quote now), then the
+    // message when there is one.
+    if (voiceSendable) void sendDraft();
+    if (!messageSendable) return;
     const body = sendBody(text);
     const draft: LinkCardDraft = {
       text: body,
@@ -1496,9 +1517,9 @@ export function Composer(props: ComposerProps): ReactElement {
     if (!ok) toast.show({ title: 'Microphone access is needed to record.' });
   }
 
-  // One draft per chat: a new recording while one is saved asks first.
+  // One kept note per box: a new recording while one waits asks first.
   async function start(): Promise<void> {
-    if (voiceDraft !== null) {
+    if (keptNote !== null) {
       setDraftAsk('replace');
       return;
     }
@@ -1528,24 +1549,30 @@ export function Composer(props: ComposerProps): ReactElement {
     cancel();
   }
 
+  // Send with a kept note: the note goes (its own message), and leaves the box.
+  function dropKeptNote(): void {
+    deleteVoiceDraft(channelId);
+    setLocalNote(null);
+  }
+
   async function sendDraft(): Promise<void> {
-    const draft = voiceDraft;
-    if (draft === null || voiceBusy) return;
+    const note = keptNote;
+    if (note === null || voiceBusy) return;
     setVoiceBusy(true);
     try {
       const outcome = await sendVoiceRecording(
-        draftRecording(draft),
+        note,
         props.onSend,
         props.uploadFile,
         props.reply?.quote ?? null,
         privateReply !== null ? privateReplyFromDraft(privateReply) : null,
       );
       if (outcome === 'sent') {
-        deleteVoiceDraft(channelId);
+        dropKeptNote();
         if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
         props.onCancelReply?.();
       } else if (outcome === 'too-short') {
-        deleteVoiceDraft(channelId);
+        dropKeptNote();
         toast.show({ title: VOICE_TOO_SHORT_COPY });
       } else toast.show({ title: errorText('send the voice note', null) });
     } catch (error) {
@@ -1556,34 +1583,32 @@ export function Composer(props: ComposerProps): ReactElement {
     }
   }
 
-  // The recording goes to the outbox like a picked file: the bubble shows its
-  // clock at once, the blob is kept (IndexedDB) until the row lands, and the
-  // upload runs in the background with retries. Never transcribed at send time.
-  async function stopSend(): Promise<void> {
-    setVoiceBusy(true);
-    const recordingId = recorder.recordingId;
+  // The check on the recording row: stop and keep. The note waits in the open
+  // box as a chip (this chat's voice draft, so leaving keeps it too); Send
+  // sends it through the outbox like a picked file (the bubble shows its clock
+  // at once, the upload runs in the background with retries). A recording
+  // under MIN_VOICE_NOTE_MS is dropped with a toast.
+  async function stopKeep(): Promise<void> {
+    if (stopping) return;
+    setStopping(true);
     try {
-      // stop() releases the mic before resolving, on every path.
+      // stop() releases the mic before resolving, on every path. The kept
+      // draft replaces any page-hide snapshot of this same recording.
+      const recordingId = recorder.recordingId;
       const rec = await recorder.stop();
-      // A page-hide snapshot of this same recording is superseded by the send.
-      dropSnapshotOf(channelId, recordingId);
-      const outcome = await sendVoiceRecording(
-        rec,
-        props.onSend,
-        props.uploadFile,
-        props.reply?.quote ?? null,
-        privateReply !== null ? privateReplyFromDraft(privateReply) : null,
-      );
-      if (outcome === 'too-short') toast.show({ title: VOICE_TOO_SHORT_COPY });
-      else if (outcome === 'sent') {
-        if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
-        props.onCancelReply?.();
-      } else toast.show({ title: errorText('send the voice note', null) });
+      if (channelId !== undefined) {
+        if (!saveVoiceDraft(channelId, rec)) {
+          dropSnapshotOf(channelId, recordingId);
+          toast.show({ title: VOICE_TOO_SHORT_COPY });
+        }
+      } else if (rec !== null && rec.blob.size > 0 && rec.durationMs >= MIN_VOICE_NOTE_MS) {
+        setLocalNote(rec);
+      } else toast.show({ title: VOICE_TOO_SHORT_COPY });
     } catch (error) {
-      logger.error('chat composer: voice note send failed', { error: String(error) });
-      toast.show({ title: errorText('send the voice note', error) });
+      logger.error('chat composer: voice note stop failed', { error: String(error) });
+      toast.show({ title: errorText('keep the voice note', error) });
     } finally {
-      setVoiceBusy(false);
+      setStopping(false);
     }
   }
 
@@ -1752,7 +1777,18 @@ export function Composer(props: ComposerProps): ReactElement {
   const hasDraft =
     text !== '' ||
     pending.length + library.length + sharedPosts.length + sharedBriefs.length > 0 ||
+    keptNote !== null ||
     editing !== undefined;
+  // The kept voice note waits in the open box as a chip (its X asks first, the
+  // chat's Delete voice note confirm); Send sends it.
+  const keptChip =
+    keptNote !== null && editing === undefined ? (
+      <VoiceNoteChipPlayer
+        blob={keptNote.blob}
+        durationMs={keptNote.durationMs}
+        onRemove={() => setDraftAsk('delete')}
+      />
+    ) : undefined;
   // The mic: a bare 36 key in the pill (phone) and beside Send in the card,
   // typing included.
   const micKey = (
@@ -1833,15 +1869,6 @@ export function Composer(props: ComposerProps): ReactElement {
           />
         ) : null}
 
-        {voiceDraft !== null && !recorder.recording && editing === undefined ? (
-          <VoiceDraftBar
-            draft={voiceDraft}
-            busy={voiceBusy}
-            onSend={() => void sendDraft()}
-            onDelete={() => setDraftAsk('delete')}
-          />
-        ) : null}
-
         {draftAsk !== null ? (
           <ConfirmDialog
             title={draftAsk === 'delete' ? VOICE_DRAFT_DELETE_TITLE : VOICE_DRAFT_REPLACE_TITLE}
@@ -1856,7 +1883,7 @@ export function Composer(props: ComposerProps): ReactElement {
             onConfirm={() => {
               const ask = draftAsk;
               setDraftAsk(null);
-              deleteVoiceDraft(channelId);
+              dropKeptNote();
               if (ask === 'replace') void startNow();
             }}
           />
@@ -1936,18 +1963,16 @@ export function Composer(props: ComposerProps): ReactElement {
                 ? { kind: 'sending' }
                 : { kind: 'idle' }
           }
-          discard={
-            <Button
-              type="button"
-              variant="danger"
-              shape="round"
-              aria-label="Cancel recording"
-              className="shrink-0"
-              onClick={cancel}
-            >
-              <IconTrash size={ICON_SIZE.control} />
-            </Button>
+          recording={
+            <RecordingRow
+              elapsed={recordingElapsed(recorder.seconds)}
+              bars={liveBarCount}
+              busy={stopping}
+              onCancel={cancel}
+              onKeep={() => void stopKeep()}
+            />
           }
+          attachments={keptChip}
           leading={
             canAttach ? (
               <ComposerTray
@@ -2025,29 +2050,18 @@ export function Composer(props: ComposerProps): ReactElement {
             />
           }
           send={
-            recorder.recording ? (
-              <Button
+            // While recording the box shows the recording row (its check stops
+            // and keeps), so send needs no recording state of its own.
+            voiceBusy ? (
+              // The kept voice note is on its way: the spinner sits in the
+              // send slot, at send's own width.
+              <RowSend
                 type="button"
-                variant="primary"
-                shape="round"
-                aria-label="Stop and send voice note"
-                className="shrink-0"
-                onClick={() => void stopSend()}
-              >
-                <IconSend size={ICON_SIZE.control} />
-              </Button>
-            ) : voiceBusy ? (
-              // The voice note is on its way: the spinner sits in the send slot.
-              <Button
-                type="button"
-                variant="primary"
-                shape="round"
-                aria-label="Sending voice note"
-                className="shrink-0"
+                label="Sending voice note"
                 busy
-              >
-                <IconMic size={ICON_SIZE.control} />
-              </Button>
+                disabled
+                icon={<IconSend size={ICON_SIZE.control} />}
+              />
             ) : (
               <RowSend
                 label={editing !== undefined ? 'Save edit' : 'Send'}

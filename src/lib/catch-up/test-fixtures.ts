@@ -3,6 +3,7 @@
 
 import type { Database, Json } from '@srtdio/schemas';
 import { mapEntry, type ActivityItem } from '@/components/pages/activity/data';
+import { buildCatchUpQueue, type CatchUpItem } from '@/lib/catch-up/queue';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -33,4 +34,13 @@ export function entry(
   fields: Partial<ActivityItem> = {},
 ): ActivityItem {
   return { ...mapEntry(inboxRow(over)), ...fields };
+}
+
+/** One catch-up card (item) holding `entries`, built by the real queue. */
+export function cardOf(...entries: ActivityItem[]): CatchUpItem {
+  const [first] = entries;
+  if (first === undefined) throw new Error('cardOf needs an entry');
+  const card = buildCatchUpQueue({ tapped: first, held: entries, nowMs: 0 })[0];
+  if (card === undefined) throw new Error('cardOf: no card');
+  return card;
 }

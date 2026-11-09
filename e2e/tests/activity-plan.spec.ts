@@ -54,7 +54,7 @@ function card(page: Page, title: string) {
   return page.locator('[data-activity-id]').filter({ hasText: title }).first();
 }
 
-test('agency: a plan_comment row is a Notifications card (All); a tap opens catch up; the link opens the item', async ({
+test('agency: a plan_comment row is a Notifications card (All); a tap opens the item at the comment', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -78,15 +78,13 @@ test('agency: a plan_comment row is a Notifications card (All); a tap opens catc
   ).toHaveCount(0);
   expectMinTouchTarget(await row.boundingBox());
 
-  // The tap opens catch up at this entry (8 Nov 2026); Mark as read saves it.
+  // The tap opens the real place at the comment (9 Nov 2026: catch-up cards
+  // live only in Catch up) and marks the row read.
   await row.click();
-  await expect(page).toHaveURL(/[?&]catchup=/);
-  const catchUp = page.locator('[data-catch-up-card]');
-  await expect(catchUp).toBeVisible({ timeout: 8000 });
-  await expect(catchUp).toContainText(PLAN_CONCEPT_TITLE);
-  await page.locator('[data-catch-up-read]').click();
+  await expect(page).not.toHaveURL(/[?&]catchup=/);
+  await expect(page).toHaveURL(new RegExp(`item=${PLAN_CONCEPT_ITEM}`));
   await expect
-    .poll(() => network.rpcCalls.filter((c) => c.name === 'inbox_mark_read_ids').length)
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'inbox_mark_read').length)
     .toBe(1);
 
   // The entry's link: the standalone page with the item open at the comment.
@@ -99,7 +97,7 @@ test('agency: a plan_comment row is a Notifications card (All); a tap opens catc
   expectClean(network);
 });
 
-test('client: a plan_review row is a Notifications card; a tap opens catch up; the link opens the post item', async ({
+test('client: a plan_review row is a Notifications card; a tap opens the post item', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -122,10 +120,8 @@ test('client: a plan_review row is a Notifications card; a tap opens catch up; t
   await expect(row).toContainText(`Maya Chen approved ${POST_TITLE}`, { timeout: 15_000 });
 
   await row.click();
-  await expect(page).toHaveURL(/[?&]catchup=/);
-  const catchUp = page.locator('[data-catch-up-card]');
-  await expect(catchUp).toBeVisible({ timeout: 8000 });
-  await expect(catchUp).toContainText(POST_TITLE);
+  await expect(page).not.toHaveURL(/[?&]catchup=/);
+  await expect(page).toHaveURL(new RegExp(`item=${PLAN_POST_ITEM}`));
 
   await page.goto(`/plan/${PLAN_ID}?item=${PLAN_POST_ITEM}`);
   const item = planPage(page, 'item');

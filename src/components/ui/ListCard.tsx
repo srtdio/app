@@ -14,7 +14,7 @@ import { textRole } from '@/components/ui/Text';
 import { Tag, type TagDot } from '@/components/ui/Tag';
 import { Avatar } from '@/components/ui/Avatar';
 import { PostPlaceholder, type PostPlaceholderKind } from '@/components/ui/PostPlaceholder';
-import { ICON_SIZE, type IconProps } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronDown, type IconProps } from '@/components/ui/icons';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { useSelectGesture, type SelectGesture } from '@/components/ui/useLongPress';
 
@@ -56,6 +56,25 @@ export type ListCardPress = Omit<
 > &
   ListCardHooks;
 
+/**
+ * The tag as a fold toggle (Activity's "3 updates ⌄"): the one grey Tag plus a
+ * chevron that turns 180 while open, one 44 hit box around the 20 tag, laid
+ * above the cover so a tap on it never opens the card. The caller draws what
+ * unfolds (under the card, at LIST_CARD_SUB_INSET).
+ */
+export interface ListCardTagToggle {
+  /** The caller's rows are showing: aria-expanded, the chevron turned. */
+  open: boolean;
+  /** Fold or unfold; the card's own tap is not run. */
+  onToggle: () => void;
+  /** The button's name; absent: "Show {tag}" / "Hide {tag}". */
+  label?: string;
+  /** The id of what unfolds (aria-controls). */
+  controls?: string;
+  /** data-* hooks on the toggle button. */
+  hooks?: ListCardHooks;
+}
+
 /** The card root's own hooks: data-*, gesture handlers. Behaviour only. */
 export type ListCardSurface = Omit<HTMLAttributes<HTMLElement>, 'className' | 'children'> &
   ListCardHooks;
@@ -82,6 +101,8 @@ export interface ListCardProps {
   tagDot?: TagDot | undefined;
   /** data-* hooks on the tag. */
   tagHooks?: ListCardHooks;
+  /** The tag folds and unfolds the caller's rows under the card (ListCardTagToggle). */
+  tagToggle?: ListCardTagToggle | undefined;
   /** Line 2 last: the 8px unread dot, only when true. */
   unread?: boolean;
   /** Select mode for this list; absent: long-press and right-click do nothing. */
@@ -179,6 +200,21 @@ export const LIST_CARD_PREVIEW = textRole('secondary', 'min-w-0 flex-1 truncate'
 
 /** The unread dot: 8px, round, fg ink. */
 export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full bg-fg';
+
+/**
+ * Rows a card unfolds under itself (Activity's grouped updates) start on the
+ * card's text column: the density picture plus its 12 gap (48 + 12 = 60 Cozy
+ * and Calm, 40 + 12 = 52 Compact).
+ */
+export const LIST_CARD_SUB_INSET = 'pl-15 compact:pl-13';
+
+/**
+ * The tag toggle's hit box: 44 tall and at least 44 wide around the 20 tag
+ * (-my-3 keeps line 2 at 20), above the cover (z-raised) and live under the
+ * body's pointer-events-none.
+ */
+export const LIST_CARD_TAG_TOGGLE =
+  'pointer-events-auto relative z-raised -mx-2 -my-3 flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-fg-3 focus-visible:lit-focus';
 
 /** The list the rows stack in: rows touching, no divider (phone, and the chat list pane). */
 export const LIST_CARD_STACK = 'flex flex-col';
@@ -294,8 +330,10 @@ function clickCover(event: MouseEvent<HTMLElement>): void {
  *   2. preview (secondary, one line) then the one grey Tag then the unread dot;
  *      with no preview the tag sits on the right end, under the time.
  * No third line and no ⋮: a card's actions live on its list's select bar
- * (long-press / right-click selects). Every row is exactly 60 tall
- * (LIST_CARD_HEIGHT_PX); line 2 stays even when it is empty.
+ * (long-press / right-click selects). A tag may fold rows open under the card
+ * (tagToggle: "3 updates ⌄", its own 44 hit box over the cover). Every row
+ * is exactly the density height (listCardHeightPx); line 2 stays even when it
+ * is empty.
  */
 export function ListCard({
   picture,
@@ -309,6 +347,7 @@ export function ListCard({
   tag,
   tagDot,
   tagHooks,
+  tagToggle,
   unread = false,
   select,
   onPress,
@@ -422,12 +461,49 @@ export function ListCard({
             {!hasPreview ? <span data-list-card-spacer="" className="flex-1" /> : null}
             {hasTag ? (
               <span data-list-card-tag="" {...tagHooks} className="flex min-w-0 shrink-0">
-                <Tag
-                  label={tag}
-                  tone="neutral"
-                  {...(tagDot !== undefined ? { dot: tagDot } : {})}
-                  className="truncate"
-                />
+                {tagToggle !== undefined ? (
+                  <button
+                    {...tagToggle.hooks}
+                    type="button"
+                    data-list-card-tag-toggle={tagToggle.open ? 'open' : 'closed'}
+                    aria-expanded={tagToggle.open}
+                    {...(tagToggle.controls !== undefined
+                      ? { 'aria-controls': tagToggle.controls }
+                      : {})}
+                    aria-label={tagToggle.label ?? `${tagToggle.open ? 'Hide' : 'Show'} ${tag}`}
+                    onClick={(event) => {
+                      // The fold only: never the card's own tap.
+                      event.stopPropagation();
+                      tagToggle.onToggle();
+                    }}
+                    className={LIST_CARD_TAG_TOGGLE}
+                  >
+                    <Tag
+                      label={tag}
+                      tone="neutral"
+                      {...(tagDot !== undefined ? { dot: tagDot } : {})}
+                      className="truncate"
+                    />
+                    <span
+                      aria-hidden="true"
+                      data-list-card-tag-chevron=""
+                      className={cn(
+                        'flex shrink-0',
+                        MOVE_CLASS.turn,
+                        tagToggle.open && 'rotate-180',
+                      )}
+                    >
+                      <IconChevronDown size={ICON_SIZE.inline} />
+                    </span>
+                  </button>
+                ) : (
+                  <Tag
+                    label={tag}
+                    tone="neutral"
+                    {...(tagDot !== undefined ? { dot: tagDot } : {})}
+                    className="truncate"
+                  />
+                )}
               </span>
             ) : null}
             {unread ? (

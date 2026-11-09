@@ -327,17 +327,15 @@ describe("Activity: the page's own write reaches device-saved chip pages", () =>
     render();
     await settle();
     const lead = document.querySelector<HTMLElement>('[data-activity-lead]');
-    // A tap opens catch up with that entry first; Mark as read on its card
-    // is the page's own write (optimistic, every kept page edited).
+    // A tap opens the real place (9 Nov 2026: catch-up cards live only in
+    // Catch up) and marks the row read: the page's own write (optimistic,
+    // every kept page edited).
     act(() => lead?.click());
     await settle();
-    const read = document.querySelector<HTMLElement>('[data-catch-up-read]');
-    expect(read).not.toBeNull();
-    act(() => read?.click());
-    await settle();
+    expect(document.querySelector('[data-catch-up-card]')).toBeNull();
     expect(h.rpc).toHaveBeenCalledWith(
-      'inbox_mark_read_ids',
-      expect.objectContaining({ p_ids: ['e1'] }),
+      'inbox_mark_read',
+      expect.objectContaining({ p_entry_id: 'e1' }),
     );
     expect(peekActivityPage(MENTIONS_KEY)?.[0]?.readAt).toEqual(expect.any(String));
   });

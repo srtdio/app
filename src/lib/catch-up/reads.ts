@@ -1,4 +1,4 @@
-// Catch up's card reads: only what the current and the next card need, one
+// Catch up's chat card reads: only what the current and the next card need, one
 // batched read per kind, never one per card and never a full table. Chat
 // cards: the messages by id IN (the entry's message and its thread root), the
 // newest replies by thread root IN, the root cards' titles (posts, briefs,
@@ -40,6 +40,10 @@ export interface CatchUpChatContent {
   threadName: string | null;
   /** The newest reply id (a thread is marked read up to it). */
   latestReplyId: string | null;
+  /** Main chat: replies under each top-level message (its threads row). */
+  replyCounts: ReadonlyMap<string, number>;
+  /** Older messages exist above (scroll up loads them). */
+  hasOlder: boolean;
 }
 
 /** Most replies a thread card draws (the newest ones). */
@@ -140,7 +144,10 @@ export async function readCatchUpChat(
   const rootIds = [
     ...new Set(points.flatMap(({ point }) => (point.rootId !== null ? [point.rootId] : []))),
   ];
-  const [byId, replies] = await Promise.all([
+  const mainChannels = [
+    ...new Set(points.flatMap(({ point }) => (point.rootId === null ? [point.channelId] : []))),
+  ];
+  const [byId, replies, mains] = await Promise.all([
     loadMessagesByIds(client, messageIds),
     rootIds.length > 0
       ? client
@@ -150,6 +157,17 @@ export async function readCatchUpChat(
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(CATCH_UP_REPLIES * rootIds.length)
+      : Promise.resolve(null),
+    // The main chat's newest top-level messages, so earlier ones fill the card.
+    mainChannels.length > 0
+      ? client
+          .from('chat_messages')
+          .select(REPLY_COLUMNS)
+          .in('channel_id', mainChannels)
+          .is('thread_root_message_id', null)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(CATCH_UP_REPLIES * mainChannels.length)
       : Promise.resolve(null),
   ]);
   const rows = new Map<string, ReplyRow>();
@@ -167,6 +185,33 @@ export async function readCatchUpChat(
     }
   } else if (replies !== null) {
     logger.warn('catch-up: replies read failed', { error: replies.error.message });
+  }
+  const mainByChannel = new Map<string, ReplyRow[]>();
+  if (mains !== null && mains.error === null) {
+    for (const r of (mains.data ?? []) as ReplyRow[]) {
+      const list = mainByChannel.get(r.channel_id) ?? [];
+      if (list.length < CATCH_UP_REPLIES) list.push(r);
+      mainByChannel.set(r.channel_id, list);
+      rows.set(r.id, r);
+    }
+  } else if (mains !== null) {
+    logger.warn('catch-up: main chat read failed', { error: mains.error.message });
+  }
+  const mainIds = [...mainByChannel.values()].flat().map((r) => r.id);
+  const countsRes =
+    mainIds.length > 0
+      ? await client
+          .from('chat_messages')
+          .select('thread_root_message_id')
+          .in('thread_root_message_id', mainIds)
+          .is('deleted_at', null)
+      : null;
+  const replyCounts = new Map<string, number>();
+  if (countsRes !== null && countsRes.error === null) {
+    for (const r of countsRes.data ?? []) {
+      const root = r.thread_root_message_id;
+      if (root !== null) replyCounts.set(root, (replyCounts.get(root) ?? 0) + 1);
+    }
   }
   const cards = rootIds.flatMap((id) => {
     const row = rows.get(id);
@@ -206,12 +251,17 @@ export async function readCatchUpChat(
   for (const { item, point } of points) {
     const target = rows.get(point.messageId);
     if (point.rootId === null) {
+      const recent = [...(mainByChannel.get(point.channelId) ?? [])];
+      if (target !== undefined && !recent.some((r) => r.id === target.id)) recent.push(target);
+      recent.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
       out.set(item.id, {
         root: null,
-        messages: target !== undefined ? [toMessage(target)] : [],
+        messages: recent.map(toMessage),
         firstNewId: target !== undefined ? target.id : null,
         threadName: null,
         latestReplyId: null,
+        replyCounts,
+        hasOlder: (mainByChannel.get(point.channelId) ?? []).length >= CATCH_UP_REPLIES,
       });
       continue;
     }
@@ -229,6 +279,8 @@ export async function readCatchUpChat(
         (card !== null ? (titles.get(card.id) ?? null) : null) ??
         (root !== null ? rootFirstLine(root.text) : null),
       latestReplyId: thread[thread.length - 1]?.id ?? null,
+      replyCounts: new Map(),
+      hasOlder: false,
     });
   }
   return out;

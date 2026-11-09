@@ -1,5 +1,6 @@
 import { forwardRef, type InputHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
+import { Text } from '@/components/ui/Text';
 
 /**
  * 'field' (default): a field the person must fill (forms, code boxes, add-task
@@ -25,11 +26,44 @@ export const INPUT_TONE: Record<InputTone, string> = {
     SEARCH_ONE_CLEAR,
 };
 
+/** The text end kept clear for the counter ("25/25" in meta mono) so typing never runs under it. */
+export const INPUT_COUNTER_ROOM = 'pr-16';
+
+export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+  tone?: InputTone;
+  /**
+   * A live length counter ("20/25") at the field's trailing edge, in the meta
+   * role. Pass the prop (null while hidden) to reserve its room and keep the
+   * polite live region mounted, so the field never changes size when it shows.
+   * Omitted: the plain input, exactly as before.
+   */
+  counter?: string | null;
+};
+
 // 16px text below md so iOS Safari does not zoom the page when the field takes
 // focus; the usual 14px from md up.
-export const Input = forwardRef<
-  HTMLInputElement,
-  InputHTMLAttributes<HTMLInputElement> & { tone?: InputTone }
->(function Input({ className, tone = 'field', ...props }, ref) {
-  return <input ref={ref} className={cn(INPUT_TONE[tone], className)} {...props} />;
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { className, tone = 'field', counter, ...props },
+  ref,
+) {
+  if (counter === undefined) {
+    return <input ref={ref} className={cn(INPUT_TONE[tone], className)} {...props} />;
+  }
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        className={cn(INPUT_TONE[tone], INPUT_COUNTER_ROOM, className)}
+        {...props}
+      />
+      <Text
+        role="meta"
+        aria-live="polite"
+        data-input-counter=""
+        className="pointer-events-none absolute inset-y-0 right-3 flex items-center"
+      >
+        {counter ?? ''}
+      </Text>
+    </div>
+  );
 });

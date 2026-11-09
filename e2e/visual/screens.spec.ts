@@ -3592,6 +3592,15 @@ async function startRecording(page: Page): Promise<void> {
   await waitFor([page.locator('[data-composer-state="recording"]')], 'recording composer');
 }
 
+/** The recording row's check: stop and keep; the note waits in the box as a chip. */
+async function keepRecording(page: Page): Promise<void> {
+  await tap(
+    [page.getByRole('button', { name: 'Stop and keep voice note', exact: true })],
+    'Stop and keep',
+  );
+  await waitFor([dmComposer(page).locator('[data-voice-chip]')], 'kept voice note chip');
+}
+
 /** Types a line into the DM composer and sends it. */
 async function sendInDm(page: Page, body: string): Promise<void> {
   await openDm(page);
@@ -3623,32 +3632,34 @@ const PENDING_BODY = 'Sending the cut now';
 
 SCREENS.push(
   {
-    // The composer while a voice note records: the bin in the leading slot,
-    // the red dot, "Recording" and the elapsed time (masked: it ticks), and
-    // Stop and send in the send slot.
+    // The composer while a voice note records (chat/VoiceDraft RecordingRow):
+    // round X cancel, the dotted track with the live bars, the elapsed time
+    // (the track and time masked: they tick), and the round check (stop and
+    // keep).
     name: 'chat-composer-recording',
     seed: creator,
     prepare: stubRecorder,
     url: '/chat',
-    mask: (page) => [page.locator('[data-composer-field]').getByText(/^\d+:\d{2}$/)],
+    mask: (page) => [
+      page.locator('[data-recording-track]'),
+      page.locator('[data-recording-elapsed]'),
+    ],
     steps: startRecording,
   },
   {
-    // Stop and send: the voice note on its way, the spinner in the send slot
-    // at the stop button's width.
+    // Stop and keep, then Send: the kept note on its way, the spinner in the
+    // send slot at send's own width.
     name: 'chat-voice-sending',
     seed: creator,
     prepare: stubRecorder,
     url: '/chat',
     steps: async (page) => {
       await startRecording(page);
-      // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+      // Over MIN_VOICE_NOTE_MS, so the recording is kept and not dropped.
       await page.waitForTimeout(1_100);
+      await keepRecording(page);
       await assertSameWidth(sendSlot(page), async () => {
-        await tap(
-          [page.getByRole('button', { name: 'Stop and send voice note', exact: true })],
-          'Stop and send',
-        );
+        await tap([dmComposer(page).locator('[data-row-send]')], 'Send');
         await expect(
           page.getByRole('button', { name: 'Sending voice note', exact: true }),
         ).toHaveAttribute('aria-busy', 'true');

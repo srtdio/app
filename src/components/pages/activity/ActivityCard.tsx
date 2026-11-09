@@ -1,9 +1,17 @@
 import { stripFormat } from '@srtdio/comments';
-import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
+import { itemIn, itemOut, rememberCard, useMoveOnMount, usePresence } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
-import type { ComponentType, ReactElement, ReactNode } from 'react';
+import { useId, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
-import { ListCard, LIST_CARD_UNREAD_DOT, type ListCardPicture } from '@/components/ui/ListCard';
+import {
+  ListCard,
+  LIST_CARD_SUB_INSET,
+  LIST_CARD_UNREAD_DOT,
+  type ListCardPicture,
+} from '@/components/ui/ListCard';
+import { PressableRow } from '@/components/ui/PressableRow';
+import { cn } from '@/lib/cn';
+import { textRole } from '@/components/ui/Text';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail } from '@/components/media';
@@ -36,6 +44,7 @@ import {
   isWelcome,
   opensNothing,
   segmentSelfMentions,
+  shortLine,
   updatesLabel,
   welcomeTitle,
   type ActivityItem,
@@ -59,7 +68,8 @@ interface ActivityCardProps {
   /** Open the thread: mark it read and navigate from `entry` (groupOpenEntry:
    *  the newest entry that links to a comment, else the lead). */
   onOpenGroup: (group: ActivityItem[], entry: ActivityItem) => void;
-  /** Open a single entry (kept for callers; the card opens the group). */
+  /** Open one entry of a grouped card (its unfolded row): navigate to its own
+   *  place at its comment and mark it read. */
   onOpenEntry: (entry: ActivityItem) => void;
   /** The signed-in user's resolved display name, used to accent their own @name
    *  inside a mention preview; null when it has not resolved yet. */
@@ -331,17 +341,40 @@ function activityPicture(
 }
 
 /**
- * One digest group as one ui/ListCard (two lines, 60 tall):
+ * One unfolded update's line: "Name · what" (the actor, then the short event
+ * line without the card's title), or the short line alone when nobody is
+ * named. Pure.
+ */
+export function activitySubRowLine(entry: ActivityItem): string {
+  const what = shortLine(entry, { name: false });
+  const name = entry.actorName;
+  return name !== null && name !== '' ? `${name} · ${what}` : what;
+}
+
+/** An entry's "how long ago" on the list's one clock ("just now", "3h", "Mon"). */
+function entryAgo(entry: ActivityItem, nowMs: number, timeZone: string | null | undefined): string {
+  return formatAgo(
+    alertDisplayTime(entry.eventType, entry.createdAt, entry.alert?.plan),
+    new Date(nowMs),
+    timeZone ?? undefined,
+  );
+}
+
+/**
+ * One digest group as one ui/ListCard (two lines, the density height):
  *   1. the who-did-what title, the actor first ... the time (formatAgo on the
  *      list's clock; the bad token for a missed due time);
  *   2. the comment, quote or alert line as the preview, the one tag
  *      (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
  *      Reminder) and the unread dot.
- * The picture is the thing or the person, never blank. No ⋮ and no select
- * mode: a long-press does nothing. A tap opens the group (the newest entry
- * that links to a comment, else the lead) and marks it read. A threaded group
- * is one card ("+N more" when it has no line of its own); its entries open
- * from the page it lands on.
+ * The picture is the thing or the person, never blank. No ⋮. A tap on the
+ * card opens the group (the newest entry that links to a comment, else the
+ * lead) and marks it read. A grouped card ("+N more" when it has no line of
+ * its own) makes its tag a toggle ("3 updates ⌄", ListCard tagToggle): a tap
+ * unfolds one 44 row per entry under the card, on its text column (unread
+ * dot, "Name · what", the time), in the group's order; a row opens ITS entry
+ * at its comment and marks it read (onOpenEntry). A second tap folds them
+ * (itemIn on open, itemOut on fold; the chevron turns 180).
  */
 export function ActivityCard({
   group,
@@ -350,10 +383,19 @@ export function ActivityCard({
   cache,
   presignEnabled,
   onOpenGroup,
+  onOpenEntry,
   selfName,
   side = 'unknown',
   entering = false,
 }: ActivityCardProps) {
+  // A grouped card's tag folds its updates open under the card: itemIn (Y
+  // only) as they land, itemOut (clip) before they unmount; never a fade.
+  const [open, setOpen] = useState(false);
+  const subRows = usePresence<HTMLDivElement>(open && group.length > 1, {
+    enter: (el) => itemIn(el),
+    exit: (el) => itemOut(el),
+  });
+  const subRowsId = useId();
   // itemIn (docs/motion.md): a live-added card renders in place and rises
   // 8 px over its final state on its first frame. Y only, never a fade.
   // growFromCard: a tap remembers this card so the page grows out of it, and
@@ -380,14 +422,11 @@ export function ActivityCard({
   const tappable = !opensNothing(lead, side);
   const tag = activityCardTag(group);
   // Line 1 trailing: how long ago, on the list's one clock ("just now", "3h", "Mon").
-  const time = formatAgo(
-    alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
-    new Date(nowMs),
-    timeZone ?? undefined,
-  );
+  const time = entryAgo(lead, nowMs, timeZone);
   const bad = lead.eventType === 'task_due';
+  const grouped = group.length > 1;
 
-  return (
+  const card = (
     <ListCard
       rootRef={cardRef}
       surface={{
@@ -411,7 +450,18 @@ export function ActivityCard({
       timeBad={bad}
       tag={tag}
       tagHooks={
-        group.length > 1 ? { 'data-activity-updates-tag': '' } : { 'data-activity-scope-tag': '' }
+        grouped ? { 'data-activity-updates-tag': '' } : { 'data-activity-scope-tag': '' }
+      }
+      // A grouped card's tag folds its updates open under the card.
+      tagToggle={
+        grouped
+          ? {
+              open,
+              onToggle: () => setOpen((was) => !was),
+              controls: subRowsId,
+              hooks: { 'data-activity-updates-toggle': '' },
+            }
+          : undefined
       }
       {...(tappable
         ? {
@@ -424,5 +474,45 @@ export function ActivityCard({
           }
         : {})}
     />
+  );
+  // The grid cell: the card, then (a grouped card, unfolded) its updates on
+  // its text column. Always this cell, so a card that gains a second entry
+  // keeps its tree (and its rootRef) in place.
+  return (
+    <div data-activity-card-cell="" className="flex min-w-0 flex-col">
+      {card}
+      {subRows.rendered ? (
+        <div
+          ref={subRows.ref}
+          id={subRowsId}
+          data-activity-sub-rows=""
+          className={cn('flex flex-col pb-2', LIST_CARD_SUB_INSET)}
+        >
+          {group.map((entry) => (
+            <PressableRow
+              key={entry.id}
+              data-activity-sub-row={entry.id}
+              onClick={() => onOpenEntry(entry)}
+              className="flex items-center gap-2"
+            >
+              <span className={textRole('secondary', 'min-w-0 flex-1 truncate')}>
+                {activitySubRowLine(entry)}
+              </span>
+              <span className={textRole('meta', 'shrink-0 whitespace-nowrap')}>
+                {entryAgo(entry, nowMs, timeZone)}
+              </span>
+              {entry.readAt === null ? (
+                <span
+                  data-activity-sub-row-unread=""
+                  role="img"
+                  aria-label="Unread"
+                  className={LIST_CARD_UNREAD_DOT}
+                />
+              ) : null}
+            </PressableRow>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

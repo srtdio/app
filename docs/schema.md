@@ -35,7 +35,7 @@ App-level profile. id mirrors auth.users.id (FK).
 | Column | Type | Notes |
 | --- | --- | --- |
 | id | uuid | PK, FK auth.users.id |
-| display_name | text | 1 to 80 chars |
+| display_name | text | 1 to 25 chars: CHECK users_display_name_max25 (char_length(display_name) <= 25), added 9 Nov 2026 (20261109090000_users_display_name_max25; live max was 25, no row broke). Inputs cap at 25 with an n/25 counter from 20 |
 | designation | text | nullable, 1 to 80 |
 | avatar_url | text | nullable, ^https?:// |
 | deleted_at | timestamptz | nullable, account-level soft-delete |

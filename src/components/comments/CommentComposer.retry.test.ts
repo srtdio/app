@@ -20,7 +20,8 @@ describe('comment attachment Retry (FT17)', () => {
     expect(SRC).toContain(
       'onRetry={onRetry !== undefined && canRetryPending(item) ? onRetry : undefined}',
     );
-    expect(SRC).toContain('onRetry={() => retryPending(item.id)}');
+    // The upload flow is the shared useCommentUploads hook (the catch-up reply uses it too).
+    expect(SRC).toContain('onRetry={() => uploads.retryPending(item.id)}');
     expect(SRC).toContain('retryable: false,');
     // Retry re-runs the same upload path the first attempt used.
     expect(SRC).toContain('void uploadPending(id, target.file);');
