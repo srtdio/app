@@ -166,6 +166,16 @@ describe('catch-up end screen', () => {
     expect(host.textContent).toContain("Everything's sorted.");
     click('[data-catch-up-done]');
     expect(onDone).toHaveBeenCalledTimes(1);
+    // The check circle and Done are ink (text-fg / bg-accent: black in light,
+    // white in dark), never green.
+    const check = host.querySelector('[data-catch-up-end-check]');
+    expect(check?.className).toContain('text-fg');
+    expect(check?.querySelector('svg')).not.toBeNull();
+    const done = host.querySelector('[data-catch-up-done]');
+    expect(done?.className).toContain('bg-accent');
+    for (const el of [check, done]) {
+      expect(el?.className ?? '').not.toMatch(/\b(text|bg)-(good|success|green)/);
+    }
   });
 });
 
