@@ -78,6 +78,7 @@ import {
 } from '@/components/chat/PlanItemScreen';
 import { PlanBankItemPage, planBankBack, planBankItemRoute } from '@/components/pages/PlanPage';
 import { ToastProvider } from '@/components/ui/toast';
+import { TEAM_ONLY_LINE } from '@/lib/chat/plan-item-bank';
 import { resetSessionReads } from '@/lib/session-read';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 
@@ -181,7 +182,8 @@ describe('the Item screen with no bundle', () => {
     expect($('[data-plan-came-from]')?.textContent).toBe('Came from Week of 2 Nov');
     expect($('[data-plan-item-date]')?.textContent).toBe('No date');
     expect($('[data-plan-item-date]')?.getAttribute('data-plan-item-date')).toBe('none');
-    expect(text()).not.toContain('Approvers');
+    // No plan approval parts: "Approvers" only in the Who can see line.
+    expect(text().replace(TEAM_ONLY_LINE, '')).not.toContain('Approvers');
     expect(text()).not.toContain('Creators');
     // The bank idea's own More menu (Plan it, Send to chat, ...), never Move or Remove.
     expect($('[data-plan-item-more]')).not.toBeNull();

@@ -160,7 +160,7 @@ describe('CreateBriefSheet: dirty close paths ask first', () => {
 
   it('system Back with text asks and the sheet stays', async () => {
     const { onClose } = await mount();
-    await type('brief-initial-comment', 'Hi team');
+    await type('brief-title', 'Hi team');
     await settle();
     await act(async () => {
       window.history.back();

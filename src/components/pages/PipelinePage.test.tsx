@@ -925,8 +925,8 @@ describe('target-date window narrows every surface (fix A)', () => {
 });
 
 describe('W4 fix 3: create gating', () => {
-  it('the "+" is icon-only with "New post" as its accessible label, only with post.create', () => {
-    expect(topbar(false).primary).toBeUndefined();
+  it('the "+" is icon-only with "New post" as its accessible label; live only with post.create', () => {
+    expect((topbar(false).primary!.props as { blocked?: unknown }).blocked).toBeDefined();
     const plus = topbar(true).primary!;
     expect((plus.props as { label: string }).label).toBe('New post');
     // The old labelled header button and its loading placeholder are gone.
