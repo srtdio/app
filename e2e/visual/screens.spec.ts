@@ -3489,22 +3489,30 @@ SCREENS.push(
     },
   },
   {
-    // The New post sheet's Format select open: the option list (lit-overlay)
-    // with the picked option ticked. The New brief sheet has no Format since
-    // 9 Nov 2026, so the post sheet (with a platform preset) hosts it.
+    // A ui/Select open: the option list (lit-overlay). The New brief sheet has
+    // no Format select since 9 Nov 2026, so the on-behalf approve sheet's
+    // "Approving on behalf of" select hosts it.
     name: 'select-open',
     seed: creator,
     hold: true,
-    extra: (network) => onPlatform(network, 'instagram', 'single_image'),
-    url: '/pipeline',
+    url: `/posts/${POST}`,
     steps: async (page) => {
-      await pipelineReady(page);
-      await tap([page.getByRole('button', { name: 'New post', exact: true })], 'New post');
-      const sheet = page.getByRole('dialog');
-      await waitFor([sheet], 'create post sheet');
+      await postDetailReady(page);
+      const direct = page.getByRole('button', { name: /^Approve on their behalf/ });
+      if (
+        !(await direct
+          .first()
+          .isVisible()
+          .catch(() => false))
+      ) {
+        await openPostMenu(page);
+      }
+      await tap([...menuRow(page, /^Approve on their behalf/), direct], 'Approve on their behalf');
+      const sheet = page.locator('[data-on-behalf-sheet]');
+      await waitFor([sheet], 'on-behalf sheet');
       await tap(
-        [sheet.getByRole('button', { name: 'Format', exact: true })],
-        'Format select trigger',
+        [sheet.getByRole('button', { name: /^Approving on behalf of/ })],
+        'on-behalf select trigger',
       );
       await waitFor([page.getByRole('listbox')], 'select options');
       // No hover on an option: the open list as it lands.
