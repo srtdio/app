@@ -2157,7 +2157,8 @@ async function enrichInboxRows(
   if (commentsRes !== null && commentsRes.error === null) {
     for (const r of commentsRes.data ?? []) {
       commentAuthors.set(r.id, r.author_user_id);
-      if (r.deleted_at !== null) commentsGone.add(r.id);
+      // Only a real timestamp is a delete (a row without the column is live).
+      if (typeof r.deleted_at === 'string') commentsGone.add(r.id);
       else if (typeof r.body === 'string') commentBodies.set(r.id, r.body);
     }
     for (const id of commentIds) if (!commentAuthors.has(id)) commentsGone.add(id);
