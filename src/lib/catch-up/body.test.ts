@@ -139,7 +139,10 @@ describe('catch-up bodies', () => {
       bodyOf(card, { ...parts, side: 'client', post: { ...parts.post, stage: 'draft' } }),
     ).toBe('skip');
     expect(bodyOf(card, { ...parts, post: undefined })).toBe('skip');
-    expect(bodyOf(card, { ...parts, comments: [] })).toBe('skip');
+    // Its comment not drawn: the unread entry still gets its own line (9 Nov 2026), never empty.
+    const lineOnly = bodyOf(card, { ...parts, comments: [] });
+    if (lineOnly === 'skip' || lineOnly === 'error') throw new Error('line only');
+    expect(lineOnly.rows.map((r) => r.kind)).toEqual(['event']);
   });
 });
 

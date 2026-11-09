@@ -407,7 +407,7 @@ function EntryLine(props: {
       data-activity-line={entry.id}
       {...(unread ? { 'data-activity-line-unread': '' } : {})}
       onClick={() => props.onOpen(entry)}
-      className="flex min-w-0 items-center gap-2 whitespace-nowrap"
+      className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
     >
       <Avatar
         name={actor}
