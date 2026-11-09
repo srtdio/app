@@ -140,14 +140,15 @@ function listProps(
 }
 
 describe('Activity: the day line and the card with no trailing ⋯', () => {
-  it("the section heading is Plan's (section role, no count); Mark all read is the top bar's IconButton; no avatar beside the label", () => {
+  it("the section heading is Plan's (section role, no count); Mark all read is Catch up's long-press; no avatar beside the label", () => {
     const page = src('pages/NotificationsPage.tsx');
     // Activity twins Plan's list: the heading is a bare section-role h2, no count.
     expect(page).toContain('<Text as="h2" role="section" data-activity-heading="">');
     expect(page).not.toContain('data-activity-bucket-head');
     expect(page).not.toContain('data-bucket-count');
-    expect(page).toMatch(/<IconButton[\s\S]{0,120}?data-activity-mark-all=""/);
-    expect(page).toContain('useTopbarActions({ primary: markAllNode });');
+    // Mark all read is Catch up's long-press in the top bar (10 Nov), never a page button.
+    expect(page).not.toContain('data-activity-mark-all');
+    expect(page).toContain('useActivityTopbar({');
     expect(page).not.toContain('AvatarStack');
   });
 

@@ -121,10 +121,12 @@ test(
     for (const name of ['Briefs', 'Plans']) {
       await expect(chipRow.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
-    // Mark all read is the top bar's primary (2 unread on All).
-    await expect(
-      page.locator('[data-topbar-slot="primary"] [data-activity-mark-all]'),
-    ).toBeVisible();
+    // The top bar: Threads | Catch up (10 Nov); Catch up filled with the unread count.
+    await expect(page.locator('header [data-topbar-pair] [data-topbar-catch-up]')).toHaveAttribute(
+      'aria-label',
+      /^Catch up, \d+ unread$/,
+    );
+    await expect(page.locator('[data-activity-mark-all]')).toHaveCount(0);
     // Snooze is gone: no Snoozed chip.
     await expect(page.getByRole('button', { name: /^Snoozed/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Upcoming', exact: true })).toHaveCount(0);

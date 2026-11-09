@@ -34,6 +34,12 @@ export interface CatchUpItem {
   entries: ActivityItem[];
   /** The newest card-making entry's time (the queue order). */
   latestAt: string;
+  /**
+   * 'threads': a card of the Threads button's queue (catch-up/threads.ts). Its
+   * entries are stand-ins, never inbox ids: a decision writes the thread's
+   * read point only. Absent on every inbox card.
+   */
+  source?: 'threads';
 }
 
 /** The stage changes that make a card (sent for review, approved, rejected, parked). */

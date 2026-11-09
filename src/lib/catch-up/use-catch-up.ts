@@ -15,9 +15,11 @@ import {
   markAllCatchUpRead,
   markCatchUpRead,
   markCatchUpSkipped,
+  markThreadsCatchUpRead,
   undoCatchUpRead,
 } from '@/lib/catch-up/writes';
 import { unreadIdsOf, type CatchUpItem } from '@/lib/catch-up/queue';
+import { patchThreadUnread } from '@/lib/catch-up/threads';
 
 /** How long Undo stays offered after a decision (the app's Undo window). */
 export const CATCH_UP_UNDO_MS = 4000;
@@ -39,6 +41,20 @@ export interface CatchUpHooks {
   onFailed: (action: 'mark as read' | 'undo') => void;
   /** Long-press Mark as read saved: every entry read. */
   onAllRead: () => void;
+}
+
+/**
+ * Whether Mark as read on `item` writes: an inbox card with unread entries, or
+ * any Threads card (its read point is the write; it holds no inbox ids). Pure.
+ */
+export function decisionWrites(item: CatchUpItem): boolean {
+  return item.source === 'threads' || unreadIdsOf(item).length > 0;
+}
+
+/** A Threads card's read state in the held threads list (its count follows at once). */
+function patchThread(item: CatchUpItem, unread: boolean): void {
+  if (item.source !== 'threads' || item.threadRootId === null) return;
+  patchThreadUnread(item.workspaceId, item.entityId, item.threadRootId, unread);
 }
 
 /** The state after `decisions` on `queue`: the next card's index. Pure. */
@@ -78,9 +94,10 @@ export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
       setUndoUntil(now + CATCH_UP_UNDO_MS);
       // Keep unread writes nothing; an item with nothing unread only moves on.
       const ids = unreadIdsOf(item);
-      if (!read || ids.length === 0) return;
+      if (!read || !decisionWrites(item)) return;
       const h = hooksRef.current;
       h.onRead(ids);
+      patchThread(item, false);
       const traceId = generateTraceId();
       void markCatchUpRead(supabase, {
         workspaceId: h.workspaceId,
@@ -90,6 +107,7 @@ export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
       }).then((result) => {
         if (result.ok) return;
         logger.warn('catch-up: mark read failed', { trace_id: traceId, error: result.message });
+        patchThread(item, true);
         hooksRef.current.onUnread(ids);
         hooksRef.current.onFailed('mark as read');
         putBack(item.key);
@@ -129,36 +147,48 @@ export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
     setDecisions((prev) => prev.slice(0, -1));
     setUndoUntil(0);
     const ids = unreadIdsOf(last.item);
-    if (!last.read || ids.length === 0) return;
+    if (!last.read || !decisionWrites(last.item)) return;
     const h = hooksRef.current;
     h.onUnread(ids);
+    patchThread(last.item, true);
     const traceId = generateTraceId();
     void undoCatchUpRead(supabase, { workspaceId: h.workspaceId, item: last.item, traceId }).then(
       (result) => {
         if (result.ok) return;
         logger.warn('catch-up: undo failed', { trace_id: traceId, error: result.message });
+        patchThread(last.item, false);
         hooksRef.current.onRead(ids);
         hooksRef.current.onFailed('undo');
       },
     );
   }, [decisions, undoUntil]);
 
-  /** Long-press Mark as read: every queued entry read (one inbox_mark_all_read), then the end screen. */
+  /**
+   * Long-press Mark as read: every queued entry read (one inbox_mark_all_read),
+   * then the end screen. The Threads queue reads every queued thread instead
+   * (its read points; the inbox is untouched).
+   */
   const markAll = useCallback((): void => {
     const rest = queue.slice(decisions.length);
     if (rest.length === 0) return;
     const h = hooksRef.current;
     const unread = rest.flatMap(unreadIdsOf);
+    const threads = rest.every((item) => item.source === 'threads');
     setDecisions((prev) => [...prev, ...rest.map((item) => ({ item, read: true }))]);
     setUndoUntil(0);
     h.onRead(unread);
+    for (const item of rest) patchThread(item, false);
     const traceId = generateTraceId();
-    void markAllCatchUpRead(supabase, { workspaceId: h.workspaceId, traceId }).then((result) => {
+    const write = threads
+      ? markThreadsCatchUpRead(supabase, { items: rest, traceId })
+      : markAllCatchUpRead(supabase, { workspaceId: h.workspaceId, traceId });
+    void write.then((result) => {
       if (result.ok) {
         hooksRef.current.onAllRead();
         return;
       }
       logger.warn('catch-up: mark all read failed', { trace_id: traceId, error: result.message });
+      for (const item of rest) patchThread(item, true);
       hooksRef.current.onUnread(unread);
       hooksRef.current.onFailed('mark as read');
       setDecisions((prev) => prev.slice(0, prev.length - rest.length));

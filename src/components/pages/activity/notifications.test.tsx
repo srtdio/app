@@ -219,32 +219,30 @@ describe('Mark all read', () => {
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    expect(page).toMatch(
-      /if \(!marksWholeInbox\(state\)\) \{\s*markEntriesRead\(targets\);\s*return;\s*\}/,
-    );
+    // Catch up's long-press is always the whole inbox (10 Nov), whatever chip is on.
+    expect(page).not.toMatch(/marksWholeInbox|markChipRead/);
     expect(count(page, 'markAllEntriesRead(supabase, workspaceId, traceId)')).toBe(1);
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
-  it("Mark all read is the top bar's primary (IconTickDouble), hidden at 0 unread", () => {
+  it('the double-tick Mark all read is gone: Catch up long-press marks all (10 Nov)', () => {
     const page = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // The top bar's primary slot: an IconButton, gone (undefined) with nothing unread
-    // (the slot keeps its width); no sort beside it.
-    expect(page).toContain("export const MARK_ALL_READ_LABEL = 'Mark all read';");
-    expect(page).toMatch(
-      /hasUnread \? \(\s*<IconButton\s+label=\{MARK_ALL_READ_LABEL\}[\s\S]{0,160}?<IconTickDouble size=\{ICON_SIZE\.control\} \/>[\s\S]{0,80}?\) : undefined/,
-    );
-    expect(page).toContain('const hasUnread = chipUnread > 0;');
-    expect(page).toContain('useTopbarActions({ primary: markAllNode });');
+    // The top bar is Threads | Catch up (useActivityTopbar); Catch up's
+    // long-press "Mark all as read" is the whole-inbox write.
+    expect(page).not.toContain('MARK_ALL_READ_LABEL');
+    expect(page).not.toContain('IconTickDouble');
+    expect(page).not.toContain('data-activity-mark-all');
+    expect(page).toContain('onMarkAllRead: handleMarkAll,');
+    expect(page).toContain("const targets = markAllTargets(items, 'all', nowMs);");
     // Moved up from the day line: no link there any more, no count text.
     expect(page).not.toContain('<Button variant="link" onClick={handleMarkAll}>');
     expect(page).not.toContain('bucketIndex === 0 && chipUnread > 0');
     expect(page).not.toContain('{chipUnread} unread');
     expect(page).not.toContain('ActionMenu');
-    expect(count(page, 'markAllRef.current()')).toBe(1);
+    expect(page).not.toContain('markAllRef');
   });
 });
 

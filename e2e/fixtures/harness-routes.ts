@@ -1629,6 +1629,28 @@ const RPC: Record<string, RpcHandler> = {
       )
       .slice(0, 50);
   },
+  // Every thread I am in across the workspace's chats (Activity's Threads
+  // button): chat_threads_for_me per chat, with its channel, unread first,
+  // newest reply first, max 50 (the live proc's shape).
+  chat_threads_for_me_all: (args, tables) => {
+    const channels = (tables.chat_channels ?? []).filter(
+      (c) => c.workspace_id === args.p_workspace_id,
+    );
+    const perChat = RPC.chat_threads_for_me;
+    if (perChat === undefined) return [];
+    return channels
+      .flatMap((c) =>
+        (perChat({ p_channel_id: c.channel_id, p_trace_id: args.p_trace_id }, tables) as Row[]).map(
+          (row): Row => ({ channel_id: c.channel_id, ...row }),
+        ),
+      )
+      .sort(
+        (a, b) =>
+          Number(b.unread) - Number(a.unread) ||
+          String(b.last_reply_at).localeCompare(String(a.last_reply_at)),
+      )
+      .slice(0, 50);
+  },
   // The record write: the row lands now, its thread root set by the trigger's rule.
   chat_message_send: (args, tables) => {
     const rows = tables.chat_messages ?? [];

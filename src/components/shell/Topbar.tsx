@@ -17,8 +17,7 @@ import { useTopbarActionsValue } from '@/components/shell/topbar-actions';
 
 /**
  * One fixed 44 slot: the page's control, or an empty box of the same width so
- * search and sort never move between tabs (the "+" hides where a person can't
- * create, and Mark all read hides at 0 unread, keeping the width).
+ * search and sort never move between tabs (an empty slot keeps the width).
  */
 function Slot({ name, children }: { name: 'sort' | 'primary'; children: ReactNode }) {
   return (
@@ -43,6 +42,15 @@ export const TOPBAR_SEARCH_FIELD = 'border border-b-border-strong bg-panel text-
  */
 export function TopbarSlots() {
   const actions = useTopbarActionsValue();
+  // Activity's Threads | Catch up (10 Nov 2026) stand in place of both slots,
+  // 8 apart. Only Activity publishes a pair, so no other screen's bar moves.
+  if (actions.pair !== undefined && actions.pair !== null) {
+    return (
+      <span data-topbar-pair="" className="inline-flex shrink-0 items-center gap-2">
+        {actions.pair}
+      </span>
+    );
+  }
   return (
     <>
       <Slot name="sort">{actions.sort}</Slot>

@@ -4,11 +4,10 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadMore } from '@/components/ui/LoadMore';
-import { IconButton } from '@/components/ui/IconButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { useTopbarActions } from '@/components/shell/topbar-actions';
-import { ICON_SIZE, IconActivity, IconAt, IconTickDouble } from '@/components/ui/icons';
+import { useActivityTopbar } from '@/components/shell/topbar-actions';
+import { ICON_SIZE, IconActivity, IconAt } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
@@ -42,10 +41,7 @@ import {
   MARKED_READ_LABEL,
   markAllTargets,
   markAllEntriesRead,
-  markChipRead,
   markEntryRead,
-  marksChipOnServer,
-  marksWholeInbox,
   mergeFresh,
   msUntilZonedMidnight,
   openAction,
@@ -76,9 +72,11 @@ import {
 } from '@/components/pages/activity/ActivityBoxes';
 import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
 import { buildCatchUpQueue, heldEntries, type CatchUpItem } from '@/lib/catch-up/queue';
+import { peekThreadsQueue } from '@/lib/catch-up/threads';
 import {
   CATCH_UP_NEWEST,
   CATCH_UP_PARAM,
+  CATCH_UP_THREADS,
   catchUpReturnOf,
   takeCatchUpSeed,
 } from '@/lib/catch-up/route';
@@ -88,9 +86,6 @@ const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
 
 /** The page title: the surface is Activity. */
 export const ACTIVITY_TITLE = 'Activity';
-
-/** Mark all read's label (the top bar's primary IconButton). */
-export const MARK_ALL_READ_LABEL = 'Mark all read';
 
 /**
  * How a feed load lands: 'reset' clears the list first (a chip or workspace
@@ -557,43 +552,13 @@ export function NotificationsPage() {
     [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
-  // The active chip only: mark its unread rows (no snooze, or one that has run
-  // out) read at once and write immediately; no Undo and no confirmation toast.
-  // All and Unread are ONE call to inbox_mark_all_read (every unread row of
-  // every type, run-out snoozes included). Mentions marks every matching row
-  // on the server, loaded or not, 500 ids per inbox_mark_read_ids call
-  // (markChipRead); a failure part way reloads the list, so only the rows that
-  // did not save show unread again. Then the Mentions count and the nav badge
-  // refetch.
+  // Catch up's long-press "Mark all as read" (the top bar): every unread row
+  // of the workspace read at once by ONE inbox_mark_all_read, whatever chip is
+  // on; no Undo and no toast. A failure puts the rows back with the fixed
+  // toast. Then the Mentions count and the nav badge refetch.
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
-    const targets = markAllTargets(items, state, nowMs);
-    if (targets.length === 0) return;
-    if (marksChipOnServer(state)) {
-      const ids = new Set(targets.map((item) => item.id));
-      const stamp = new Date().toISOString();
-      editItems((prev) =>
-        prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)),
-      );
-      const traceId = newTrace();
-      void markChipRead(supabase, { workspaceId, state, traceId }).then((result) => {
-        if (!result.ok) {
-          logger.warn('notifications: chip mark read failed', {
-            trace_id: traceId,
-            error: result.error.message,
-          });
-          toast?.show({ title: MARK_READ_FAILED });
-          void loadActivity();
-        }
-        void loadMentionCount();
-        window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-      });
-      return;
-    }
-    if (!marksWholeInbox(state)) {
-      markEntriesRead(targets);
-      return;
-    }
+    const targets = markAllTargets(items, 'all', nowMs);
     const ids = new Set(targets.map((item) => item.id));
     const stamp = new Date().toISOString();
     editItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
@@ -611,47 +576,23 @@ export function NotificationsPage() {
       void loadMentionCount();
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
     });
-  }, [
-    workspaceId,
-    items,
-    state,
-    nowMs,
-    newTrace,
-    toast,
-    loadMentionCount,
-    loadActivity,
-    markEntriesRead,
-    editItems,
-    revertRead,
-  ]);
-
-  // The top bar: Mark all read as the primary (IconTickDouble), for the
-  // active chip; at 0 unread the slot is empty (it keeps its width). No sort
-  // (decided 7 Nov). The latest handler rides a ref so the published node
-  // changes only when the unread state does.
-  const chipUnread = useMemo(
-    () => markAllTargets(items, state, nowMs).length,
-    [items, state, nowMs],
-  );
-  const markAllRef = useRef(handleMarkAll);
-  markAllRef.current = handleMarkAll;
-  const hasUnread = chipUnread > 0;
-  const markAllNode = useMemo(
-    () =>
-      hasUnread ? (
-        <IconButton
-          label={MARK_ALL_READ_LABEL}
-          data-activity-mark-all=""
-          onClick={() => markAllRef.current()}
-        >
-          <IconTickDouble size={ICON_SIZE.control} />
-        </IconButton>
-      ) : undefined,
-    [hasUnread],
-  );
-  useTopbarActions({ primary: markAllNode });
+  }, [workspaceId, items, nowMs, newTrace, toast, loadMentionCount, editItems, revertRead]);
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  // The top bar (no sort): Threads | Catch up (topbar-actions). Threads opens
+  // the same catch up on unread threads only (?catchup=threads).
+  useActivityTopbar({
+    workspaceId,
+    totalUnread,
+    ready: !listLoading,
+    onCatchUp: () => openCatchUp(null),
+    onThreads: () => {
+      const next = new URLSearchParams(searchParams);
+      next.set(CATCH_UP_PARAM, CATCH_UP_THREADS);
+      setSearchParams(next);
+    },
+    onMarkAllRead: handleMarkAll,
+  });
   // Catch up (/activity?catchup=<entryId>): the queue is fixed when it opens
   // (Slack): the tapped entry (the row or toast handed it over, else the
   // list's copy, else one read by id for a cold link), then the unread
@@ -683,6 +624,11 @@ export function NotificationsPage() {
         }),
       });
     };
+    if (catchUpParam === CATCH_UP_THREADS) {
+      mark('catch-up:queue');
+      setCatchUp({ param: catchUpParam, queue: peekThreadsQueue(workspaceId, userId) });
+      return;
+    }
     if (catchUpParam === CATCH_UP_NEWEST) {
       if (listLoading) return;
       fix(null);
