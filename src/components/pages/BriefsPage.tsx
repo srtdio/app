@@ -7,7 +7,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LoadMore } from '@/components/ui/LoadMore';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SortMenu } from '@/components/ui/SortMenu';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
@@ -24,16 +23,8 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { entityUrlPath } from '@/lib/entityRef';
-import { useSort } from '@/lib/use-sort';
+import { orderBriefsFixed } from '@/lib/brief-sort';
 import {
-  BRIEF_SORT_DEFAULT,
-  BRIEF_SORT_OPTIONS,
-  sanitizeBriefSort,
-  sortBriefs,
-  type BriefSort,
-} from '@/lib/brief-sort';
-import {
-  BRIEF_NOTE_PARAM,
   briefListParams,
   filterBriefsByStatus,
   listBriefsFirstPage,
@@ -99,10 +90,10 @@ interface BriefsHeaderProps {
 
 /**
  * The Briefs chip row (decisions A, B): the shared SectionHeader with the All
- * / Open / Closed chips. Sort and New brief live in the app top bar
- * ({@link briefsTopbarActions}); search lives only in the top bar's command
- * palette. Pure (no hooks) so the wiring is unit-tested by walking the
- * returned tree.
+ * / Open / Closed chips. New brief lives in the app top bar
+ * ({@link briefsTopbarActions}); there is no Sort (fixed order, 9 Nov 2026);
+ * search lives only in the top bar's command palette. Pure (no hooks) so the
+ * wiring is unit-tested by walking the returned tree.
  */
 export function briefsHeader(props: BriefsHeaderProps): ReactElement {
   return (
@@ -122,44 +113,38 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
   );
 }
 
+/** The blocked "+" toast on Briefs (no brief.create). */
+export const BRIEFS_PLUS_BLOCKED = 'Briefs come from approvers.';
+
 /** What Briefs publishes into the app top bar. */
 export interface BriefsTopbarProps {
-  /** Whether the viewer holds brief.create; the "+" shows only then. */
-  canCreate: boolean;
   /**
-   * The agency-side sort (Due date / Newest first). Omitted for client
-   * approvers: their list stays grouped by time, so they get no sort.
+   * brief.create: true = live "+", false = blocked "+" (toast says who
+   * creates), null = still unknown, empty slot (never a blocked "+" that
+   * turns live).
    */
-  sort?: { value: BriefSort; onChange: (value: BriefSort) => void };
+  canCreate: boolean | null;
 }
 
 /**
- * The top bar's sort and primary for Briefs (decision A): sort is the shared
- * SortMenu over BRIEF_SORT_OPTIONS (agency side only); primary is the filled
- * "+" labelled "New brief", carrying the old New brief induction key, only
- * where the person holds brief.create. Pure (no hooks).
+ * The top bar's primary for Briefs (decision A): the filled "+" labelled "New
+ * brief", carrying the old New brief induction key. It always shows once the
+ * capability is known; without brief.create it is blocked (9 Nov 2026). No
+ * sort: the list order is fixed. Pure (no hooks).
  */
 export function briefsTopbarActions(props: BriefsTopbarProps): {
-  sort: ReactElement | undefined;
   primary: ReactElement | undefined;
 } {
   return {
-    sort:
-      props.sort !== undefined ? (
-        <SortMenu
-          options={BRIEF_SORT_OPTIONS}
-          value={props.sort.value}
-          onChange={props.sort.onChange}
-          label="Sort"
+    primary:
+      props.canCreate === null ? undefined : (
+        <TopbarPlus
+          label="New brief"
+          induction={INDUCTION_KEYS.briefsNew}
+          onClick={() => dispatchSorted('sorted:create-brief')}
+          {...(props.canCreate ? {} : { blocked: { message: BRIEFS_PLUS_BLOCKED } })}
         />
-      ) : undefined,
-    primary: props.canCreate ? (
-      <TopbarPlus
-        label="New brief"
-        induction={INDUCTION_KEYS.briefsNew}
-        onClick={() => dispatchSorted('sorted:create-brief')}
-      />
-    ) : undefined,
+      ),
   };
 }
 
@@ -198,16 +183,16 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
 
 /** Which empty state the list shows when no card is visible. */
 export type BriefsEmpty =
-  /** A client with no open briefs: one line (the header's New brief is the only create). */
+  /** An approver with no open briefs: one line (the top bar's "+" is the only create). */
   | { kind: 'client-empty' }
-  /** The agency side with no briefs at all: one line, no heading. */
+  /** The creator side with no briefs at all: one line, no heading. */
   | { kind: 'agency-empty' }
   /** A chip with nothing under it: one line only. */
   | { kind: 'filtered'; title: string };
 
 /**
- * Pick the empty state. A workspace with no briefs at all (client or agency
- * copy), then the chip: Closed has its own heading; a client on Open (nothing
+ * Pick the empty state. A workspace with no briefs at all (approver or creator
+ * copy), then the chip: Closed has its own heading; an approver on Open (nothing
  * open) gets the "Open briefs show up here." state. Pure.
  */
 export function briefsEmptyState(
@@ -223,14 +208,14 @@ export function briefsEmptyState(
 }
 
 /**
- * The agency-side flat list: status chip, then the chosen sort. Re-narrows
- * each surviving row back to its BriefWithThumbnail (same object reference)
- * via an id map, as {@link deriveBriefGroups} does. Pure.
+ * The creator-side flat list: status chip, then the fixed order (open by due
+ * date, undated last; closed by closed_at newest first; open block first on
+ * All). Re-narrows each surviving row back to its BriefWithThumbnail (same
+ * object reference) via an id map, as {@link deriveBriefGroups} does. Pure.
  */
 export function deriveSortedBriefs(
   briefs: BriefWithThumbnail[],
   filter: BriefFilter,
-  sort: BriefSort,
 ): BriefWithThumbnail[] {
   const byId = new Map(briefs.map((brief) => [brief.id, brief]));
   const filtered = filterBriefsByStatus(briefs, filter);
@@ -238,7 +223,7 @@ export function deriveSortedBriefs(
     const full = byId.get(brief.id);
     return full !== undefined ? [full] : [];
   });
-  return sortBriefs(narrowed, sort);
+  return orderBriefsFixed(narrowed);
 }
 
 const LIST_CLASS = cn(GUTTER, 'py-4 flex flex-col gap-6');
@@ -331,8 +316,8 @@ export function capBriefGroups<T>(groups: BriefGroup<T>[], count: number): Brief
 }
 
 /** The sessionStorage key for the Briefs list's Load more depth under one view. */
-export function briefsShownKey(workspaceId: string | null, filter: string, sort: string): string {
-  return `briefs:shown:${workspaceId ?? ''}:${filter}:${sort}`;
+export function briefsShownKey(workspaceId: string | null, filter: string, view: string): string {
+  return `briefs:shown:${workspaceId ?? ''}:${filter}:${view}`;
 }
 
 export function deriveBriefGroups(
@@ -407,21 +392,10 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
 }
 
 /**
- * The toast after Create. A lost note is a partial failure: the error tone with
- * "Add note", which opens the new brief with its comment box focused; never the
- * success style. Pure apart from the navigate it is handed.
+ * The toast after Create (one write: the brief itself). Pure apart from the
+ * navigate it is handed.
  */
 export function createdToast(created: BriefCreated, navigate: (to: string) => void): ToastOptions {
-  if (created.noteFailed) {
-    return {
-      title: 'Brief created. Your note did not post.',
-      tone: 'error',
-      action: {
-        label: 'Add note',
-        onPress: () => navigate(`/briefs/${created.briefId}?${BRIEF_NOTE_PARAM}=1`),
-      },
-    };
-  }
   return {
     title: 'Brief created',
     tone: 'success',
@@ -440,7 +414,7 @@ export function briefsEmptyView(state: BriefsEmpty): ReactElement {
     case 'client-empty':
       return <EmptyState icon={icon} title="Open briefs show up here." />;
     case 'agency-empty':
-      return <EmptyState icon={icon} title="Briefs from the client show up here." />;
+      return <EmptyState icon={icon} title="Briefs from approvers show up here." />;
     case 'filtered':
       return <EmptyState icon={icon} title={state.title} />;
   }
@@ -452,13 +426,13 @@ export function BriefsPage() {
   // The provider's stable show (the wrapper object is new each render).
   const showToast = toast?.show;
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
-  // New brief is an approver action: the "+" shows only where the role holds brief.create.
-  const canCreateBrief = useWorkspaceCapability('brief.create') === true;
-  // The agency side (no brief.create) sorts a flat list; the client keeps the
-  // time sections. Persisted per page like Pipeline; a stale value heals.
-  const { value: storedSort, setValue: setSort } = useSort<BriefSort>('briefs', BRIEF_SORT_DEFAULT);
-  const sort = sanitizeBriefSort(storedSort);
-  const showSort = !canCreateBrief;
+  // New brief is an approver action: live "+" with brief.create, blocked "+"
+  // without, empty slot while unknown (cached capability, no new read).
+  const briefCreate = useWorkspaceCapability('brief.create');
+  const canCreateBrief = briefCreate === true;
+  // The creator side (no brief.create) shows a flat list in the fixed order;
+  // approvers keep the time sections.
+  const showFlat = !canCreateBrief;
   // The active workspace's civil calendar: the sections and the day headings are
   // read on the WORKSPACE zone and week start, never the browser's. Derived the
   // same way the Pipeline surface derives it; the helpers re-validate the zone,
@@ -759,15 +733,15 @@ export function BriefsPage() {
   );
 
   const sortedBriefs = useMemo(
-    () => (showSort ? deriveSortedBriefs(workspaceBriefs, filter, sort) : []),
-    [showSort, workspaceBriefs, filter, sort],
+    () => (showFlat ? deriveSortedBriefs(workspaceBriefs, filter) : []),
+    [showFlat, workspaceBriefs, filter],
   );
 
   // The list's one clock: every card's time ("Today", "2d late", "3h")
   // reads the same instant and ages once a minute; no timer per card.
   const nowMs = useMinuteClock();
 
-  const shownCount = showSort
+  const shownCount = showFlat
     ? sortedBriefs.length
     : groups.reduce((sum, group) => sum + group.items.length, 0);
 
@@ -776,7 +750,7 @@ export function BriefsPage() {
   // the next server page only once the loaded ones are all shown). The depth is
   // kept per view for the session, so Back lands on the same rows.
   const fill = useFillCount();
-  const depthKey = briefsShownKey(workspaceId, filter, showSort ? sort : 'sections');
+  const depthKey = briefsShownKey(workspaceId, filter, showFlat ? 'fixed' : 'sections');
   const [depth, setDepth] = useState(() => readShown(depthKey, fill));
   useEffect(() => setDepth(readShown(depthKey, fill)), [depthKey, fill]);
   const hiddenCount = Math.max(0, shownCount - depth);
@@ -812,8 +786,8 @@ export function BriefsPage() {
   useKeptScroll(viewKey('briefs:scroll'), !listLoading && !loadFailed);
 
   // BriefCard renders its own root, so the first rendered card is marked for the
-  // induction from here (attribute only). Re-run each render: the chip or sort
-  // can change which card is first, so a stale mark is cleared first.
+  // induction from here (attribute only). Re-run each render: the chip can
+  // change which card is first, so a stale mark is cleared first.
   const listRef = useRef<HTMLDivElement>(null);
   // Boxes only while nothing is held; the cards settle once when they land
   // after the boxes (a kept list paints at once and never settles).
@@ -831,16 +805,9 @@ export function BriefsPage() {
     });
   });
 
-  // Sort (agency side) and New brief ride the app top bar (decision A);
-  // memoised so the bar only re-renders when one of them changes.
-  const topbar = useMemo(
-    () =>
-      briefsTopbarActions({
-        canCreate: canCreateBrief,
-        ...(showSort ? { sort: { value: sort, onChange: setSort } } : {}),
-      }),
-    [canCreateBrief, showSort, sort, setSort],
-  );
+  // New brief rides the app top bar (decision A); memoised so the bar only
+  // re-renders when it changes.
+  const topbar = useMemo(() => briefsTopbarActions({ canCreate: briefCreate }), [briefCreate]);
   useTopbarActions(topbar);
 
   return (
@@ -860,7 +827,7 @@ export function BriefsPage() {
         <BriefsListSkeleton />
       ) : shownCount === 0 ? (
         briefsEmptyView(briefsEmptyState(filter, workspaceBriefs.length, canCreateBrief))
-      ) : showSort ? (
+      ) : showFlat ? (
         <div ref={listRef} className={LIST_CLASS}>
           <div className={GRID_CLASS}>
             {briefCardList({
@@ -886,7 +853,7 @@ export function BriefsPage() {
         </div>
       )}
 
-      {/* Older briefs load a page at a time; chips and sort narrow what is
+      {/* Older briefs load a page at a time; chips narrow what is
           loaded, while the chip counts are server totals. */}
       {!listFailed && !listLoading
         ? briefsLoadMore(next, loadingMore, onLoadMore, hiddenCount)

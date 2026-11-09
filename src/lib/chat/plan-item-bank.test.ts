@@ -64,7 +64,7 @@ describe('bucket picks', () => {
 describe('Who can see this', () => {
   it('team only and client lines', () => {
     expect(TEAM_ONLY_LINE).toBe(
-      'The client sees it once it is in a shared plan, or when you show it.',
+      'Approvers see it once it is in a shared plan, or when you show it.',
     );
     expect(clientSeesLine('Asha and Ravi')).toBe(
       'Asha and Ravi see this idea and all its comments.',
@@ -106,7 +106,7 @@ describe('More menu per kind', () => {
       'Plan it',
       'Edit idea',
       'Send to chat',
-      'Show to client',
+      'Show to approvers',
       'Star',
       'Archive',
       'Delete',
@@ -117,7 +117,7 @@ describe('More menu per kind', () => {
       'Plan it',
       'Edit idea',
       'Send to chat',
-      'Hide from client',
+      'Hide from approvers',
       'Unstar',
       'Unarchive',
       'Delete',

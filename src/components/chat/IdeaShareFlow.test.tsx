@@ -66,9 +66,9 @@ describe('idea_not_shared_with_client sheet path', () => {
   it('the refusal is recognised and the sheet names the chat and the comment count', () => {
     expect(isIdeaNotSharedWithClient('P0001: idea_not_shared_with_client')).toBe(true);
     expect(isIdeaNotSharedWithClient('idea not available')).toBe(false);
-    expect(IDEA_SHOW_TITLE).toBe('Show this idea to the client?');
+    expect(IDEA_SHOW_TITLE).toBe('Show this idea to approvers?');
     expect(ideaShowLine('Acme', 4)).toBe(
-      'This idea is team only and Acme has the client in it. Showing it lets them see the idea and all 4 comments.',
+      'This idea is team only and Acme has approvers in it. Showing it lets them see the idea and all 4 comments.',
     );
     expect(ideaShowLine('Acme', 1)).toContain('all 1 comment.');
   });

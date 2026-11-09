@@ -60,7 +60,7 @@ async function visibleText(page: Page): Promise<string> {
 /** Registers the no entity codes tests; called from an area spec (see scripts/ci/e2e-areas.ts). */
 export function noEntityCodesCases(): void {
   test.describe('no entity codes', () => {
-    test('brief page: no KEY-N code; the ⋯ menu offers Copy link, Copy brief and Reopen brief', async ({
+    test('brief page: no KEY-N code; Reopen brief is the header button, the ⋯ menu offers Copy link and Copy brief', async ({
       page,
     }) => {
       const network = await installHarnessNetwork(page);
@@ -74,13 +74,10 @@ export function noEntityCodesCases(): void {
       expect(await visibleText(page)).not.toMatch(CODE);
       await expect(page.getByText('HS-7', { exact: false })).toHaveCount(0);
 
+      await expect(page.getByRole('button', { name: 'Reopen brief', exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'More actions', exact: true }).first().click();
       const menu = page.getByRole('menu', { name: 'Brief actions' });
-      await expect(menu.getByRole('menuitem')).toHaveText([
-        'Copy link',
-        'Copy brief',
-        'Reopen brief',
-      ]);
+      await expect(menu.getByRole('menuitem')).toHaveText(['Copy link', 'Copy brief']);
       expect(await visibleText(page)).not.toMatch(CODE);
       expectNoBlocked(network);
     });

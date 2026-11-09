@@ -11,6 +11,7 @@ import {
   useTopbarActions,
   useTopbarActionsValue,
 } from '@/components/shell/topbar-actions';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -92,5 +93,46 @@ describe('topbar actions (decision A)', () => {
     expect(html).toContain('data-topbar-plus=""');
     expect(html).toContain('h-11');
     expect(html).not.toContain('>New post<');
+  });
+
+  it('TopbarPlus blocked: same slot, aria-disabled (not disabled), a tap toasts and stays blocked', async () => {
+    let created = 0;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(
+        <ToastProvider>
+          <TopbarPlus
+            label="New brief"
+            onClick={() => {
+              created += 1;
+            }}
+            blocked={{ message: 'Briefs come from approvers.' }}
+          />
+          <ToastViewport />
+        </ToastProvider>,
+      );
+    });
+    const btn = document.querySelector<HTMLButtonElement>('[data-topbar-plus]');
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('aria-label')).toBe('New brief');
+    expect(btn?.getAttribute('aria-disabled')).toBe('true');
+    expect(btn?.hasAttribute('disabled')).toBe(false);
+    expect(btn?.className).toContain('h-11');
+    await act(async () => {
+      btn?.click();
+    });
+    expect(created).toBe(0);
+    expect(document.body.textContent).toContain('Briefs come from approvers.');
+    expect(btn?.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('TopbarPlus blocked outside a ToastProvider: a tap does nothing and never throws', () => {
+    const html = renderToStaticMarkup(
+      <TopbarPlus label="New post" onClick={() => {}} blocked={{ message: 'x' }} />,
+    );
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain(' disabled=""');
   });
 });

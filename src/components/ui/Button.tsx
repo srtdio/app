@@ -51,10 +51,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // Disabled never fades: filled buttons turn solid fg-3 with accent-fg text,
 // the rest take text-fg-3; no hover (pointer-events-none), default cursor.
 const BUTTON_BASE =
-  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 text-base font-medium select-none disabled:pointer-events-none disabled:cursor-default focus-visible:lit-focus';
+  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 text-base font-medium select-none disabled:pointer-events-none disabled:cursor-default aria-disabled:cursor-default focus-visible:lit-focus';
 
-const FILLED_DISABLED = 'disabled:bg-fg-3 disabled:text-accent-fg';
-const QUIET_DISABLED = 'disabled:text-fg-3';
+// aria-disabled twins (9 Nov): a blocked control (TopbarPlus blocked) keeps
+// taps alive so it can say why, and looks exactly like disabled.
+const FILLED_DISABLED =
+  'disabled:bg-fg-3 disabled:text-accent-fg aria-disabled:bg-fg-3 aria-disabled:text-accent-fg';
+const QUIET_DISABLED = 'disabled:text-fg-3 aria-disabled:text-fg-3';
 
 /** The BUTTON level: solid soft grey, no border, no lighting. */
 export const BUTTON_LEVEL_CLASS = `bg-fg/10 text-fg hover:bg-fg/15 ${QUIET_DISABLED}`;

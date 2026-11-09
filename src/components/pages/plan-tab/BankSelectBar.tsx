@@ -1,7 +1,7 @@
 // The Bank's select bar (ui/SelectBar): a long-press (phone) or right-click /
 // Shift-click / Cmd-click (laptop) on an idea card enters select mode with it
 // ticked. The bar carries every row the card's old ⋮ menu held: Open, Plan it
-// and Send to chat for one idea only; Show to client / Hide from client, Star /
+// and Send to chat for one idea only; Show to approvers / Hide from approvers, Star /
 // Unstar, Archive / Unarchive and Delete (last, bad ink) for any count. The
 // toggles follow the selection: every picked idea already starred reads
 // Unstar, else Star (it stars the rest); the same for Hide / Show and
@@ -24,6 +24,7 @@ import {
   IconTrash,
 } from '@/components/ui/icons';
 import type { BankIdea } from '@/lib/chat/plans';
+import { HIDE_FROM_CLIENT_LABEL, SHOW_TO_CLIENT_LABEL } from '@/lib/chat/plan-item-bank';
 
 /** A select bar action; `single` rows show only with exactly one idea ticked. */
 export type BankSelectAction = SelectBarAction & { single?: boolean };
@@ -33,9 +34,9 @@ export interface BankSelectHandlers {
   onOpen: (idea: BankIdea) => void;
   onPlanIt: (idea: BankIdea) => void;
   onSend: (idea: BankIdea) => void;
-  /** Show to client: the ideas not yet shown (the warning sheet first). */
+  /** Show to approvers: the ideas not yet shown (the warning sheet first). */
   onShow: (ideas: BankIdea[]) => void;
-  /** Hide from client: every picked idea (all shown). */
+  /** Hide from approvers: every picked idea (all shown). */
   onHide: (ideas: BankIdea[]) => void;
   /** Star the unstarred (on) or unstar every picked idea (off). */
   onStar: (ideas: BankIdea[], on: boolean) => void;
@@ -88,14 +89,14 @@ export function bankSelectActions(
     allShown
       ? {
           id: 'hide',
-          label: 'Hide from client',
+          label: HIDE_FROM_CLIENT_LABEL,
           icon: IconEyeOff,
           hooks: { 'data-bank-select-show': 'hide' },
           onSelect: () => handlers.onHide([...picked]),
         }
       : {
           id: 'show',
-          label: 'Show to client',
+          label: SHOW_TO_CLIENT_LABEL,
           icon: IconEye,
           hooks: { 'data-bank-select-show': 'show' },
           onSelect: () => handlers.onShow(picked.filter((i) => i.show_to_client !== true)),

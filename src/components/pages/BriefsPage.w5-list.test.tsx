@@ -3,9 +3,10 @@
 // Retry and never the server's text, and Retry re-runs the same workspace read;
 // the read is workspace-scoped and keyset paged on the server (Load more); the
 // chip defaults to Open and lives in the URL; there is no screen search (decision B);
-// empty states (no Clear); the agency sort and the client "+" are published into
-// the top bar (decision A); the loading skeleton; cards carry a real title link
-// with no buttons nested in a role=link, and no Close.
+// empty states (no Clear); the "+" (live for approvers, blocked for creators) is
+// published into the top bar (decision A), and there is no Sort; the loading
+// skeleton; cards carry a real title link with no buttons nested in a role=link,
+// and no Close.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -16,7 +17,7 @@ import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom has no matchMedia; the agency-side SortMenu reads it. A phone-width stub.
+// jsdom has no matchMedia; a phone-width stub for the parts that read it.
 if (typeof window.matchMedia !== 'function') {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
@@ -32,7 +33,7 @@ if (typeof window.matchMedia !== 'function') {
 const { listBriefs, countBriefs, capability } = vi.hoisted(() => ({
   listBriefs: vi.fn(),
   countBriefs: vi.fn(),
-  capability: { create: true },
+  capability: { create: true as boolean | null },
 }));
 
 vi.mock('@/lib/brief-list', async (importOriginal) => {
@@ -311,29 +312,74 @@ describe('Briefs list filter (no screen search)', () => {
     expect(clearText()).toBeUndefined();
   });
 
-  it('agency with no briefs: one line, no heading, no create button', async () => {
+  it('creator with no briefs: one line, no heading, only the blocked top bar "+"', async () => {
     capability.create = false;
     listBriefs.mockResolvedValue({ ok: true, data: [] });
     await mount();
-    expect(button('New brief')).toBeUndefined();
-    expect(text()).toContain('Briefs from the client show up here.');
+    const plus = button('New brief');
+    expect(plus).toBeDefined();
+    expect(plus!.closest('[data-topbar-probe]')).not.toBeNull();
+    expect(plus!.getAttribute('aria-disabled')).toBe('true');
+    expect(plus!.hasAttribute('disabled')).toBe(false);
+    expect(text()).toContain('Briefs from approvers show up here.');
     expect(text()).not.toContain('No briefs yet');
     expect(text()).not.toContain('Open briefs show up here.');
   });
 });
 
-describe('Briefs sort and loading', () => {
-  it('agency side publishes the Sort control into the top bar; the client side does not', async () => {
+describe('Briefs top bar and loading', () => {
+  it('no Sort on either side (fixed order, 9 Nov 2026)', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
     capability.create = false;
     await mount();
-    expect(button('Sort')).toBeDefined();
-    expect(button('Sort')!.closest('[data-topbar-probe]')).not.toBeNull();
+    expect(button('Sort')).toBeUndefined();
     act(() => root?.unmount());
     document.body.innerHTML = '';
     capability.create = true;
     await mount();
     expect(button('Sort')).toBeUndefined();
+  });
+
+  it('capability still unknown: the "+" slot stays empty (never a blocked "+" that turns live)', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
+    capability.create = null;
+    await mount();
+    expect(button('New brief')).toBeUndefined();
+  });
+
+  it('creator list: open by due date (undated last), then closed by closed_at newest first', async () => {
+    capability.create = false;
+    listBriefs.mockResolvedValue({
+      ok: true,
+      data: [
+        brief('undated', { title: 'Undated', target_date: null }),
+        brief('later', { title: 'Later', target_date: '2099-02-01' }),
+        brief('sooner', { title: 'Sooner', target_date: '2099-01-01' }),
+        brief('shut-old', {
+          title: 'Shut old',
+          status: 'closed',
+          closed_at: '2026-01-01T00:00:00Z',
+        }),
+        brief('shut-new', {
+          title: 'Shut new',
+          status: 'closed',
+          closed_at: '2026-06-01T00:00:00Z',
+        }),
+      ],
+    });
+    await mount('/briefs?status=all');
+    const ids = [...document.querySelectorAll('[data-brief-card]')].map((card) =>
+      card.textContent?.includes('Undated')
+        ? 'undated'
+        : card.textContent?.includes('Later')
+          ? 'later'
+          : card.textContent?.includes('Sooner')
+            ? 'sooner'
+            : card.textContent?.includes('Shut old')
+              ? 'shut-old'
+              : 'shut-new',
+    );
+    expect(ids).toEqual(['sooner', 'later', 'undated', 'shut-new', 'shut-old']);
   });
 
   it('shows a list-shaped skeleton while loading, never "Loading briefs"', async () => {

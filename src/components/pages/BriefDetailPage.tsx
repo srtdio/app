@@ -24,7 +24,6 @@ import { useOptionalToast } from '@/components/ui/toast';
 import {
   ICON_SIZE,
   IconBriefs,
-  IconCheck,
   IconCopy,
   IconLink,
   IconPlus,
@@ -314,38 +313,37 @@ export function briefCopyLink(
 
 /**
  * The header ⋯ menu's rows (ui/ActionMenu), on every brief for every member:
- * Copy link, Copy brief, then Close brief (open, and the viewer may close) or
- * Reopen brief (closed, any member). Briefs are never deleted, so there is no
- * Delete row. Pure.
+ * Copy link and Copy brief only. Close / Reopen moved to the header button
+ * ({@link briefStatusAction}, 9 Nov 2026). Briefs are never deleted, so there
+ * is no Delete row. Pure.
  */
 export function briefMenuItems(args: {
-  closed: boolean;
-  canClose: boolean;
   onCopyLink: () => void;
   onCopyBrief: () => void;
-  onCloseBrief: () => void;
-  onReopenBrief: () => void;
 }): ActionMenuItem[] {
-  const items: ActionMenuItem[] = [
+  return [
     { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: args.onCopyLink },
     { id: 'copy-brief', label: 'Copy brief', icon: IconCopy, onSelect: args.onCopyBrief },
   ];
+}
+
+/**
+ * The header's BUTTON-level action before the ⋮ (9 Nov 2026): "Close brief"
+ * while open and the viewer may close, "Reopen brief" while closed (any
+ * member), else none. Same rules, handlers, undo and audit as the old menu
+ * rows. Pure.
+ */
+export function briefStatusAction(args: {
+  closed: boolean;
+  canClose: boolean;
+  onCloseBrief: () => void;
+  onReopenBrief: () => void;
+}): { id: 'close-brief' | 'reopen-brief'; label: string; onPress: () => void } | null {
   if (args.closed) {
-    items.push({
-      id: 'reopen-brief',
-      label: 'Reopen brief',
-      icon: IconBriefs,
-      onSelect: args.onReopenBrief,
-    });
-  } else if (args.canClose) {
-    items.push({
-      id: 'close-brief',
-      label: 'Close brief',
-      icon: IconCheck,
-      onSelect: args.onCloseBrief,
-    });
+    return { id: 'reopen-brief', label: 'Reopen brief', onPress: args.onReopenBrief };
   }
-  return items;
+  if (args.canClose) return { id: 'close-brief', label: 'Close brief', onPress: args.onCloseBrief };
+  return null;
 }
 
 export function BriefDetailPage({
@@ -717,6 +715,12 @@ export function BriefDetailPage({
   const links = briefExternalLinks(brief.reference_links, gallery);
   const mediaItems = briefMediaItems(gallery);
   const canClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
+  const statusAction = briefStatusAction({
+    closed,
+    canClose,
+    onCloseBrief: closeWithUndo,
+    onReopenBrief: reopenWithUndo,
+  });
   const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
   const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone, new Date(nowMs));
@@ -839,6 +843,16 @@ export function BriefDetailPage({
           </span>
         </span>,
         <>
+          {statusAction !== null ? (
+            <Button
+              variant="secondary"
+              data-brief-status-action={statusAction.id}
+              className="shrink-0 whitespace-nowrap"
+              onClick={statusAction.onPress}
+            >
+              {statusAction.label}
+            </Button>
+          ) : null}
           {showNewPost && isLaptop ? (
             <Button
               variant="primary"
@@ -852,14 +866,7 @@ export function BriefDetailPage({
           <span data-brief-more="" className="flex shrink-0">
             <ActionMenu
               title="Brief actions"
-              items={briefMenuItems({
-                closed,
-                canClose,
-                onCopyLink: copyLink,
-                onCopyBrief: copyBrief,
-                onCloseBrief: closeWithUndo,
-                onReopenBrief: reopenWithUndo,
-              })}
+              items={briefMenuItems({ onCopyLink: copyLink, onCopyBrief: copyBrief })}
             />
           </span>
         </>,

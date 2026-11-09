@@ -4,7 +4,7 @@
 // (chat_plan_item_share, a fresh message id; published live when the chat is
 // not the open one, added to the open thread when it is). A team-only idea
 // into a chat with the client in it is refused (idea_not_shared_with_client):
-// a bank idea gets "Show this idea to the client?" (Cancel, Send in Team
+// a bank idea gets "Show this idea to approvers?" (Cancel, Send in Team
 // instead: the picker again, chats known to have a client left out; Show and
 // send: bank_idea_set show_to_client true keeping its other flags, then the
 // share again with the same message id). An idea inside a Draft plan gets the
@@ -46,7 +46,7 @@ export interface IdeaShareTarget {
   plan?: { id: string; title: string } | null;
 }
 
-/** Which sheet a refused share opens: the plan path for a planned idea, else Show to client. Pure. */
+/** Which sheet a refused share opens: the plan path for a planned idea, else Show to approvers. Pure. */
 export function refusedPath(idea: Pick<IdeaShareTarget, 'plan'>): 'open-plan' | 'show-idea' {
   return idea.plan !== undefined && idea.plan !== null ? 'open-plan' : 'show-idea';
 }
@@ -73,11 +73,11 @@ export async function openPlanThenShareIdea(deps: {
   }
 }
 
-export const IDEA_SHOW_TITLE = 'Show this idea to the client?';
+export const IDEA_SHOW_TITLE = 'Show this idea to approvers?';
 
 /** The Show and send sheet's line. Pure. */
 export function ideaShowLine(chatName: string, comments: number): string {
-  return `This idea is team only and ${chatName} has the client in it. Showing it lets them see the idea and all ${comments} ${comments === 1 ? 'comment' : 'comments'}.`;
+  return `This idea is team only and ${chatName} has approvers in it. Showing it lets them see the idea and all ${comments} ${comments === 1 ? 'comment' : 'comments'}.`;
 }
 
 /** Whether a chat_plan_item_share failure is the team-only-idea refusal. Pure. */

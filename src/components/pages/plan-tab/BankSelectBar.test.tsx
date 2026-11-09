@@ -158,10 +158,10 @@ describe('bankSelectActions: the toggles follow the selection', () => {
   it('every idea shown reads Hide from client; else Show to client for the rest', () => {
     const shown = idea('s', { show_to_client: true });
     const team = idea('t');
-    expect(byId([shown], 'hide')?.label).toBe('Hide from client');
+    expect(byId([shown], 'hide')?.label).toBe('Hide from approvers');
     byId([shown], 'hide')?.onSelect();
     expect(calls.onHide).toHaveBeenCalledWith([shown]);
-    expect(byId([shown, team], 'show')?.label).toBe('Show to client');
+    expect(byId([shown, team], 'show')?.label).toBe('Show to approvers');
     byId([shown, team], 'show')?.onSelect();
     expect(calls.onShow).toHaveBeenCalledWith([team]);
   });

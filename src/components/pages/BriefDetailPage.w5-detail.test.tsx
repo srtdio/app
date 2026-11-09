@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // W5 Brief detail: a load failure shows LoadError ("Couldn't load this brief.")
 // with Retry and never the server's text, and Retry re-reads; not-found is its
-// own state; the header ⋯ menu is on every brief: Copy link always, Close
-// brief (open, gated on brief.close or brief.close_own for the creator; no
-// confirm, it commits brief_close only after the Undo window) or Reopen brief
-// (closed, any member; optimistic, commits brief_reopen after the Undo window);
+// own state; the header ⋯ menu is on every brief: Copy link and Copy brief only;
+// the header button before it (9 Nov 2026) is Close brief (open, gated on
+// brief.close or brief.close_own for the creator; no confirm, it commits
+// brief_close only after the Undo window) or Reopen brief (closed, any member;
+// optimistic, commits brief_reopen after the Undo window);
 // no KEY-N code anywhere; Copy brief in the menu (no copy icons on section
 // labels); Created by skeleton; no helper text; Back pops in-app history or goes
 // to /briefs; the top bar status line; details as two lines; linked posts.
@@ -156,9 +157,10 @@ async function openMenu(): Promise<void> {
 const ROW_IDS: Record<string, string> = {
   'Copy link': 'brief-menu-copy-link',
   'Copy brief': 'brief-menu-copy-brief',
-  'Close brief': 'brief-menu-close',
-  'Reopen brief': 'brief-menu-reopen',
 };
+/** The header's BUTTON-level Close / Reopen action (before the ⋯). */
+const statusAction = () =>
+  document.querySelector<HTMLButtonElement>('button[data-brief-status-action]');
 /** The open menu's rows as [id, label], in order. */
 const menuRows = (): [string, string][] =>
   [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].map(
@@ -232,7 +234,7 @@ describe('Brief detail load failure', () => {
 });
 
 describe('Brief detail close', () => {
-  it('without a close capability the ⋯ menu offers Copy link only, no Close anywhere', async () => {
+  it('without a close capability: no header button; the ⋯ menu offers Copy link and Copy brief', async () => {
     h.getBrief.mockResolvedValue(detail());
     await mount();
     expect(byLabel('More actions')).not.toBeNull();
@@ -246,13 +248,16 @@ describe('Brief detail close', () => {
     expect(button('Reopen brief')).toBeUndefined();
   });
 
-  it('brief.close: Close is in the ⋯ menu and closes at once behind Undo, no confirm', async () => {
+  it('brief.close: Close brief is a header button (secondary) and closes at once behind Undo, no confirm', async () => {
     h.caps = { 'brief.close': true };
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    expect(button('Close brief')).toBeUndefined();
-    await act(async () => byLabel('More actions')?.click());
-    await act(async () => menuRow('brief-menu-close')?.click());
+    const action = statusAction();
+    expect(action?.textContent?.trim()).toBe('Close brief');
+    expect(action?.getAttribute('data-brief-status-action')).toBe('close-brief');
+    expect(action?.className).toContain('bg-fg/10');
+    expect(action?.className).toContain('whitespace-nowrap');
+    await act(async () => action?.click());
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(text()).toContain('Brief closed');
     expect(text()).toContain('Closed');
@@ -267,8 +272,7 @@ describe('Brief detail close', () => {
     h.caps = { 'brief.close': true };
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    await act(async () => byLabel('More actions')?.click());
-    await act(async () => menuRow('brief-menu-close')?.click());
+    await act(async () => statusAction()?.click());
     act(() => root?.unmount());
     root = null;
     expect(h.briefClose).toHaveBeenCalledTimes(1);
@@ -279,19 +283,13 @@ describe('Brief detail close', () => {
     h.caps = { 'brief.close_own': true };
     h.getBrief.mockResolvedValue(detail({ created_by: 'u1' }));
     await mount();
-    await openMenu();
-    expect(menuRows().map(([id]) => id)).toEqual([
-      'brief-menu-copy-link',
-      'brief-menu-copy-brief',
-      'brief-menu-close',
-    ]);
+    expect(statusAction()?.textContent?.trim()).toBe('Close brief');
     act(() => root?.unmount());
     document.body.innerHTML = '';
     h.viewer = 'u2';
     await mount();
     expect(byLabel('More actions')).not.toBeNull();
-    await openMenu();
-    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-copy-brief']);
+    expect(statusAction()).toBeNull();
   });
 
   it('canCloseBrief: close, or close_own for the creator only', () => {
@@ -304,7 +302,7 @@ describe('Brief detail close', () => {
 });
 
 describe('Brief detail ⋯ menu rows', () => {
-  it('an open brief with close rights: Copy link, Copy brief, then Close brief', async () => {
+  it('an open brief with close rights: the menu is Copy link and Copy brief; Close is the header button', async () => {
     h.caps = { 'brief.close': true };
     h.getBrief.mockResolvedValue(detail());
     await mount();
@@ -315,9 +313,8 @@ describe('Brief detail ⋯ menu rows', () => {
     expect(menuRows()).toEqual([
       ['brief-menu-copy-link', 'Copy link'],
       ['brief-menu-copy-brief', 'Copy brief'],
-      ['brief-menu-close', 'Close brief'],
     ]);
-    expect(menuRow('brief-menu-reopen')).toBeNull();
+    expect(statusAction()?.textContent?.trim()).toBe('Close brief');
   });
 
   it('an open brief without close rights: Copy link and Copy brief only', async () => {
@@ -330,28 +327,25 @@ describe('Brief detail ⋯ menu rows', () => {
     ]);
   });
 
-  it('a closed brief, member without close rights: Copy link, Copy brief, then Reopen brief', async () => {
+  it('a closed brief, member without close rights: Reopen brief header button; menu Copy link, Copy brief', async () => {
     h.getBrief.mockResolvedValue(detail({ status: 'closed', created_by: 'u9' }));
     await mount();
     await openMenu();
     expect(menuRows()).toEqual([
       ['brief-menu-copy-link', 'Copy link'],
       ['brief-menu-copy-brief', 'Copy brief'],
-      ['brief-menu-reopen', 'Reopen brief'],
     ]);
-    expect(menuRow('brief-menu-close')).toBeNull();
+    expect(statusAction()?.textContent?.trim()).toBe('Reopen brief');
   });
 
   it('a closed brief never offers Close brief, even with close rights', async () => {
     h.caps = { 'brief.close': true, 'brief.close_own': true };
     h.getBrief.mockResolvedValue(detail({ status: 'closed' }));
     await mount();
+    expect(statusAction()?.textContent?.trim()).toBe('Reopen brief');
+    expect(button('Close brief')).toBeUndefined();
     await openMenu();
-    expect(menuRows().map(([id]) => id)).toEqual([
-      'brief-menu-copy-link',
-      'brief-menu-copy-brief',
-      'brief-menu-reopen',
-    ]);
+    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-copy-brief']);
   });
 
   it('every row is a 44px menu item and picking one closes the menu', async () => {
@@ -413,8 +407,7 @@ describe('Brief detail Copy link', () => {
 
 describe('Brief detail reopen', () => {
   async function reopen(): Promise<void> {
-    await openMenu();
-    await act(async () => menuRow('brief-menu-reopen')?.click());
+    await act(async () => statusAction()?.click());
   }
 
   it('flips to Open at once with a "Brief reopened" Undo, before any write', async () => {
@@ -426,7 +419,8 @@ describe('Brief detail reopen', () => {
     expect(text()).toContain('Brief reopened');
     expect(button('Undo')).toBeDefined();
     expect(h.reopenBrief).not.toHaveBeenCalled();
-    // Now open: the menu offers no Reopen (and no Close without rights).
+    // Now open: no Reopen (and no Close without rights) in the header.
+    expect(statusAction()).toBeNull();
     await openMenu();
     expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-copy-brief']);
   });
