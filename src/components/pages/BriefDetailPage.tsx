@@ -21,13 +21,7 @@ import { GUTTER } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
-import {
-  ICON_SIZE,
-  IconBriefs,
-  IconCopy,
-  IconLink,
-  IconPlus,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs, IconCopy, IconLink, IconPlus } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';

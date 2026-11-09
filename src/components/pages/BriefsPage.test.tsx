@@ -495,10 +495,7 @@ describe('deriveSortedBriefs (fixed order, 9 Nov 2026)', () => {
   });
 
   it('Closed: by closed_at newest first', () => {
-    expect(deriveSortedBriefs(briefs, 'closed').map((b) => b.id)).toEqual([
-      'shut-new',
-      'shut-old',
-    ]);
+    expect(deriveSortedBriefs(briefs, 'closed').map((b) => b.id)).toEqual(['shut-new', 'shut-old']);
   });
 
   it('All: the open block first, then the closed block, keeping object references', () => {
