@@ -880,10 +880,11 @@ export function NotificationsPage() {
             return (
               <section key={bucket.key} className="mt-2">
                 {/* One 44 line on the page edge: "YESTERDAY · 1 update" (Mark all read
-                    lives in the top bar). */}
+                    lives in the top bar). Text box to text box (9 Nov 2026): 24 from
+                    the day above's last text (8 + 16), 12 to the first card. */}
                 <div
                   data-activity-bucket-head=""
-                  className={cn('flex h-11 min-w-0 items-center gap-2', GUTTER)}
+                  className={cn('flex min-w-0 items-center gap-2 pb-3 pt-4', GUTTER)}
                 >
                   <Text as="h2" role="section" className="shrink-0">
                     {bucket.label}
@@ -910,6 +911,7 @@ export function NotificationsPage() {
                         selfName={selfName}
                         side={side}
                         entering={entering.has(group[0]?.id ?? '')}
+                        lastInDay={groupIndex === bucket.groups.length - 1}
                       />
                     );
                     // The newest card is what the induction points at (its own corners, not the padded list).

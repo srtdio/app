@@ -201,12 +201,37 @@ describe('Activity line: short, long, more, less, navigate', () => {
     expect(onOpen).toHaveBeenCalledWith(e);
   });
 
-  it('the accessible name carries the FULL text; the hit overlay is 12 past the text', () => {
+  it('the accessible name carries the FULL text; the hit overlay splits the line gap past the text', () => {
     mount([entry({ body: LONG })]);
     const open = q<HTMLElement>('[data-activity-line-open]');
     expect(open?.getAttribute('aria-label')).toContain(LONG);
     expect(open?.getAttribute('aria-label')).toContain('Priya');
-    expect(open?.className).toContain('-inset-y-3');
+    // Above + below = one line gap (8 / 12 / 16): neighbouring hits meet, never overlap.
+    expect(open?.className.split(' ')).toEqual(
+      expect.arrayContaining(['-top-1', '-bottom-2', 'compact:-bottom-1', 'calm:-top-2']),
+    );
+    expect(open?.className).toContain('min-h-0');
+    // The 44 tap: a ::before past the row box (E2E button system counts it), 8 radius (not flat).
+    expect(open?.className.split(' ')).toEqual(
+      expect.arrayContaining([
+        'before:absolute',
+        'before:-top-1',
+        'before:-bottom-2',
+        'compact:before:-inset-y-2',
+        'calm:before:-inset-y-1',
+      ]),
+    );
+    expect(open?.className).not.toContain('rounded-none');
+  });
+
+  it('the time is tied to the last word by a no-break space (never alone on a line)', () => {
+    mount([entry({ body: 'see slide 3.' })]);
+    const body = q<HTMLElement>('[data-activity-line-body]');
+    const time = q<HTMLElement>('[data-activity-line-time]');
+    const before = time?.previousSibling;
+    expect(before?.nodeType).toBe(Node.TEXT_NODE);
+    expect(before?.textContent?.endsWith('\u00a0')).toBe(true);
+    expect(body?.textContent).not.toMatch(/ \S+$/);
   });
 
   it('the dot slot stays when read, so the text never shifts', () => {

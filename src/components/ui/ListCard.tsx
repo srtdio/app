@@ -84,6 +84,12 @@ export interface ListCardProps {
   tagHooks?: ListCardHooks;
   /** Line 2 last: the 8px unread dot, only when true. */
   unread?: boolean;
+  /**
+   * The unread dot is named for screen readers but not drawn, so the tag ends
+   * on the right edge (under the time). Activity's item head only: its lines
+   * carry the dots on that edge. The title still bolds while unread.
+   */
+  unreadDotHidden?: boolean;
   /** Select mode for this list; absent: long-press and right-click do nothing. */
   select?: ListCardSelect | undefined;
   /** The card opens something: the whole card is one button. */
@@ -317,6 +323,7 @@ export function ListCard({
   tagDot,
   tagHooks,
   unread = false,
+  unreadDotHidden = false,
   select,
   onPress,
   press,
@@ -443,7 +450,7 @@ export function ListCard({
                 data-list-card-unread=""
                 role="img"
                 aria-label="Unread"
-                className={LIST_CARD_UNREAD_DOT}
+                className={unreadDotHidden ? 'sr-only' : LIST_CARD_UNREAD_DOT}
               />
             ) : null}
           </div>

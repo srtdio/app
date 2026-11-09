@@ -17,6 +17,7 @@
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prepush": "node --experimental-strip-types --no-warnings scripts/prepush.ts",
     "types:supabase": "(echo '// AUTO-GENERATED. Run pnpm types:supabase to refresh. Do not edit by hand.'; echo; supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public) > packages/schemas/src/supabase.generated.ts"
   },
   "dependencies": {

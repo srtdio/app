@@ -352,6 +352,13 @@ const REQUIRED: readonly string[] = [
   'post-comment-editing',
   // Alignment, one thread strip, Activity lines (9 Nov 2026).
   'activity-line-more-open',
+  // Activity in Compact and Calm (9 Nov 2026).
+  'activity-grouped-folded-calm',
+  'activity-grouped-folded-compact',
+  'activity-grouped-unfolded-calm',
+  'activity-grouped-unfolded-compact',
+  'activity-line-more-open-calm',
+  'activity-line-more-open-compact',
   'catch-up-thread-empty',
   'catch-up-thread-replies',
   'chat-thread-replies',
@@ -396,6 +403,12 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   ),
   'name: `pipeline-${density}`': ['compact', 'calm'].map((density) => `pipeline-${density}`),
   'name: `chat-list-${density}`': ['compact', 'calm'].map((density) => `chat-list-${density}`),
+  // Activity's grouped card in Compact and Calm (9 Nov 2026).
+  'name: `${base}-${density}`': [
+    'activity-grouped-folded',
+    'activity-grouped-unfolded',
+    'activity-line-more-open',
+  ].flatMap((base) => ['compact', 'calm'].map((density) => `${base}-${density}`)),
   // The platform preview, one per platform (post screen redo, 7 Nov 2026).
   'name: `post-preview-${p.slug}`': [
     'instagram',

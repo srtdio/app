@@ -18,7 +18,7 @@ Node 22 (`.nvmrc`), pnpm. Run `pnpm install` first.
 - `pnpm format` / `pnpm format:check` - Prettier
 - `pnpm types:supabase` - regenerate `packages/schemas/src/supabase.generated.ts` (needs `SUPABASE_PROJECT_ID`); never edit that file by hand
 
-These commands are for GitHub CI. Claude Code does not run them (see Speed rule).
+- `pnpm prepush` - the CI checks on the files changed vs origin/main (prettier, eslint, tsc, vitest related, design ratchet, and the visual screens + layout checks those files feed); see `scripts/prepush.ts`
 
 Single unit test: `pnpm exec vitest run src/lib/foo.test.ts`.
 
@@ -73,7 +73,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 
 ## Rules for Claude Code
 
-- Speed rule: never run pnpm test, pnpm build, pnpm typecheck, pnpm lint, e2e or any test suite locally. GitHub CI runs all checks. Write tests, do not run them. Do not wait for CI or the test site after pushing: push, open the PR, return the URL. No self-audit loops.
+- Run pnpm prepush on the exact tree before every push. One push per finished step. [update-visual-baselines] only on a PR's last push. A red CI run means prepush missed something: fix prepush too.
 - One PR per prompt.
 - Never auto-merge a PR.
 - Schema changes execute via the Supabase MCP only after Shubham approves them.

@@ -807,4 +807,53 @@ describe('alignmentViolations (9 Nov 2026: rules 1, 2, 3, 5 measured)', () => {
     expect(out.some((m) => m.includes('under 12'))).toBe(true);
     expect(out.some((m) => m.includes('not the same as'))).toBe(true);
   });
+
+  it('Activity gaps by density: exact values, Cozy when unset', async () => {
+    const { activityGaps } = await load();
+    expect(activityGaps('compact')).toEqual({
+      headToLine: 4,
+      lineToLine: 8,
+      labelToCard: 12,
+      dayToLabel: 24,
+    });
+    expect(activityGaps('cozy')).toEqual({
+      headToLine: 8,
+      lineToLine: 12,
+      labelToCard: 12,
+      dayToLabel: 24,
+    });
+    expect(activityGaps('calm')).toEqual({
+      headToLine: 12,
+      lineToLine: 16,
+      labelToCard: 12,
+      dayToLabel: 24,
+    });
+    expect(activityGaps(undefined)).toEqual(activityGaps('cozy'));
+  });
+
+  it("fails main's Activity numbers (24 between lines in Cozy) and a lone time", async () => {
+    const { alignmentViolations } = await load();
+    const out = alignmentViolations([
+      {
+        label: 'activity card 1 (cozy)',
+        textLefts: [],
+        rightEdges: [
+          { label: 'head time', x: 374 },
+          { label: 'head tag', x: 358 },
+        ],
+        gaps: [
+          { label: 'head card to line 1', gap: 12, equals: 8 },
+          { label: 'line 1 to line 2', gap: 24, equals: 12 },
+          { label: 'line 1 to line 2 (ok)', gap: 12.6, equals: 12 },
+        ],
+        loneTimes: ['line 4'],
+      },
+    ]);
+    expect(out).toEqual([
+      'activity card 1 (cozy): head tag ends at x 358, not on the right edge (head time 374)',
+      'activity card 1 (cozy): head card to line 1 is 12px, not 8',
+      'activity card 1 (cozy): line 1 to line 2 is 24px, not 12',
+      'activity card 1 (cozy): line 4 ends with the time alone on its last line',
+    ]);
+  });
 });

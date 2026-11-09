@@ -2957,6 +2957,36 @@ for (const density of ['compact', 'calm'] as const) {
   });
 }
 
+// Activity's grouped card in each density (9 Nov 2026; check 14 measures the
+// density's exact gaps): the Cozy screens boot in Cozy explicitly, Compact and
+// Calm are their twins.
+const ACTIVITY_DENSITY_SCREENS = [
+  'activity-grouped-folded',
+  'activity-grouped-unfolded',
+  'activity-line-more-open',
+] as const;
+for (const base of ACTIVITY_DENSITY_SCREENS) {
+  const screen = SCREENS.find((s) => s.name === base);
+  if (screen === undefined) throw new Error(`no ${base} screen`);
+  const steps = screen.steps;
+  screen.prepare = withDensity('cozy');
+  screen.steps = async (page) => {
+    await steps(page);
+    await expectDensity(page, 'cozy');
+  };
+  for (const density of ['compact', 'calm'] as const) {
+    SCREENS.push({
+      ...screen,
+      name: `${base}-${density}`,
+      prepare: withDensity(density),
+      steps: async (page) => {
+        await steps(page);
+        await expectDensity(page, density);
+      },
+    });
+  }
+}
+
 // The New chat sheet with New group blocked by the groups-per-workspace rule
 // (20261029120000_group_limit.sql): the workspace's group_allowance (1, the
 // default) is already used, so capabilities_for_workspace answers
@@ -6256,6 +6286,12 @@ const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
   'activity-grouped-folded': 'activity',
   'activity-grouped-unfolded': 'activity',
   'activity-line-more-open': 'activity',
+  'activity-grouped-folded-compact': 'activity',
+  'activity-grouped-unfolded-compact': 'activity',
+  'activity-line-more-open-compact': 'activity',
+  'activity-grouped-folded-calm': 'activity',
+  'activity-grouped-unfolded-calm': 'activity',
+  'activity-line-more-open-calm': 'activity',
   'chat-thread-screen': 'chat-thread',
   'chat-thread-view-divider': 'chat-thread',
   'chat-thread-replies': 'chat-thread',
@@ -6285,6 +6321,10 @@ const LIST_CARD_SCREENS = new Set([
   'activity-bank',
   'activity-grouped-folded',
   'activity-grouped-unfolded',
+  'activity-grouped-folded-compact',
+  'activity-grouped-unfolded-compact',
+  'activity-grouped-folded-calm',
+  'activity-grouped-unfolded-calm',
   'plan-tab',
   'plan-tab-live',
   'plan-tab-ended',
@@ -6433,6 +6473,13 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-thread-view-divider',
   // Alignment, one thread strip, Activity lines (9 Nov 2026): phone and laptop, light and dark.
   'activity-line-more-open',
+  // Activity in each density (9 Nov 2026): phone and laptop, light and dark.
+  'activity-grouped-folded-compact',
+  'activity-grouped-unfolded-compact',
+  'activity-line-more-open-compact',
+  'activity-grouped-folded-calm',
+  'activity-grouped-unfolded-calm',
+  'activity-line-more-open-calm',
   'chat-thread-replies',
   'catch-up-thread-empty',
   'catch-up-thread-replies',

@@ -874,6 +874,27 @@ export const TEXT_TO_HAIRLINE_MIN_PX = 12;
 /** Rule 2: the photo-to-text gap of a hung photo. */
 export const PHOTO_TEXT_GAP_PX = 12;
 
+/**
+ * Activity's spacing per density (9 Nov 2026), text box to text box, in px:
+ * the head card to its first line, a line to the next (and the last line to
+ * "+N more"), the day label to its first card, a day's last card to the next
+ * day label. Density reads <html data-density> (Cozy when unset).
+ */
+export const ACTIVITY_GAPS_BY_DENSITY = {
+  compact: { headToLine: 4, lineToLine: 8, labelToCard: 12, dayToLabel: 24 },
+  cozy: { headToLine: 8, lineToLine: 12, labelToCard: 12, dayToLabel: 24 },
+  calm: { headToLine: 12, lineToLine: 16, labelToCard: 12, dayToLabel: 24 },
+} as const;
+
+/** The Activity gaps for a density name (anything else reads Cozy). Pure. */
+export function activityGaps(
+  density: string | undefined,
+): (typeof ACTIVITY_GAPS_BY_DENSITY)[keyof typeof ACTIVITY_GAPS_BY_DENSITY] {
+  return density === 'compact' || density === 'calm'
+    ? ACTIVITY_GAPS_BY_DENSITY[density]
+    : ACTIVITY_GAPS_BY_DENSITY.cozy;
+}
+
 /** A measured x (a left or right edge) and what it is. */
 export interface EdgeAt {
   label: string;
@@ -902,6 +923,8 @@ export interface AlignFamily {
   gaps: GapAt[];
   /** Same relationship, same gap: these gaps are all equal (±1). */
   sameGaps?: GapAt[];
+  /** Lines whose last visual line holds only the time (a lone time; never allowed). */
+  loneTimes?: string[];
 }
 
 const sameEdge = (a: number, b: number): boolean => Math.abs(a - b) <= ALIGN_TOLERANCE_PX;
@@ -951,6 +974,9 @@ export function alignmentViolations(families: readonly AlignFamily[]): string[] 
       if (min !== undefined && g.gap < min - 0.5) {
         out.push(`${f.label}: ${g.label} is ${r1(g.gap)}px, under ${min}`);
       }
+    }
+    for (const label of f.loneTimes ?? []) {
+      out.push(`${f.label}: ${label} ends with the time alone on its last line`);
     }
     const same = f.sameGaps ?? [];
     const first = same[0];

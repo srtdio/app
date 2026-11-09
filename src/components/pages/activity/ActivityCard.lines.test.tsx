@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // 9 Nov 2026 (locked): every notification gets its own line, grouped by item.
 // A non-chat card is a head (item title, kind, "N new") and one line per
-// notification, newest first; 5 show, the rest fold behind "+N more" (44 tall,
-// aria-expanded) that turns into "Show less". A line opens ITS entry only.
+// notification, newest first; 5 show, the rest fold behind "+N more" (a 20
+// text box, aria-expanded) that turns into "Show less". A line opens ITS entry only.
 // Chat rows keep their one card.
 
 vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
@@ -132,6 +132,59 @@ const lines = (): HTMLElement[] => [
 const more = (): HTMLButtonElement | null =>
   document.querySelector<HTMLButtonElement>('[data-activity-more]');
 
+describe('Activity density gaps and the head edge (9 Nov 2026)', () => {
+  it('lines: head to line 1 4 / 8 / 12, line to line 8 / 12 / 16 (Compact / Cozy / Calm)', () => {
+    mount(comments(8));
+    const box = document.querySelector('[data-activity-lines]');
+    const cls = box?.className.split(/\s+/) ?? [];
+    expect(cls).toEqual(
+      expect.arrayContaining([
+        'pt-2',
+        'compact:pt-1',
+        'calm:pt-3',
+        'gap-3',
+        'compact:gap-2',
+        'calm:gap-4',
+        'pb-3',
+      ]),
+    );
+    expect(cls).not.toContain('gap-6');
+    act(() => more()?.click());
+    const rest = document.querySelector('[data-activity-lines-rest]')?.className ?? '';
+    expect(rest).toContain('gap-3');
+    expect(rest).toContain('compact:gap-2');
+    expect(rest).toContain('calm:gap-4');
+  });
+
+  it("the day's last card ends on its last text box (no 12 under it)", () => {
+    act(() =>
+      root?.render(
+        <ActivityCard
+          group={comments(2)}
+          nowMs={NOW}
+          timeZone="UTC"
+          cache={cache}
+          presignEnabled={false}
+          onOpenGroup={vi.fn()}
+          onOpenEntry={vi.fn()}
+          selfName={null}
+          lastInDay
+        />,
+      ),
+    );
+    expect(document.querySelector('[data-activity-lines]')?.className).not.toContain('pb-3');
+  });
+
+  it('the head tag ends on the right edge: the head dot is spoken, not drawn', () => {
+    mount(comments(2));
+    const dot = document.querySelector('[data-activity-item-head] [data-list-card-unread]');
+    expect(dot?.getAttribute('aria-label')).toBe('Unread');
+    expect(dot?.className).toBe('sr-only');
+    // Each line keeps its drawn dot on the same edge.
+    expect(document.querySelectorAll('[data-activity-line-dot]')).toHaveLength(2);
+  });
+});
+
 describe('Activity: one card per item, one line per notification', () => {
   it('3 notifications: 1 card, 3 lines, no "+N more"', () => {
     mount(comments(3));
@@ -166,7 +219,9 @@ describe('Activity: one card per item, one line per notification', () => {
     expect(more()?.textContent).toBe('+3 more');
     expect(more()?.getAttribute('aria-expanded')).toBe('false');
     expect(more()?.getAttribute('aria-label')).toBe('Show 3 more updates');
-    expect(more()?.className).toContain('min-h-11');
+    // Its text box (the label's 20 line; gap measured like a line's); the tap is its hit box.
+    expect(more()?.className).toContain('min-h-0');
+    expect(more()?.className).toContain('before:-inset-y-3');
     act(() => more()?.click());
     expect(lines()).toHaveLength(8);
     expect(more()?.textContent).toBe('Show less');
