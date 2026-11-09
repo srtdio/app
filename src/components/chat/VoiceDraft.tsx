@@ -257,11 +257,11 @@ export function VoiceNoteChip(props: {
         className="absolute -right-4 -top-4 rounded-full"
         onClick={props.onRemove}
       >
-        <span
-          aria-hidden="true"
-          className="grid h-6 w-6 place-items-center rounded-full bg-fg text-bg"
-        >
-          <IconX size={ICON_SIZE.inline} />
+        {/* The IconButton is the 44 hit box; the visible disc inside it is 24. */}
+        <span aria-hidden="true" className="grid place-items-center">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-fg text-bg">
+            <IconX size={ICON_SIZE.inline} />
+          </span>
         </span>
       </IconButton>
     </div>
