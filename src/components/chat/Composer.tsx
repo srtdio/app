@@ -260,6 +260,11 @@ export interface ComposerProps {
 /** The draft link card appears once typing has paused this long. */
 export const DRAFT_CARD_DEBOUNCE_MS = 600;
 
+/** The mic's 36 slot held empty while a voice note sends (the row keeps its width). */
+const MIC_SLOT_HOLD = (
+  <span aria-hidden="true" data-mic-slot-hold="" className="inline-flex h-11 w-9 shrink-0" />
+);
+
 /**
  * The link the draft card previews: the draft's first external link, unless an
  * edit is open or X dismissed that same link for this draft. Pure.
@@ -1905,7 +1910,9 @@ export function Composer(props: ComposerProps): ReactElement {
           onInsert={insertEmoji}
           expandTitle={props.expandTitle}
           pillEnd={showMic ? micKey : undefined}
-          mic={showMic ? micKey : undefined}
+          // While the kept note sends, the mic's slot keeps its width (states
+          // keep their footprint): the row never narrows under the spinner.
+          mic={showMic ? micKey : voiceBusy ? MIC_SLOT_HOLD : undefined}
           overlay={pickers}
           strip={
             <>

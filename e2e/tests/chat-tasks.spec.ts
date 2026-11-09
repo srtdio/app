@@ -349,7 +349,7 @@ test("Close with changes still waiting saves them, then closes; the Add button a
   expectClean(network);
 });
 
-test('Notifications: an older task alert opens catch up at that alert; Mark as read saves it; Back returns', async ({
+test('Notifications: an older task alert opens its task in the chat and marks it read', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -361,16 +361,11 @@ test('Notifications: an older task alert opens catch up at that alert; Mark as r
   await expect(row.locator('[data-activity-alert-icon="task"]')).toBeVisible();
   await row.locator('[data-activity-lead]').click();
 
-  // Catch up opens with that alert's card first (8 Nov 2026: every row tap).
-  await expect(page).toHaveURL(/[?&]catchup=/);
-  const card = page.locator('[data-catch-up-card]');
-  await expect(card).toBeVisible({ timeout: 8000 });
-  await expect(card).toContainText(TASK_DUE_TITLE);
-  await page.locator('[data-catch-up-read]').click();
-  await expect
-    .poll(() => network.rpcCalls.some((c) => c.name === 'inbox_mark_read_ids'))
-    .toBe(true);
-  await page.goBack();
+  // The tap opens the real place (9 Nov 2026: catch-up cards live only in
+  // Catch up): the chat with the task, and the row is marked read.
+  await expect(page).not.toHaveURL(/[?&]catchup=/);
+  await expect(page).toHaveURL(/\/chat/);
+  await expect.poll(() => network.rpcCalls.some((c) => c.name === 'inbox_mark_read')).toBe(true);
   await expect(page.locator('[data-catch-up]')).toHaveCount(0);
   expectClean(network);
 });

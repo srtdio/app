@@ -205,7 +205,7 @@ function RepliesLink(props: { count: number; onOpen: () => void }): ReactElement
       onClick={props.onOpen}
       className={textRole(
         'label',
-        'flex min-h-11 items-center self-start text-fg focus-visible:lit-focus',
+        'flex min-h-11 min-w-11 items-center self-start text-fg focus-visible:lit-focus',
       )}
     >
       {props.count === 1 ? '1 reply' : `${props.count} replies`}

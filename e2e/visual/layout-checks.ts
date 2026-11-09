@@ -1214,7 +1214,8 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
         const { width, height } = hitBox(el);
         const inBar = el.closest('[data-catch-up-bar]') !== null;
         const rowKey =
-          el.matches('[data-composer-key], [data-row-send]') ||
+          // The compact + (ComposerTray, data-plus) is a row key too (CLAUDE.md "Composer rows").
+          el.matches('[data-composer-key], [data-row-send], [data-plus]') ||
           el.closest('[data-writing-row]') !== null;
         const minW = inBar ? px.bar : rowKey ? px.rowKey : px.hit;
         const minH = inBar ? px.bar : px.hit;
@@ -1262,12 +1263,18 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
         return p !== 'absolute' && p !== 'fixed';
       };
       const groups: Array<{ name: string; parent: Element }> = [];
+      // A held swipe leans the card (rotate): its boxes overlap by design, so
+      // the overlap check runs only on a card at rest (no swipe tint).
+      const leaning = root.querySelector('[data-catch-up-tint]') !== null;
       for (const card of Array.from(root.querySelectorAll('[data-catch-up-card]'))) {
+        if (leaning) break;
         const key = card.getAttribute('data-catch-up-card') ?? '';
         groups.push({ name: `card ${key}`, parent: card });
       }
       for (const list of Array.from(
-        root.querySelectorAll('[data-catch-up-rows], [data-catch-up-thread-replies]'),
+        leaning
+          ? []
+          : root.querySelectorAll('[data-catch-up-rows], [data-catch-up-thread-replies]'),
       )) {
         groups.push({ name: 'rows', parent: list });
       }

@@ -279,9 +279,7 @@ test('Open plan: the client OK on a client-approved row, Also in, and keep the a
   expectClean(network);
 });
 
-test('Notifications: plan alerts under All; a tap opens catch up; the plan link opens the plan', async ({
-  page,
-}) => {
+test('Notifications: plan alerts under All; a tap opens the plan at the item', async ({ page }) => {
   test.setTimeout(90_000);
   const network = await installHarnessNetwork(page);
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
@@ -320,33 +318,33 @@ test('Notifications: plan alerts under All; a tap opens catch up; the plan link 
       240_000,
     ),
   );
-  // All lists the plan alerts (the Plans chip is gone).
+  // All lists the plan alerts (the Plans chip is gone). 9 Nov 2026: each is an
+  // item card (the head names the plan) with the alert as its own line.
   await page.goto('/notifications');
-  const line = (event: string) => page.locator(`[data-activity-event="${event}"]`);
+  const head = (event: string) => page.locator(`[data-activity-event="${event}"]`);
+  const line = (event: string) => page.locator('[data-activity-card-cell]', { has: head(event) });
   await expect(line('plan_opened')).toContainText(
-    `${PEER_NAME} opened ${DATED_PLAN_TITLE} for approvers`,
+    new RegExp(`${PEER_NAME}\\s*Opened ${DATED_PLAN_TITLE} for approvers`),
     { timeout: 15_000 },
   );
   await expect(page.locator('[data-activity-alert-icon="plan"]')).toHaveCount(4);
-  await expect(line('plan_deleted')).toContainText(`${PEER_NAME} deleted ${DATED_PLAN_TITLE}`);
+  await expect(line('plan_deleted')).toContainText(
+    new RegExp(`${PEER_NAME}\\s*Deleted ${DATED_PLAN_TITLE}`),
+  );
   await expect(line('plan_date_changed')).toContainText('Lamp lighting reel moved to Fri 16 Oct');
   await expect(line('plan_updated')).toContainText(
-    `${PEER_NAME} renamed Old name to ${DATED_PLAN_TITLE}`,
+    new RegExp(`${PEER_NAME}\\s*Renamed Old name to ${DATED_PLAN_TITLE}`),
   );
   for (const lead of await page.locator('[data-activity-lead]').all()) {
     expectMinTouchTarget(await lead.boundingBox());
   }
 
-  // A tap opens catch up at that alert (8 Nov 2026); Mark as read saves it.
-  await line('plan_date_changed').locator('[data-activity-lead]').click();
-  await expect(page).toHaveURL(/[?&]catchup=0190d800-0000-7000-8000-000000000003/);
-  const card = page.locator('[data-catch-up-card]');
-  await expect(card).toBeVisible({ timeout: 8000 });
-  await expect(card).toContainText('Lamp lighting reel moved to Fri 16 Oct');
-  await page.locator('[data-catch-up-read]').click();
-  await expect
-    .poll(() => network.rpcCalls.some((c) => c.name === 'inbox_mark_read_ids'))
-    .toBe(true);
+  // A tap opens the real place (9 Nov 2026: catch-up cards live only in Catch
+  // up) and marks the row read.
+  await head('plan_date_changed').locator('[data-activity-lead]').click();
+  await expect(page).not.toHaveURL(/[?&]catchup=/);
+  await expect(page).toHaveURL(new RegExp(`/plan/${DATED_PLAN_ID}`));
+  await expect.poll(() => network.rpcCalls.some((c) => c.name === 'inbox_mark_read')).toBe(true);
 
   // The alert's link still opens the plan at the item.
   await page.goto(`/plan/${DATED_PLAN_ID}?item=${concept.id}`);
