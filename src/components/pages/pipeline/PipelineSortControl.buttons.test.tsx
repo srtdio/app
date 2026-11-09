@@ -18,7 +18,6 @@ import {
   PipelineSortControl,
 } from '@/components/pages/pipeline/PipelineSortControl';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
-import { BRIEF_SORT_OPTIONS } from '@/lib/brief-sort';
 import { ASSET_SORT_OPTIONS } from '@/lib/assets';
 
 // Button system: the Sort / Due date triggers are the shared 44px /
@@ -155,11 +154,9 @@ describe('Pipeline controls buttons', () => {
     expect(PIPELINE_SORT_OPTIONS.find((o) => o.value === 'target')?.label).toBe('Due date');
   });
 
-  it('Pipeline, Briefs and Assets sort labels all come from the CLAUDE.md set', () => {
+  it('Pipeline and Assets sort labels all come from the CLAUDE.md set (Briefs has no Sort)', () => {
     const allowed = ['Newest first', 'Oldest first', 'Due date', 'Name', 'Size', 'Type'];
-    const labels = [...PIPELINE_SORT_OPTIONS, ...BRIEF_SORT_OPTIONS, ...ASSET_SORT_OPTIONS].map(
-      (o) => o.label,
-    );
+    const labels = [...PIPELINE_SORT_OPTIONS, ...ASSET_SORT_OPTIONS].map((o) => o.label);
     expect(labels.filter((label) => !allowed.includes(label))).toEqual([]);
     expect(PIPELINE_SORT_OPTIONS.map((o) => o.label)).toEqual([
       'Newest first',

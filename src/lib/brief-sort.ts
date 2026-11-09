@@ -4,14 +4,7 @@
 // open block comes first. Pure (no hooks, no Date.now), so the order is
 // unit-tested without rendering. Approvers keep the time sections.
 
-import type { SortOption } from '@/components/ui/SortMenu';
-
 export type BriefSort = 'due' | 'updated';
-
-export const BRIEF_SORT_OPTIONS: SortOption<BriefSort>[] = [
-  { value: 'due', label: 'Due date' },
-  { value: 'updated', label: 'Newest first' },
-];
 
 interface BriefSortable {
   target_date: string | null;
