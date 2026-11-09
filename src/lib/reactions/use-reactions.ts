@@ -73,6 +73,15 @@ export function useReactions(params: {
   const lastEpoch = useRef<unknown>(epoch);
   // Ids written since a read started keep their local rows when it lands.
   const touched = useRef(new Map<string, number>());
+  // The newest read started per id: an older one landing late never overwrites it.
+  const lastRead = useRef(new Map<string, number>());
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const seq = useRef(0);
   const idsKey = params.ids.join(',');
   const latest = useRef({ me, channelId: params.channelId ?? null, rows });
@@ -99,13 +108,19 @@ export function useReactions(params: {
     lastEpoch.current = epoch;
     const ids = idsToRead(idsKey.split(','), readIds.current, full);
     if (ids.length === 0) return;
-    for (const id of ids) readIds.current.add(id);
     const startedAt = ++seq.current;
-    let active = true;
+    for (const id of ids) {
+      readIds.current.add(id);
+      lastRead.current.set(id, startedAt);
+    }
+    // Never dropped by a re-render (its ids are marked read); only unmount
+    // and a newer read of the same id win over it.
     void readReactions(supabase, kind, ids).then((result) => {
-      if (!active) return;
+      if (!mounted.current) return;
       if (!result.ok) {
-        for (const id of ids) readIds.current.delete(id);
+        for (const id of ids) {
+          if (lastRead.current.get(id) === startedAt) readIds.current.delete(id);
+        }
         logger.warn('reactions: read failed', { kind, error: result.error.message });
         return;
       }
@@ -115,14 +130,12 @@ export function useReactions(params: {
         for (const [id, list] of grouped) {
           // A write after this read started keeps its own optimistic rows.
           if ((touched.current.get(id) ?? 0) > startedAt) continue;
+          if (lastRead.current.get(id) !== startedAt) continue;
           next.set(id, list);
         }
         return next;
       });
     });
-    return () => {
-      active = false;
-    };
   }, [kind, idsKey, epoch, enabled]);
 
   const run = useCallback(

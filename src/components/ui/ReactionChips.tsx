@@ -224,7 +224,8 @@ export function ReactionChips(props: ReactionChipsProps): ReactElement | null {
           className={cn(
             REACTION_PILL_CLASS,
             REACTION_PILL_OTHERS,
-            'w-10 justify-center text-fg-2',
+            // 40 wide: its ::before runs 2 past each side, so the tap is 44 x 44.
+            'w-10 justify-center text-fg-2 before:-inset-x-0.5',
             MOVE_CLASS.press,
           )}
         >

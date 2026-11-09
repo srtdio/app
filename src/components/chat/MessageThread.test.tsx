@@ -1259,8 +1259,10 @@ describe('own-bubble inner content', () => {
       expect((chips as unknown as { props: { reactions: unknown } }).props.reactions).toEqual(
         reactions,
       );
-      // 8 under the message: the column's gap-1 plus the row's mt-1.
-      expect((chips as unknown as { props: { className?: string } }).props.className).toBe('mt-1');
+      // 8 under the message (the column's gap-1 plus mt-1), 8 over the next row.
+      expect((chips as unknown as { props: { className?: string } }).props.className).toBe(
+        'mb-2 mt-1',
+      );
       const cls = rootClass(root).split(' ');
       for (const gone of ['mb-6', 'pb-6']) expect(cls).not.toContain(gone);
     }

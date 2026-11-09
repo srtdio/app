@@ -1205,10 +1205,10 @@ function railTop(head: boolean, afterLabel: boolean): string {
 
 /**
  * The root's rail reaches down to the row's bottom edge: past the bubble's box
- * through the reaction chip row under it when there is one (8 + the 32 pill).
+ * through the reaction chip row under it when there is one (8 + the 32 pill + 8).
  */
 function railBottom(hasReactions: boolean): string {
-  return hasReactions ? '-bottom-10' : 'bottom-0';
+  return hasReactions ? '-bottom-12' : 'bottom-0';
 }
 
 /**
@@ -1960,10 +1960,11 @@ export function MessageBubble(props: {
           <FailedLine status={fullMeta.status} />
         ) : null}
         {hasReactions ? (
-          // On the text column, 8 under the message (the column's 4 + 4); the
-          // thread root's stays above the strip (its 12 is the strip's margin).
+          // On the text column, 8 under the message (the column's 4 + 4) and
+          // 8 over the next row, so the pills' 44 taps never meet its first
+          // line's (a mention's); the thread root's ends on the strip's 12.
           <ReactionChips
-            className="mt-1"
+            className={rootPlace ? 'mt-1' : 'mb-2 mt-1'}
             reactions={message.reactions}
             onToggle={(emoji) => props.reactionChips?.onToggle(emoji)}
             onPick={(emoji) => props.reactionChips?.onPick(emoji)}

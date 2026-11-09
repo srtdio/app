@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const reads = vi.hoisted(() => ({
   calls: [] as string[][],
+  delayMs: 0,
   rows: [] as { targetId: string; userId: string; emoji: string; createdAt: string }[],
 }));
 const writes = vi.hoisted(() => ({ calls: [] as unknown[][], ok: true }));
@@ -16,7 +17,8 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('@/lib/reactions/reads', () => ({
   readReactions: (_c: unknown, _k: unknown, ids: string[]) => {
     reads.calls.push(ids);
-    return Promise.resolve({ ok: true, data: reads.rows.filter((r) => ids.includes(r.targetId)) });
+    const answer = { ok: true, data: reads.rows.filter((r) => ids.includes(r.targetId)) };
+    return new Promise((r) => setTimeout(() => r(answer), reads.delayMs));
   },
 }));
 vi.mock('@/lib/reactions/writes', () => ({
@@ -61,6 +63,7 @@ async function render(ids: string[], epoch = 1): Promise<void> {
 
 beforeEach(() => {
   reads.calls = [];
+  reads.delayMs = 0;
   reads.rows = [{ targetId: 'c1', userId: 'u', emoji: '👍', createdAt: '2026-11-09T10:00:00Z' }];
   writes.calls = [];
   writes.ok = true;
@@ -80,6 +83,18 @@ describe('useReactions', () => {
     expect(reads.calls).toEqual([['c1', 'c2'], ['c3']]);
     await render(['c1', 'c2', 'c3'], 2);
     expect(reads.calls[2]).toEqual(['c1', 'c2', 'c3']);
+  });
+
+  it('a re-render that changes the id order mid-read never drops the read', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    reads.delayMs = 30;
+    await act(async () => root?.render(<Probe ids={['c2', 'c1']} epoch={1} />));
+    await act(async () => root?.render(<Probe ids={['c1', 'c2']} epoch={1} />));
+    await act(async () => new Promise((r) => setTimeout(r, 60)));
+    expect(reads.calls).toEqual([['c2', 'c1']]);
+    expect(api?.of('c1')).toEqual([{ emoji: '👍', count: 1, mine: false }]);
   });
 
   it('toggle adds optimistically, a second tap removes', async () => {
