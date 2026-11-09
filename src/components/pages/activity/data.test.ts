@@ -19,6 +19,7 @@ import {
   appendUnique,
   bucketActorNames,
   cardBodyLine,
+  trimBody,
   cardTitle,
   chatMentionPreview,
   cursorAfter,
@@ -333,14 +334,19 @@ describe('mapEntry ledger counts', () => {
 });
 
 describe('cardBodyLine', () => {
-  it('uses the real comment body, trimmed to ~140 chars, for a comment event', () => {
+  it('uses the real comment body in full (9 Nov 2026: no 140 cut; the screen cuts)', () => {
     const short = cardBodyLine(item({ eventType: 'comment', body: '  Looks great, ship it!  ' }));
     expect(short).toBe('Looks great, ship it!');
 
-    const long = 'x'.repeat(200);
-    const trimmed = cardBodyLine(item({ eventType: 'comment', body: long }));
-    expect(trimmed.length).toBeLessThanOrEqual(141); // 140 chars + an ellipsis
-    expect(trimmed.endsWith('…')).toBe(true);
+    const long = 'word '.repeat(80).trim();
+    const full = cardBodyLine(item({ eventType: 'comment', body: long }));
+    expect(full).toBe(long);
+    expect(full.endsWith('…')).toBe(false);
+  });
+
+  it('trimBody trims the ends only, never cuts', () => {
+    const long = 'x'.repeat(500);
+    expect(trimBody(`  ${long}  `)).toBe(long);
   });
 
   it('keeps the generic label for a non-comment event even when a body is set', () => {

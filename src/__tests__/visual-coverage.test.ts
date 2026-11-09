@@ -350,6 +350,11 @@ const REQUIRED: readonly string[] = [
   'plan-day-picker',
   'post-comment-edited',
   'post-comment-editing',
+  // Alignment, one thread strip, Activity lines (9 Nov 2026).
+  'activity-line-more-open',
+  'catch-up-thread-empty',
+  'catch-up-thread-replies',
+  'chat-thread-replies',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */

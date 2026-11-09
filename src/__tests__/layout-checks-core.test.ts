@@ -747,3 +747,64 @@ describe('comment action bars (8 Nov 2026)', () => {
     ).toEqual(['comment-c1: the bar covers a time (5m)']);
   });
 });
+
+describe('alignmentViolations (9 Nov 2026: rules 1, 2, 3, 5 measured)', () => {
+  const load = async () => import('../../e2e/visual/layout-checks-core');
+
+  it('passes one text column, one right edge, a hung photo and spaced text', async () => {
+    const { alignmentViolations } = await load();
+    expect(
+      alignmentViolations([
+        {
+          label: 'card',
+          textLefts: [
+            { label: 'title', x: 76 },
+            { label: 'line 1', x: 76.6 },
+          ],
+          rightEdges: [
+            { label: 'time', x: 374 },
+            { label: 'dot', x: 373.4 },
+          ],
+          hung: [{ label: 'line 1', photoRight: 64, pictureRight: 64, textLeft: 76 }],
+          gaps: [
+            { label: 'root text to hairline', gap: 13, min: 12 },
+            { label: 'strip to reply', gap: 8, equals: 8 },
+          ],
+          sameGaps: [
+            { label: 'a', gap: 24 },
+            { label: 'b', gap: 24.5 },
+          ],
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('fails a line off the column, a ragged right edge, a short gap', async () => {
+    const { alignmentViolations } = await load();
+    const out = alignmentViolations([
+      {
+        label: 'card',
+        textLefts: [
+          { label: 'title', x: 76 },
+          { label: 'line 1', x: 80 },
+        ],
+        rightEdges: [
+          { label: 'time', x: 374 },
+          { label: 'dot', x: 370 },
+        ],
+        hung: [{ label: 'line 1', photoRight: 60, pictureRight: 64, textLeft: 68 }],
+        gaps: [{ label: 'text to hairline', gap: 8 }],
+        sameGaps: [
+          { label: 'a', gap: 24 },
+          { label: 'b', gap: 12 },
+        ],
+      },
+    ]);
+    expect(out.some((m) => m.includes('not on the text column'))).toBe(true);
+    expect(out.some((m) => m.includes('not on the right edge'))).toBe(true);
+    expect(out.some((m) => m.includes("picture's right edge"))).toBe(true);
+    expect(out.some((m) => m.includes('photo to text'))).toBe(true);
+    expect(out.some((m) => m.includes('under 12'))).toBe(true);
+    expect(out.some((m) => m.includes('not the same as'))).toBe(true);
+  });
+});

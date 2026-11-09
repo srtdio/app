@@ -278,7 +278,8 @@ export interface LayoutViolation {
     | 'writing-box'
     | 'comment-bar'
     | 'thread-header'
-    | 'catch-up';
+    | 'catch-up'
+    | 'alignment';
   message: string;
 }
 
@@ -860,6 +861,107 @@ export function commentBarViolations(bars: readonly CommentBarGeom[]): string[] 
     }
     for (const near of b.around) {
       if (overlaps(b.bar, near.box)) out.push(`${b.label}: the bar covers ${near.label}`);
+    }
+  }
+  return out;
+}
+
+// Alignment rules (9 Nov 2026, CLAUDE.md "Alignment"): measured, never eyeballed.
+/** Two edges within this many px are the same edge (rules 1 to 3). */
+export const ALIGN_TOLERANCE_PX = 1;
+/** Rule 5: the least space between a text block and a hairline. */
+export const TEXT_TO_HAIRLINE_MIN_PX = 12;
+/** Rule 2: the photo-to-text gap of a hung photo. */
+export const PHOTO_TEXT_GAP_PX = 12;
+
+/** A measured x (a left or right edge) and what it is. */
+export interface EdgeAt {
+  label: string;
+  x: number;
+}
+
+/** A vertical gap that must equal a value (±1) or reach a minimum. */
+export interface GapAt {
+  label: string;
+  gap: number;
+  /** Exactly this (±1); absent: at least `min`. */
+  equals?: number;
+  min?: number;
+}
+
+/** One card or row family, as measured on a screen. */
+export interface AlignFamily {
+  label: string;
+  /** Rule 1: every text line's left edge (the first is the column). */
+  textLefts: EdgeAt[];
+  /** Rule 3: times, tags, unread dots and trailing glyphs' right edges. */
+  rightEdges: EdgeAt[];
+  /** Rule 2: a hung photo's right edge vs its parent picture's, and its gap to the text. */
+  hung?: Array<{ label: string; photoRight: number; pictureRight: number; textLeft: number }>;
+  /** Rule 5: text to hairline (and the strip's spec gaps). */
+  gaps: GapAt[];
+  /** Same relationship, same gap: these gaps are all equal (±1). */
+  sameGaps?: GapAt[];
+}
+
+const sameEdge = (a: number, b: number): boolean => Math.abs(a - b) <= ALIGN_TOLERANCE_PX;
+const r1 = (n: number): number => Math.round(n * 10) / 10;
+
+/** The alignment rules 1, 2, 3 and 5 over measured families. Pure. */
+export function alignmentViolations(families: readonly AlignFamily[]): string[] {
+  const out: string[] = [];
+  for (const f of families) {
+    const column = f.textLefts[0];
+    if (column !== undefined) {
+      for (const t of f.textLefts.slice(1)) {
+        if (!sameEdge(t.x, column.x)) {
+          out.push(
+            `${f.label}: ${t.label} starts at x ${r1(t.x)}, not on the text column (${column.label} ${r1(column.x)})`,
+          );
+        }
+      }
+    }
+    const edge = f.rightEdges[0];
+    if (edge !== undefined) {
+      for (const e of f.rightEdges.slice(1)) {
+        if (!sameEdge(e.x, edge.x)) {
+          out.push(
+            `${f.label}: ${e.label} ends at x ${r1(e.x)}, not on the right edge (${edge.label} ${r1(edge.x)})`,
+          );
+        }
+      }
+    }
+    for (const h of f.hung ?? []) {
+      if (!sameEdge(h.photoRight, h.pictureRight)) {
+        out.push(
+          `${f.label}: ${h.label} photo ends at ${r1(h.photoRight)}, not on the picture's right edge ${r1(h.pictureRight)}`,
+        );
+      }
+      if (!sameEdge(h.textLeft - h.photoRight, PHOTO_TEXT_GAP_PX)) {
+        out.push(
+          `${f.label}: ${h.label} photo to text is ${r1(h.textLeft - h.photoRight)}px, not ${PHOTO_TEXT_GAP_PX}`,
+        );
+      }
+    }
+    for (const g of f.gaps) {
+      if (g.equals !== undefined && !sameEdge(g.gap, g.equals)) {
+        out.push(`${f.label}: ${g.label} is ${r1(g.gap)}px, not ${g.equals}`);
+      }
+      const min = g.min ?? (g.equals === undefined ? TEXT_TO_HAIRLINE_MIN_PX : undefined);
+      if (min !== undefined && g.gap < min - 0.5) {
+        out.push(`${f.label}: ${g.label} is ${r1(g.gap)}px, under ${min}`);
+      }
+    }
+    const same = f.sameGaps ?? [];
+    const first = same[0];
+    if (first !== undefined) {
+      for (const g of same.slice(1)) {
+        if (!sameEdge(g.gap, first.gap)) {
+          out.push(
+            `${f.label}: ${g.label} is ${r1(g.gap)}px, not the same as ${first.label} (${r1(first.gap)})`,
+          );
+        }
+      }
     }
   }
   return out;

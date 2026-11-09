@@ -96,14 +96,16 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
     expect(title?.className).not.toMatch(/leading-\[/);
   });
 
-  it('the head preview ("N new") and each line are the secondary role, one truncated line', () => {
+  it('the head preview ("N new") is one truncated line; each line is a secondary paragraph that wraps', () => {
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
     const preview = byText('1 new');
     expectRole(preview, ['text-md', 'text-fg-2', 'truncate']);
-    // A comment line reads the comment text (locked 9 Nov 2026).
-    const line = byText('Looks good to me');
-    expectRole(line, ['text-md', 'truncate']);
-    expect(line.className).not.toContain('line-clamp-2');
+    // A comment line reads the comment text (locked 9 Nov 2026), in one
+    // paragraph of up to 3 lines (cut by "… more", never by CSS).
+    const line = document.querySelector('[data-activity-line-body]');
+    expect(line?.textContent).toContain('Looks good to me');
+    expectRole(line as HTMLElement, ['text-md']);
+    expect(line?.className).not.toMatch(/truncate|line-clamp|text-ellipsis/);
   });
 
   it('the time is the meta role: mono, tabular, fg-3', () => {

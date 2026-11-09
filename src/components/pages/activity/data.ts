@@ -1089,15 +1089,17 @@ export function shortLine(item: ActivityItem, parts: { name?: boolean } = {}): s
   }
 }
 
-/** Trim a comment body to a single legible line of at most ~140 characters. */
-function trimBody(text: string): string {
-  const t = text.trim();
-  return t.length <= 140 ? t : `${t.slice(0, 140).trimEnd()}…`;
+/**
+ * A comment body for its line: trimmed ends only (9 Nov 2026: no character
+ * cut; the line cuts on screen at 3 lines with "… more").
+ */
+export function trimBody(text: string): string {
+  return text.trim();
 }
 
 /**
  * The body line shown inside a card. For a comment event it is the real comment
- * text, trimmed to ~140 chars; for every other event type (and for a comment with
+ * text in full (ends trimmed); for every other event type (and for a comment with
  * an empty/missing body) it falls back to the existing generic short line. Never
  * throws and never renders an empty string for a comment that has text.
  */
