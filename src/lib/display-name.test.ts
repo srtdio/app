@@ -42,7 +42,8 @@ describe('isNameTooLong', () => {
     expect(
       isNameTooLong({
         code: 'unknown',
-        message: 'new row for relation "users" violates check constraint "users_display_name_max25"',
+        message:
+          'new row for relation "users" violates check constraint "users_display_name_max25"',
       }),
     ).toBe(true);
     expect(isNameTooLong({ message: 'x', details: 'users_display_name_max25' })).toBe(true);

@@ -449,9 +449,7 @@ export function ActivityCard({
       // A missed due time reads in bad.
       timeBad={bad}
       tag={tag}
-      tagHooks={
-        grouped ? { 'data-activity-updates-tag': '' } : { 'data-activity-scope-tag': '' }
-      }
+      tagHooks={grouped ? { 'data-activity-updates-tag': '' } : { 'data-activity-scope-tag': '' }}
       // A grouped card's tag folds its updates open under the card.
       tagToggle={
         grouped

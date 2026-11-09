@@ -37,7 +37,9 @@ export function shortLink(url: string): string {
 }
 
 /** One run of a text: plain words or a link. */
-export type TextRun = { kind: 'text'; text: string } | { kind: 'link'; href: string; label: string };
+export type TextRun =
+  | { kind: 'text'; text: string }
+  | { kind: 'link'; href: string; label: string };
 
 const LINK_RE = /\bhttps?:\/\/[^\s<>()]+[^\s<>().,;:!?'"]/gi;
 
@@ -76,7 +78,10 @@ export function dayKey(at: string, timeZone?: string): string {
  * Where day lines go: the indexes of rows that start a new day, only when the
  * rows span more than one day (never before the first row of a one-day card). Pure.
  */
-export function dayBreaks(rows: ReadonlyArray<{ createdAt: string }>, timeZone?: string): Set<number> {
+export function dayBreaks(
+  rows: ReadonlyArray<{ createdAt: string }>,
+  timeZone?: string,
+): Set<number> {
   const keys = rows.map((r) => dayKey(r.createdAt, timeZone));
   const distinct = new Set(keys.filter((k) => k !== ''));
   const out = new Set<number>();

@@ -39,7 +39,13 @@ import {
 import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconArrowUpRight, IconChevronLeft, IconLink, IconReply } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconArrowUpRight,
+  IconChevronLeft,
+  IconLink,
+  IconReply,
+} from '@/components/ui/icons';
 import { Text, textRole } from '@/components/ui/Text';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { useLongPress } from '@/components/ui/useLongPress';
@@ -137,7 +143,12 @@ export function cardReplyTarget(item: CatchUpItem): CatchUpReplyTarget {
       return { kind: 'chat', channelId: item.entityId, threadRootId: item.threadRootId };
     case 'post':
     case 'brief':
-      return { kind: 'comment', entityType: item.kind, entityId: item.entityId, parentCommentId: null };
+      return {
+        kind: 'comment',
+        entityType: item.kind,
+        entityId: item.entityId,
+        parentCommentId: null,
+      };
     default:
       return { kind: 'plan-comment', itemId: item.entityId };
   }
@@ -146,7 +157,8 @@ export function cardReplyTarget(item: CatchUpItem): CatchUpReplyTarget {
 /** The reply box's hint. Pure. */
 export function replyHint(item: CatchUpItem, inThread: boolean): string {
   if (inThread || item.kind === 'chat-thread') return 'Reply in thread';
-  if (item.kind === 'chat-main') return `Message ${item.lead.chatName ?? item.lead.actorName ?? 'chat'}`;
+  if (item.kind === 'chat-main')
+    return `Message ${item.lead.chatName ?? item.lead.actorName ?? 'chat'}`;
   return 'Reply';
 }
 
@@ -166,8 +178,12 @@ interface OpenThread {
   data: CatchUpThread | null | 'error';
 }
 
-function withOlder(body: CatchUpBodyResult | undefined, hasOlder: boolean | undefined): CatchUpBodyResult | undefined {
-  if (body === undefined || body === 'skip' || body === 'error' || hasOlder === undefined) return body;
+function withOlder(
+  body: CatchUpBodyResult | undefined,
+  hasOlder: boolean | undefined,
+): CatchUpBodyResult | undefined {
+  if (body === undefined || body === 'skip' || body === 'error' || hasOlder === undefined)
+    return body;
   return { ...body, hasOlder };
 }
 
@@ -188,7 +204,9 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
   const [bodies, setBodies] = useState<ReadonlyMap<string, CatchUpBodyResult>>(new Map());
-  const [older, setOlder] = useState<ReadonlyMap<string, { rows: CatchUpRow[]; hasOlder: boolean }>>(new Map());
+  const [older, setOlder] = useState<
+    ReadonlyMap<string, { rows: CatchUpRow[]; hasOlder: boolean }>
+  >(new Map());
   const [sent, setSent] = useState<ReadonlyMap<string, SentMessage[]>>(new Map());
   const [typing, setTyping] = useState(false);
   const [tint, setTint] = useState<'read' | 'keep' | null>(null);
@@ -279,7 +297,8 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
       setFlying(true);
       setTint(decision);
       const body = bodies.get(current.key);
-      const latest = body !== undefined && body !== 'skip' && body !== 'error' ? body.latestReplyId : null;
+      const latest =
+        body !== undefined && body !== 'skip' && body !== 'error' ? body.latestReplyId : null;
       const played = flyOut(cardRef.current, decision, fromDx);
       playedRef.current = played;
       const finish = (): void => {
@@ -305,7 +324,9 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         root,
         channelId: current.kind === 'chat-main' ? current.entityId : null,
       }).then((data) =>
-        setThread((prev) => (prev !== null && prev.root.id === root.id ? { ...prev, data: data ?? 'error' } : prev)),
+        setThread((prev) =>
+          prev !== null && prev.root.id === root.id ? { ...prev, data: data ?? 'error' } : prev,
+        ),
       );
     },
     [current, workspaceId],
@@ -327,7 +348,8 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   }, [laptop]);
   // Back in the card: the exact scroll it had.
   useLayoutEffect(() => {
-    if (thread === null && cardBodyRef.current !== null) cardBodyRef.current.scrollTop = cardScrollRef.current;
+    if (thread === null && cardBodyRef.current !== null)
+      cardBodyRef.current.scrollTop = cardScrollRef.current;
   }, [thread]);
 
   const retryThread = (): void => {
@@ -377,10 +399,19 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (flying || typing) return;
     const target = event.target;
-    if (target instanceof Element && target.closest('form, button, a, textarea, input, video') !== null) {
+    if (
+      target instanceof Element &&
+      target.closest('form, button, a, textarea, input, video') !== null
+    ) {
       return;
     }
-    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, locked: false };
+    dragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      dx: 0,
+      locked: false,
+    };
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const drag = dragRef.current;
@@ -434,7 +465,10 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const setSentState = (sentKey: string, id: string, state: SentMessage['state']): void => {
     setSent((prev) => {
       const out = new Map(prev);
-      out.set(sentKey, (out.get(sentKey) ?? []).map((m) => (m.id === id ? { ...m, state } : m)));
+      out.set(
+        sentKey,
+        (out.get(sentKey) ?? []).map((m) => (m.id === id ? { ...m, state } : m)),
+      );
       return out;
     });
   };
@@ -444,7 +478,10 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     if (payload === undefined) return;
     const { send, target } = payload;
     const traceId = generateTraceId();
-    const files = [...send.attachmentAssetIds, ...(send.voice !== null ? [send.voice.assetId] : [])];
+    const files = [
+      ...send.attachmentAssetIds,
+      ...(send.voice !== null ? [send.voice.assetId] : []),
+    ];
     const outcome: Promise<boolean> =
       target.kind === 'chat'
         ? sendMessageRecord({
@@ -516,15 +553,20 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     const first = have?.rows[0] ?? body.rows[0];
     if (first === undefined) return;
     olderBusyRef.current.add(item.key);
-    void readCatchUpOlder(supabase, { workspaceId, item, beforeAt: first.createdAt, side }).then((got) => {
-      olderBusyRef.current.delete(item.key);
-      if (got === null) return;
-      setOlder((prev) => {
-        const out = new Map(prev);
-        out.set(item.key, { rows: [...got.rows, ...(prev.get(item.key)?.rows ?? [])], hasOlder: got.hasOlder });
-        return out;
-      });
-    });
+    void readCatchUpOlder(supabase, { workspaceId, item, beforeAt: first.createdAt, side }).then(
+      (got) => {
+        olderBusyRef.current.delete(item.key);
+        if (got === null) return;
+        setOlder((prev) => {
+          const out = new Map(prev);
+          out.set(item.key, {
+            rows: [...got.rows, ...(prev.get(item.key)?.rows ?? [])],
+            hasOlder: got.hasOlder,
+          });
+          return out;
+        });
+      },
+    );
   };
 
   const retryLoad = (item: CatchUpItem): void => {
@@ -551,7 +593,10 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const phoneTyping = typing && !laptop;
   const inThread = thread !== null && current !== null && thread.cardKey === current.key;
 
-  const menuFor = (item: CatchUpItem, body: CatchUpBody | null): { title: string; items: ActionMenuItem[] } => {
+  const menuFor = (
+    item: CatchUpItem,
+    body: CatchUpBody | null,
+  ): { title: string; items: ActionMenuItem[] } => {
     const href = entityHref(item.lead, props.workspaceKey ?? null, side);
     const title = body?.title ?? item.lead.title ?? item.lead.chatName ?? '';
     const items: ActionMenuItem[] =
@@ -571,7 +616,9 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
               onSelect: () => {
                 void copyText(`${window.location.origin}${href}`).then((ok) =>
                   toastRef.current?.show(
-                    ok ? { title: 'Link copied' } : { title: errorText('copy the link', null), tone: 'error' },
+                    ok
+                      ? { title: 'Link copied' }
+                      : { title: errorText('copy the link', null), tone: 'error' },
                   ),
                 );
               },
@@ -747,7 +794,13 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             data-catch-up-actions=""
             className="grid shrink-0 grid-cols-2 gap-3 px-3 pb-[max(16px,env(safe-area-inset-bottom))]"
           >
-            <Button type="button" variant="secondary" data-catch-up-keep="" disabled={flying} onClick={() => go('keep')}>
+            <Button
+              type="button"
+              variant="secondary"
+              data-catch-up-keep=""
+              disabled={flying}
+              onClick={() => go('keep')}
+            >
               {KEEP_UNREAD}
               {laptop ? (
                 <span aria-hidden="true" className={textRole('meta')}>
@@ -786,7 +839,10 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
       role="dialog"
       aria-label="Catch up"
       data-catch-up=""
-      className={cn('fixed inset-0 z-sheet flex', laptop ? 'items-center justify-center p-4' : 'h-dvh flex-col')}
+      className={cn(
+        'fixed inset-0 z-sheet flex',
+        laptop ? 'items-center justify-center p-4' : 'h-dvh flex-col',
+      )}
     >
       {laptop ? <Backdrop aria-label="Close catch up" onClick={close} /> : null}
       <div
@@ -794,7 +850,9 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         data-catch-up-box=""
         className={cn(
           'catch-up-page relative flex min-h-0 flex-col',
-          laptop ? 'h-catch-up max-h-full w-catch-up max-w-full overflow-hidden rounded-2xl lit-overlay' : 'flex-1',
+          laptop
+            ? 'h-catch-up max-h-full w-catch-up max-w-full overflow-hidden rounded-2xl lit-overlay'
+            : 'flex-1',
         )}
       >
         {bar}
@@ -806,7 +864,9 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
           index={lightbox.index}
           cache={cache}
           presignEnabled={presignEnabled}
-          onIndexChange={(index) => setLightbox((prev) => (prev !== null ? { ...prev, index } : prev))}
+          onIndexChange={(index) =>
+            setLightbox((prev) => (prev !== null ? { ...prev, index } : prev))
+          }
           onClose={() => setLightbox(null)}
         />
       ) : null}

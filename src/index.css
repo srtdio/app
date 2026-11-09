@@ -205,35 +205,28 @@
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
   --lit-muted-shine: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
   --lit-tab-active-bg: rgba(8, 9, 10, 0.06);
-  --lit-raised:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.04),
+  --lit-raised: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.04),
     0 10px 28px -6px rgba(20, 22, 30, 0.24);
-  --lit-card:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.03),
+  --lit-card: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.03),
     0 4px 12px -4px rgba(20, 22, 30, 0.14);
-  --lit-float:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.05),
+  --lit-float: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.05),
     0 12px 28px -6px rgba(20, 22, 30, 0.32);
-  --lit-overlay:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.06),
+  --lit-overlay: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.06),
     0 24px 56px -12px rgba(20, 22, 30, 0.4);
   --lit-header: 0 1px 0 var(--border), 0 6px 14px -10px rgba(20, 22, 30, 0.24);
   --lit-side: 1px 0 0 var(--border), 8px 0 16px -12px rgba(20, 22, 30, 0.18);
   --lit-dock: inset 0 1px 0 #fff, 0 -1px 0 var(--border), 0 -8px 18px -12px rgba(20, 22, 30, 0.2);
   /* lit-dock under an open tray: no top highlight, top line or upward shade. */
   --lit-dock-joined: none;
-  --lit-btn-primary:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.55),
+  --lit-btn-primary: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.55),
     0 3px 9px -2px rgba(0, 0, 0, 0.35);
-  --lit-btn-success:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
+  --lit-btn-success: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
     0 3px 9px -2px rgba(47, 138, 91, 0.5);
-  --lit-btn-danger:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
+  --lit-btn-danger: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
     0 3px 9px -2px rgba(200, 60, 60, 0.5);
   --lit-btn-secondary: inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.1);
-  --lit-chip:
-    inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
+  --lit-chip: inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03),
+    0 3px 8px -2px rgba(20, 22, 30, 0.16);
   --lit-well: inset 0 1px 2px rgba(20, 22, 30, 0.1), inset 0 0 0 1px rgba(20, 22, 30, 0.02);
   --lit-well-soft: inset 0 1px 2px rgba(20, 22, 30, 0.05);
   --lit-pill: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 1px rgba(20, 22, 30, 0.08);
@@ -241,13 +234,11 @@
   --lit-active: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(8, 9, 10, 0.08);
   --lit-knob: 0 2px 6px rgba(20, 22, 30, 0.18), inset 0 1px 0 #fff;
   --lit-media: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --lit-avatar:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+  --lit-avatar: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(20, 22, 30, 0.16);
   --lit-badge: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(20, 22, 30, 0.35);
   --lit-bubble-own: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 3px 8px -3px rgba(0, 0, 0, 0.4);
-  --lit-bubble-other:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.08),
+  --lit-bubble-other: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.08),
     0 3px 8px -4px rgba(20, 22, 30, 0.18);
   --lit-strip: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
@@ -388,38 +379,28 @@
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
   --lit-muted-shine: linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
   --lit-tab-active-bg: rgba(255, 255, 255, 0.1);
-  --lit-raised:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+  --lit-raised: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 34px -6px rgba(0, 0, 0, 0.85);
-  --lit-card:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+  --lit-card: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
     0 0 0 1px rgba(0, 0, 0, 0.4), 0 6px 16px -6px rgba(0, 0, 0, 0.7);
-  --lit-float:
-    inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+  --lit-float: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.65), 0 16px 36px -6px rgba(0, 0, 0, 0.9);
-  --lit-overlay:
-    inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+  --lit-overlay: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.7), 0 28px 64px -8px rgba(0, 0, 0, 0.95);
   --lit-header: 0 1px 0 rgba(0, 0, 0, 0.6), 0 8px 16px -10px rgba(0, 0, 0, 0.85);
   --lit-side: 1px 0 0 rgba(0, 0, 0, 0.6), 8px 0 16px -12px rgba(0, 0, 0, 0.8);
-  --lit-dock:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6),
+  --lit-dock: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6),
     0 -10px 20px -12px rgba(0, 0, 0, 0.75);
   --lit-dock-joined: none;
-  --lit-btn-primary:
-    inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.6),
-    0 3px 10px -2px rgba(0, 0, 0, 0.7);
-  --lit-btn-success:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 3px 10px -2px rgba(92, 194, 141, 0.35);
-  --lit-btn-danger:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 3px 10px -2px rgba(230, 90, 90, 0.35);
-  --lit-btn-secondary:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.5);
-  --lit-chip:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+  --lit-btn-primary: inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(0, 0, 0, 0.7);
+  --lit-btn-success: inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 3px 10px -2px rgba(92, 194, 141, 0.35);
+  --lit-btn-danger: inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 3px 10px -2px rgba(230, 90, 90, 0.35);
+  --lit-btn-secondary: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --lit-chip: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
   --lit-well: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   --lit-well-soft: inset 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -428,15 +409,14 @@
   --lit-active: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --lit-knob: 0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   --lit-media: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --lit-avatar:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+  --lit-avatar: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2),
     0 1px 2px rgba(0, 0, 0, 0.6);
   --lit-badge: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6);
-  --lit-bubble-own:
-    inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.55);
-  --lit-bubble-other:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --lit-bubble-own: inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.55);
+  --lit-bubble-other: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
   --lit-strip: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 /* FLAT LOOK (Slack style, decided 7 Nov 2026). In-content surfaces are flat:

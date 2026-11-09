@@ -223,7 +223,8 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(activityCardTag(group.slice(0, 1))).toBe('Post');
     const html = renderCard(group);
     expect(html).toMatch(/data-activity-updates-tag=""[^>]*>[^]*?">3 updates</);
-    expect(count(html, 'data-list-card-tag')).toBe(1);
+    // One tag (the toggle wraps it: "N updates ⌄"); data-list-card-tag-toggle is its button.
+    expect(count(html, 'data-list-card-tag=""')).toBe(1);
     expect(html).not.toContain('data-activity-scope-tag');
   });
 
@@ -260,7 +261,9 @@ describe('ActivityCard on ui/ListCard', () => {
   it('a live-added card renders at its final place, never a class fade or slide', () => {
     const entering = renderCard([item({ id: 'new' })], { entering: true });
     expect(entering).toContain('data-activity-entering=""');
-    const root = /^<div[^>]*data-activity-entering=""[^>]*class="([^"]*)"/.exec(entering)?.[1];
+    // The card's own root (inside its grid cell) carries the hook.
+    const root = /<div[^>]*data-activity-entering=""[^>]*class="([^"]*)"/.exec(entering)?.[1];
+    expect(root).toBeDefined();
     expect(root).not.toMatch(/translate-|rotate|opacity|transition|duration-|motion-safe/);
     expect(renderCard([item({ id: 'old' })])).not.toContain('data-activity-entering');
   });

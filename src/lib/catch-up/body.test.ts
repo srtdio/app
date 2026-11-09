@@ -42,7 +42,9 @@ describe('catch-up bodies', () => {
     expect(contextLabel({ kind: 'post', pictures: 0, video: true })).toBe('Caption · Video');
     expect(contextLabel({ kind: 'post', pictures: 0, video: false })).toBe('Caption');
     expect(contextLabel({ kind: 'brief', pictures: 0, video: false })).toBe('Brief');
-    expect(contextLabel({ kind: 'plan-item', pictures: 0, video: false, planTitle: 'Nov' })).toBe('Plan · Nov');
+    expect(contextLabel({ kind: 'plan-item', pictures: 0, video: false, planTitle: 'Nov' })).toBe(
+      'Plan · Nov',
+    );
     expect(contextLabel({ kind: 'idea', pictures: 0, video: false })).toBe('Idea · Bank');
   });
 
@@ -58,7 +60,12 @@ describe('catch-up bodies', () => {
       'w1',
       [
         comment({ id: 'a', ledger_batch_id: 'b1', ledger_seq: 1 }),
-        comment({ id: 'b', ledger_batch_id: 'b1', ledger_seq: 2, resolved_at: '2026-11-08T11:00:00Z' }),
+        comment({
+          id: 'b',
+          ledger_batch_id: 'b1',
+          ledger_seq: 2,
+          resolved_at: '2026-11-08T11:00:00Z',
+        }),
         comment({ id: 'c' }),
       ],
       new Map([['a', 2]]),
@@ -74,7 +81,9 @@ describe('catch-up bodies', () => {
   });
 
   it('event rows for stage changes, without the name', () => {
-    const card = cardOf(entry({ id: 's', event_type: 'stage_change', payload: { to_stage: 'review' } }));
+    const card = cardOf(
+      entry({ id: 's', event_type: 'stage_change', payload: { to_stage: 'review' } }),
+    );
     const rows = eventRows(card);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe('event:s');
@@ -85,7 +94,11 @@ describe('catch-up bodies', () => {
       entry({ id: 'e2', created_at: '2026-11-08T11:00:00Z', payload: { comment_id: 'c2' } }),
       entry({ id: 'e1', created_at: '2026-11-08T10:00:00Z', payload: { comment_id: 'c1' } }),
     );
-    const rows = commentRows('w1', [comment({ id: 'c0' }), comment({ id: 'c1' }), comment({ id: 'c2' })], new Map());
+    const rows = commentRows(
+      'w1',
+      [comment({ id: 'c0' }), comment({ id: 'c1' }), comment({ id: 'c2' })],
+      new Map(),
+    );
     expect(firstNewOf(card, rows)).toBe('c1');
   });
 
@@ -95,7 +108,14 @@ describe('catch-up bodies', () => {
       workspaceId: 'w1',
       side: 'agency' as const,
       zone: 'UTC',
-      post: { title: 'T', caption: '', format: 'text', target_date: null, stage: 'review', deleted_at: null },
+      post: {
+        title: 'T',
+        caption: '',
+        format: 'text',
+        target_date: null,
+        stage: 'review',
+        deleted_at: null,
+      },
       brief: undefined,
       planItem: undefined,
       planTitle: new Map<string, string>(),
@@ -111,8 +131,12 @@ describe('catch-up bodies', () => {
       expect(ok.context).toBeNull();
       expect(ok.threads).toBe(true);
     }
-    expect(bodyOf(card, { ...parts, post: { ...parts.post, deleted_at: '2026-11-08T00:00:00Z' } })).toBe('skip');
-    expect(bodyOf(card, { ...parts, side: 'client', post: { ...parts.post, stage: 'draft' } })).toBe('skip');
+    expect(
+      bodyOf(card, { ...parts, post: { ...parts.post, deleted_at: '2026-11-08T00:00:00Z' } }),
+    ).toBe('skip');
+    expect(
+      bodyOf(card, { ...parts, side: 'client', post: { ...parts.post, stage: 'draft' } }),
+    ).toBe('skip');
     expect(bodyOf(card, { ...parts, post: undefined })).toBe('skip');
     expect(bodyOf(card, { ...parts, comments: [] })).toBe('skip');
   });

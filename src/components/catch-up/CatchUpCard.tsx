@@ -168,10 +168,16 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   rows.forEach((row, i) => {
     if (breaks.has(i)) {
       drawn.push(
-        <DayLine key={`day-${row.id}`} at={row.createdAt} timeZone={props.timeZone} laptop={props.laptop} />,
+        <DayLine
+          key={`day-${row.id}`}
+          at={row.createdAt}
+          timeZone={props.timeZone}
+          laptop={props.laptop}
+        />,
       );
     }
-    if (ready !== null && row.id === ready.firstNewId) drawn.push(<UnreadDivider key="new" count={1} />);
+    if (ready !== null && row.id === ready.firstNewId)
+      drawn.push(<UnreadDivider key="new" count={1} />);
     if (row.kind === 'message') {
       drawn.push(
         <MessageRow

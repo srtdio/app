@@ -106,7 +106,11 @@ describe('catch up writes', () => {
       created_at: '2026-11-08T11:00:00.000Z',
       payload: { comment_id: 'x2' },
     });
-    const quiet = entry({ id: 'k3', event_type: 'post_deleted', created_at: '2026-11-08T09:00:00.000Z' });
+    const quiet = entry({
+      id: 'k3',
+      event_type: 'post_deleted',
+      created_at: '2026-11-08T09:00:00.000Z',
+    });
     const read = entry({ id: 'k4', event_type: 'comment', read_at: '2026-11-08T12:00:00.000Z' });
     const card = cardOf(c2, c1, quiet, read);
     const m = fakeClient();
@@ -128,7 +132,11 @@ describe('catch up writes', () => {
 
   it('a failed write reports, never throws', async () => {
     const { client } = fakeClient({ message: 'nope' });
-    const res = await markCatchUpRead(client, { workspaceId: 'w1', item: cardOf(comment), traceId: 't6' });
+    const res = await markCatchUpRead(client, {
+      workspaceId: 'w1',
+      item: cardOf(comment),
+      traceId: 't6',
+    });
     expect(res).toEqual({ ok: false, message: 'nope' });
   });
 

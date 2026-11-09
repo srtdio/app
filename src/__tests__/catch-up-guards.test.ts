@@ -118,7 +118,9 @@ describe('catch-up guards', () => {
   it('card and page are distinct surfaces in both themes', () => {
     const css = readFileSync(join(SRC, 'index.css'), 'utf8');
     const bg = (selector: string): string =>
-      new RegExp(`${selector.replace(/[.]/g, '\\.')}\\s*\\{[^}]*background-color:\\s*([^;]+);`).exec(css)?.[1]?.trim() ?? '';
+      new RegExp(`${selector.replace(/[.]/g, '\\.')}\\s*\\{[^}]*background-color:\\s*([^;]+);`)
+        .exec(css)?.[1]
+        ?.trim() ?? '';
     const light = { card: bg('\n  .catch-up-card'), page: bg('\n  .catch-up-page') };
     const dark = { card: bg('.dark .catch-up-card'), page: bg('.dark .catch-up-page') };
     expect(light.card).not.toBe('');

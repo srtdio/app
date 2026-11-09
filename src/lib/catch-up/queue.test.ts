@@ -12,9 +12,24 @@ const NOW = Date.parse('2026-11-08T12:00:00.000Z');
 const at = (h: number): string => `2026-11-08T${String(h).padStart(2, '0')}:00:00.000Z`;
 
 describe('catch up queue: one card per item', () => {
-  const p1a = entry({ id: 'p1a', entity_id: 'p1', created_at: at(9), payload: { comment_id: 'c1' } });
-  const p1b = entry({ id: 'p1b', entity_id: 'p1', created_at: at(11), payload: { comment_id: 'c2' } });
-  const p2 = entry({ id: 'p2', entity_id: 'p2', created_at: at(10), payload: { comment_id: 'c3' } });
+  const p1a = entry({
+    id: 'p1a',
+    entity_id: 'p1',
+    created_at: at(9),
+    payload: { comment_id: 'c1' },
+  });
+  const p1b = entry({
+    id: 'p1b',
+    entity_id: 'p1',
+    created_at: at(11),
+    payload: { comment_id: 'c2' },
+  });
+  const p2 = entry({
+    id: 'p2',
+    entity_id: 'p2',
+    created_at: at(10),
+    payload: { comment_id: 'c3' },
+  });
   const brief = entry({
     id: 'b1',
     event_type: 'brief_created',
@@ -25,7 +40,12 @@ describe('catch up queue: one card per item', () => {
   });
 
   it('groups entries per item, newest activity first', () => {
-    const q = buildCatchUpQueue({ tapped: null, held: [p1a, p1b, p2, brief], nowMs: NOW, workspaceId: 'w1' });
+    const q = buildCatchUpQueue({
+      tapped: null,
+      held: [p1a, p1b, p2, brief],
+      nowMs: NOW,
+      workspaceId: 'w1',
+    });
     expect(q.map((c) => c.key)).toEqual(['post:p1', 'post:p2', 'brief:br1']);
     expect(q[0]?.entries.map((e) => e.id)).toEqual(['p1b', 'p1a']);
     expect(q[0]?.lead.id).toBe('p1b');
@@ -40,7 +60,12 @@ describe('catch up queue: one card per item', () => {
     const read = entry({ id: 'r', entity_id: 'p9', read_at: at(8) });
     const snoozed = entry({ id: 's', entity_id: 'p8', snoozed_until: '2026-11-09T00:00:00.000Z' });
     const other = entry({ id: 'o', entity_id: 'p7', workspace_id: 'w2' });
-    const q = buildCatchUpQueue({ tapped: null, held: [read, snoozed, other, p2], nowMs: NOW, workspaceId: 'w1' });
+    const q = buildCatchUpQueue({
+      tapped: null,
+      held: [read, snoozed, other, p2],
+      nowMs: NOW,
+      workspaceId: 'w1',
+    });
     expect(q.map((c) => c.key)).toEqual(['post:p2']);
   });
 
@@ -65,7 +90,12 @@ describe('catch up queue: one card per item', () => {
   });
 
   it('plan items and bank ideas', () => {
-    const plan = entry({ id: 'pl', event_type: 'plan_comment', entity_type: 'plan_item', entity_id: 'i1' });
+    const plan = entry({
+      id: 'pl',
+      event_type: 'plan_comment',
+      entity_type: 'plan_item',
+      entity_id: 'i1',
+    });
     const idea = entry({
       id: 'id',
       event_type: 'plan_comment',
@@ -94,32 +124,61 @@ describe('card-making entries', () => {
 
   it('stage changes only to review, approved, rejected, parked', () => {
     for (const stage of ['review', 'approved', 'rejected', 'parked']) {
-      expect(makesCard(entry({ event_type: 'stage_change', payload: { to_stage: stage } })), stage).toBe(true);
+      expect(
+        makesCard(entry({ event_type: 'stage_change', payload: { to_stage: stage } })),
+        stage,
+      ).toBe(true);
     }
-    expect(makesCard(entry({ event_type: 'stage_change', payload: { to_stage: 'draft' } }))).toBe(false);
+    expect(makesCard(entry({ event_type: 'stage_change', payload: { to_stage: 'draft' } }))).toBe(
+      false,
+    );
   });
 
   it('Activity-only kinds never make a card, but ride on their item card', () => {
-    for (const type of ['post_deleted', 'assets_deleted', 'comment_resolved', 'task_changed', 'reminder']) {
+    for (const type of [
+      'post_deleted',
+      'assets_deleted',
+      'comment_resolved',
+      'task_changed',
+      'reminder',
+    ]) {
       expect(makesCard(entry({ event_type: type })), type).toBe(false);
     }
     const quiet = entry({ id: 'q', event_type: 'comment_resolved', created_at: at(11) });
-    const loud = entry({ id: 'l', event_type: 'comment', created_at: at(9), payload: { comment_id: 'c' } });
-    const q = buildCatchUpQueue({ tapped: null, held: [quiet, loud], nowMs: NOW, workspaceId: 'w1' });
+    const loud = entry({
+      id: 'l',
+      event_type: 'comment',
+      created_at: at(9),
+      payload: { comment_id: 'c' },
+    });
+    const q = buildCatchUpQueue({
+      tapped: null,
+      held: [quiet, loud],
+      nowMs: NOW,
+      workspaceId: 'w1',
+    });
     expect(q).toHaveLength(1);
     expect(q[0]?.lead.id).toBe('l');
     expect(q[0] !== undefined ? unreadIdsOf(q[0]) : []).toEqual(['q', 'l']);
     // An item with only Activity-only entries is no card.
-    expect(buildCatchUpQueue({ tapped: null, held: [quiet], nowMs: NOW, workspaceId: 'w1' })).toEqual([]);
+    expect(
+      buildCatchUpQueue({ tapped: null, held: [quiet], nowMs: NOW, workspaceId: 'w1' }),
+    ).toEqual([]);
   });
 
   it('own actions never make a card', () => {
     const mine = entry({ id: 'me', actor_user_id: 'u-me' });
     expect(makesCard(mine, 'u-me')).toBe(false);
     expect(makesCard(entry({}, { own: true }))).toBe(false);
-    expect(buildCatchUpQueue({ tapped: null, held: [mine], nowMs: NOW, workspaceId: 'w1', selfId: 'u-me' })).toEqual(
-      [],
-    );
+    expect(
+      buildCatchUpQueue({
+        tapped: null,
+        held: [mine],
+        nowMs: NOW,
+        workspaceId: 'w1',
+        selfId: 'u-me',
+      }),
+    ).toEqual([]);
   });
 });
 

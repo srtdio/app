@@ -187,7 +187,11 @@ export function catchUpSendOf(input: {
           assetId: input.voice.assetId,
           durationMs: input.voice.durationMs,
           ...(input.voice.file !== undefined
-            ? { mime: input.voice.file.type, name: input.voice.file.name, size: input.voice.file.size }
+            ? {
+                mime: input.voice.file.type,
+                name: input.voice.file.name,
+                size: input.voice.file.size,
+              }
             : {}),
           ...(input.voice.peaks !== undefined ? { peaks: [...input.voice.peaks] } : {}),
         }

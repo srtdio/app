@@ -1305,5 +1305,8 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
     },
     { bar: CATCH_UP_BAR_KEY_PX, hit: CATCH_UP_HIT_PX, rowKey: CATCH_UP_ROW_KEY_WIDTH_PX },
   );
-  settleFindings(screenName, messages.map((message) => ({ check: 'catch-up' as const, message })));
+  settleFindings(
+    screenName,
+    messages.map((message) => ({ check: 'catch-up' as const, message })),
+  );
 }

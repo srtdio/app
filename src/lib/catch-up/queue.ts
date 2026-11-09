@@ -65,7 +65,8 @@ export function isOwnEntry(item: ActivityItem, selfId: string | null): boolean {
 export function makesCard(item: ActivityItem, selfId: string | null = null): boolean {
   if (isOwnEntry(item, selfId)) return false;
   if (item.alert != null) return false;
-  if (item.eventType === 'stage_change') return item.toStage !== null && CARD_STAGES.has(item.toStage);
+  if (item.eventType === 'stage_change')
+    return item.toStage !== null && CARD_STAGES.has(item.toStage);
   return CARD_EVENTS.has(item.eventType);
 }
 
@@ -77,14 +78,34 @@ export function itemOf(
   if (isChatRow(item)) {
     const root = item.threadRootId ?? null;
     return root !== null
-      ? { key: `thread:${item.entityId}:${root}`, kind: 'chat-thread', entityId: item.entityId, threadRootId: root }
-      : { key: `chat:${item.entityId}`, kind: 'chat-main', entityId: item.entityId, threadRootId: null };
+      ? {
+          key: `thread:${item.entityId}:${root}`,
+          kind: 'chat-thread',
+          entityId: item.entityId,
+          threadRootId: root,
+        }
+      : {
+          key: `chat:${item.entityId}`,
+          kind: 'chat-main',
+          entityId: item.entityId,
+          threadRootId: null,
+        };
   }
   if (item.entityType === 'post') {
-    return { key: `post:${item.entityId}`, kind: 'post', entityId: item.entityId, threadRootId: null };
+    return {
+      key: `post:${item.entityId}`,
+      kind: 'post',
+      entityId: item.entityId,
+      threadRootId: null,
+    };
   }
   if (item.entityType === 'brief') {
-    return { key: `brief:${item.entityId}`, kind: 'brief', entityId: item.entityId, threadRootId: null };
+    return {
+      key: `brief:${item.entityId}`,
+      kind: 'brief',
+      entityId: item.entityId,
+      threadRootId: null,
+    };
   }
   if (item.entityType === PLAN_ITEM_ENTITY) {
     return {

@@ -20,7 +20,9 @@ describe('catch-up text hygiene', () => {
     expect(shortLink('https://www.example.com/a/b/launch-plan')).toBe('example.com/…/launch-plan');
     expect(shortLink('https://example.com/one')).toBe('example.com/one');
     expect(shortLink('https://example.com/')).toBe('example.com');
-    expect(shortLink(`https://example.com/x/${'a'.repeat(40)}`)).toBe(`example.com/…/${'a'.repeat(18)}…`);
+    expect(shortLink(`https://example.com/x/${'a'.repeat(40)}`)).toBe(
+      `example.com/…/${'a'.repeat(18)}…`,
+    );
   });
 
   it('finds links in text (a 120-character unbroken link included)', () => {

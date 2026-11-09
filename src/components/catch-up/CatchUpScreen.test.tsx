@@ -62,7 +62,10 @@ import { fileURLToPath } from 'node:url';
 
 function card(id: string): CatchUpItem {
   return cardOf(
-    entry({ id: `${id}-1`, entity_id: id, payload: { comment_id: `${id}-c` } }, { title: `Post ${id}` }),
+    entry(
+      { id: `${id}-1`, entity_id: id, payload: { comment_id: `${id}-c` } },
+      { title: `Post ${id}` },
+    ),
     entry({
       id: `${id}-2`,
       entity_id: id,
@@ -96,7 +99,10 @@ function bodyFor(title: string): CatchUpBodyResult {
 let root: Root | null = null;
 let host: HTMLDivElement;
 
-function render(queue: CatchUpItem[]): { onClose: ReturnType<typeof vi.fn>; onRead: ReturnType<typeof vi.fn> } {
+function render(queue: CatchUpItem[]): {
+  onClose: ReturnType<typeof vi.fn>;
+  onRead: ReturnType<typeof vi.fn>;
+} {
   const onClose = vi.fn();
   const onRead = vi.fn();
   host = document.createElement('div');
@@ -169,11 +175,15 @@ describe('catch-up screen', () => {
     render([card('p1'), card('p2')]);
     await settle();
     expect(document.querySelector('[data-catch-up-left]')?.textContent).toBe(leftLabel(2));
-    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe('post:p1');
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'post:p1',
+    );
     click('[data-catch-up-keep]');
     expect(writes.markCatchUpRead).not.toHaveBeenCalled();
     expect(document.querySelector('[data-catch-up-left]')?.textContent).toBe(leftLabel(1));
-    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe('post:p2');
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'post:p2',
+    );
   });
 
   it('only the current and next card are read, in one batched call', async () => {
@@ -204,18 +214,24 @@ describe('catch-up screen', () => {
     await settle();
     click('[data-catch-up-undo]');
     expect(writes.undoCatchUpRead).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe('post:p1');
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'post:p1',
+    );
   });
 
   it('a gone card is skipped silently (marked read, never shown empty, no Undo)', async () => {
     reads.readCatchUpBodies.mockImplementation(
       async (_client: unknown, input: { items: CatchUpItem[] }) =>
-        new Map(input.items.map((i) => [i.key, i.entityId === 'p1' ? 'skip' : bodyFor(i.entityId)])),
+        new Map(
+          input.items.map((i) => [i.key, i.entityId === 'p1' ? 'skip' : bodyFor(i.entityId)]),
+        ),
     );
     render([card('p1'), card('p2')]);
     await settle();
     expect(writes.markCatchUpSkipped).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe('post:p2');
+    expect(document.querySelector('[data-catch-up-card]')?.getAttribute('data-catch-up-card')).toBe(
+      'post:p2',
+    );
     expect(document.querySelector('[data-catch-up-undo]')?.className).toContain('invisible');
   });
 
@@ -226,7 +242,9 @@ describe('catch-up screen', () => {
     );
     render([card('p1')]);
     await settle();
-    expect(document.querySelector('[data-catch-up-error]')?.textContent).toContain("Couldn't load this card.");
+    expect(document.querySelector('[data-catch-up-error]')?.textContent).toContain(
+      "Couldn't load this card.",
+    );
     expect(document.querySelector('[data-catch-up-reply]')).not.toBeNull();
     expect(document.querySelector('[data-catch-up-read]')).not.toBeNull();
   });
@@ -252,7 +270,9 @@ function undoState(): { visible: boolean; focusable: boolean; disabled: boolean 
   const undo = document.querySelector<HTMLButtonElement>('[data-catch-up-undo]');
   if (undo === null) throw new Error('missing undo');
   return {
-    visible: !undo.className.split(/\s+/).includes('invisible') && undo.getAttribute('aria-hidden') !== 'true',
+    visible:
+      !undo.className.split(/\s+/).includes('invisible') &&
+      undo.getAttribute('aria-hidden') !== 'true',
     focusable: undo.tabIndex >= 0,
     disabled: undo.disabled,
   };

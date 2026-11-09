@@ -34,7 +34,12 @@ export function CatchUpThreadView(props: {
     <div ref={props.viewRef} data-catch-up-thread="" className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
         <ul className="flex flex-col py-2">
-          <MessageRow row={props.root} selfName={props.selfName} timeZone={props.timeZone} onOpenThread={null} />
+          <MessageRow
+            row={props.root}
+            selfName={props.selfName}
+            timeZone={props.timeZone}
+            onOpenThread={null}
+          />
         </ul>
         <div
           data-catch-up-thread-count=""
@@ -70,7 +75,11 @@ export function CatchUpThreadView(props: {
                       <Text role="secondary" className="text-bad">
                         Not sent
                       </Text>
-                      <Button variant="ghost" type="button" onClick={() => props.onRetrySend(message.id)}>
+                      <Button
+                        variant="ghost"
+                        type="button"
+                        onClick={() => props.onRetrySend(message.id)}
+                      >
                         Retry
                       </Button>
                     </span>

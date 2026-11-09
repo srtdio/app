@@ -95,7 +95,11 @@ export function RichText(props: {
               const k = inner;
               inner += seg.text.length;
               return seg.self ? (
-                <span key={k} data-catch-up-mention-me="" className={cn('rounded-sm', MENTION_ME_PEER)}>
+                <span
+                  key={k}
+                  data-catch-up-mention-me=""
+                  className={cn('rounded-sm', MENTION_ME_PEER)}
+                >
                   {seg.text}
                 </span>
               ) : (
@@ -140,7 +144,10 @@ export function LongText(props: { text: string; selfName: string | null }): Reac
         type="button"
         data-catch-up-more=""
         onClick={() => setOpen(true)}
-        className={textRole('secondary', 'min-h-11 min-w-11 text-left text-fg-2 focus-visible:lit-focus')}
+        className={textRole(
+          'secondary',
+          'min-h-11 min-w-11 text-left text-fg-2 focus-visible:lit-focus',
+        )}
       >
         more
       </button>
@@ -193,7 +200,10 @@ function RepliesLink(props: { count: number; onOpen: () => void }): ReactElement
       type="button"
       data-catch-up-replies=""
       onClick={props.onOpen}
-      className={textRole('label', 'flex min-h-11 items-center self-start text-fg focus-visible:lit-focus')}
+      className={textRole(
+        'label',
+        'flex min-h-11 items-center self-start text-fg focus-visible:lit-focus',
+      )}
     >
       {props.count === 1 ? '1 reply' : `${props.count} replies`}
     </button>
@@ -218,7 +228,10 @@ export function MessageRow(props: {
       hook={{ 'data-catch-up-message': row.id }}
     >
       {row.earlierCaption != null && row.earlierCaption !== '' ? (
-        <div data-catch-up-earlier="" className="flex flex-col gap-1 border-l border-border-strong pl-3">
+        <div
+          data-catch-up-earlier=""
+          className="flex flex-col gap-1 border-l border-border-strong pl-3"
+        >
           <Text role="meta">Earlier caption</Text>
           <Text role="body" as="p" style={WRAP_ANYWHERE} className="text-fg-3">
             {row.earlierCaption}
@@ -292,7 +305,10 @@ export function PointsRow(props: {
               type="button"
               aria-expanded={isOpen}
               onClick={() => toggle(point.id)}
-              className={cn('flex w-full gap-3 text-left focus-visible:lit-focus-inset', CATCH_UP_ROW_X)}
+              className={cn(
+                'flex w-full gap-3 text-left focus-visible:lit-focus-inset',
+                CATCH_UP_ROW_X,
+              )}
             >
               {/* The photo column (w-8): the 44 circle box centred on the first text line (22 down). */}
               <span className="flex w-8 shrink-0 justify-center">
@@ -339,7 +355,10 @@ export function PointsRow(props: {
 }
 
 /** An event with no comment of its own: actor, time, the line without the name. */
-export function EventRow(props: { row: CatchUpEventRow; timeZone: string | undefined }): ReactElement {
+export function EventRow(props: {
+  row: CatchUpEventRow;
+  timeZone: string | undefined;
+}): ReactElement {
   return (
     <RowFrame
       author={props.row.author}
@@ -355,7 +374,11 @@ export function EventRow(props: { row: CatchUpEventRow; timeZone: string | undef
 }
 
 /** A day line between rows of different days ("Today", "Yesterday", "Fri 9 Oct"). */
-export function DayLine(props: { at: string; timeZone: string | undefined; laptop: boolean }): ReactElement {
+export function DayLine(props: {
+  at: string;
+  timeZone: string | undefined;
+  laptop: boolean;
+}): ReactElement {
   return (
     <DayPill
       label={formatDayLabel(props.at, new Date(), props.timeZone)}
@@ -424,7 +447,9 @@ function StripPicture(props: {
         alt="Post picture"
       />
       {props.pictures.length > 1 ? (
-        <span className={textRole('meta', 'absolute right-2 top-2 rounded-full bg-bg px-2 text-fg')}>
+        <span
+          className={textRole('meta', 'absolute right-2 top-2 rounded-full bg-bg px-2 text-fg')}
+        >
           {`1/${props.pictures.length}`}
         </span>
       ) : null}
@@ -432,12 +457,22 @@ function StripPicture(props: {
   );
 }
 
-function StripVideo(props: { versionId: string; cache: PresignCache; presignEnabled: boolean }): ReactElement {
+function StripVideo(props: {
+  versionId: string;
+  cache: PresignCache;
+  presignEnabled: boolean;
+}): ReactElement {
   const { url } = useAttachmentUrl(props.versionId, props.cache, props.presignEnabled);
   return url !== null ? (
     // A video post plays inline with its controls (muted captions are the post's own).
     // eslint-disable-next-line jsx-a11y/media-has-caption
-    <video data-catch-up-strip-video="" src={url} controls playsInline className="h-44 w-full rounded-lg bg-bg" />
+    <video
+      data-catch-up-strip-video=""
+      src={url}
+      controls
+      playsInline
+      className="h-44 w-full rounded-lg bg-bg"
+    />
   ) : (
     <Bone lit="flat" className="block h-44 w-full rounded-lg" />
   );
@@ -465,13 +500,20 @@ export function ContextStrip(props: {
   const firstLine = context.text.split('\n')[0] ?? '';
   const thumb = context.pictures[0] ?? null;
   return (
-    <div data-catch-up-strip="" data-open={open ? '' : undefined} className="shrink-0 border-b border-border">
+    <div
+      data-catch-up-strip=""
+      data-open={open ? '' : undefined}
+      className="shrink-0 border-b border-border"
+    >
       <button
         type="button"
         aria-expanded={open}
         data-catch-up-strip-toggle=""
         onClick={() => setOpen((v) => !v)}
-        className={cn('flex min-h-11 w-full items-center gap-3 py-1 text-left focus-visible:lit-focus-inset', CATCH_UP_ROW_X)}
+        className={cn(
+          'flex min-h-11 w-full items-center gap-3 py-1 text-left focus-visible:lit-focus-inset',
+          CATCH_UP_ROW_X,
+        )}
       >
         {thumb !== null || context.video !== null ? (
           <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg">
@@ -516,7 +558,11 @@ export function ContextStrip(props: {
           className="mx-4 mb-3 flex max-h-64 flex-col gap-3 overflow-y-auto overscroll-contain rounded-lg border border-border bg-panel-2 p-3"
         >
           {context.video !== null ? (
-            <StripVideo versionId={context.video} cache={props.cache} presignEnabled={props.presignEnabled} />
+            <StripVideo
+              versionId={context.video}
+              cache={props.cache}
+              presignEnabled={props.presignEnabled}
+            />
           ) : context.pictures.length > 0 ? (
             <StripPicture
               pictures={context.pictures}

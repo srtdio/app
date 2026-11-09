@@ -253,7 +253,9 @@ export async function readCatchUpChat(
     if (point.rootId === null) {
       const recent = [...(mainByChannel.get(point.channelId) ?? [])];
       if (target !== undefined && !recent.some((r) => r.id === target.id)) recent.push(target);
-      recent.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+      recent.sort((a, b) =>
+        a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0,
+      );
       out.set(item.id, {
         root: null,
         messages: recent.map(toMessage),

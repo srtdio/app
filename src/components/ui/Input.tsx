@@ -51,11 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   }
   return (
     <div className="relative">
-      <input
-        ref={ref}
-        className={cn(INPUT_TONE[tone], INPUT_COUNTER_ROOM, className)}
-        {...props}
-      />
+      <input ref={ref} className={cn(INPUT_TONE[tone], INPUT_COUNTER_ROOM, className)} {...props} />
       <Text
         role="meta"
         aria-live="polite"

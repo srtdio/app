@@ -22,5 +22,10 @@ export interface CatchUpSend {
 /** Where the reply goes: a chat (main or thread) or an item's comments. */
 export type CatchUpReplyTarget =
   | { kind: 'chat'; channelId: string; threadRootId: string | null }
-  | { kind: 'comment'; entityType: 'post' | 'brief'; entityId: string; parentCommentId: string | null }
+  | {
+      kind: 'comment';
+      entityType: 'post' | 'brief';
+      entityId: string;
+      parentCommentId: string | null;
+    }
   | { kind: 'plan-comment'; itemId: string };

@@ -123,9 +123,10 @@ export function defaultPointOpen(point: { open: boolean }): boolean {
 
 /** The Activity line without the actor's name, its first letter raised. Pure. */
 export function lineWithoutName(line: string, name: string | null): string {
-  const trimmed = name !== null && name !== '' && line.startsWith(`${name} `)
-    ? line.slice(name.length + 1)
-    : line;
+  const trimmed =
+    name !== null && name !== '' && line.startsWith(`${name} `)
+      ? line.slice(name.length + 1)
+      : line;
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
@@ -140,7 +141,9 @@ export function contextLabel(input: {
     case 'brief':
       return 'Brief';
     case 'plan-item':
-      return input.planTitle != null && input.planTitle !== '' ? `Plan · ${input.planTitle}` : 'Plan';
+      return input.planTitle != null && input.planTitle !== ''
+        ? `Plan · ${input.planTitle}`
+        : 'Plan';
     case 'idea':
       return 'Idea · Bank';
     default:
@@ -250,7 +253,9 @@ export function eventRows(item: CatchUpItem): CatchUpEventRow[] {
   return item.cardEntries
     .filter(
       (e) =>
-        e.eventType === 'stage_change' || e.eventType === 'plan_review' || e.eventType === 'brief_created',
+        e.eventType === 'stage_change' ||
+        e.eventType === 'plan_review' ||
+        e.eventType === 'brief_created',
     )
     .map((e) => ({
       kind: 'event' as const,
@@ -400,9 +405,7 @@ export async function readCatchUpBodies(
     }
 
     const planIds = [
-      ...new Set(
-        (planItems?.data ?? []).flatMap((r) => (r.plan_id !== null ? [r.plan_id] : [])),
-      ),
+      ...new Set((planItems?.data ?? []).flatMap((r) => (r.plan_id !== null ? [r.plan_id] : []))),
     ];
     const commentRowsAll = (comments?.data ?? []) as CommentRowLite[];
     const [plans, counts] = await Promise.all([
@@ -497,9 +500,35 @@ interface BodyParts {
   workspaceId: string;
   side: ViewerSide;
   zone: string | null;
-  post: { title: string | null; caption: string | null; format: string | null; target_date: string | null; stage: string; deleted_at: string | null } | undefined;
-  brief: { title: string; objective: string | null; target_date: string | null; status: string; deleted_at: string | null } | undefined;
-  planItem: { title: string | null; description: string | null; target_date: string | null; plan_id: string | null; show_to_client: boolean; deleted_at: string | null } | undefined;
+  post:
+    | {
+        title: string | null;
+        caption: string | null;
+        format: string | null;
+        target_date: string | null;
+        stage: string;
+        deleted_at: string | null;
+      }
+    | undefined;
+  brief:
+    | {
+        title: string;
+        objective: string | null;
+        target_date: string | null;
+        status: string;
+        deleted_at: string | null;
+      }
+    | undefined;
+  planItem:
+    | {
+        title: string | null;
+        description: string | null;
+        target_date: string | null;
+        plan_id: string | null;
+        show_to_client: boolean;
+        deleted_at: string | null;
+      }
+    | undefined;
   planTitle: ReadonlyMap<string, string>;
   pictures: { images: string[]; video: string | null };
   comments: CommentRowLite[];
@@ -558,7 +587,8 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
         kind: item.kind,
         pictures: 0,
         video: false,
-        planTitle: planItem.plan_id !== null ? (parts.planTitle.get(planItem.plan_id) ?? null) : null,
+        planTitle:
+          planItem.plan_id !== null ? (parts.planTitle.get(planItem.plan_id) ?? null) : null,
       }),
       pictures: [],
       video: null,
@@ -624,7 +654,10 @@ async function readCatchUpChatItems(
       continue;
     }
     out.set(item.key, {
-      title: item.kind === 'chat-thread' ? (chat.threadName ?? 'Thread') : (item.lead.chatName ?? item.lead.actorName ?? 'Chat'),
+      title:
+        item.kind === 'chat-thread'
+          ? (chat.threadName ?? 'Thread')
+          : (item.lead.chatName ?? item.lead.actorName ?? 'Chat'),
       context: null,
       rows,
       firstNewId: chat.firstNewId,
@@ -656,10 +689,21 @@ export async function readCatchUpOlder(
       if (res.error !== null) return null;
       const list = (res.data ?? []) as CommentRowLite[];
       const [counts] = await Promise.all([
-        replyCountsFor(client, 'comments', list.map((c) => c.id)),
-        resolvePeople(client, workspaceId, list.map((c) => c.author_user_id)),
+        replyCountsFor(
+          client,
+          'comments',
+          list.map((c) => c.id),
+        ),
+        resolvePeople(
+          client,
+          workspaceId,
+          list.map((c) => c.author_user_id),
+        ),
       ]);
-      return { rows: commentRows(workspaceId, [...list].reverse(), counts), hasOlder: list.length >= CATCH_UP_PAGE };
+      return {
+        rows: commentRows(workspaceId, [...list].reverse(), counts),
+        hasOlder: list.length >= CATCH_UP_PAGE,
+      };
     }
     if (item.kind === 'plan-item' || item.kind === 'idea') {
       const res = await client
@@ -674,7 +718,11 @@ export async function readCatchUpOlder(
       const list = ((res.data ?? []) as PlanCommentLite[]).filter(
         (c) => !(input.side === 'client' && c.visibility === 'team'),
       );
-      await resolvePeople(client, workspaceId, list.flatMap((c) => (c.author_user_id !== null ? [c.author_user_id] : [])));
+      await resolvePeople(
+        client,
+        workspaceId,
+        list.flatMap((c) => (c.author_user_id !== null ? [c.author_user_id] : [])),
+      );
       return {
         rows: [...list].reverse().map((c) => ({
           kind: 'message' as const,
@@ -700,8 +748,15 @@ export async function readCatchUpOlder(
       if (res.error !== null) return null;
       const list = res.data ?? [];
       const [counts] = await Promise.all([
-        chatReplyCounts(client, list.map((m) => m.id)),
-        resolvePeople(client, workspaceId, list.flatMap((m) => (m.sender_user_id !== null ? [m.sender_user_id] : []))),
+        chatReplyCounts(
+          client,
+          list.map((m) => m.id),
+        ),
+        resolvePeople(
+          client,
+          workspaceId,
+          list.flatMap((m) => (m.sender_user_id !== null ? [m.sender_user_id] : [])),
+        ),
       ]);
       return {
         rows: [...list].reverse().map((m) => ({
@@ -723,7 +778,10 @@ export async function readCatchUpOlder(
 }
 
 /** Reply counts of chat roots: one IN read. */
-export async function chatReplyCounts(client: Client, rootIds: string[]): Promise<Map<string, number>> {
+export async function chatReplyCounts(
+  client: Client,
+  rootIds: string[],
+): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (rootIds.length === 0) return counts;
   const res = await client
@@ -765,7 +823,13 @@ export async function readCatchUpThread(
         .limit(200);
       if (res.error !== null) return null;
       const list = res.data ?? [];
-      await resolvePeople(client, workspaceId, list.flatMap((m) => (m.sender_user_id !== null ? [m.sender_user_id, ...parseMentions(m.body ?? '')] : [])));
+      await resolvePeople(
+        client,
+        workspaceId,
+        list.flatMap((m) =>
+          m.sender_user_id !== null ? [m.sender_user_id, ...parseMentions(m.body ?? '')] : [],
+        ),
+      );
       return {
         root,
         replies: list.map((m) => ({
@@ -787,7 +851,11 @@ export async function readCatchUpThread(
       .limit(200);
     if (res.error !== null) return null;
     const list = res.data ?? [];
-    await resolvePeople(client, workspaceId, list.flatMap((c) => [c.author_user_id, ...parseMentions(c.body)]));
+    await resolvePeople(
+      client,
+      workspaceId,
+      list.flatMap((c) => [c.author_user_id, ...parseMentions(c.body)]),
+    );
     return {
       root,
       replies: list.map((c) => ({
@@ -804,4 +872,3 @@ export async function readCatchUpThread(
     return null;
   }
 }
-

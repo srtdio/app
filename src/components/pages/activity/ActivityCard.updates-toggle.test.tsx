@@ -157,9 +157,7 @@ describe('ActivityCard grouped updates toggle', () => {
     expect(onOpenEntry).not.toHaveBeenCalled();
     expect(toggle()?.getAttribute('aria-expanded')).toBe('true');
     expect(toggle()?.getAttribute('aria-label')).toBe('Hide 3 updates');
-    expect(host?.querySelector('[data-list-card-tag-chevron]')?.className).toContain(
-      'rotate-180',
-    );
+    expect(host?.querySelector('[data-list-card-tag-chevron]')?.className).toContain('rotate-180');
     const list = host?.querySelector<HTMLElement>('[data-activity-sub-rows]');
     expect(list).not.toBeNull();
     // Under the card (not inside it), on the card's text column.
