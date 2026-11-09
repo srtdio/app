@@ -142,7 +142,9 @@ function listProps(
 describe('Activity: the day line and the card with no trailing ⋯', () => {
   it('"YESTERDAY · 1 update" is one 44 line; Mark all read is the top bar\'s IconButton; no avatar beside the label', () => {
     const page = src('pages/NotificationsPage.tsx');
-    expect(page).toMatch(/data-activity-bucket-head=""[\s\S]{0,120}?h-11/);
+    // One 44 line, text box to text box (9 Nov 2026): 16 above the label (24 from
+    // the day above's last text with the section's 8), the 16 label, 12 under it.
+    expect(page).toMatch(/data-activity-bucket-head=""[\s\S]{0,120}?pb-3 pt-4/);
     expect(page).toMatch(/data-activity-bucket-head[\s\S]*?data-bucket-count/);
     // Mark all read moved to the top bar: an IconButton published via useTopbarActions,
     // never on the day line.

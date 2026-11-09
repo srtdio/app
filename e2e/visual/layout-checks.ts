@@ -1,5 +1,6 @@
 import { test, type Locator, type Page } from '@playwright/test';
 import {
+  ACTIVITY_GAPS_BY_DENSITY,
   alignmentViolations,
   boxText,
   clipBox,
@@ -1330,8 +1331,12 @@ export type AlignScope = 'activity' | 'chat-thread' | 'catch-up-thread';
  * - activity: each item card: the head title, its preview and every line's
  *   paragraph start on one x (rule 1); each line's 20 photo ends on the head
  *   picture's right edge, 12 to the text (rule 2); the head time, the head's
- *   line 2 end and every line's dot slot end on one x (rule 3); the gaps
- *   between line paragraphs are all the same (rule 5).
+ *   kind tag and every line's dot slot end on one x (rule 3); the gaps are the
+ *   density's EXACT values (ACTIVITY_GAPS_BY_DENSITY, <html data-density>):
+ *   head card to its first line, line to line, the last line to "+N more";
+ *   no line ends with the time alone on its last line. The page: each day
+ *   label to its first card, and a day's last card (its last text box) to the
+ *   next day label.
  * - chat-thread / catch-up-thread: the thread strip's label starts on the
  *   root's (and the replies') text column (rule 1); the strip's trailing key
  *   glyph ends on the strip's content edge (rule 3); the root's text ends 12
@@ -1343,164 +1348,236 @@ export async function assertAlignment(
   screenName: string,
   scope: AlignScope,
 ): Promise<void> {
-  const families: AlignFamily[] = await page.evaluate((which: AlignScope): AlignFamily[] => {
-    const shown = (el: Element | null): el is Element => {
-      if (el === null) return false;
-      const r = el.getBoundingClientRect();
-      if (r.width <= 0 || r.height <= 0) return false;
-      return getComputedStyle(el).visibility !== 'hidden';
-    };
-    /** The painted text's box inside el (its text nodes' rects), or null. */
-    const textBox = (el: Element): { left: number; top: number; bottom: number } | null => {
-      let left = Infinity;
-      let top = Infinity;
-      let bottom = -Infinity;
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-      for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
-        if ((n.textContent ?? '').trim() === '') continue;
-        const range = document.createRange();
-        range.selectNodeContents(n);
-        for (const rect of Array.from(range.getClientRects())) {
-          if (rect.width === 0 || rect.height === 0) continue;
-          left = Math.min(left, rect.left);
-          top = Math.min(top, rect.top);
-          bottom = Math.max(bottom, rect.bottom);
+  const families: AlignFamily[] = await page.evaluate(
+    ({ which, gapsByDensity }): AlignFamily[] => {
+      const shown = (el: Element | null): el is Element => {
+        if (el === null) return false;
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return false;
+        return getComputedStyle(el).visibility !== 'hidden';
+      };
+      /** The painted text's box inside el (its text nodes' rects), or null. */
+      const textBox = (el: Element): { left: number; top: number; bottom: number } | null => {
+        let left = Infinity;
+        let top = Infinity;
+        let bottom = -Infinity;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+          if ((n.textContent ?? '').trim() === '') continue;
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const rect of Array.from(range.getClientRects())) {
+            if (rect.width === 0 || rect.height === 0) continue;
+            left = Math.min(left, rect.left);
+            top = Math.min(top, rect.top);
+            bottom = Math.max(bottom, rect.bottom);
+          }
         }
-      }
-      return Number.isFinite(left) ? { left, top, bottom } : null;
-    };
-    const out: AlignFamily[] = [];
-    if (which === 'activity') {
-      const cells = Array.from(document.querySelectorAll('[data-activity-card-cell]'));
-      cells.forEach((cell, c) => {
-        const head = cell.querySelector('[data-activity-item-head]');
-        const title = head?.querySelector('[data-list-card-title]') ?? null;
-        if (!shown(title)) return;
-        const f: AlignFamily = {
-          label: `activity card ${c + 1}`,
-          textLefts: [{ label: 'head title', x: title.getBoundingClientRect().left }],
-          rightEdges: [],
-          hung: [],
-          gaps: [],
-          sameGaps: [],
-        };
-        const preview = head?.querySelector('[data-list-card-preview]') ?? null;
-        if (shown(preview)) {
-          f.textLefts.push({ label: 'head line 2', x: preview.getBoundingClientRect().left });
-        }
-        const time = head?.querySelector('[data-list-card-time]') ?? null;
-        if (shown(time))
-          f.rightEdges.push({ label: 'head time', x: time.getBoundingClientRect().right });
-        const line2 = head?.querySelector('[data-list-card-line="2"]') ?? null;
-        const last = line2 !== null ? Array.from(line2.children).filter(shown).pop() : undefined;
-        if (last !== undefined) {
-          f.rightEdges.push({ label: 'head line 2 end', x: last.getBoundingClientRect().right });
-        }
-        const picture = head?.querySelector('[data-list-card-picture]') ?? null;
-        const pictureRight = shown(picture) ? picture.getBoundingClientRect().right : null;
-        let prevBottom: number | null = null;
-        const lines = Array.from(cell.querySelectorAll('[data-activity-line]')).filter(shown);
-        lines.forEach((line, i) => {
-          const body = line.querySelector('[data-activity-line-body]');
-          if (!shown(body)) return;
-          const b = body.getBoundingClientRect();
-          f.textLefts.push({ label: `line ${i + 1}`, x: b.left });
-          const slot = line.querySelector('[data-activity-line-dot-slot]');
-          if (shown(slot)) {
-            f.rightEdges.push({
-              label: `line ${i + 1} dot`,
-              x: slot.getBoundingClientRect().right,
+        return Number.isFinite(left) ? { left, top, bottom } : null;
+      };
+      const out: AlignFamily[] = [];
+      if (which === 'activity') {
+        const density = document.documentElement.dataset.density;
+        const want =
+          density === 'compact' || density === 'calm' ? gapsByDensity[density] : gapsByDensity.cozy;
+        const box = (el: Element): DOMRect => el.getBoundingClientRect();
+        const cells = Array.from(document.querySelectorAll('[data-activity-card-cell]'));
+        cells.forEach((cell, c) => {
+          const head = cell.querySelector('[data-activity-item-head]');
+          const title = head?.querySelector('[data-list-card-title]') ?? null;
+          if (head === null || !shown(title)) return;
+          const f: AlignFamily = {
+            label: `activity card ${c + 1} (${density ?? 'cozy'})`,
+            textLefts: [{ label: 'head title', x: title.getBoundingClientRect().left }],
+            rightEdges: [],
+            hung: [],
+            gaps: [],
+            loneTimes: [],
+          };
+          const preview = head.querySelector('[data-list-card-preview]');
+          if (shown(preview)) {
+            f.textLefts.push({ label: 'head line 2', x: preview.getBoundingClientRect().left });
+          }
+          const time = head.querySelector('[data-list-card-time]');
+          if (shown(time)) f.rightEdges.push({ label: 'head time', x: box(time).right });
+          const tag = head.querySelector('[data-list-card-tag]');
+          if (shown(tag)) f.rightEdges.push({ label: 'head tag', x: box(tag).right });
+          const picture = head.querySelector('[data-list-card-picture]');
+          const pictureRight = shown(picture) ? box(picture).right : null;
+          let prevBottom: number | null = null;
+          const lines = Array.from(cell.querySelectorAll('[data-activity-line]')).filter(shown);
+          lines.forEach((line, i) => {
+            const body = line.querySelector('[data-activity-line-body]');
+            if (!shown(body)) return;
+            const b = box(body);
+            f.textLefts.push({ label: `line ${i + 1}`, x: b.left });
+            const slot = line.querySelector('[data-activity-line-dot-slot]');
+            if (shown(slot)) f.rightEdges.push({ label: `line ${i + 1} dot`, x: box(slot).right });
+            const photo = line.querySelector('[data-activity-line-photo] > *');
+            if (shown(photo) && pictureRight !== null) {
+              f.hung?.push({
+                label: `line ${i + 1}`,
+                photoRight: box(photo).right,
+                pictureRight,
+                textLeft: b.left,
+              });
+            }
+            if (prevBottom === null) {
+              f.gaps.push({
+                label: 'head card to line 1',
+                gap: b.top - box(head).bottom,
+                equals: want.headToLine,
+              });
+            } else {
+              f.gaps.push({
+                label: `line ${i} to line ${i + 1}`,
+                gap: b.top - prevBottom,
+                equals: want.lineToLine,
+              });
+            }
+            prevBottom = b.bottom;
+            // A lone time: the time's first box starts a visual line of the paragraph.
+            const t = line.querySelector('[data-activity-line-time]');
+            const first = t !== null ? Array.from(t.getClientRects())[0] : undefined;
+            if (
+              first !== undefined &&
+              Math.abs(first.left - b.left) <= 1 &&
+              b.height > first.height + 1
+            ) {
+              f.loneTimes?.push(`line ${i + 1}`);
+            }
+          });
+          const more = cell.querySelector('[data-activity-more]');
+          if (shown(more) && prevBottom !== null) {
+            f.gaps.push({
+              label: 'last line to "+N more"',
+              gap: box(more).top - prevBottom,
+              equals: want.lineToLine,
             });
           }
-          const photo = line.querySelector('[data-activity-line-photo] > *');
-          if (shown(photo) && pictureRight !== null) {
-            f.hung?.push({
-              label: `line ${i + 1}`,
-              photoRight: photo.getBoundingClientRect().right,
-              pictureRight,
-              textLeft: b.left,
-            });
-          }
-          if (prevBottom !== null) {
-            f.sameGaps?.push({ label: `line ${i} to line ${i + 1}`, gap: b.top - prevBottom });
-          }
-          prevBottom = b.bottom;
+          if (lines.length > 0) out.push(f);
         });
-        if (lines.length > 0) out.push(f);
-      });
-      return out;
-    }
-    // A thread view: the root, the strip, the replies.
-    const catchUp = which === 'catch-up-thread';
-    const strip = document.querySelector(
-      catchUp
-        ? '[data-catch-up-thread] [data-thread-strip]'
-        : '[data-thread-view] [data-thread-strip]',
-    );
-    if (!shown(strip)) {
-      return [
-        {
-          label: `${which} strip`,
+        // The page: day label to its first card; a day's last text to the next label.
+        const days: AlignFamily = {
+          label: `activity days (${density ?? 'cozy'})`,
           textLefts: [],
           rightEdges: [],
-          gaps: [{ label: 'no thread strip shown', gap: -1, min: 0 }],
-        },
-      ];
-    }
-    const s = strip.getBoundingClientRect();
-    const rowSel = catchUp ? '[data-catch-up-message]' : 'li[data-msg-id]';
-    const textSel = catchUp ? '[data-catch-up-name]' : '[data-sender-line], [data-msg-body]';
-    const host =
-      strip.closest(catchUp ? '[data-catch-up-thread]' : '[data-thread-view]') ?? document;
-    const rows = Array.from(host.querySelectorAll(rowSel)).filter(shown);
-    const above = rows.filter((r) => r.getBoundingClientRect().bottom <= s.top + 0.5);
-    const below = rows.filter((r) => r.getBoundingClientRect().top >= s.bottom - 0.5);
-    const root = above.pop();
-    const label = strip.querySelector('[data-thread-strip-label]');
-    const f: AlignFamily = { label: `${which}`, textLefts: [], rightEdges: [], gaps: [] };
-    const column = root?.querySelector(textSel) ?? null;
-    if (shown(column))
-      f.textLefts.push({ label: 'root text', x: column.getBoundingClientRect().left });
-    if (shown(label))
-      f.textLefts.push({ label: 'strip label', x: label.getBoundingClientRect().left });
-    below.slice(0, 3).forEach((r, i) => {
-      const t = r.querySelector(textSel);
-      if (shown(t))
-        f.textLefts.push({ label: `reply ${i + 1} text`, x: t.getBoundingClientRect().left });
-    });
-    // Rule 3: the trailing key's glyph on the strip's content edge.
-    const keys = Array.from(strip.querySelectorAll('[data-thread-root-action]')).filter(shown);
-    const lastKey = keys.pop();
-    if (lastKey !== undefined) {
-      const pad = Number.parseFloat(getComputedStyle(strip).paddingRight) || 0;
-      f.rightEdges.push({ label: 'strip content edge', x: s.right - pad });
-      const glyph = lastKey.querySelector('svg');
-      if (shown(glyph))
-        f.rightEdges.push({ label: 'last key glyph', x: glyph.getBoundingClientRect().right });
-    }
-    // Rule 5: the root's text 12 over the top hairline; replies start 8 under it.
-    if (root !== undefined) {
-      const t = textBox(root);
-      if (t !== null)
-        f.gaps.push({ label: 'root text to strip hairline', gap: s.top - t.bottom, min: 12 });
-      f.gaps.push({
-        label: 'root row to strip',
-        gap: s.top - root.getBoundingClientRect().bottom,
-        equals: catchUp ? 4 : 12,
+          gaps: [],
+        };
+        const heads = Array.from(document.querySelectorAll('[data-activity-bucket-head]')).filter(
+          shown,
+        );
+        /** The lowest text box of a day: a line, "+N more", else the card itself. */
+        const dayBottom = (list: Element): number => {
+          let bottom = -Infinity;
+          for (const child of Array.from(list.children).filter(shown)) {
+            const texts = Array.from(
+              child.querySelectorAll('[data-activity-line-body], [data-activity-more]'),
+            ).filter(shown);
+            const cards =
+              texts.length > 0 ? texts : [child.querySelector('[data-list-card]') ?? child];
+            for (const t of cards) bottom = Math.max(bottom, box(t).bottom);
+          }
+          return bottom;
+        };
+        heads.forEach((h, d) => {
+          const label = h.querySelector('h2');
+          const list = h.parentElement?.querySelector('[data-activity-list]') ?? null;
+          if (!shown(label) || list === null) return;
+          const first = Array.from(list.children).find(shown);
+          const name = (label.textContent ?? '').trim();
+          if (first !== undefined) {
+            days.gaps.push({
+              label: `${name} label to its first card`,
+              gap: box(first).top - box(label).bottom,
+              equals: want.labelToCard,
+            });
+          }
+          const next = heads[d + 1]?.querySelector('h2');
+          if (shown(next ?? null) && next !== undefined && next !== null) {
+            days.gaps.push({
+              label: `${name} last card to the ${(next.textContent ?? '').trim()} label`,
+              gap: box(next).top - dayBottom(list),
+              equals: want.dayToLabel,
+            });
+          }
+        });
+        if (days.gaps.length > 0) out.push(days);
+        return out;
+      }
+      // A thread view: the root, the strip, the replies.
+      const catchUp = which === 'catch-up-thread';
+      const strip = document.querySelector(
+        catchUp
+          ? '[data-catch-up-thread] [data-thread-strip]'
+          : '[data-thread-view] [data-thread-strip]',
+      );
+      if (!shown(strip)) {
+        return [
+          {
+            label: `${which} strip`,
+            textLefts: [],
+            rightEdges: [],
+            gaps: [{ label: 'no thread strip shown', gap: -1, min: 0 }],
+          },
+        ];
+      }
+      const s = strip.getBoundingClientRect();
+      const rowSel = catchUp ? '[data-catch-up-message]' : 'li[data-msg-id]';
+      const textSel = catchUp ? '[data-catch-up-name]' : '[data-sender-line], [data-msg-body]';
+      const host =
+        strip.closest(catchUp ? '[data-catch-up-thread]' : '[data-thread-view]') ?? document;
+      const rows = Array.from(host.querySelectorAll(rowSel)).filter(shown);
+      const above = rows.filter((r) => r.getBoundingClientRect().bottom <= s.top + 0.5);
+      const below = rows.filter((r) => r.getBoundingClientRect().top >= s.bottom - 0.5);
+      const root = above.pop();
+      const label = strip.querySelector('[data-thread-strip-label]');
+      const f: AlignFamily = { label: `${which}`, textLefts: [], rightEdges: [], gaps: [] };
+      const column = root?.querySelector(textSel) ?? null;
+      if (shown(column))
+        f.textLefts.push({ label: 'root text', x: column.getBoundingClientRect().left });
+      if (shown(label))
+        f.textLefts.push({ label: 'strip label', x: label.getBoundingClientRect().left });
+      below.slice(0, 3).forEach((r, i) => {
+        const t = r.querySelector(textSel);
+        if (shown(t))
+          f.textLefts.push({ label: `reply ${i + 1} text`, x: t.getBoundingClientRect().left });
       });
-    }
-    const firstReply = below[0];
-    if (firstReply !== undefined) {
-      // Chat: the reply row's box (the strip carries the 8); catch up: the row's photo column.
-      const top = catchUp
-        ? (firstReply.firstElementChild?.getBoundingClientRect().top ??
-          firstReply.getBoundingClientRect().top)
-        : firstReply.getBoundingClientRect().top;
-      f.gaps.push({ label: 'strip to first reply', gap: top - s.bottom, equals: 8 });
-    }
-    out.push(f);
-    return out;
-  }, scope);
+      // Rule 3: the trailing key's glyph on the strip's content edge.
+      const keys = Array.from(strip.querySelectorAll('[data-thread-root-action]')).filter(shown);
+      const lastKey = keys.pop();
+      if (lastKey !== undefined) {
+        const pad = Number.parseFloat(getComputedStyle(strip).paddingRight) || 0;
+        f.rightEdges.push({ label: 'strip content edge', x: s.right - pad });
+        const glyph = lastKey.querySelector('svg');
+        if (shown(glyph))
+          f.rightEdges.push({ label: 'last key glyph', x: glyph.getBoundingClientRect().right });
+      }
+      // Rule 5: the root's text 12 over the top hairline; replies start 8 under it.
+      if (root !== undefined) {
+        const t = textBox(root);
+        if (t !== null)
+          f.gaps.push({ label: 'root text to strip hairline', gap: s.top - t.bottom, min: 12 });
+        f.gaps.push({
+          label: 'root row to strip',
+          gap: s.top - root.getBoundingClientRect().bottom,
+          equals: catchUp ? 4 : 12,
+        });
+      }
+      const firstReply = below[0];
+      if (firstReply !== undefined) {
+        // Chat: the reply row's box (the strip carries the 8); catch up: the row's photo column.
+        const top = catchUp
+          ? (firstReply.firstElementChild?.getBoundingClientRect().top ??
+            firstReply.getBoundingClientRect().top)
+          : firstReply.getBoundingClientRect().top;
+        f.gaps.push({ label: 'strip to first reply', gap: top - s.bottom, equals: 8 });
+      }
+      out.push(f);
+      return out;
+    },
+    { which: scope, gapsByDensity: ACTIVITY_GAPS_BY_DENSITY },
+  );
   settleFindings(
     screenName,
     alignmentViolations(families).map((message) => ({ check: 'alignment' as const, message })),

@@ -1,7 +1,7 @@
 name: CI
 
-# changes: picks what a PR runs, from its diff against the merge base with the
-#   PR's base branch. A push to main runs everything.
+# changes: picks what a PR (or a dispatched run, against main) runs, from its
+#   diff against the merge base with the base branch. A push to main runs everything.
 #   - code=false when every changed file is under docs/ or ends in .md:
 #     typecheck, lint, format-check and build then report green and skip.
 #   - unit: all (push to main; or a PR touching vitest.config.ts, a
@@ -15,10 +15,14 @@ name: CI
 # test-shard: the unit run in 4 parallel shards.
 # test: the required check; fails if change detection or any shard failed,
 #   passes on success or skip.
+# workflow_dispatch: Visual CI's commit-baselines starts it on a PR branch for
+#   the bot's baseline commit (a GITHUB_TOKEN push starts no run); it diffs
+#   against main like a pull request.
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 # One run per PR: a newer push cancels the older run (main pushes always finish).
 concurrency:
@@ -44,13 +48,14 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ]; then
+          if [ "$EVENT_NAME" = "push" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "unit=all" >> "$GITHUB_OUTPUT"
             echo "related=" >> "$GITHUB_OUTPUT"
             echo "push: everything, full unit suite"
             exit 0
           fi
+          BASE_REF="${BASE_REF:-main}"
           git fetch --no-tags origin "$BASE_REF"
           base=$(git merge-base "origin/$BASE_REF" HEAD)
           files=$(git diff --name-only "$base" HEAD)

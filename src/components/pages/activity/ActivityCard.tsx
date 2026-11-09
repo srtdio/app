@@ -89,6 +89,11 @@ interface ActivityCardProps {
   side?: ViewerSide;
   /** A card a live refresh just added: it slides up into place (never sideways). */
   entering?: boolean;
+  /**
+   * The day's last card: its lines end on their last text box (no 12 under
+   * them), so the next day label sits 24 below (NotificationsPage).
+   */
+  lastInDay?: boolean;
 }
 
 /**
@@ -440,13 +445,24 @@ export function itemCardLines(group: readonly ActivityItem[]): ActivityItem[] {
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
+/** Line to line (and to "+N more"), text box to text box: 8 / 12 / 16 by density. */
+const LINES_GAP = 'flex min-w-0 flex-col gap-3 compact:gap-2 calm:gap-4';
+
+/**
+ * A line's (and "+N more"'s) hit box past its text, splitting the line gap
+ * with its neighbours: above + below = one gap (Compact 4 + 4, Cozy 4 + 8,
+ * Calm 8 + 8), so hits meet edge to edge and never overlap (layout check
+ * tap-overlap), and the reach above never passes the head gap. A row's tap
+ * height is its text + one gap.
+ */
+const LINE_HIT_Y = '-top-1 -bottom-2 compact:-bottom-1 calm:-top-2';
+
 /** A no-break space: "… more" and the time never split across lines. */
 const NBSP = '\u00a0';
 
 /** The secondary role without its one-line truncate: the line wraps to 3 lines. */
 // min-h-5 at the call site: a one-line paragraph (18) is as tall as the 20 photo,
-// so every row is set by its text box and the 24 between rows never varies (rule 5),
-// and the hit overlay (12 past each side) is 44 even for one line.
+// so every row is set by its text box and the gap between rows never varies (rule 5).
 const LINE_BODY_ROLE = TEXT_ROLE.secondary.replace(/\btruncate\b/, '').trim();
 
 /** Lines a notification's text shows before "… more" (9 Nov 2026). */
@@ -479,7 +495,7 @@ export function cutLine(text: string, fits: (candidate: string | null) => boolea
   return lo > 0 ? at(lo) : (words[0] ?? '');
 }
 
-/** The "more" / "less" key after the marker: muted, inline, a 44 hit from its own child box. */
+/** The "more" / "less" key after the marker: muted, inline, its hit from its own child box (LINE_HIT_Y). */
 const LINE_MARKER =
   'relative inline min-h-0 w-auto rounded-sm align-baseline text-fg-3 focus-visible:lit-focus';
 
@@ -553,8 +569,8 @@ function useLineCut(text: string): {
  * the end. At most 3 lines: past that the text is cut at the last whole word
  * with "… more" before the time; "… more" unfolds this line in place
  * ("less" folds it). An 8px dot slot on the head's dot edge, kept when read
- * so the text never shifts. The 44 tap comes from a hit overlay (12 above and
- * below the text, half the 24 gap), never from padding. A tap opens its own
+ * so the text never shifts. The tap comes from a hit overlay (half the line
+ * gap above and below the text, LINE_HIT_Y), never from padding. A tap opens its own
  * spot and marks only it read. No reactions.
  */
 function EntryLine(props: {
@@ -588,7 +604,7 @@ function EntryLine(props: {
         insetFocus
         data-activity-line-open=""
         aria-label={`${actor} ${text} ${time}${unread ? ', unread' : ''}`}
-        className="absolute -inset-y-3 -left-8 right-0 w-auto"
+        className={cn('absolute -left-8 right-0 min-h-0 w-auto', LINE_HIT_Y)}
       />
       <span aria-hidden="true" data-activity-line-photo="" className="-ml-8 flex w-8 shrink-0">
         <Avatar
@@ -632,12 +648,12 @@ function EntryLine(props: {
             className={LINE_MARKER}
           >
             {open ? 'less' : 'more'}
-            <span
-              aria-hidden="true"
-              className="absolute -inset-x-2 top-1/2 h-11 -translate-y-1/2"
-            />
+            <span aria-hidden="true" className={cn('absolute -inset-x-2', LINE_HIT_Y)} />
           </PressableRow>
-        ) : null}{' '}
+        ) : null}
+        {/* A no-break space ties the time to the last word (or "more" / "less"):
+            the time never drops onto a line of its own. */}
+        {NBSP}
         <span aria-hidden="true" data-activity-line-time="" className={textRole('meta')}>
           {time.replace(/ /g, NBSP)}
         </span>
@@ -666,7 +682,7 @@ function EntryLine(props: {
  *   head ListCard (the picture, the item title, the kind tag, "N new" while
  *   anything is unread; a tap opens the item, unchanged), then one line per
  *   notification, newest first, on the head's title column. The first 5 show;
- *   more fold behind "+N more" (44 tall, aria-expanded), which unfolds the
+ *   more fold behind "+N more" (a 20 text box, aria-expanded), which unfolds the
  *   rest in place (itemIn, Y) and becomes "Show less" (itemOut on fold). The
  *   fold is per card, in memory. A line opens its own spot and marks only
  *   that entry read.
@@ -682,6 +698,7 @@ export function ActivityCard({
   selfName,
   side = 'unknown',
   entering = false,
+  lastInDay = false,
 }: ActivityCardProps) {
   const [open, setOpen] = useState(false);
   const lines = itemCardLines(group);
@@ -745,6 +762,8 @@ export function ActivityCard({
           : {})}
       title={title}
       unread={chat ? groupHasUnread(group) : unreadLines > 0}
+      // The item head's tag ends on the time's edge: its lines carry the dots.
+      unreadDotHidden={!chat}
       preview={preview}
       previewHooks={chat ? { 'data-activity-preview': '' } : { 'data-activity-new': '' }}
       time={time}
@@ -783,18 +802,20 @@ export function ActivityCard({
       {lines.length > 0 ? (
         <div
           data-activity-lines=""
-          // 24 between lines (and 12 + 12 under the head): each line's 44 hit
-          // overlay reaches 12 past its text, so neighbours meet, never overlap.
-          className={cn('flex min-w-0 flex-col gap-6 py-3', LIST_CARD_SUB_INSET)}
+          // Density (9 Nov 2026, text box to text box): head card to line 1
+          // 4 / 8 / 12, line to line (and to "+N more") 8 / 12 / 16, Compact /
+          // Cozy / Calm; 12 under the last line to the next card (none on the
+          // day's last card). Hits meet in the gaps (LINE_HIT_Y), never overlap.
+          className={cn(
+            LINES_GAP,
+            'pt-2 compact:pt-1 calm:pt-3',
+            !lastInDay && 'pb-3',
+            LIST_CARD_SUB_INSET,
+          )}
         >
           {lines.slice(0, ACTIVITY_LINES_SHOWN).map(line)}
           {rest.rendered ? (
-            <div
-              ref={rest.ref}
-              id={restId}
-              data-activity-lines-rest=""
-              className="flex min-w-0 flex-col gap-6"
-            >
+            <div ref={rest.ref} id={restId} data-activity-lines-rest="" className={LINES_GAP}>
               {lines.slice(ACTIVITY_LINES_SHOWN).map(line)}
             </div>
           ) : null}
@@ -805,9 +826,12 @@ export function ActivityCard({
               aria-controls={restId}
               aria-label={open ? 'Show less' : `Show ${hidden} more updates`}
               onClick={() => setOpen((was) => !was)}
-              className={textRole('label', 'flex items-center text-fg-2')}
+              // Its text box only (the label's 20 line; its gap is measured like a line's); the tap
+              // comes from the hit box (LINE_HIT_Y), never from padding.
+              className={textRole('label', 'relative flex min-h-0 items-center text-fg-2')}
             >
               {open ? 'Show less' : moreLabel(hidden)}
+              <span aria-hidden="true" className={cn('absolute inset-x-0', LINE_HIT_Y)} />
             </PressableRow>
           ) : null}
         </div>

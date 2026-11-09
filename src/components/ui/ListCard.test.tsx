@@ -348,6 +348,16 @@ describe('ListCard line 2: preview, tag, unread dot', () => {
     );
   });
 
+  it('unreadDotHidden: the dot is spoken (sr-only), the title still bolds; off by default', () => {
+    const quiet = render({ unread: true, unreadDotHidden: true, tag: 'Post' });
+    expect(quiet).toMatch(
+      /data-list-card-unread="" role="img" aria-label="Unread" class="sr-only"/,
+    );
+    expect(quiet).not.toMatch(/data-list-card-title=""[^>]*font-normal/);
+    // Every other list keeps the drawn dot.
+    expect(render({ unread: true })).toContain(`class="${LIST_CARD_UNREAD_DOT}"`);
+  });
+
   it('with a preview: no spacer, the tag follows the preview', () => {
     expect(line2Order(render({ unread: true }))).toEqual(['preview', 'tag', 'unread']);
   });

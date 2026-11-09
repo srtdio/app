@@ -7,9 +7,10 @@ name: Visual CI
 # Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines], each shard clears the baselines and re-renders its own screens (--update-snapshots=all) on this CI WebKit image and uploads them as visual-baselines-<N>,
 #   then compares its screens again against those fresh baselines on the same tree (a render that is not stable fails here, not on a later push).
 #   commit-baselines merges all four artifacts into one full set and commits it to the PR's head branch. That push is made with GITHUB_TOKEN, so it starts no new run;
-#   instead commit-baselines reports the checks for the bot commit itself (no new secret): the bot commit changes only e2e/visual/__screenshots__, so it waits for every
-#   other check on the tested head commit to finish and copies each result onto the bot commit, and reports visual / visual-shard as passed (the screens were just
-#   rendered and compared on this tree). The PR ends green on the bot commit with no human re-run. If anything but the screenshots differs, it reports nothing.
+#   instead commit-baselines gives the bot commit its checks itself (no new secret): it starts CI (ci.yml) on the branch by workflow_dispatch (the one event a
+#   GITHUB_TOKEN may start; its unit tests read the screenshots), reports visual / visual-shard as passed (the screens were just rendered and compared on this tree),
+#   and, since the bot commit changes only e2e/visual/__screenshots__, waits for every other workflow's checks on the tested head and copies each result onto it.
+#   The PR ends green on the bot commit with no human re-run. If anything but the screenshots differs, it reports nothing.
 # Locally: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts (add --update-snapshots=all to refresh; local baselines differ from CI's, commit only CI-rendered ones).
 on:
   pull_request:
@@ -193,6 +194,7 @@ jobs:
       contents: write
       checks: write
       statuses: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -226,11 +228,12 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # A GITHUB_TOKEN push starts no workflow, so the bot commit would wait on
-      # its required checks forever. Its tree differs from the tested head only
-      # in e2e/visual/__screenshots__ (checked here), so every other check's
-      # result on the tested head holds for it: wait for them to finish and copy
-      # each one (check runs and commit statuses) onto the bot commit. The
-      # visual checks pass: the screens were rendered and compared on this tree.
+      # its required checks forever. CI runs for real on it (workflow_dispatch;
+      # its unit tests read the baselines). Visual passes: the screens were
+      # rendered and compared on this tree. Every other workflow's tree is the
+      # tested head's but for e2e/visual/__screenshots__ (checked here), so its
+      # results there hold: wait for them and copy each check run (and commit
+      # status) onto the bot commit.
       - name: Report the checks for the bot commit
         if: steps.commit.outputs.sha != ''
         env:
@@ -238,6 +241,7 @@ jobs:
           REPO: ${{ github.repository }}
           TESTED: ${{ github.event.pull_request.head.sha }}
           BOT: ${{ steps.commit.outputs.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -248,23 +252,8 @@ jobs:
             echo "$other"
             exit 1
           fi
-          own() { case "$1" in visual|visual-shard*|commit-baselines) return 0 ;; *) return 1 ;; esac; }
-          runs() {
-            gh api --paginate "repos/$REPO/commits/$TESTED/check-runs?per_page=100" \
-              --jq '.check_runs[] | [.name, .status, (.conclusion // ""), .html_url] | @tsv'
-          }
-          # Wait (up to 60 minutes) until every other check on the tested head is done.
-          for i in $(seq 1 120); do
-            pending=0
-            while IFS=$'\t' read -r name status conclusion url; do
-              [ -z "$name" ] && continue
-              own "$name" && continue
-              [ "$status" != completed ] && pending=$((pending + 1))
-            done < <(runs)
-            [ "$pending" -eq 0 ] && break
-            echo "waiting on $pending checks of $TESTED"
-            sleep 30
-          done
+          gh workflow run ci.yml --repo "$REPO" --ref "$HEAD_REF"
+          echo "CI dispatched on $HEAD_REF ($BOT)"
           post() {
             gh api -X POST "repos/$REPO/check-runs" \
               -f name="$1" -f head_sha="$BOT" -f status=completed -f conclusion="$2" \
@@ -272,23 +261,43 @@ jobs:
               -f "output[summary]=Bot baseline commit: $4 (tested head $TESTED)." > /dev/null
             echo "$1: $2"
           }
-          # Only the newest run of each name counts (a re-run replaces the old one).
+          for n in 1 2 3 4; do
+            post "visual-shard ($n/4)" success "$RUN_URL" "rendered and compared on this tree"
+          done
+          post visual success "$RUN_URL" "rendered and compared on this tree"
+          # The check suites of CI and Visual CI on the tested head are not copied.
+          skip=$(gh api "repos/$REPO/actions/runs?head_sha=$TESTED&per_page=100" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml" or .path == ".github/workflows/visual-ci.yml") | .check_suite_id] | map(tostring) | join(" ")')
+          runs() {
+            gh api --paginate "repos/$REPO/commits/$TESTED/check-runs?per_page=100" \
+              --jq '.check_runs[] | [(.check_suite.id | tostring), .name, .status, (.conclusion // ""), .html_url] | @tsv'
+          }
+          own() { case " $skip " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+          # Wait (up to 60 minutes) until every other check on the tested head is done.
+          for i in $(seq 1 120); do
+            pending=0
+            while IFS=$'\t' read -r suite name status conclusion url; do
+              [ -z "$name" ] && continue
+              own "$suite" && continue
+              [ "$status" != completed ] && pending=$((pending + 1))
+            done < <(runs)
+            [ "$pending" -eq 0 ] && break
+            echo "waiting on $pending checks of $TESTED"
+            sleep 30
+          done
+          # One result per check suite and name (the newest; the list is newest first).
           declare -A seen
-          while IFS=$'\t' read -r name status conclusion url; do
+          while IFS=$'\t' read -r suite name status conclusion url; do
             [ -z "$name" ] && continue
-            own "$name" && continue
-            [ -n "${seen[$name]:-}" ] && continue
-            seen[$name]=1
+            own "$suite" && continue
+            [ -n "${seen[$suite/$name]:-}" ] && continue
+            seen[$suite/$name]=1
             if [ "$status" != completed ]; then
               echo "$name: still $status after 60 minutes, not reported"
               continue
             fi
             post "$name" "$conclusion" "$url" "copied from the tested head ($conclusion)"
           done < <(runs)
-          for n in 1 2 3 4; do
-            post "visual-shard ($n/4)" success "$RUN_URL" "rendered and compared on this tree"
-          done
-          post visual success "$RUN_URL" "rendered and compared on this tree"
           # Commit statuses (non-Actions checks) carry over the same way.
           gh api "repos/$REPO/commits/$TESTED/status" \
             --jq '.statuses[] | [.context, .state, (.target_url // ""), (.description // "")] | @tsv' |

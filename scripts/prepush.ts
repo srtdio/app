@@ -351,14 +351,7 @@ async function main(): Promise<void> {
   if (visual.grep === null) {
     results.push(await skip('visual + layout checks', visual.why));
   } else {
-    const args = [
-      'exec',
-      'playwright',
-      'test',
-      '--config',
-      'e2e/visual/playwright.visual.config.ts',
-      '--reporter=line',
-    ];
+    const args = ['test', '--config', 'e2e/visual/playwright.visual.config.ts', '--reporter=line'];
     if (process.env.PREPUSH_SNAPSHOTS !== '1') args.push('--ignore-snapshots');
     if (visual.grep !== 'ALL') args.push('-g', visual.grep);
     process.stdout.write(
