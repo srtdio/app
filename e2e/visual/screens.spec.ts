@@ -1684,9 +1684,11 @@ const SCREENS: Screen[] = [
     url: '/activity',
     steps: async (page) => {
       await waitFor([page.locator('[data-activity-line-more="more"]').first()], '… more');
+      // "… more" unfolds in place: the URL (the Activity route) never changes.
+      const before = page.url();
       await tap([page.locator('[data-activity-line-more="more"]').first()], '… more');
       await waitFor([page.locator('[data-activity-line-more="less"]')], 'less');
-      await expect(page).toHaveURL(/\/activity/);
+      expect(page.url()).toBe(before);
     },
   },
   {
