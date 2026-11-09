@@ -351,7 +351,6 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
         cache={cache}
         presignEnabled={false}
         onOpenGroup={() => {}}
-        onOpenEntry={() => {}}
         selfName={null}
         {...extra}
       />,
@@ -395,9 +394,13 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
 
   it('a plan alert reads the side-aware line', () => {
     const p = { ...plan('plan_opened'), actorName: 'Priya' };
-    // 9 Nov 2026: the head names the plan; the alert is a line (actor, then its words).
-    expect(card([p], { side: 'client' })).toMatch(/>Priya<[^]*Shared Week of 12 Oct with you/);
-    expect(card([p])).toMatch(/>Priya<[^]*Opened Week of 12 Oct for approvers/);
+    // The row's preview is the newest entry's whole action line, side-aware.
+    expect(card([p], { side: 'client' })).toMatch(
+      /data-activity-preview=""[^>]*>Priya shared Week of 12 Oct with you</,
+    );
+    expect(card([p])).toMatch(
+      /data-activity-preview=""[^>]*>Priya opened Week of 12 Oct for approvers</,
+    );
   });
 
   it('a merged plan edit reads "{name} updated {plan}" with the plan icon, light and dark', () => {
@@ -422,13 +425,12 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
               cache={cache}
               presignEnabled={false}
               onOpenGroup={() => {}}
-              onOpenEntry={() => {}}
               selfName={null}
               side={side}
             />
           </div>,
         );
-        expect(html).toMatch(/>Priya<[^]*Updated Week of 12 Oct/);
+        expect(html).toMatch(/data-activity-preview=""[^>]*>Priya updated Week of 12 Oct</);
         expect(html).toContain('data-activity-event="plan_updated"');
         expect(html).toContain('data-activity-alert-icon="plan"');
         // Token classes only: the theme swaps the tokens, never the markup.
@@ -600,11 +602,11 @@ describe('notifications fixes: page and provider wiring', () => {
   it('fix 9 (9 Nov 2026): a row tap opens the real place; catch up opens only from its button', () => {
     expect(page).toContain('const open = openAction(entry, workspaceKey, side);');
     expect(page).toContain('if (open.href !== null) navigate(open.href);');
-    // A group head marks every unread entry of the group read, then opens its newest comment.
+    // A row marks every unread entry of its item read, then opens its newest entry.
     expect(page).toContain('if (unread.length > 0) markEntriesRead(unread);');
     expect(page).not.toContain('groupHeadEntry');
-    // The Catch up button is the one way in.
-    expect(page).toContain('onClick={() => openCatchUp(null)}');
+    // No Catch up bar in the list (the top bar carries Catch up).
+    expect(page).not.toContain('data-activity-catch-up-bar');
   });
 
   it('fix 11: relative times age on the shared minute clock, never a page timer of its own', () => {
@@ -622,7 +624,7 @@ describe('notifications fixes: page and provider wiring', () => {
     // Loading is the card-shaped boxes (ActivityBoxes), labelled "Loading activity".
     expect(page).toContain('<ActivityBoxes />');
     expect(page).not.toContain('Upcoming');
-    expect(page).toContain('{updatesLabel(entries.length)}');
+    expect(page).not.toContain('updatesLabel');
   });
 
   it('fix 13: each chip empty state is its one positive line', () => {

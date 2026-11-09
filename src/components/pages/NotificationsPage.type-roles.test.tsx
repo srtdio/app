@@ -200,14 +200,14 @@ describe('Notifications type roles', () => {
     expect(title?.className).not.toMatch(/leading-\[/);
   });
 
-  it('the card time and bucket count are sm fg-3 meta', async () => {
+  it('the card time is sm fg-3 meta; a section heading carries no count', async () => {
     await mount();
     const time = document.querySelector('[data-activity-time]');
     expect(time).not.toBeNull();
     expectRole(time as HTMLElement, ['text-sm', 'text-fg-3']);
-    const count = document.querySelector('[data-bucket-count]');
-    expect(count?.textContent).toBe('1 update');
-    expectRole(count as HTMLElement, ['text-sm', 'text-fg-3']);
+    expect(document.querySelector('[data-bucket-count]')).toBeNull();
+    const heading = document.querySelector('[data-activity-section] > h2');
+    expect(heading?.textContent).toMatch(/^(Today|Yesterday|Earlier)$/);
   });
 });
 

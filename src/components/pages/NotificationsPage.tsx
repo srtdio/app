@@ -13,9 +13,7 @@ import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ActivityFilterBar, activityChip } from '@/components/pages/activity/ActivityFilterBar';
-import { cn } from '@/lib/cn';
-import { Text, textRole } from '@/components/ui/Text';
-import { GUTTER } from '@/components/ui/layout';
+import { Text } from '@/components/ui/Text';
 import { mentionHandle } from '@/lib/chat/mentions';
 import { errorText } from '@/lib/error-copy';
 import { useViewerSide } from '@/lib/chat/viewer-role';
@@ -53,7 +51,6 @@ import {
   openAction,
   fetchActivityEntry,
   unreadCount,
-  updatesLabel,
   type ActivityDirection,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -72,15 +69,17 @@ import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { useOptionalToast } from '@/components/ui/toast';
 import { undoFailureTitle } from '@/lib/use-undoable-action';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
-import { ActivityBoxes } from '@/components/pages/activity/ActivityBoxes';
+import {
+  ACTIVITY_LIST,
+  ACTIVITY_SECTION,
+  ActivityBoxes,
+} from '@/components/pages/activity/ActivityBoxes';
 import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
-import { CATCH_UP, unreadHeading } from '@/lib/catch-up/copy';
 import { buildCatchUpQueue, heldEntries, type CatchUpItem } from '@/lib/catch-up/queue';
 import {
   CATCH_UP_NEWEST,
   CATCH_UP_PARAM,
   catchUpReturnOf,
-  seedCatchUpEntry,
   takeCatchUpSeed,
 } from '@/lib/catch-up/route';
 
@@ -542,32 +541,8 @@ export function NotificationsPage() {
     [workspaceId, newTrace, editItems, revertRead, toast, loadMentionCount],
   );
 
-  // Catch up opens only from the Catch up button (cards live only in Catch
-  // up, 9 Nov 2026). One history step (push): Back closes catch up.
-  const openCatchUp = useCallback(
-    (entry: ActivityItem | null, follow: readonly ActivityItem[] = []) => {
-      if (entry !== null) seedCatchUpEntry(entry, follow);
-      const next = new URLSearchParams(searchParams);
-      next.set(CATCH_UP_PARAM, entry?.id ?? CATCH_UP_NEWEST);
-      setSearchParams(next);
-    },
-    [searchParams, setSearchParams],
-  );
-  // A row tap opens the real place at the exact comment or message
-  // (openAction): mark it read (optimistic, reverted with a toast), toast a
-  // deleted plan, then navigate.
-  const handleOpenEntry = useCallback(
-    (entry: ActivityItem) => {
-      if (workspaceId === null) return;
-      const open = openAction(entry, workspaceKey, side);
-      if (open.markRead && entry.readAt === null) markEntriesRead([entry]);
-      if (open.toast !== null) toast?.show({ title: open.toast });
-      if (open.href !== null) navigate(open.href);
-    },
-    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
-  );
-  // A grouped card's head: every unread entry of the group read in one batch,
-  // then the group's newest comment opens (groupOpenEntry, chosen by the card).
+  // A row tap: every unread entry of the item read in one batch, then its
+  // newest entry opens at its exact place (the row hands it over).
   const handleOpenGroup = useCallback(
     (group: ActivityItem[], entry: ActivityItem) => {
       if (workspaceId === null) return;
@@ -825,21 +800,6 @@ export function NotificationsPage() {
         mentionCount={mentionCount}
       />
 
-      {/* The Catch up bar: under the chips while anything is unread; gone at 0. */}
-      {totalUnread > 0 ? (
-        <div
-          data-activity-catch-up-bar=""
-          className={cn('flex min-h-11 items-center justify-between gap-3 pt-2', GUTTER)}
-        >
-          <Text as="h2" role="heading" className="min-w-0 truncate">
-            {unreadHeading(totalUnread)}
-          </Text>
-          <Button variant="primary" data-activity-catch-up="" onClick={() => openCatchUp(null)}>
-            {CATCH_UP}
-          </Button>
-        </div>
-      ) : null}
-
       {catchUp !== null && catchUp.queue.length > 0 && workspaceId !== null && userId !== null ? (
         <CatchUpScreen
           key={catchUp.param}
@@ -874,72 +834,54 @@ export function NotificationsPage() {
           />
         )
       ) : (
-        <div ref={listRef} className="pb-6">
-          {buckets.map((bucket, bucketIndex) => {
-            const entries = bucket.groups.flat();
-            return (
-              <section key={bucket.key} className="mt-2">
-                {/* One 44 line on the page edge: "YESTERDAY · 1 update" (Mark all read
-                    lives in the top bar). Text box to text box (9 Nov 2026): 24 from
-                    the day above's last text (8 + 16), 12 to the first card. */}
-                <div
-                  data-activity-bucket-head=""
-                  className={cn('flex min-w-0 items-center gap-2 pb-3 pt-4', GUTTER)}
-                >
-                  <Text as="h2" role="section" className="shrink-0">
-                    {bucket.label}
-                  </Text>
-                  <span aria-hidden="true" className={textRole('meta', 'shrink-0')}>
-                    ·
-                  </span>
-                  <span data-bucket-count="" className={textRole('meta', 'min-w-0 truncate')}>
-                    {updatesLabel(entries.length)}
-                  </span>
-                </div>
-                <div data-activity-list="" className={cn(LIST_CARD_GRID, GUTTER)}>
-                  {bucket.groups.map((group, groupIndex) => {
-                    const card = (
-                      <ActivityCard
-                        key={group[0]?.id ?? bucket.key}
-                        group={group}
-                        nowMs={nowMs}
-                        timeZone={tz}
-                        cache={cache}
-                        presignEnabled={presignEnabled}
-                        onOpenGroup={handleOpenGroup}
-                        onOpenEntry={handleOpenEntry}
-                        selfName={selfName}
-                        side={side}
-                        entering={entering.has(group[0]?.id ?? '')}
-                        lastInDay={groupIndex === bucket.groups.length - 1}
-                      />
-                    );
-                    // The newest card is what the induction points at (its own corners, not the padded list).
-                    return bucketIndex === 0 && groupIndex === 0 ? (
-                      <div
-                        key={group[0]?.id ?? bucket.key}
-                        data-induction={INDUCTION_KEYS.activityList}
-                        className="rounded-xl"
-                      >
-                        {card}
-                      </div>
-                    ) : (
-                      card
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+        // Plan's list frame (PlanTabList): 16 under the chips, 24 between
+        // sections, 16 heading to rows; one heading per section, no count.
+        <div ref={listRef} data-activity-list="" className={ACTIVITY_LIST}>
+          {buckets.map((bucket, bucketIndex) => (
+            <section
+              key={bucket.key}
+              data-activity-section={bucket.key}
+              className={ACTIVITY_SECTION}
+            >
+              <Text as="h2" role="section" data-activity-heading="">
+                {bucket.label}
+              </Text>
+              <div className={LIST_CARD_GRID}>
+                {bucket.groups.map((group, groupIndex) => {
+                  const id = group[0]?.id ?? bucket.key;
+                  const card = (
+                    <ActivityCard
+                      key={id}
+                      group={group}
+                      nowMs={nowMs}
+                      timeZone={tz}
+                      cache={cache}
+                      presignEnabled={presignEnabled}
+                      onOpenGroup={handleOpenGroup}
+                      selfName={selfName}
+                      side={side}
+                      entering={entering.has(id)}
+                    />
+                  );
+                  // The newest row is what the induction points at (its own box, not the list).
+                  return bucketIndex === 0 && groupIndex === 0 ? (
+                    <div key={id} data-induction={INDUCTION_KEYS.activityList} className="min-w-0">
+                      {card}
+                    </div>
+                  ) : (
+                    card
+                  );
+                })}
+              </div>
+            </section>
+          ))}
 
           {hasMore ? (
-            <div className="mt-4 flex flex-col px-4 md:px-6">
-              <LoadMore
-                data-activity-load-more=""
-                busy={loadingMore}
-                onMore={() => void loadMore()}
-              />
-            </div>
+            <LoadMore
+              data-activity-load-more=""
+              busy={loadingMore}
+              onMore={() => void loadMore()}
+            />
           ) : null}
         </div>
       )}

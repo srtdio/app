@@ -3606,7 +3606,6 @@ describe('J7 only a real "@[all]" token draws bold', () => {
         cache={cache}
         presignEnabled={false}
         onOpenGroup={() => {}}
-        onOpenEntry={() => {}}
         selfName={null}
       />,
     );

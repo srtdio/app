@@ -171,7 +171,6 @@ describe('cards use the 12px card radius; list rows are flat', () => {
         cache={cache}
         presignEnabled={false}
         onOpenGroup={() => {}}
-        onOpenEntry={() => {}}
         selfName={null}
       />,
     );

@@ -254,7 +254,6 @@ const SCREENS: Record<string, string> = {
       cache={cache}
       presignEnabled={false}
       onOpenGroup={() => {}}
-      onOpenEntry={() => {}}
       selfName={null}
     />,
   ),

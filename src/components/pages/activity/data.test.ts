@@ -52,7 +52,6 @@ import {
   shortLine,
   storedActivitySort,
   unreadCount,
-  updatesLabel,
   welcomeTitle,
   zonedDayKey,
   WELCOME_BODY,
@@ -630,6 +629,48 @@ describe('groupDigest', () => {
     });
     const buckets = groupDigest([a, b, c], 'newest', clock);
     expect(buckets[0]?.groups.map((g) => g.map((i) => i.id))).toEqual([['b', 'a'], ['c']]);
+  });
+
+  it('places an item ONCE, in the section of its newest entry, its older entries riding along', () => {
+    const old = item({ id: 'old-p1', entityType: 'post', entityId: 'p1', createdAt: olderTs });
+    const yest = item({
+      id: 'yest-p1',
+      entityType: 'post',
+      entityId: 'p1',
+      createdAt: yesterdayTs,
+    });
+    const now = item({ id: 'today-p1', entityType: 'post', entityId: 'p1', createdAt: todayTs });
+    const other = item({ id: 'old-p2', entityType: 'post', entityId: 'p2', createdAt: olderTs });
+    const buckets = groupDigest([old, other, yest, now], 'newest', clock);
+    expect(buckets.map((b) => b.key)).toEqual(['today', 'earlier']);
+    expect(buckets[0]?.groups.map((g) => g.map((i) => i.id))).toEqual([
+      ['today-p1', 'yest-p1', 'old-p1'],
+    ]);
+    expect(buckets[1]?.groups.map((g) => g.map((i) => i.id))).toEqual([['old-p2']]);
+  });
+
+  it('orders items within a section by their newest entry, newest first', () => {
+    const a = item({ id: 'a', entityType: 'post', entityId: 'p1', createdAt: todayTs });
+    const b = item({
+      id: 'b',
+      entityType: 'post',
+      entityId: 'p2',
+      createdAt: new Date(startOfToday + 2 * 3_600_000).toISOString(),
+    });
+    const a2 = item({
+      id: 'a2',
+      entityType: 'post',
+      entityId: 'p1',
+      createdAt: new Date(startOfToday + 1 * 3_600_000).toISOString(),
+    });
+    const buckets = groupDigest([b, a2, a], 'newest', clock);
+    expect(buckets[0]?.groups.map((g) => g[0]?.id)).toEqual(['a', 'b']);
+  });
+
+  it('hides empty sections (only Yesterday here)', () => {
+    const buckets = groupDigest([item({ createdAt: yesterdayTs })], 'newest', clock);
+    expect(buckets.map((b) => b.key)).toEqual(['yesterday']);
+    expect(buckets[0]?.label).toBe('Yesterday');
   });
 });
 
@@ -2179,12 +2220,6 @@ describe('brief reopened rows', () => {
 });
 
 describe('notifications fixes: pure helpers', () => {
-  it('fix 5: a bucket header counts "1 update" / "N updates"', () => {
-    expect(updatesLabel(1)).toBe('1 update');
-    expect(updatesLabel(0)).toBe('0 updates');
-    expect(updatesLabel(12)).toBe('12 updates');
-  });
-
   it('fix 12: loading and refresh copy is fixed, plain and has no em-dash', () => {
     expect(LOADING_NOTIFICATIONS).toBe('Loading activity');
     expect(REFRESH_FAILED).toBe("Couldn't refresh. Try again.");
