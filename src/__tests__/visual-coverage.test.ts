@@ -43,6 +43,8 @@ const REQUIRED: readonly string[] = [
   'brief-picker',
   'briefs-approver',
   'briefs-empty',
+  'catch-up-card-reactions',
+  'catch-up-thread-reactions',
   'chat-composer-keyboard',
   'chat-composer-recording',
   'chat-delete-sheet-everyone',
@@ -80,6 +82,7 @@ const REQUIRED: readonly string[] = [
   'chat-post-sheet',
   'chat-post-sheet-approver',
   'chat-post-sheet-scrolled',
+  'chat-reactions-chips',
   'chat-select-mode',
   'chat-status-drawer',
   'chat-status-drawer-plan',
@@ -93,6 +96,7 @@ const REQUIRED: readonly string[] = [
   'chat-thread-files-removed',
   'chat-thread-group',
   'chat-thread-own-voice',
+  'chat-thread-reactions',
   'chat-tombstone',
   'chat-tombstone-menu',
   'chat-upload-progress',
@@ -112,6 +116,10 @@ const REQUIRED: readonly string[] = [
   'chat-send-failed-file',
   'chat-link-youtube',
   'chat-link-no-picture',
+  'comment-no-reactions',
+  'comment-reactions',
+  'emoji-sheet-add-reaction',
+  'plan-comment-reactions',
   'plan-dates-sheet',
   'sheet-header-back',
   'chat-viewer-delete-sheet',
@@ -354,6 +362,7 @@ const REQUIRED: readonly string[] = [
   // Thread times and the replies row (9 Nov 2026).
   'chat-replies-row-today',
   'chat-replies-row-older',
+  'who-reacted-sheet',
   // Activity twins Plan (10 Nov 2026): sections and rows in each density.
   'activity-sections',
   'activity-rows',
@@ -435,6 +444,8 @@ const PHONE_ONLY_NAMES = [
   'chat-composer-keyboard',
   'chat-box-idle',
   'chat-box-expanded',
+  // Long-press a reaction chip: who reacted (phone; laptop shows names on hover).
+  'who-reacted-sheet',
 ];
 
 /**

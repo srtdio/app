@@ -1556,6 +1556,139 @@ export async function assertAlignment(
   );
 }
 
+/**
+ * Check 16 (9 Nov 2026, emoji reactions): on the screen as shot, every
+ * reaction chip row ([data-reaction-chips]) is measured (EXACT +-1):
+ * - each pill ([data-reaction-chip], the smiley [data-reaction-add]) is 32
+ *   tall and its tap box (the pill grown by its ::before) at least 44 tall;
+ * - the row's left edge is its row's text column: a comment's head
+ *   ([data-comment-header]); a chat, plan comment or thread reply message's
+ *   body text ([data-msg-body]); a catch-up row's text (its last paragraph);
+ * - in a thread view the root's row sits at x16 and replies' at x60 from the
+ *   strip's left, the root's chip row ends 12 over the strip's top hairline,
+ *   and the first reply's name sits 8 under the strip;
+ * - no [data-reaction-badge] anywhere, and at least `minRows` rows show.
+ */
+export async function assertReactionChips(
+  page: Page,
+  screenName: string,
+  opts: { minRows?: number } = {},
+): Promise<void> {
+  const messages = await page.evaluate((minRows: number): string[] => {
+    const out: string[] = [];
+    const shown = (el: Element | null): el is Element => {
+      if (el === null) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const textLeft = (el: Element): number | null => {
+      let left = Infinity;
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+        if ((n.textContent ?? '').trim() === '') continue;
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        for (const rect of Array.from(range.getClientRects())) {
+          if (rect.width > 0 && rect.height > 0) left = Math.min(left, rect.left);
+        }
+      }
+      return Number.isFinite(left) ? left : null;
+    };
+    const px = (v: string): number | null => (v.endsWith('px') ? parseFloat(v) : null);
+    const r1 = (n: number): number => Math.round(n * 10) / 10;
+    const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+    if (document.querySelector('[data-reaction-badge]') !== null) {
+      out.push('a [data-reaction-badge] shows (chips only, 9 Nov 2026)');
+    }
+    const rows = Array.from(document.querySelectorAll('[data-reaction-chips]')).filter(shown);
+    if (rows.length < minRows) out.push(`${rows.length} reaction chip rows, want ${minRows}+`);
+    rows.forEach((row, i) => {
+      const at = `chip row ${i + 1}`;
+      const box = row.getBoundingClientRect();
+      for (const pill of Array.from(
+        row.querySelectorAll('[data-reaction-chip], [data-reaction-add]'),
+      ).filter(shown)) {
+        const r = pill.getBoundingClientRect();
+        const name = pill.getAttribute('aria-label') ?? 'pill';
+        if (!near(r.height, 32)) out.push(`${at}: ${name} is ${r1(r.height)} tall, want 32`);
+        const before = getComputedStyle(pill, '::before');
+        const grow =
+          before.position === 'absolute'
+            ? Math.max(0, -(px(before.top) ?? 0)) + Math.max(0, -(px(before.bottom) ?? 0))
+            : 0;
+        if (r.height + grow < 43.5) {
+          out.push(`${at}: ${name} tap box ${r1(r.height + grow)} tall, want 44+`);
+        }
+      }
+      const comment = row.closest('[data-comment-row]');
+      const catchUp = row.closest('[data-catch-up-message]');
+      const message = row.closest('li[data-msg-id]');
+      const view = row.closest('[data-thread-view], [data-catch-up-thread]');
+      const strip = view?.querySelector('[data-thread-strip]') ?? null;
+      if (comment !== null) {
+        const head = comment.querySelector('[data-comment-header]');
+        if (shown(head) && !near(box.left, head.getBoundingClientRect().left)) {
+          out.push(
+            `${at}: left ${r1(box.left)}, comment column ${r1(head.getBoundingClientRect().left)}`,
+          );
+        }
+        return;
+      }
+      if (shown(strip)) {
+        const s = strip.getBoundingClientRect();
+        const isRoot = box.bottom <= s.top + 0.5;
+        const want = isRoot ? 16 : 60;
+        if (!near(box.left - s.left, want)) {
+          out.push(`${at}: x ${r1(box.left - s.left)} in the thread, want ${want}`);
+        }
+        if (isRoot) {
+          if (!near(s.top - box.bottom, 12)) {
+            out.push(`${at}: root chips to strip ${r1(s.top - box.bottom)}, want 12`);
+          }
+          const reply = Array.from(
+            view?.querySelectorAll('[data-catch-up-message], li[data-msg-id]') ?? [],
+          )
+            .filter(shown)
+            .find((el) => el.getBoundingClientRect().top >= s.bottom - 0.5);
+          const name = reply?.querySelector('[data-catch-up-name], [data-sender-line]') ?? null;
+          if (shown(name) && !near(name.getBoundingClientRect().top - s.bottom, 8)) {
+            out.push(
+              `${at}: strip to first reply name ${r1(name.getBoundingClientRect().top - s.bottom)}, want 8`,
+            );
+          }
+        }
+        return;
+      }
+      const text = catchUp
+        ? (Array.from(catchUp.querySelectorAll('p')).filter(shown).pop() ?? null)
+        : (message?.querySelector('[data-msg-body]') ?? null);
+      const left = text !== null && shown(text) ? textLeft(text) : null;
+      if (left === null) out.push(`${at}: no text to align to`);
+      else if (!near(box.left, left)) {
+        out.push(`${at}: left ${r1(box.left)}, text column ${r1(left)}`);
+      }
+    });
+    return out;
+  }, opts.minRows ?? 1);
+  settleFindings(
+    screenName,
+    messages.map((message) => ({ check: 'alignment' as const, message: `reactions: ${message}` })),
+  );
+}
+
+/** Check 16: Activity never shows reactions (no chip row, no badge). */
+export async function assertNoReactionsHere(page: Page, screenName: string): Promise<void> {
+  const count = await page
+    .locator('[data-reaction-chips], [data-reaction-badge], [data-reaction-add]')
+    .count();
+  settleFindings(
+    screenName,
+    count > 0
+      ? [{ check: 'alignment' as const, message: `reactions: ${count} reaction parts on Activity` }]
+      : [],
+  );
+}
+
 // Check 15 (10 Nov 2026, Activity twins Plan): Activity's list measured
 // against the Plan tab's, both read on the page as painted.
 

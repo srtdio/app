@@ -19,6 +19,8 @@ import {
   assertWritingBox,
   assertAlignment,
   assertCatchUpLayout,
+  assertReactionChips,
+  assertNoReactionsHere,
   checkCatchUpComposer,
   checkLayout,
   type AlignScope,
@@ -6246,6 +6248,297 @@ const WRITING_BOX_SCREENS = new Set([
   'catch-up-tray-comment',
   'catch-up-tray-chat',
 ]);
+
+// Emoji reactions (9 Nov 2026): chips under the text everywhere text lives
+// (comments, plan comments, chat main, thread root and replies, catch-up
+// cards and their thread view); check 16 (assertReactionChips) measures each.
+
+/** One reaction row per [user, emoji] on a target, a minute apart. */
+function reactionRows(
+  key: 'comment_id' | 'message_id',
+  id: string,
+  list: ReadonlyArray<readonly [string, string]>,
+  extra: Row = {},
+): Row[] {
+  return list.map(([userId, emoji], i) => ({
+    [key]: id,
+    user_id: userId,
+    emoji,
+    workspace_id: WORKSPACE_ID,
+    created_at: new Date(NOW - 3_000_000 + i * 60_000).toISOString(),
+    ...extra,
+  }));
+}
+
+/** A channel's newest "4 replies" thread root, and its first reply. */
+function threadOf(network: HarnessNetwork, channel: string): { root: string; reply: string } {
+  const rows = (network.world.tables.chat_messages ?? []).filter((m) => m.channel_id === channel);
+  const counts = new Map<string, number>();
+  for (const m of rows) {
+    const root = m.thread_root_message_id;
+    if (typeof root === 'string') counts.set(root, (counts.get(root) ?? 0) + 1);
+  }
+  // The newest "4 replies" thread (the first such replies row on screen).
+  const at = (id: string): string => String(rows.find((m) => m.id === id)?.created_at ?? '');
+  const four = [...counts].filter(([, n]) => n === 4).map(([id]) => id);
+  const root = four.sort((a, b) => at(b).localeCompare(at(a)))[0] ?? '';
+  const replies = rows
+    .filter((m) => m.thread_root_message_id === root)
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  return { root, reply: String(replies[0]?.id ?? '') };
+}
+
+/** The DM's newest top-level text message from Priya (on screen when the DM opens). */
+let reactedDmId = '';
+function seedDmReactions(network: HarnessNetwork): void {
+  const dm = (network.world.tables.chat_messages ?? [])
+    .filter(
+      (m) =>
+        m.channel_id === DM_CHANNEL &&
+        m.sender_user_id === PEER &&
+        m.thread_root_message_id == null &&
+        typeof m.body === 'string' &&
+        m.body !== '',
+    )
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  reactedDmId = String(dm[dm.length - 1]?.id ?? '');
+  (network.world.tables.chat_reactions ??= []).push(
+    ...reactionRows(
+      'message_id',
+      reactedDmId,
+      [
+        [PEER, '👍'],
+        [ME, '👍'],
+        [PEER, '😂'],
+      ],
+      { channel_id: DM_CHANNEL },
+    ),
+  );
+}
+
+async function dmReactionsReady(page: Page): Promise<Locator> {
+  const message = await openDmOn(page, reactedDmId);
+  await waitFor([message.locator('[data-reaction-chips]')], 'chat chips');
+  await message.scrollIntoViewIfNeeded();
+  return message;
+}
+
+const checkReactions =
+  (name: string, minRows = 1) =>
+  async (page: Page): Promise<void> =>
+    assertReactionChips(page, name, { minRows });
+
+SCREENS.push(
+  {
+    // A post's comments with reactions: the chips under the text on the
+    // comment column, mine in the darker ink, the smiley pill last.
+    name: 'comment-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedOwnEditedComment(network);
+      seedPeerComment(network);
+      (network.world.tables.comment_reactions ??= []).push(
+        ...reactionRows('comment_id', PEER_COMMENT_ID, [
+          [ME, '👍'],
+          [COLLEAGUE_A, '👍'],
+          [PEER, '❤️'],
+        ]),
+        ...reactionRows('comment_id', ME_COMMENT_ID, [[PEER, '🙏']]),
+      );
+    },
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
+      await waitFor([comment.locator('[data-reaction-chips]')], 'comment chips');
+      await comment.scrollIntoViewIfNeeded();
+    },
+    after: checkReactions('comment-reactions', 2),
+  },
+  {
+    // No reactions: no chip row; the bar's smiley is its first key.
+    name: 'comment-no-reactions',
+    seed: creator,
+    extra: seedPeerComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
+      await waitFor([comment.locator('[data-bar-action="react"]')], 'bar smiley');
+      await comment.scrollIntoViewIfNeeded();
+      const first = comment.locator('[data-comment-bar] button').first();
+      await expect(first).toHaveAttribute('data-bar-action', 'react');
+    },
+    after: checkReactions('comment-no-reactions', 0),
+  },
+  {
+    // Plan comments draw with chat's parts: chips under the text.
+    name: 'plan-comment-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedChatPlanThread(network, true);
+      (network.world.tables.plan_item_comment_reactions ??= []).push(
+        ...reactionRows('comment_id', '0190d300-0000-7000-8000-00000000d401', [
+          [ME, '👍'],
+          [COLLEAGUE_A, '✅'],
+        ]),
+        ...reactionRows('comment_id', '0190d300-0000-7000-8000-00000000d403', [
+          [COLLEAGUE_A, '❤️'],
+        ]),
+      );
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openPlanItemThread(page);
+      await waitFor(
+        [page.locator('[data-plan-thread] [data-reaction-chips]').first()],
+        'plan comment chips',
+      );
+    },
+    after: checkReactions('plan-comment-reactions', 2),
+  },
+  {
+    // Chat: the badge is gone; chips under the message on its text column.
+    name: 'chat-reactions-chips',
+    seed: creator,
+    extra: seedDmReactions,
+    url: '/chat',
+    steps: async (page) => {
+      await dmReactionsReady(page);
+    },
+    after: checkReactions('chat-reactions-chips'),
+  },
+  {
+    // The thread view: root chips at x16 above the strip (12 to it), reply
+    // chips on the x60 column.
+    name: 'chat-thread-reactions',
+    seed: creator,
+    extra: (network) => {
+      const { root, reply } = threadOf(network, THREAD_DM);
+      (network.world.tables.chat_reactions ??= []).push(
+        ...reactionRows('message_id', root, [[ME, '👍']], { channel_id: THREAD_DM }),
+        ...reactionRows(
+          'message_id',
+          reply,
+          [
+            [ME, '✅'],
+            [PEER, '❤️'],
+          ],
+          { channel_id: THREAD_DM },
+        ),
+      );
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button')],
+        'replies row',
+      );
+      await waitFor([page.locator('[data-thread-view] [data-reaction-chips]').first()], 'chips');
+      await expect(page.locator('[data-thread-view] [data-reaction-chips]')).toHaveCount(2);
+    },
+    after: checkReactions('chat-thread-reactions', 2),
+  },
+  {
+    // A catch-up card: the comment's chips under its text; reacting never
+    // marks the card read.
+    name: 'catch-up-card-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedCatchUp(network);
+      (network.world.tables.comment_reactions ??= []).push(
+        ...reactionRows('comment_id', CATCH_UP_COMMENT_ID, [
+          [ME, '👍'],
+          [PEER, '👍'],
+          [COLLEAGUE_A, '🙏'],
+        ]),
+      );
+    },
+    url: `/activity?catchup=${CATCH_UP_COMMENT}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor(
+        [page.locator(`[data-catch-up-message="${CATCH_UP_COMMENT_ID}"] [data-reaction-chips]`)],
+        'catch-up chips',
+      );
+    },
+    after: checkReactions('catch-up-card-reactions'),
+  },
+  {
+    // Catch up's thread view: root chips at x16 over the strip, a reply's at x60.
+    name: 'catch-up-thread-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedCatchUpGroupMain(network, NOW);
+      const { root, reply } = threadOf(network, THREAD_GROUP);
+      (network.world.tables.chat_reactions ??= []).push(
+        ...reactionRows('message_id', root, [[ME, '👍']], { channel_id: THREAD_GROUP }),
+        ...reactionRows('message_id', reply, [[COLLEAGUE_A, '✅']], {
+          channel_id: THREAD_GROUP,
+        }),
+      );
+    },
+    url: `/activity?catchup=${CU_GROUP_MAIN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-replies]', { hasText: '4 replies' })], '4 replies');
+      await waitFor(
+        [page.locator('[data-catch-up-thread] [data-reaction-chips]').first()],
+        'thread chips',
+      );
+      await expect(page.locator('[data-catch-up-thread] [data-reaction-chips]')).toHaveCount(2);
+    },
+    after: checkReactions('catch-up-thread-reactions', 2),
+  },
+  {
+    // The one emoji drawer (ui/EmojiSheet) opened from a comment's smiley:
+    // titled "Add reaction"; the composer's keeps "Emoji".
+    name: 'emoji-sheet-add-reaction',
+    seed: creator,
+    extra: seedPeerComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
+      await comment.scrollIntoViewIfNeeded();
+      await tap([comment.locator('[data-bar-action="react"]')], 'Add reaction');
+      await waitFor([page.locator('[data-emoji-sheet]')], 'emoji sheet');
+      await expect(page.getByRole('dialog', { name: 'Add reaction' })).toBeVisible();
+    },
+  },
+  {
+    // Long-press a chip (phone): who reacted, chat's sheet.
+    name: 'who-reacted-sheet',
+    seed: creator,
+    only: 'phone',
+    extra: seedDmReactions,
+    url: '/chat',
+    steps: async (page) => {
+      const message = await dmReactionsReady(page);
+      await openMenuGesture(page, message.locator('[data-reaction-chip]').first());
+      await waitFor([page.locator('[data-who-reacted]')], 'who reacted');
+    },
+  },
+);
+
+// Check 16: Activity never shows reactions (no chip row, no badge, no smiley).
+test('reactions-activity-none', async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(page);
+  Object.assign(network.world, buildWorld(NOW));
+  seedAudit(network, creator, NOW);
+  seedCatchUp(network);
+  await installDeletedRoutes(page, network);
+  await page.goto('/activity');
+  await activityReady(page);
+  await assertNoReactionsHere(page, 'reactions-activity-none');
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
 
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
