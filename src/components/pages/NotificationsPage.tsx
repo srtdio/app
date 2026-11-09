@@ -713,11 +713,15 @@ export function NotificationsPage() {
       fix(null);
       return;
     }
+    // One card per item: the card needs every entry of the tapped item the list
+    // holds, so a deep link waits for the list (as the newest link does); a
+    // handed-over seed paints at once with what the opener held.
     const seed = takeCatchUpSeed(catchUpParam);
     if (seed !== undefined) {
       fix(seed.item, seed.follow);
       return;
     }
+    if (listLoading) return;
     const known = held.find((item) => item.id === catchUpParam);
     if (known !== undefined) {
       fix(known);
@@ -734,7 +738,7 @@ export function NotificationsPage() {
     });
     // `items` and `listLoading` matter only until the queue is fixed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catchUpParam, catchUp, workspaceId, userId, sort, items.length > 0]);
+  }, [catchUpParam, catchUp, workspaceId, userId, sort, items.length > 0, listLoading]);
 
   // Back, Esc and Done: return to where catch up was opened. A link from
   // another screen (a toast) carries its return path; on Activity the param
