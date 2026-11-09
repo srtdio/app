@@ -30,6 +30,7 @@ vi.mock('@/components/ui/toast', () => {
 vi.mock('@/components/pages/activity/data', () => ({
   entityHref: () => null,
   mapEntry: (row: unknown) => row,
+  openAction: () => ({ href: null, markRead: true, toast: null }),
 }));
 vi.mock('@/lib/chat/notify-sound', () => ({ playToneShared: () => {} }));
 vi.mock('@/lib/tab-alert', () => ({ pushTabAlert: () => {} }));

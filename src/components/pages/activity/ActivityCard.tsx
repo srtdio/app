@@ -55,6 +55,7 @@ import {
 import { alertDisplayTime } from '@/lib/inbox/alerts';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatAgo } from '@/lib/time';
+import { linkRuns } from '@/lib/catch-up/text';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (one card). */
@@ -218,7 +219,6 @@ export function activityPreviewText(group: readonly ActivityItem[]): string {
   const more = group.length > 1 ? `+${group.length - 1} more` : '';
   if (alert !== null) return alertBody(alert) ?? more;
   if (isWelcome(lead)) return WELCOME_BODY;
-  if (lead.eventType === MENTION_EVENT_TYPE && lead.body !== null) return stripFormat(lead.body);
   if (lead.eventType === 'assets_deleted') {
     // The first file by name, then the others ("deck.pdf · Also hero.png and teaser.mov").
     const first = lead.filenames?.[0];
@@ -226,14 +226,51 @@ export function activityPreviewText(group: readonly ActivityItem[]): string {
     if (first === undefined) return others ?? more;
     return others !== null ? `${first} · ${others}` : first;
   }
-  const hasBody =
-    lead.eventType === 'comment' ||
-    lead.eventType === 'checkpoints_added' ||
-    lead.eventType === 'plan_comment';
-  if (hasBody && lead.body !== null && lead.body.trim() !== '') {
-    return stripFormat(cardBodyLine(lead));
+  return entryBodyText(lead) ?? more;
+}
+
+/**
+ * The cleaned comment or message text an entry carries (the preview Activity
+ * has always shown): a comment, mention, plan comment, the first point of a
+ * checkpoint batch, a thread start's reply. Mentions are already names (the
+ * read resolves them), formatting is stripped. Null for an entry without a
+ * body. Pure; the one helper behind the card preview and every line.
+ */
+export function entryBodyText(entry: ActivityItem): string | null {
+  if (entry.body === null || entry.body.trim() === '') return null;
+  if (entry.eventType === MENTION_EVENT_TYPE || isThreadStarted(entry)) {
+    return stripFormat(entry.body);
   }
-  return more;
+  const hasBody =
+    entry.eventType === 'comment' ||
+    entry.eventType === 'checkpoints_added' ||
+    entry.eventType === 'plan_comment';
+  return hasBody ? stripFormat(cardBodyLine(entry)) : null;
+}
+
+/** What a line says when its comment was deleted (muted; the line still opens the spot). */
+export const COMMENT_DELETED = 'Comment deleted';
+
+/**
+ * One line's text (locked 9 Nov 2026): a body-carrying entry reads its comment
+ * text, folded to one line with links shortened (host/…/last part); a deleted
+ * comment reads "Comment deleted" (muted); every other entry keeps its
+ * entryLine wording. Pure.
+ */
+export function entryLineText(
+  entry: ActivityItem,
+  side: ViewerSide = 'unknown',
+): { actor: string; text: string; muted: boolean } {
+  const { actor, text } = entryLine(entry, side);
+  if (entry.bodyGone === true) return { actor, text: COMMENT_DELETED, muted: true };
+  const body = entryBodyText(entry);
+  if (body === null) return { actor, text, muted: false };
+  const oneLine = linkRuns(body)
+    .map((run) => (run.kind === 'link' ? run.label : run.text))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { actor, text: oneLine !== '' ? oneLine : text, muted: false };
 }
 
 /** An alert's glyph: what kind of alert at a glance. */
@@ -409,7 +446,7 @@ function EntryLine(props: {
   onOpen: (entry: ActivityItem) => void;
 }): ReactElement {
   const { entry } = props;
-  const { actor, text } = entryLine(entry, props.side);
+  const { actor, text, muted } = entryLineText(entry, props.side);
   const unread = entry.readAt === null;
   return (
     <PressableRow
@@ -428,7 +465,11 @@ function EntryLine(props: {
         {actor}
       </span>
       <span
-        className={textRole('secondary', cn('min-w-0 flex-1 truncate', !unread && 'text-fg-3'))}
+        {...(muted ? { 'data-activity-line-gone': '' } : {})}
+        className={textRole(
+          'secondary',
+          cn('min-w-0 flex-1 truncate', (!unread || muted) && 'text-fg-3'),
+        )}
       >
         {text}
       </span>

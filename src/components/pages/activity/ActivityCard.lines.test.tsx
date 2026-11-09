@@ -24,8 +24,15 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => ({
 import {
   ACTIVITY_LINES_SHOWN,
   ActivityCard,
+  COMMENT_DELETED,
+  entryLineText,
   itemCardLines,
 } from '@/components/pages/activity/ActivityCard';
+import {
+  rememberMentionNames,
+  resetMentionNames,
+  resolvePersonMentionText,
+} from '@/lib/chat/mentions';
 import { entryLine, type ActivityItem } from '@/components/pages/activity/data';
 import { LIST_CARD_SUB_INSET } from '@/components/ui/ListCard';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -264,5 +271,75 @@ describe('Activity: one card per item, one line per notification', () => {
     mount(comments(8));
     act(() => more()?.click());
     expect(document.body.innerHTML).not.toMatch(/\b(bg|text|border)-(good|success|green)/);
+  });
+});
+
+describe('Activity lines carry the comment text (locked 9 Nov 2026)', () => {
+  const MAYA = '7f0e8a10-1b2c-4d3e-8f40-5a6b7c8d9e0f';
+
+  afterEach(() => resetMentionNames());
+
+  it('a comment line reads the actor, then the comment text, not "Commented on"', () => {
+    mount([item({ id: 'a', commentId: 'cm', body: 'Love the second slide' })]);
+    const [line] = lines();
+    expect(line?.textContent).toContain('Priya');
+    expect(line?.textContent).toContain('Love the second slide');
+    expect(line?.textContent).not.toMatch(/Commented on/i);
+  });
+
+  it('a mention resolves to a name, never a raw @[uuid]', () => {
+    rememberMentionNames('w1', [{ userId: MAYA, displayName: 'Maya' }]);
+    // The read resolves the body as the comment thread does (resolvePersonMentionText).
+    const body = resolvePersonMentionText(`Can you check @[${MAYA}]`, 'w1');
+    mount([item({ id: 'm', eventType: 'mention', commentId: 'cm', body })]);
+    const text = lines()[0]?.textContent ?? '';
+    expect(text).toContain('@Maya');
+    expect(text).not.toContain('@[');
+    expect(text).not.toContain(MAYA);
+  });
+
+  it('a multi-line comment folds to one line; links are shortened', () => {
+    const { text } = entryLineText(
+      item({
+        commentId: 'cm',
+        body: 'First line\n\nsecond line see https://www.example.com/a/b/brief-final',
+      }),
+    );
+    expect(text).not.toContain('\n');
+    expect(text).toBe('First line second line see example.com/…/brief-final');
+  });
+
+  it('plan comments and checkpoint notes read their text too', () => {
+    expect(
+      entryLineText(item({ eventType: 'plan_comment', entityType: 'plan_item', body: 'Swap day' }))
+        .text,
+    ).toBe('Swap day');
+    expect(
+      entryLineText(item({ eventType: 'checkpoints_added', pointsAdded: 2, body: 'Crop tighter' }))
+        .text,
+    ).toBe('Crop tighter');
+  });
+
+  it('a deleted comment reads "Comment deleted", muted, and still opens its spot', () => {
+    const gone = item({ id: 'g', commentId: 'cm', body: null, bodyGone: true });
+    const { onOpenEntry } = mount([gone]);
+    const [line] = lines();
+    const text = line?.querySelector('[data-activity-line-gone]');
+    expect(text?.textContent).toBe(COMMENT_DELETED);
+    expect(text?.className).toContain('text-fg-3');
+    act(() => line?.click());
+    expect(onOpenEntry).toHaveBeenCalledWith(gone);
+  });
+
+  it('a stage change line keeps its activityLine wording', () => {
+    const stage = item({ id: 's', eventType: 'stage_change', toStage: 'approved', body: null });
+    expect(entryLineText(stage)).toEqual({ ...entryLine(stage), muted: false });
+  });
+
+  it('still one line per notification, same cap: 8 comments show 5 + "+3 more"', () => {
+    mount(comments(8, { body: 'Looks good' }));
+    expect(lines()).toHaveLength(ACTIVITY_LINES_SHOWN);
+    expect(more()?.textContent).toBe('+3 more');
+    for (const line of lines()) expect(line.textContent).toContain('Looks good');
   });
 });

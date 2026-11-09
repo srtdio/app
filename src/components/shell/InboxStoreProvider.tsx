@@ -50,7 +50,8 @@ import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useToast } from '@/components/ui/toast';
 import { Avatar } from '@/components/ui/Avatar';
-import { catchUpHref, type CatchUpReturnState } from '@/lib/catch-up/route';
+import { mapEntry, openAction } from '@/components/pages/activity/data';
+import { peekViewerSide } from '@/lib/chat/viewer-role';
 import {
   ACTIVITY_PATH,
   activityToneWanted,
@@ -116,7 +117,7 @@ export function ownedUnread(
 
 export function InboxStoreProvider({ children }: { children: ReactNode }): ReactElement {
   const { session } = useSession();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaceKey } = useWorkspace();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -125,16 +126,20 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   // The route on screen: new Activity rows never tone while Activity is open.
   const pathnameRef = useRef(location.pathname);
   pathnameRef.current = location.pathname;
-  const hereRef = useRef(`${location.pathname}${location.search}`);
-  hereRef.current = `${location.pathname}${location.search}`;
-  // A toast opens catch up with its entry first; Done and Back return here
-  // (on Activity itself, closing just drops the param).
-  const openCatchUpAt = (entryId: string): void => {
-    const here = hereRef.current;
-    const state: CatchUpReturnState | undefined = pathnameRef.current.startsWith(ACTIVITY_PATH)
-      ? undefined
-      : { catchUpReturn: here };
-    navigate(catchUpHref(entryId), state !== undefined ? { state } : {});
+  // A toast opens the real place, never catch up (9 Nov 2026): the same deep
+  // link an Activity line opens (openAction, one source of truth), at the
+  // comment or message. The side comes from the device cache only (no read on
+  // the tap); a deleted plan toasts as the line does.
+  const openPlaceOf = (row: Parameters<typeof mapEntry>[0], fallback: string): void => {
+    const ws = workspaceIdRef.current;
+    const uid = userIdRef.current;
+    const side = ws !== null && uid !== null ? (peekViewerSide(ws, uid) ?? 'unknown') : 'unknown';
+    const open = openAction(mapEntry(row), workspaceKey, side);
+    if (open.toast !== null) {
+      toast.show({ title: open.toast });
+      return;
+    }
+    navigate(open.href ?? fallback);
   };
   openChatRef.current = location.pathname.startsWith('/chat')
     ? new URLSearchParams(location.search).get('channel')
@@ -266,7 +271,8 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
           role="inline"
         />
       ),
-      onPress: () => (newest !== null ? openCatchUpAt(newest.id) : navigate(ACTIVITY_PATH)),
+      onPress: () =>
+        newest !== null ? openPlaceOf(newest, ACTIVITY_PATH) : navigate(ACTIVITY_PATH),
     });
   };
 
@@ -325,7 +331,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
         />
       ),
       onPress: () =>
-        newestMention !== null ? openCatchUpAt(newestMention.id) : navigate(spec.href),
+        newestMention !== null ? openPlaceOf(newestMention, spec.href) : navigate(spec.href),
     });
   };
 

@@ -268,6 +268,9 @@ export interface ActivityItem {
   actorAvatarUrl: string | null;
   /** The comment text, resolved by the comments join (comment events only). */
   body: string | null;
+  /** The comment this entry points at was deleted (a successful read did not
+   *  return it, or returned it soft-deleted): the line reads "Comment deleted". */
+  bodyGone?: boolean;
   /** The post format (text/single_image/carousel/video/link), posts only. */
   format: string | null;
   /** The post caption, posts only (null otherwise). Feeds the thumbnail fallback body. */
@@ -1745,6 +1748,8 @@ async function readPlanSources(
   items: Map<string, PlanItemInfo>;
   planTitles: Map<string, string>;
   comments: Map<string, { authorId: string | null; body: string }>;
+  /** The plan comments read succeeded (a missing id is then a deleted comment). */
+  commentsOk: boolean;
 }> {
   const [itemsRes, plansRes, commentsRes] = await Promise.all([
     ids.itemIds.length > 0
@@ -1782,7 +1787,12 @@ async function readPlanSources(
         comments.set(r.id, { authorId: r.author_user_id, body: r.body });
     }
   }
-  return { items, planTitles, comments };
+  return {
+    items,
+    planTitles,
+    comments,
+    commentsOk: commentsRes !== null && commentsRes.error === null,
+  };
 }
 
 /** A thread start's card title from the batched reads; null while unknown (the line falls back to the chat). */
@@ -2049,8 +2059,11 @@ async function enrichInboxRows(
     ...items.filter(isChatRow).flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
     ...alerts.flatMap((alert) => (alert.channelId !== null ? [alert.channelId] : [])),
   ]);
+  // A thread start's reply rides the same IN read: its line shows the reply text.
   const messageIds = unique(
-    chatMentions.flatMap((i) => (i.messageId !== null ? [i.messageId] : [])),
+    [...chatMentions, ...items.filter(isThreadStarted)].flatMap((i) =>
+      i.messageId !== null ? [i.messageId] : [],
+    ),
   );
   // Plan events and plan alerts: the items, the plans and the plan comments,
   // one IN read each, alongside the chat reads (the posts read below needs the
@@ -2105,7 +2118,10 @@ async function enrichInboxRows(
       chatSources,
       planSources,
       commentIds.length > 0
-        ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
+        ? client
+            .from('comments')
+            .select('id, author_user_id, body, deleted_at')
+            .in('id', commentIds)
         : Promise.resolve(null),
       postsRead,
       briefIds.length > 0
@@ -2135,11 +2151,16 @@ async function enrichInboxRows(
 
   const commentAuthors = new Map<string, string>();
   const commentBodies = new Map<string, string>();
+  // Comments a successful read returned soft-deleted or not at all: their lines
+  // read "Comment deleted". A failed read marks nothing (the line degrades).
+  const commentsGone = new Set<string>();
   if (commentsRes !== null && commentsRes.error === null) {
     for (const r of commentsRes.data ?? []) {
       commentAuthors.set(r.id, r.author_user_id);
-      if (typeof r.body === 'string') commentBodies.set(r.id, r.body);
+      if (r.deleted_at !== null) commentsGone.add(r.id);
+      else if (typeof r.body === 'string') commentBodies.set(r.id, r.body);
     }
+    for (const id of commentIds) if (!commentAuthors.has(id)) commentsGone.add(id);
   }
   const postTitles = new Map<string, string>();
   const postFormats = new Map<string, string>();
@@ -2246,6 +2267,9 @@ async function enrichInboxRows(
       const channel = item.entityId !== null ? chatRes.channels.get(item.entityId) : undefined;
       item.channelType = channel?.type ?? null;
       item.chatName = channel?.groupId != null ? (groupNames.get(channel.groupId) ?? null) : null;
+      const reply =
+        item.messageId !== null ? (chatRes.messages.get(item.messageId)?.body ?? null) : null;
+      item.body = chatMentionPreview(reply, chatNames);
     } else if (item.alert != null) {
       // Every alert names its own actor.
       actorUserId = item.actorId;
@@ -2284,7 +2308,6 @@ async function enrichInboxRows(
         planTitles: planRes.planTitles,
         planItems: planRes.items,
       });
-      item.body = null;
       item.format = null;
       item.caption = null;
       item.thumbnailAssetVersionId = null;
@@ -2327,6 +2350,11 @@ async function enrichInboxRows(
           ? planRes.comments.get(item.commentId)
           : undefined;
       item.body = comment !== undefined ? mentionOf(comment.body) : null;
+      item.bodyGone =
+        isPlanCommentRow(item) &&
+        item.commentId !== null &&
+        planRes.commentsOk &&
+        comment === undefined;
       item.format = null;
       item.caption = null;
       item.thumbnailAssetVersionId = null;
@@ -2347,6 +2375,10 @@ async function enrichInboxRows(
           ? (batchBodies.get(item.batchId) ?? null)
           : null;
     item.body = rawBody !== null ? mentionOf(rawBody) : null;
+    item.bodyGone =
+      (item.eventType === 'comment' || item.eventType === MENTION_EVENT_TYPE) &&
+      item.commentId !== null &&
+      commentsGone.has(item.commentId);
 
     if (item.entityType === 'post') {
       // A deleted post is gone from the posts read: its payload carries the
