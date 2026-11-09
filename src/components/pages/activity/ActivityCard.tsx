@@ -351,6 +351,15 @@ function entryAgo(entry: ActivityItem, nowMs: number, timeZone: string | null | 
   );
 }
 
+/** The entity types an item card groups under (a post, brief, plan or plan item). */
+const ITEM_ENTITIES: ReadonlySet<string> = new Set(['post', 'brief', 'plan', PLAN_ITEM_ENTITY]);
+
+/** Whether a row belongs to an item (or is a plan / bank alert): it gets the item card. Pure. */
+export function hasItem(lead: ActivityItem): boolean {
+  if (lead.alert != null) return lead.alert.kind !== 'task';
+  return lead.entityType !== null && ITEM_ENTITIES.has(lead.entityType);
+}
+
 /** Lines an item card shows before "+N more" (Android InboxStyle: 5). */
 export const ACTIVITY_LINES_SHOWN = 5;
 
@@ -441,7 +450,8 @@ function EntryLine(props: {
 /**
  * One digest group as one card (9 Nov 2026: every notification gets its own
  * line, grouped by item; Android InboxStyle, Notion, Asana).
- * - A chat row (isChatRow, or a chat task alert) keeps its one ui/ListCard: the who-did-what title,
+ * - A chat row (isChatRow, or a chat task alert), and a row with no item
+ *   (deleted files, an invite, the welcome row), keeps its one ui/ListCard: the who-did-what title,
  *   the preview, the tag, the unread dot; a tap opens it.
  * - Every other item (post, brief, plan, plan item, idea, anything else): a
  *   head ListCard (the picture, the item title, the kind tag, "N new" while
@@ -486,8 +496,10 @@ export function ActivityCard({
   };
   const lead = group[0];
   if (lead === undefined) return null;
-  // Chat rows keep their one card: chat mentions, thread starts and chat task alerts.
-  const chat = isChatRow(lead) || lead.alert?.kind === 'task';
+  // Chat rows keep their one card: chat mentions, thread starts and chat task
+  // alerts. So do rows with no item to group under (deleted files, invites, the
+  // welcome row): they read as one who-did-what card with their own preview.
+  const chat = isChatRow(lead) || lead.alert?.kind === 'task' || !hasItem(lead);
   // The head opens the newest entry that links to a comment, else the lead.
   const openEntry = groupOpenEntry(group) ?? lead;
   const alert = lead.alert ?? null;
