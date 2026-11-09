@@ -186,7 +186,7 @@ afterEach(() => {
 describe('Reply privately on comments: no row icon, the author tap keeps it', () => {
   it("someone else's row: the bar is Reply, Resolve, To-do (agency), no Reply privately, no Copy", async () => {
     await mount();
-    expect(barWords('c-other')).toEqual(['Reply', 'Resolve', 'To-do']);
+    expect(barWords('c-other')).toEqual(['Add reaction', 'Reply', 'Resolve', 'To-do']);
     expect(barWords('c-other')).not.toContain(REPLY_PRIVATELY);
   });
 

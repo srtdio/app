@@ -136,6 +136,9 @@ import {
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
 import { isFormerMember } from '@/lib/chat/mentions';
+import { AddReactionSheet, ReactionChips } from '@/components/ui/ReactionChips';
+import { useReactions } from '@/lib/reactions/use-reactions';
+import { whoReactedFromRows } from '@/lib/reactions/reads';
 import { canReplyPrivately, commentPrivateReplyDraft } from '@/lib/reply-privately';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import {
@@ -1635,6 +1638,9 @@ export function Comments({
   // delete / resolve, a refreshSignal bump) is a silent background refetch that
   // swaps the rows in place. Reset when the entity changes (the mount effect).
   const hasLoaded = useRef(false);
+  // Reactions re-read with every landed page zero (the list's own refresh;
+  // no realtime channel of their own).
+  const [reactionEpoch, setReactionEpoch] = useState(0);
 
   // Fetch a single page. page 0 replaces the list (mount + post-submit refetch);
   // later pages append. One page is one screen's worth (getFillCount, read once
@@ -1686,7 +1692,10 @@ export function Comments({
         return;
       }
       if (checkpointRows !== null) setCheckpoints(checkpointRows);
-      if (nextPage === 0) hasLoaded.current = true;
+      if (nextPage === 0) {
+        hasLoaded.current = true;
+        setReactionEpoch((n) => n + 1);
+      }
       setComments((prev) => (nextPage === 0 ? result.data : [...prev, ...result.data]));
       setPage(nextPage);
       setHasMore(result.data.length === pageSize);
@@ -1739,6 +1748,19 @@ export function Comments({
   );
   const mergedRef = useRef(merged);
   mergedRef.current = merged;
+  // Every listed comment's reactions: one batched read per landed page, after paint.
+  const reactionIds = useMemo(
+    () => merged.filter((row) => row.deleted_at === null).map((row) => row.id),
+    [merged],
+  );
+  const reactions = useReactions({
+    kind: 'comment',
+    ids: reactionIds,
+    epoch: reactionEpoch,
+    me: currentUserId,
+  });
+  // The action bar's smiley: the one drawer, for that comment.
+  const [reactFor, setReactFor] = useState<string | null>(null);
 
   useEffect(() => {
     // A new entity (or first mount) is a first load again: skeleton, never the
@@ -2807,6 +2829,7 @@ export function Comments({
         replyOpen={reply?.open === true}
         replyInduction={reply?.induction}
         replyToReply={reply?.toReply === true}
+        onReact={() => setReactFor(comment.id)}
         onReply={() => reply?.onReply()}
         onResolve={() => resolve?.onResolve()}
         onTodo={() => openTaskSheet(comment)}
@@ -2827,6 +2850,36 @@ export function Comments({
       nameOf,
     });
     return tag === null ? null : <CommentTaskTag tag={tag} />;
+  }
+
+  // The reaction chips under the body (after the files and the task tag),
+  // ending with the smiley pill. None: nothing (the bar's smiley adds one).
+  function renderReactions(comment: CommentRow): ReactNode {
+    const list = reactions.of(comment.id);
+    if (list.length === 0) return null;
+    return (
+      <ReactionChips
+        className="mt-3"
+        reactions={list}
+        onToggle={(emoji) => reactions.toggle(comment.id, emoji)}
+        onPick={(emoji) => reactions.pick(comment.id, emoji)}
+        who={{
+          targetId: comment.id,
+          viewerId: currentUserId,
+          load: () =>
+            whoReactedFromRows(supabase, {
+              rows: reactions.rowsOf(comment.id),
+              workspaceId,
+              known: (id) => {
+                const p = profiles.get(id);
+                return p !== undefined
+                  ? { userId: id, displayName: p.displayName, avatarUrl: p.avatarUrl }
+                  : undefined;
+              },
+            }),
+        }}
+      />
+    );
   }
 
   /**
@@ -2920,6 +2973,7 @@ export function Comments({
                   />
                 ) : null}
                 {renderTaskTag(comment)}
+                {renderReactions(comment)}
               </div>
             )}
 
@@ -3395,6 +3449,14 @@ export function Comments({
           onExists={refreshInBackground}
         />
       ) : null}
+
+      <AddReactionSheet
+        open={reactFor !== null}
+        onClose={() => setReactFor(null)}
+        onPick={(emoji) => {
+          if (reactFor !== null) reactions.pick(reactFor, emoji);
+        }}
+      />
 
       {lightbox !== null ? (
         <ImageLightbox

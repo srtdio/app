@@ -1,4 +1,5 @@
-// The emoji sheet: the composer's emoji picker on every surface. A default
+// The emoji sheet: the one emoji drawer app-wide (the composer's emoji key,
+// titled "Emoji", and every reaction's "+" / smiley, titled "Add reaction"). A default
 // export, loaded with React.lazy on the first tap of the emoji button (nothing
 // at mount). Built on ui/Sheet (floating layer: lit-overlay, the rise on phone
 // and the grow on laptop come from the motion module through Sheet). Contents:
@@ -37,8 +38,8 @@ import { EMOJI_GLYPH_TYPE } from '@/components/chat/chat-type';
 /** The recents section's heading. */
 export const RECENTS_HEADING = 'Frequently used';
 
-/** The sheet's title (its header and its dialog name). */
-const SHEET_TITLE = 'Emoji';
+/** The sheet's default title (its header and its dialog name); reactions pass "Add reaction". */
+export const EMOJI_SHEET_TITLE = 'Emoji';
 
 /** The recents section's key and its category tab name. */
 const RECENT_KEY = 'Recent';
@@ -97,6 +98,8 @@ export default function EmojiSheet(props: {
   onClose: () => void;
   onPick: (emoji: string) => void;
   closeOnPick: boolean;
+  /** The header and dialog name; absent: "Emoji" (the composer's). */
+  title?: string;
 }): ReactElement {
   const { open, onClose, onPick, closeOnPick } = props;
   const [query, setQuery] = useState('');
@@ -125,7 +128,7 @@ export default function EmojiSheet(props: {
   const results = searching ? searchEmoji(query, EMOJI_LIST) : [];
 
   return (
-    <Sheet open={open} onClose={onClose} title={SHEET_TITLE} fixedHeight>
+    <Sheet open={open} onClose={onClose} title={props.title ?? EMOJI_SHEET_TITLE} fixedHeight>
       <div data-emoji-sheet="" className="flex flex-col gap-4">
         <Input
           type="text"

@@ -1,7 +1,8 @@
 // A comment's action bar (Linear style, 8 Nov 2026): a small bordered pill
 // that sits ON the comment's top edge, right aligned, half above it, always
-// shown on phone and laptop (no hover reveal). Left to right: Reply, Resolve,
-// To-do, Edit, a hairline, Delete; src/lib/comment-tasks.ts commentBar decides
+// shown on phone and laptop (no hover reveal). Left to right: Add reaction
+// (the smiley, first, 9 Nov 2026), Reply, Resolve, To-do, Edit, a hairline,
+// Delete; src/lib/comment-tasks.ts commentBar decides
 // which show (hide what a person can't do). Every icon is a 44 box: the pill
 // is 36 tall and the boxes run 4 past it top and bottom, so the hit stays 44
 // while the pill reads small. The row it sits on keeps the room above (the
@@ -21,11 +22,13 @@ import {
   IconEdit,
   IconReply,
   IconResolve,
+  IconSmile,
   IconTodo,
   IconTrash,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { barHasButtons, type CommentBar, type TaskTag } from '@/lib/comment-tasks';
+import { ADD_REACTION_LABEL } from '@/lib/reactions/model';
 
 /**
  * The pill: 36 tall, hairline frame, the surface behind it so the row's top
@@ -66,6 +69,8 @@ export interface CommentActionBarProps {
   replyInduction?: string | undefined;
   /** A reply's Reply aims at that reply's author. */
   replyToReply?: boolean;
+  /** The smiley (first key): opens the reaction drawer; absent: no smiley. */
+  onReact?: (() => void) | undefined;
   onReply: () => void;
   onResolve: () => void;
   onTodo: () => void;
@@ -87,10 +92,23 @@ function resolveHookProps(hook: ResolveHook): ResolveHookProps {
 
 export function CommentActionBar(props: CommentActionBarProps): ReactElement | null {
   const { bar } = props;
-  if (!barHasButtons(bar)) return null;
+  const react = props.onReact;
+  if (!barHasButtons(bar) && react === undefined) return null;
   const resolved = bar.resolve === 'reopen';
   return (
     <div role="toolbar" aria-label={BAR_LABEL} data-comment-bar="" className={COMMENT_BAR_CLASS}>
+      {react !== undefined ? (
+        <IconButton
+          type="button"
+          label={ADD_REACTION_LABEL}
+          data-bar-action="react"
+          aria-haspopup="dialog"
+          className={BAR_BUTTON_CLASS}
+          onClick={react}
+        >
+          <IconSmile size={ICON_SIZE.inline} />
+        </IconButton>
+      ) : null}
       {bar.reply ? (
         <IconButton
           type="button"
@@ -151,7 +169,7 @@ export function CommentActionBar(props: CommentActionBarProps): ReactElement | n
       ) : null}
       {bar.delete ? (
         <>
-          {bar.reply || bar.resolve !== null || bar.todo || bar.edit ? (
+          {react !== undefined || bar.reply || bar.resolve !== null || bar.todo || bar.edit ? (
             <span aria-hidden="true" data-bar-divider="" className="h-5 border-l border-border" />
           ) : null}
           <IconButton
