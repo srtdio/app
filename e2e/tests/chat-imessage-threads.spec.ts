@@ -81,7 +81,9 @@ test(
     expect(
       await replies.locator('[data-replies-photos] [data-avatar-role="stack"]').count(),
     ).toBeLessThanOrEqual(3);
-    await expect(replies.locator('[data-replies-latest]')).toContainText(':');
+    // 9 Nov 2026: the last reply's time, never the reply's text.
+    await expect(replies.locator('[data-replies-latest]')).toHaveCount(0);
+    await expect(replies.locator('[data-replies-time]')).toContainText(' at ');
     expectMinTouchTarget(await replies.locator('button').boundingBox(), { dimension: 'height' });
     // A reply to a deleted root stays out of the main chat too.
     await expect(page.locator(`li[data-msg-id="${THREAD_IDS.rda ?? 'rda'}"]`)).toHaveCount(0);
