@@ -216,7 +216,8 @@ describe('chat Composer on ui/Composer', () => {
   it('the mic is a bare row key beside send in every state (typing too); send is RowSend', () => {
     expect(SRC).toMatch(/<RowKey\s+label="Record voice note"/);
     expect(FRAME).toContain('pillEnd={showMic ? micKey : undefined}');
-    expect(FRAME).toContain('mic={showMic ? micKey : undefined}');
+    // While a voice note sends the mic's slot is held (RowKeyHold) so the row keeps its width.
+    expect(FRAME).toContain('mic={showMic ? micKey : voiceBusy ? <RowKeyHold /> : undefined}');
     // The mic never takes send's place any more.
     expect(FRAME).not.toContain('showMic && laptopBox ? (');
   });
