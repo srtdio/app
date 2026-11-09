@@ -118,11 +118,13 @@ test('Activity: "<Name> approved" under the title, no brand suffix, never KEY-N'
   );
   await page.goto('/notifications');
 
-  // 9 Nov 2026: the post's card names the post; the approval is its own line
-  // (the actor, then the line without the name).
-  await expect(page.getByText('Approved Monday carousel', { exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
+  // 10 Nov 2026: one row per item; the row names the post and its preview is
+  // the newest entry's action line (the actor, then the action).
+  await expect(page.getByText('Leo Martins approved Monday carousel', { exact: true })).toBeVisible(
+    {
+      timeout: 15_000,
+    },
+  );
   await expect(page.getByText(/on behalf of/)).toHaveCount(0);
   await expect(page.getByText('HS-101', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Leo Martins deleted 3 files', { exact: true })).toBeVisible();
