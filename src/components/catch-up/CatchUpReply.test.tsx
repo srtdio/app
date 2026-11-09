@@ -162,8 +162,8 @@ describe('CatchUpReply: the shared writing box', () => {
     expect(frame?.className).toContain('rounded-full');
     const area = q<HTMLTextAreaElement>('[data-catch-up-reply-input]');
     expect(area?.getAttribute('placeholder')).toBe('Reply');
-    expect(area?.className).toContain('self-center');
-    expect(area?.parentElement?.className).toContain('self-center');
+    // The formatting field wraps the textarea; the wrapper is centred in the pill.
+    expect(area?.closest('.self-center')).not.toBeNull();
   });
 
   it('Send hands the trimmed text with mentions as @[uuid] tokens, then clears', () => {
