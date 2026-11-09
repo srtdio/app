@@ -10406,6 +10406,19 @@ export type Database = {
           unread: boolean
         }[]
       }
+      chat_threads_for_me_all: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          channel_id: string
+          last_reply_at: string
+          last_reply_body: string
+          last_reply_id: string
+          last_reply_sender: string
+          reply_count: number
+          root_message_id: string
+          unread: boolean
+        }[]
+      }
       chat_unread_bump: {
         Args: {
           p_channel_id: string
