@@ -48,6 +48,7 @@ import {
   TEAM_PLAN_ID,
   planMessage,
   TAB_SHARED_PLAN_ID,
+  THREAD_DM,
   THREAD_GROUP,
   THREAD_IDS,
   WORKSPACE_ID,
@@ -2098,6 +2099,49 @@ const SCREENS: Screen[] = [
         'replies row',
       );
       await waitFor([page.locator('[data-thread-view] [data-thread-strip="replies"]')], 'strip');
+    },
+  },
+  {
+    // 9 Nov 2026: the replies row with the last reply today: photos, "4
+    // replies" (semibold ink), "Today at 10:12 AM" (fg-3), the dot; no reply text.
+    name: 'chat-replies-row-today',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await waitFor(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first()],
+        'replies row',
+      );
+      await waitFor(
+        [page.locator('[data-replies-row] [data-replies-time]', { hasText: 'Today at' }).first()],
+        'today time',
+      );
+    },
+  },
+  {
+    // The same row with the thread 3 days old: the date form ("18 Oct at
+    // 10:12 AM"), never a weekday (rowWhen).
+    name: 'chat-replies-row-older',
+    seed: creator,
+    extra: (network) => {
+      const back = 3 * 24 * 60 * 60_000;
+      for (const m of network.world.tables.chat_messages ?? []) {
+        if (m.channel_id !== THREAD_DM || typeof m.created_at !== 'string') continue;
+        m.created_at = new Date(Date.parse(m.created_at) - back).toISOString();
+      }
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await waitFor(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first()],
+        'replies row',
+      );
+      await waitFor(
+        [page.locator('[data-replies-row] [data-replies-time]', { hasText: '18 Oct at' }).first()],
+        'older time',
+      );
     },
   },
   {
@@ -6298,6 +6342,9 @@ const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
   'catch-up-thread-full': 'catch-up-thread',
   'catch-up-thread-empty': 'catch-up-thread',
   'catch-up-thread-replies': 'catch-up-thread',
+  'chat-replies-row': 'chat-replies-row',
+  'chat-replies-row-today': 'chat-replies-row',
+  'chat-replies-row-older': 'chat-replies-row',
 };
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
@@ -6483,6 +6530,9 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-thread-replies',
   'catch-up-thread-empty',
   'catch-up-thread-replies',
+  // Thread times and the replies row (9 Nov 2026): phone and laptop, light and dark.
+  'chat-replies-row-today',
+  'chat-replies-row-older',
   // One search, the top bar and the chip row (decisions A to F): phone and
   // laptop, light and dark. The top bar of the six list screens is shot on
   // their base screens above (pipeline, briefs-approver, assets, plan-tab,

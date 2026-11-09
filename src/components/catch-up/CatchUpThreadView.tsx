@@ -1,6 +1,7 @@
 // A thread opened full screen inside catch up (9 Nov 2026): the card frame,
 // the name row and the bottom buttons hide; the top bar reads "Thread" over
-// the item name, "<" returns to the exact card state. Body: the root, chat's
+// the item name, "<" returns to the exact card state. Body: the root (40
+// photo, name over its date, the text full width on the 16 gutter), chat's
 // one thread strip (ui RepliesSeparatorRow: "Reply in thread" focuses the
 // reply box, else "N replies"), the replies oldest first, then the "Reply in
 // thread" box. No reply gesture inside a thread. Pure render.
@@ -10,9 +11,17 @@ import type { ReactElement, ReactNode, Ref } from 'react';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import type { CatchUpMessageRow, CatchUpThread } from '@/lib/catch-up/body';
-import { BoneRows, CardError, MessageRow } from '@/components/catch-up/CatchUpRows';
+import {
+  BoneRows,
+  CATCH_UP_ROW_X,
+  CardError,
+  LongText,
+  MessageRow,
+} from '@/components/catch-up/CatchUpRows';
 import type { SentMessage } from '@/components/catch-up/CatchUpCard';
-import { RepliesSeparatorRow } from '@/components/chat/ThreadRail';
+import { RepliesSeparatorRow, ThreadRootHead } from '@/components/chat/ThreadRail';
+import { cn } from '@/lib/cn';
+import { threadWhen } from '@/lib/time';
 
 /** The reply box's field inside the reply slot. */
 const REPLY_FIELD = 'textarea, input[type="text"], [contenteditable="true"]';
@@ -44,19 +53,25 @@ export function CatchUpThreadView(props: {
   return (
     <div ref={props.viewRef} data-catch-up-thread="" className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-        {/* Root: 8 (row) + 4 = 12 to the strip's top hairline; replies start 8 under it. */}
-        <ul className="flex flex-col pt-2">
-          <MessageRow
-            row={props.root}
-            selfName={props.selfName}
-            timeZone={props.timeZone}
-            onOpenThread={null}
-          />
+        {/* Root: 12 from its last text line to the strip's top hairline; replies start 8 under it. */}
+        <ul className="flex flex-col">
+          <li
+            data-catch-up-message={props.root.id}
+            data-thread-root=""
+            className={cn('flex flex-col gap-2 pb-3 pt-3', CATCH_UP_ROW_X)}
+          >
+            <ThreadRootHead
+              name={props.root.author.name}
+              avatarUrl={props.root.author.avatarUrl}
+              when={threadWhen(props.root.createdAt, 'date', new Date(), props.timeZone)}
+              dateTime={props.root.createdAt}
+            />
+            <LongText text={props.root.text} selfName={props.selfName} />
+          </li>
         </ul>
         <RepliesSeparatorRow
           as="div"
           family="catch-up"
-          className="mt-1"
           label={count > 0 ? repliesLabel(count) : null}
           through={false}
           onFocusReply={focusReply}
@@ -74,6 +89,7 @@ export function CatchUpThreadView(props: {
                 selfName={props.selfName}
                 timeZone={props.timeZone}
                 onOpenThread={null}
+                threadTime
               />
             ))}
             {props.sent.map((message) => (
@@ -83,6 +99,7 @@ export function CatchUpThreadView(props: {
                 selfName={props.selfName}
                 timeZone={props.timeZone}
                 onOpenThread={null}
+                threadTime
                 trailing={
                   message.state === 'failed' ? (
                     <span data-catch-up-not-sent="" className="flex items-center gap-2">

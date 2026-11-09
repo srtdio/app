@@ -1339,6 +1339,13 @@ export function MessageBubble(props: {
   postRefs?: BubblePostRefs | undefined;
   /** A member of a card's thread: the rail stands in for its quote and chip (selection too). */
   threadMember?: boolean | undefined;
+  /**
+   * The thread view's rows (9 Nov 2026): 'root' = 40 photo with the name over
+   * the time beside it and the text full width below on the 16 gutter;
+   * 'reply' = 32 photo, 12 to the name and text (x60), 16 between heads.
+   * Absent: the main chat's row (photo 32, 8 gap), unchanged.
+   */
+  threadPlace?: 'root' | 'reply' | undefined;
   /** The row's piece of the thread rail; absent off the rail and while selecting. */
   rail?: RowRail | undefined;
   /** A voice-only bubble: the voice note right below from the same sender. */
@@ -1395,6 +1402,9 @@ export function MessageBubble(props: {
   // continuation keeps the photo's gutter so its body aligns under the first.
   const showMeta = head;
   const gutter = !head;
+  // The thread view's root (always its list's first row, so a head) and replies.
+  const rootPlace = props.threadPlace === 'root' && head;
+  const replyPlace = props.threadPlace === 'reply';
   const hasReactions = message.reactions.length > 0;
   const failed = message.state === 'failed';
   const selection = props.selection;
@@ -1487,7 +1497,7 @@ export function MessageBubble(props: {
       node
     );
   const headTick = mine ? metaTick(fullMeta.status) : null;
-  const senderLine = showMeta ? (
+  const senderLine = rootPlace ? null : showMeta ? (
     // One block line, its parts inline: the name trigger stays an inline
     // control in running text (its hit area is the trigger's 44 box), and the
     // whole line truncates.
@@ -1522,26 +1532,55 @@ export function MessageBubble(props: {
     'group flex items-start gap-2',
     railRowClass(rail, false),
     NO_TOUCH_SELECT,
-    head ? (props.afterLabel === true ? 'pt-0' : 'pt-3') : 'pt-1',
-    'flex-row',
+    head ? (props.afterLabel === true ? 'pt-0' : replyPlace ? 'pt-4' : 'pt-3') : 'pt-1',
+    // Thread view: the root stacks its head over the full-width text; replies sit 12 from the photo.
+    rootPlace ? 'relative flex-col items-stretch' : 'flex-row',
+    replyPlace && 'gap-3',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
   );
-  const photo = showMeta
-    ? withRailPhoto(
-        asPerson(
-          <Avatar
-            name={headerName(message, profiles)}
-            {...senderAvatar}
-            role="header"
-            decorative
-          />,
-          'block',
-        ),
-        rail,
-        railEdge,
-      )
-    : null;
+  const photo = rootPlace ? (
+    // The thread view's root head: 40 photo, 12 to the name over the time.
+    <div data-thread-root-head="" className="flex min-w-0 items-center gap-3">
+      {asPerson(
+        <Avatar name={headerName(message, profiles)} {...senderAvatar} role="row" decorative />,
+        'block',
+      )}
+      <span className="flex min-w-0 flex-col">
+        <span data-sender-line="" className="block min-w-0 max-w-full truncate">
+          {asPerson(
+            <span data-sender-name="" className={cn('text-fg', SENDER_NAME_TYPE)}>
+              {headerName(message, profiles)}
+            </span>,
+            'inline',
+          )}
+        </span>
+        {fullMeta.time !== '' ? (
+          <span
+            aria-hidden="true"
+            data-sender-time=""
+            className={cn('block truncate text-fg-3', SENDER_TIME_TYPE)}
+          >
+            {fullMeta.time}
+            {headTick !== null ? (
+              <span className="ml-1 inline-flex align-middle">
+                <MetaGlyph status={headTick} />
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+      </span>
+    </div>
+  ) : showMeta ? (
+    withRailPhoto(
+      asPerson(
+        <Avatar name={headerName(message, profiles)} {...senderAvatar} role="header" decorative />,
+        'block',
+      ),
+      rail,
+      railEdge,
+    )
+  ) : null;
   // Rows never show the native menu or callout on a touch-first device.
   const rowContextMenu = press?.coarse === true ? preventDefault : undefined;
   if (message.deleted === true) {
@@ -1947,6 +1986,8 @@ export function MessageBubble(props: {
             'shrink-0 self-center text-fg-3 opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
             // An own row's tick passes under the smiley; the page fill keeps the glyph clear.
             rail?.role != null && mine && 'bg-bg',
+            // The thread root's stack: the smiley rides its head line, out of the flow.
+            rootPlace && 'absolute right-4 top-3',
           )}
         >
           <SmileyGlyph />
@@ -1954,7 +1995,11 @@ export function MessageBubble(props: {
       ) : textSelect && press?.onReact !== undefined && message.state === 'sent' ? (
         // The smiley's room stays while selecting text, so the row never
         // changes size (a pinned list would re-pin and scroll it away).
-        <span aria-hidden="true" data-react-slot="" className="h-11 w-11 shrink-0" />
+        <span
+          aria-hidden="true"
+          data-react-slot=""
+          className={cn('h-11 w-11 shrink-0', rootPlace && 'absolute right-4 top-3')}
+        />
       ) : null}
       {failed && mine && message.filesMissing === true ? (
         <IconButton

@@ -213,8 +213,10 @@ describe('time format rule: src/lib/time.ts is the one rule', () => {
         'formatSpokenDate',
         'formatTime',
         'isValidTimeZone',
+        'rowWhen',
         'safeTimeZone',
         'shortZoneName',
+        'threadWhen',
         'zonedParts',
       ].sort(),
     );

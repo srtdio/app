@@ -29,7 +29,7 @@ import { DayPill, MENTION_ME_PEER } from '@/components/chat/MessageBubble';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import type { PresignCache } from '@/lib/asset-presign';
 import { segmentSelfMentions } from '@/components/pages/activity/data';
-import { formatDayLabel, formatTime } from '@/lib/time';
+import { formatDayLabel, formatTime, threadWhen } from '@/lib/time';
 import { linkRuns, overClampLines } from '@/lib/catch-up/text';
 import { defaultPointOpen } from '@/lib/catch-up/body';
 import type {
@@ -166,6 +166,8 @@ function RowFrame(props: {
   under?: ReactNode;
   children: ReactNode;
   photo?: ReactNode;
+  /** A thread reply's time (threadWhen 'relative'); absent: the clock time. */
+  when?: string | undefined;
 }): ReactElement {
   return (
     <li {...props.hook} className={cn('flex gap-3 py-2', CATCH_UP_ROW_X)}>
@@ -185,7 +187,7 @@ function RowFrame(props: {
             {props.author.name}
           </Text>
           <Text role="meta" as="time" dateTime={props.createdAt} className="shrink-0">
-            {formatTime(props.createdAt, props.timeZone)}
+            {props.when ?? formatTime(props.createdAt, props.timeZone)}
           </Text>
         </div>
         {props.under}
@@ -221,6 +223,8 @@ export function MessageRow(props: {
   /** Open its thread (null: the item has no threads, or inside a thread). */
   onOpenThread: (() => void) | null;
   trailing?: ReactNode;
+  /** Inside a thread: the reply's time as threadWhen 'relative' ("Today at 10:12 AM"). */
+  threadTime?: boolean | undefined;
 }): ReactElement {
   const { row } = props;
   return (
@@ -228,6 +232,11 @@ export function MessageRow(props: {
       author={row.author}
       createdAt={row.createdAt}
       timeZone={props.timeZone}
+      when={
+        props.threadTime === true
+          ? threadWhen(row.createdAt, 'relative', new Date(), props.timeZone)
+          : undefined
+      }
       hook={{ 'data-catch-up-message': row.id }}
     >
       {row.earlierCaption != null && row.earlierCaption !== '' ? (

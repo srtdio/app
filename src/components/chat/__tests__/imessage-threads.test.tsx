@@ -306,10 +306,11 @@ describe('thread controls', () => {
     expect(left).not.toContain('data-rail');
   });
 
-  it('the view divider (8 Nov 2026): hairlines above and below, the count in fg-2, no button without an action', () => {
+  it('the view divider (9 Nov 2026): hairlines above and below, the count semibold ink, no button without an action', () => {
     const out = html(<RepliesSeparatorRow label="2 replies" through />);
     expect(out).toContain('border-y border-border');
-    expect(out).toContain('text-fg-2');
+    expect(out).toContain('font-semibold text-fg');
+    expect(out).not.toContain('text-fg-2');
     expect(out).toContain('data-rail="through"');
     expect(out).not.toContain('<button');
   });

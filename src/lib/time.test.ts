@@ -13,7 +13,9 @@ import {
   formatOverdue,
   formatPlanStart,
   formatTime,
+  rowWhen,
   safeTimeZone,
+  threadWhen,
 } from '@/lib/time';
 
 // Zones are passed explicitly so the suite is deterministic on any machine.
@@ -475,5 +477,62 @@ describe('due dates are calendar days on the workspace zone', () => {
     expect(formatDayRange('2026-10-18T18:30:00Z', '2026-10-25T06:30:00Z', IST, NOW)).toBe(
       '19\u201325 Oct',
     );
+  });
+});
+
+describe('threadWhen and rowWhen (9 Nov 2026, thread times)', () => {
+  const UTC = 'UTC';
+  // Mon 9 Nov 2026, 15:00 UTC.
+  const now = new Date('2026-11-09T15:00:00Z');
+  it("'date': day, month and time; the year only off now's year", () => {
+    expect(threadWhen('2026-10-16T10:09:00Z', 'date', now, UTC)).toBe('16 Oct at 10:09 AM');
+    expect(threadWhen('2025-10-16T10:09:00Z', 'date', now, UTC)).toBe('16 Oct 2025 at 10:09 AM');
+    expect(threadWhen('2026-11-09T10:12:00Z', 'date', now, UTC)).toBe('9 Nov at 10:12 AM');
+  });
+  it("'relative': Today, Yesterday, the weekday 2-6 days back, else the date", () => {
+    expect(threadWhen('2026-11-09T10:12:00Z', 'relative', now, UTC)).toBe('Today at 10:12 AM');
+    expect(threadWhen('2026-11-08T22:05:00Z', 'relative', now, UTC)).toBe('Yesterday at 10:05 PM');
+    expect(threadWhen('2026-11-06T09:00:00Z', 'relative', now, UTC)).toBe('Friday at 9:00 AM');
+    expect(threadWhen('2026-11-03T09:00:00Z', 'relative', now, UTC)).toBe('Tuesday at 9:00 AM');
+    expect(threadWhen('2026-11-02T09:00:00Z', 'relative', now, UTC)).toBe('2 Nov at 9:00 AM');
+  });
+  it('rowWhen: Today, Yesterday, else the date (no weekday step)', () => {
+    expect(rowWhen('2026-11-09T10:12:00Z', now, UTC)).toBe('Today at 10:12 AM');
+    expect(rowWhen('2026-11-08T10:12:00Z', now, UTC)).toBe('Yesterday at 10:12 AM');
+    expect(rowWhen('2026-11-06T09:00:00Z', now, UTC)).toBe('6 Nov at 9:00 AM');
+    expect(rowWhen('2025-12-31T09:00:00Z', now, UTC)).toBe('31 Dec 2025 at 9:00 AM');
+  });
+  it('midnight: the civil day turns at 00:00, not 24 hours back', () => {
+    const justAfter = new Date('2026-11-09T00:01:00Z');
+    expect(threadWhen('2026-11-08T23:59:00Z', 'relative', justAfter, UTC)).toBe(
+      'Yesterday at 11:59 PM',
+    );
+    expect(threadWhen('2026-11-09T00:00:00Z', 'relative', justAfter, UTC)).toBe(
+      'Today at 12:00 AM',
+    );
+    expect(rowWhen('2026-11-08T23:59:00Z', justAfter, UTC)).toBe('Yesterday at 11:59 PM');
+  });
+  it('year boundary: yesterday across 1 Jan is Yesterday; older shows the year', () => {
+    const newYear = new Date('2027-01-01T08:00:00Z');
+    expect(threadWhen('2026-12-31T21:00:00Z', 'relative', newYear, UTC)).toBe(
+      'Yesterday at 9:00 PM',
+    );
+    expect(threadWhen('2026-12-29T21:00:00Z', 'relative', newYear, UTC)).toBe('Tuesday at 9:00 PM');
+    expect(threadWhen('2026-12-20T21:00:00Z', 'relative', newYear, UTC)).toBe(
+      '20 Dec 2026 at 9:00 PM',
+    );
+    expect(threadWhen('2026-12-31T21:00:00Z', 'date', newYear, UTC)).toBe('31 Dec 2026 at 9:00 PM');
+  });
+  it('time zone: the day and the clock read on the zone', () => {
+    // 20:00 UTC on 8 Nov is 01:30 on 9 Nov in Kolkata.
+    expect(threadWhen('2026-11-08T20:00:00Z', 'relative', now, IST)).toBe('Today at 1:30 AM');
+    expect(threadWhen('2026-11-08T20:00:00Z', 'relative', now, UTC)).toBe('Yesterday at 8:00 PM');
+    expect(rowWhen('2026-11-08T20:00:00Z', now, 'America/Los_Angeles')).toBe(
+      'Yesterday at 12:00 PM',
+    );
+  });
+  it('a bad value is empty', () => {
+    expect(threadWhen('nope', 'date', now, UTC)).toBe('');
+    expect(rowWhen('nope', now, UTC)).toBe('');
   });
 });

@@ -7,7 +7,6 @@ import {
   firstUnreadReply,
   isThreadParticipant,
   isTopLevel,
-  latestReplyLine,
   localThreadReadAt,
   mainChatMessages,
   markChatUnread,
@@ -151,7 +150,6 @@ describe('L3: every reply is a thread; the main chat holds top-level messages on
     expect(info?.unread).toBe(true);
     expect(repliesLabel(1)).toBe('1 reply');
     expect(repliesLabel(4)).toBe('4 replies');
-    expect(latestReplyLine(info?.last ?? null, 'Leo')).toBe('Leo: Done, it reads well now.');
   });
 
   it('the deleted root: its thread stays (replies still counted under the tombstone)', () => {

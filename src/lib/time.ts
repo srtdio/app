@@ -219,6 +219,54 @@ export function formatAgo(value: DateInput, now: Date = new Date(), timeZone?: s
   return dayText(civil, today.year);
 }
 
+/** The full weekday of a civil day: "Friday". */
+function longWeekdayOf(civil: Civil): string {
+  const weekday = new Date(Date.UTC(civil.year, civil.month - 1, civil.day)).getUTCDay();
+  return LONG_WEEKDAYS[weekday] ?? '';
+}
+
+/** Which day word a thread time leads with (threadWhen). */
+export type ThreadWhenMode = 'date' | 'relative';
+
+/** The day word of a thread time: 'relative' adds "Friday" 2-6 days back, 'row' does not. */
+function threadDay(instant: Date, mode: ThreadWhenMode | 'row', now: Date, zone: string): string {
+  const civil = civilOfInstant(instant, zone);
+  const today = civilOfInstant(now, zone);
+  if (mode !== 'date') {
+    const days = civilDaysBetween(civil, today);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (mode === 'relative' && days >= 2 && days <= 6) return longWeekdayOf(civil);
+  }
+  return dayText(civil, today.year);
+}
+
+/**
+ * threadWhen (9 Nov 2026): a thread's root and replies. 'date': "16 Oct at
+ * 10:09 AM" ("16 Oct 2025 at 10:09 AM" off now's year). 'relative': "Today at
+ * 10:12 AM", "Yesterday at ...", the weekday "Friday at ..." 2-6 days back,
+ * else the date form. Civil days on `timeZone` (device zone when omitted).
+ */
+export function threadWhen(
+  value: DateInput,
+  mode: ThreadWhenMode,
+  now: Date = new Date(),
+  timeZone?: string,
+): string {
+  const instant = instantOf(value);
+  if (instant === undefined) return '';
+  const zone = safeTimeZone(timeZone);
+  return `${threadDay(instant, mode, now, zone)} at ${formatTime(instant, zone)}`;
+}
+
+/** rowWhen: the chat replies row's last reply time; threadWhen 'relative' with no weekday step. */
+export function rowWhen(value: DateInput, now: Date = new Date(), timeZone?: string): string {
+  const instant = instantOf(value);
+  if (instant === undefined) return '';
+  const zone = safeTimeZone(timeZone);
+  return `${threadDay(instant, 'row', now, zone)} at ${formatTime(instant, zone)}`;
+}
+
 /**
  * formatAdded: when a record was made (Assets, Bank, Recently deleted, Members
  * joined, Settings). Never ticks: "10:27 AM" on the same civil day, else

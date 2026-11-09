@@ -154,12 +154,12 @@ describe('L2: square photos', () => {
 });
 
 describe('L3: the replies row', () => {
-  it('photos, semibold count, the latest line and the unread dot in one 44 target', () => {
+  it('photos, semibold ink count, the last reply time (no reply text) and the dot in one 44 target', () => {
     const html = renderToStaticMarkup(
       createElement(RepliesRow, {
         label: '2 replies',
         repliers: [{ id: 'leo', name: 'Leo Park' }],
-        line: 'Leo Park: Done, it reads well now.',
+        time: 'Today at 10:12 AM',
         unread: true,
         coarse: true,
         onOpen: () => {},
@@ -168,7 +168,13 @@ describe('L3: the replies row', () => {
     expect(html).toContain('data-replies-row');
     expect(html).toContain('data-avatar-role="stack"');
     expect(html).toContain('font-semibold');
-    expect(html).toContain('Leo Park: Done, it reads well now.');
+    expect(html).toContain('data-replies-time');
+    expect(html).toContain('Today at 10:12 AM');
+    expect(html).not.toContain('data-replies-latest');
+    expect(html).not.toContain('text-accent');
+    expect(html).toContain(
+      'aria-label="2 replies, last reply Today at 10:12 AM, unread. Open thread"',
+    );
     expect(html).toContain('truncate');
     expect(html).toContain('data-replies-dot');
     expect(html).toContain('min-h-11');
@@ -179,7 +185,7 @@ describe('L3: the replies row', () => {
       createElement(RepliesRow, {
         label: '1 reply',
         repliers: [],
-        line: '',
+        time: '',
         unread: false,
         coarse: false,
         onOpen: () => {},
