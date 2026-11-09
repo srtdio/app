@@ -1013,6 +1013,10 @@ export function entryLine(
   } catch {
     line = 'Updated this';
   }
+  // A plan item row names its item (as the card title does) in place of "a plan item".
+  if (item.entityType === PLAN_ITEM_ENTITY && item.title !== null && item.title !== '') {
+    line = line.replace('a plan item', item.title);
+  }
   return { actor, text: lineWithoutName(line, actor) || 'Updated this' };
 }
 

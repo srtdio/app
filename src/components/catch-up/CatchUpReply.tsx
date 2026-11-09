@@ -599,7 +599,9 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
             }}
             onSelect={trackCaret}
             onKeyDown={onKeyDown}
-            className="min-w-0 flex-1 self-center"
+            // A flex wrapper: the textarea sits as a flex item, with no inline
+            // baseline gap under it, so the hint is centred in the pill.
+            className="flex min-w-0 flex-1 self-center"
           />
         }
         send={

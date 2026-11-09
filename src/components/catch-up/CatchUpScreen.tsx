@@ -222,6 +222,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragRef = useRef<Drag | null>(null);
+  const swipedRef = useRef(false);
   const playedRef = useRef<Played | null>(null);
   const requestedRef = useRef(new Set<string>());
   const olderBusyRef = useRef(new Set<string>());
@@ -399,9 +400,13 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (flying || typing) return;
     const target = event.target;
+    // A swipe may start on the rows' own tap areas (a message's text, a point);
+    // never on the reply box, links, media or the card's other buttons.
     if (
       target instanceof Element &&
-      target.closest('form, button, a, textarea, input, video') !== null
+      (target.closest('form, a, textarea, input, video') !== null ||
+        (target.closest('button') !== null &&
+          target.closest('[data-catch-up-open-thread], [data-catch-up-point]') === null))
     ) {
       return;
     }
@@ -438,6 +443,8 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     const el = cardRef.current;
     dragRef.current = null;
     if (drag === null || !drag.locked || el === null) return;
+    // The press was a swipe: the click it ends with opens nothing.
+    swipedRef.current = true;
     el.style.transform = '';
     const decision = swipeDecision(drag.dx, el.offsetWidth);
     if (decision !== null) {
@@ -786,6 +793,12 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
               onPointerMove,
               onPointerUp: onPointerEnd,
               onPointerCancel: onPointerEnd,
+              onClickCapture: (event) => {
+                if (!swipedRef.current) return;
+                swipedRef.current = false;
+                event.preventDefault();
+                event.stopPropagation();
+              },
             }}
           />
         </div>

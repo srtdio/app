@@ -86,7 +86,7 @@ export interface CatchUpCardProps {
   bodyRef?: Ref<HTMLDivElement>;
   gesture?: Pick<
     HTMLAttributes<HTMLDivElement>,
-    'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel'
+    'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onClickCapture'
   >;
 }
 
