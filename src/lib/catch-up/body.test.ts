@@ -87,6 +87,7 @@ describe('catch-up bodies', () => {
     const rows = eventRows(card);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe('event:s');
+    expect(rows[0]?.author.name).toBe('Someone');
   });
 
   it('the New line sits at the oldest unread card entry', () => {
@@ -139,5 +140,91 @@ describe('catch-up bodies', () => {
     ).toBe('skip');
     expect(bodyOf(card, { ...parts, post: undefined })).toBe('skip');
     expect(bodyOf(card, { ...parts, comments: [] })).toBe('skip');
+  });
+});
+
+describe('catch up: every unread notification is a line (9 Nov 2026)', () => {
+  const at = (h: number): string => `2026-11-08T${String(h).padStart(2, '0')}:00:00.000Z`;
+  const postParts = (comments: Parameters<typeof commentRows>[1]) => ({
+    workspaceId: 'w1',
+    side: 'agency' as const,
+    zone: 'UTC',
+    post: {
+      title: 'Launch reel',
+      caption: '',
+      format: 'text',
+      target_date: null,
+      stage: 'review',
+      deleted_at: null,
+    },
+    brief: undefined,
+    planItem: undefined,
+    planTitle: new Map<string, string>(),
+    pictures: { images: [], video: null },
+    comments: [...comments].reverse(),
+    planComments: [],
+    counts: new Map<string, number>(),
+  });
+
+  it('3 unread comments: 1 card, 3 message rows, the New line above the first', () => {
+    const card = cardOf(
+      entry({ id: 'e3', created_at: at(11), payload: { comment_id: 'c3' } }),
+      entry({ id: 'e2', created_at: at(10), payload: { comment_id: 'c2' } }),
+      entry({ id: 'e1', created_at: at(9), payload: { comment_id: 'c1' } }),
+    );
+    const body = bodyOf(
+      card,
+      postParts([
+        comment({ id: 'c1', created_at: at(9) }),
+        comment({ id: 'c2', created_at: at(10) }),
+        comment({ id: 'c3', created_at: at(11) }),
+      ]),
+    );
+    if (body === 'skip' || body === 'error') throw new Error('body');
+    expect(body.rows.map((r) => [r.kind, r.id])).toEqual([
+      ['message', 'c1'],
+      ['message', 'c2'],
+      ['message', 'c3'],
+    ]);
+    expect(body.firstNewId).toBe('c1');
+  });
+
+  it('a comment + plan_date_changed + post_ready: 1 message row + 2 event lines', () => {
+    const card = cardOf(
+      entry({ id: 'cm', created_at: at(9), payload: { comment_id: 'c1' } }),
+      entry({ id: 'pd', event_type: 'plan_date_changed', created_at: at(10) }),
+      entry({ id: 'pr', event_type: 'post_ready', created_at: at(11) }),
+    );
+    const body = bodyOf(card, postParts([comment({ id: 'c1', created_at: at(9) })]));
+    if (body === 'skip' || body === 'error') throw new Error('body');
+    expect(body.rows.map((r) => r.kind)).toEqual(['message', 'event', 'event']);
+    expect(body.rows.map((r) => r.id)).toEqual(['c1', 'event:pd', 'event:pr']);
+    // The New line sits above the oldest unread line of any kind.
+    expect(body.firstNewId).toBe('c1');
+  });
+
+  it('a mention and a comment on one comment share its one message row', () => {
+    const card = cardOf(
+      entry({ id: 'cm', created_at: at(9), payload: { comment_id: 'c1' } }),
+      entry({ id: 'mn', event_type: 'mention', created_at: at(9), payload: { comment_id: 'c1' } }),
+    );
+    const drawn = commentRows('w1', [comment({ id: 'c1', created_at: at(9) })], new Map());
+    expect(eventRows(card, drawn)).toEqual([]);
+  });
+
+  it('own and read entries get no line; unknown types read a fallback; a missing actor is "Someone"', () => {
+    const base = cardOf(entry({ id: 'cm', created_at: at(9), payload: { comment_id: 'c1' } }));
+    const own = entry({ id: 'own', event_type: 'post_ready', created_at: at(10) }, { own: true });
+    const read = entry({ id: 'rd', event_type: 'post_ready', created_at: at(10), read_at: at(10) });
+    const odd = entry(
+      { id: 'odd', event_type: 'something_new', created_at: at(11), actor_user_id: null },
+      { actorName: null },
+    );
+    const card = { ...base, entries: [...base.entries, own, read, odd] };
+    const drawn = commentRows('w1', [comment({ id: 'c1', created_at: at(9) })], new Map());
+    const rows = eventRows(card, drawn);
+    expect(rows.map((r) => r.id)).toEqual(['event:odd']);
+    expect(rows[0]?.author.name).toBe('Someone');
+    expect(rows[0]?.line.length).toBeGreaterThan(0);
   });
 });

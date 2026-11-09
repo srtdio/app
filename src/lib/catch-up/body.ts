@@ -12,14 +12,16 @@
 
 import type { Client } from '@srtdio/rpc';
 import { parseMentions, stripFormat } from '@srtdio/comments';
-import { activityLine } from '@/components/pages/activity/data';
+import { entryLine, lineWithoutName } from '@/components/pages/activity/data';
+
+export { lineWithoutName };
 import { personAvatar, personName, resolvePeople } from '@/lib/people-names';
 import { mentionNamesIn, resolveMentionPreview } from '@/lib/chat/mentions';
 import { logger } from '@/lib/logger';
 import { formatDue, formatOverdue, daysFromToday } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { readCatchUpChat } from '@/lib/catch-up/reads';
-import { unreadIdsOf, type CatchUpItem } from '@/lib/catch-up/queue';
+import { isOwnEntry, unreadIdsOf, type CatchUpItem } from '@/lib/catch-up/queue';
 import { foldNewlines } from '@/lib/catch-up/text';
 
 /** Most rows a card reads per page (and per "load older" page). */
@@ -119,15 +121,6 @@ export interface CatchUpThread {
 /** The points' default fold: open (unresolved) points start expanded, resolved ones folded. Pure. */
 export function defaultPointOpen(point: { open: boolean }): boolean {
   return point.open;
-}
-
-/** The Activity line without the actor's name, its first letter raised. Pure. */
-export function lineWithoutName(line: string, name: string | null): string {
-  const trimmed =
-    name !== null && name !== '' && line.startsWith(`${name} `)
-      ? line.slice(name.length + 1)
-      : line;
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
 /** The context label of an item. Pure. */
@@ -248,22 +241,36 @@ export function commentRows(
   return out;
 }
 
-/** Event rows for the card-making entries that carry no comment of their own. Pure. */
-export function eventRows(item: CatchUpItem): CatchUpEventRow[] {
-  return item.cardEntries
-    .filter(
-      (e) =>
-        e.eventType === 'stage_change' ||
-        e.eventType === 'plan_review' ||
-        e.eventType === 'brief_created',
-    )
-    .map((e) => ({
-      kind: 'event' as const,
+/**
+ * Event rows (9 Nov 2026: every notification gets its own line): one row per
+ * UNREAD entry of the item that is not already drawn as a message row or in a
+ * feedback points block. One entry = at most one row; entries naming the same
+ * comment (a mention and a comment on one comment) share the one message row.
+ * Read entries and own actions get no row; an unknown type reads activityLine's
+ * fallback, and a missing actor "Someone". Pure.
+ */
+export function eventRows(item: CatchUpItem, drawn: readonly CatchUpRow[] = []): CatchUpEventRow[] {
+  const shown = new Set<string>();
+  for (const row of drawn) {
+    shown.add(row.id);
+    if (row.kind === 'points') for (const p of row.points) shown.add(p.id);
+  }
+  const out: CatchUpEventRow[] = [];
+  for (const e of item.entries) {
+    if (e.readAt !== null || isOwnEntry(e, null)) continue;
+    if (e.commentId !== null && shown.has(e.commentId)) continue;
+    if (e.batchId != null && shown.has(e.batchId)) continue;
+    if (e.commentId !== null) shown.add(e.commentId);
+    const { actor, text } = entryLine(e);
+    out.push({
+      kind: 'event',
       id: `event:${e.id}`,
-      author: { id: e.actorId, name: e.actorName ?? 'Someone', avatarUrl: e.actorAvatarUrl },
+      author: { id: e.actorId, name: actor, avatarUrl: e.actorAvatarUrl },
       createdAt: e.createdAt,
-      line: lineWithoutName(activityLine(e), e.actorName),
-    }));
+      line: text,
+    });
+  }
+  return out;
 }
 
 function byTime(a: { createdAt: string }, b: { createdAt: string }): number {
@@ -272,7 +279,9 @@ function byTime(a: { createdAt: string }, b: { createdAt: string }): number {
 
 /** The oldest unread card entry's anchor row id in `rows` (the "New" line). Pure. */
 export function firstNewOf(item: CatchUpItem, rows: readonly CatchUpRow[]): string | null {
-  const unread = item.cardEntries.filter((e) => e.readAt === null);
+  // Every unread entry of the item counts (event lines included), so the New
+  // line sits above the oldest unread line of any kind.
+  const unread = item.entries.filter((e) => e.readAt === null && !isOwnEntry(e, null));
   const pool = unread.length > 0 ? unread : item.cardEntries;
   const anchors = new Set<string>();
   for (const e of pool) {
@@ -606,7 +615,7 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
     }));
     hasOlder = parts.planComments.length >= CATCH_UP_PAGE;
   }
-  rows = [...rows, ...eventRows(item)].sort(byTime);
+  rows = [...rows, ...eventRows(item, rows)].sort(byTime);
   if (rows.length === 0 && context === null) return 'skip';
   return {
     title: title !== '' ? title : (item.lead.title ?? ''),

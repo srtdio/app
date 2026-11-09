@@ -811,6 +811,18 @@ function seedCatchUp(network: HarnessNetwork, opts: { mention?: boolean } = {}):
 }
 
 /**
+ * One post with exactly 8 unread comment notifications (Activity's item card:
+ * 5 lines + "+3 more"): the many-comments seed with its 42 oldest entries
+ * dropped (its comments stay; Activity reads the entries).
+ */
+function seedEightComments(network: HarnessNetwork): void {
+  seedCatchUpManyComments(network, NOW);
+  const t = network.world.tables;
+  const all = t.inbox_entries ?? [];
+  t.inbox_entries = [...all.slice(0, all.length - 50), ...all.slice(all.length - 8)];
+}
+
+/**
  * Catch up open on one card with its body painted: the read rows
  * ([data-catch-up-rows]), never the Bone rows that hold the footprint while
  * the batched read runs.
@@ -1614,24 +1626,27 @@ const SCREENS: Screen[] = [
     steps: async (page) => waitFor([page.locator('[data-activity-catch-up-bar]')], 'catch up bar'),
   },
   {
-    // A grouped Activity card (one post: feedback points, a comment, a stage
-    // change), folded: its tag reads "3 updates" with the chevron.
+    // 9 Nov 2026: one card per item, one line per notification. A post with 8
+    // unread comments: the head ("8 new"), 5 lines and "+3 more".
     name: 'activity-grouped-folded',
     seed: creator,
-    extra: (network) => seedCatchUpFeedback(network, NOW),
-    url: '/activity',
-    steps: async (page) =>
-      waitFor([page.locator('[data-list-card]:has([data-activity-updates-toggle])')], 'grouped'),
-  },
-  {
-    // The same card unfolded: one sub row per update under the card.
-    name: 'activity-grouped-unfolded',
-    seed: creator,
-    extra: (network) => seedCatchUpFeedback(network, NOW),
+    extra: (network) => seedEightComments(network),
     url: '/activity',
     steps: async (page) => {
-      await tap([page.locator('[data-activity-updates-toggle]')], 'updates toggle');
-      await waitFor([page.locator('[data-activity-sub-rows] [data-activity-sub-row]')], 'sub rows');
+      await waitFor([page.locator('[data-activity-lines] [data-activity-line]')], 'lines');
+      await waitFor([page.locator('[data-activity-more][aria-expanded="false"]')], '+3 more');
+    },
+  },
+  {
+    // The same card unfolded: all 8 lines and "Show less".
+    name: 'activity-grouped-unfolded',
+    seed: creator,
+    extra: (network) => seedEightComments(network),
+    url: '/activity',
+    steps: async (page) => {
+      await tap([page.locator('[data-activity-more]')], '+3 more');
+      await waitFor([page.locator('[data-activity-more][aria-expanded="true"]')], 'Show less');
+      await waitFor([page.locator('[data-activity-lines-rest] [data-activity-line]')], 'rest');
     },
   },
   {

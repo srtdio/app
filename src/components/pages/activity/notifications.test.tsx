@@ -395,8 +395,9 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
 
   it('a plan alert reads the side-aware line', () => {
     const p = { ...plan('plan_opened'), actorName: 'Priya' };
-    expect(card([p], { side: 'client' })).toContain('Priya shared Week of 12 Oct with you');
-    expect(card([p])).toContain('Priya opened Week of 12 Oct for approvers');
+    // 9 Nov 2026: the head names the plan; the alert is a line (actor, then its words).
+    expect(card([p], { side: 'client' })).toMatch(/>Priya<[^]*Shared Week of 12 Oct with you/);
+    expect(card([p])).toMatch(/>Priya<[^]*Opened Week of 12 Oct for approvers/);
   });
 
   it('a merged plan edit reads "{name} updated {plan}" with the plan icon, light and dark', () => {
@@ -427,7 +428,7 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
             />
           </div>,
         );
-        expect(html).toContain('Priya updated Week of 12 Oct');
+        expect(html).toMatch(/>Priya<[^]*Updated Week of 12 Oct/);
         expect(html).toContain('data-activity-event="plan_updated"');
         expect(html).toContain('data-activity-alert-icon="plan"');
         // Token classes only: the theme swaps the tokens, never the markup.

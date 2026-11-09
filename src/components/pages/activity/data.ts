@@ -983,6 +983,40 @@ export function activityHitLine(hit: {
 }
 
 /**
+ * An Activity line without the actor's name ("Maya sent X for review" ->
+ * "Sent X for review"), its first letter raised: the actor is shown beside
+ * it. Never empty for a non-empty line. Pure.
+ */
+export function lineWithoutName(line: string, name: string | null): string {
+  const trimmed =
+    name !== null && name !== '' && line.startsWith(`${name} `)
+      ? line.slice(name.length + 1)
+      : line;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+/**
+ * One notification's line inside its item card (9 Nov 2026: every
+ * notification gets its own line): the actor ("Someone" when unknown) and
+ * the Activity line without the name. Unknown types read activityLine's
+ * fallback, never dropped. Pure.
+ */
+export function entryLine(
+  item: ActivityItem,
+  side: ViewerSide = 'unknown',
+): { actor: string; text: string } {
+  const actor = item.actorName !== null && item.actorName !== '' ? item.actorName : UNKNOWN_ACTOR;
+  let line: string;
+  try {
+    // An alert reads in the bell's words (side-aware); every other row its Activity line.
+    line = item.alert != null ? alertTitle(item, item.alert, side) : activityLine(item);
+  } catch {
+    line = 'Updated this';
+  }
+  return { actor, text: lineWithoutName(line, actor) || 'Updated this' };
+}
+
+/**
  * The card header title: the entity title when known, a generic entity label for
  * a post/brief without a resolved title, and the full activity line otherwise (so
  * a non-entity entry, e.g. an invite, still reads as a sentence). Null-safe.

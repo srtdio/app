@@ -37,14 +37,16 @@ import {
   alertTitle,
   cardBodyLine,
   deletedFilesBody,
+  cardTitle,
+  entryLine,
   groupOpenEntry,
   isChatMention,
+  isChatRow,
   isThreadStarted,
   THREAD_STARTED_EVENT,
   isWelcome,
   opensNothing,
   segmentSelfMentions,
-  shortLine,
   updatesLabel,
   welcomeTitle,
   type ActivityItem,
@@ -340,17 +342,6 @@ function activityPicture(
   return { kind: 'icon', icon: IconActivity };
 }
 
-/**
- * One unfolded update's line: "Name · what" (the actor, then the short event
- * line without the card's title), or the short line alone when nobody is
- * named. Pure.
- */
-export function activitySubRowLine(entry: ActivityItem): string {
-  const what = shortLine(entry, { name: false });
-  const name = entry.actorName;
-  return name !== null && name !== '' ? `${name} · ${what}` : what;
-}
-
 /** An entry's "how long ago" on the list's one clock ("just now", "3h", "Mon"). */
 function entryAgo(entry: ActivityItem, nowMs: number, timeZone: string | null | undefined): string {
   return formatAgo(
@@ -360,21 +351,106 @@ function entryAgo(entry: ActivityItem, nowMs: number, timeZone: string | null | 
   );
 }
 
+/** Lines an item card shows before "+N more" (Android InboxStyle: 5). */
+export const ACTIVITY_LINES_SHOWN = 5;
+
+/** "N new" on an item card's head (only when something is unread). Pure. */
+export function newLabel(n: number): string {
+  return `${n} new`;
+}
+
+/** "+N more" / its accessible name. Pure. */
+export function moreLabel(n: number): string {
+  return `+${n} more`;
+}
+
 /**
- * One digest group as one ui/ListCard (two lines, the density height):
- *   1. the who-did-what title, the actor first ... the time (formatAgo on the
- *      list's clock; the bad token for a missed due time);
- *   2. the comment, quote or alert line as the preview, the one tag
- *      (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
- *      Reminder) and the unread dot.
- * The picture is the thing or the person, never blank. No ⋮. A tap on the
- * card opens the group (the newest entry that links to a comment, else the
- * lead) and marks it read. A grouped card ("+N more" when it has no line of
- * its own) makes its tag a toggle ("3 updates ⌄", ListCard tagToggle): a tap
- * unfolds one 44 row per entry under the card, on its text column (unread
- * dot, "Name · what", the time), in the group's order; a row opens ITS entry
- * at its comment and marks it read (onOpenEntry). A second tap folds them
- * (itemIn on open, itemOut on fold; the chevron turns 180).
+ * The item a non-chat card is about, by name: the post, brief, plan item or
+ * idea title; an alert names its item or plan; else the card title. Pure.
+ */
+export function itemCardTitle(lead: ActivityItem, side: ViewerSide = 'unknown'): string {
+  const alert = lead.alert ?? null;
+  if (alert !== null) {
+    return alert.itemTitle ?? alert.planTitle ?? activityCardTitle([lead], side);
+  }
+  return cardTitle(lead);
+}
+
+/**
+ * The lines of an item card, newest first: one per notification the group
+ * holds (the chip already filtered them), own actions left out. Pure.
+ */
+export function itemCardLines(group: readonly ActivityItem[]): ActivityItem[] {
+  return [...group]
+    .filter((entry) => entry.own !== true)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+
+/**
+ * One notification's line (44 tall, on the head's title column): a small
+ * photo, the actor, the Activity line without the name, the time, the unread
+ * dot. Read lines are muted with no dot. A tap opens ITS spot and marks only
+ * it read.
+ */
+function EntryLine(props: {
+  entry: ActivityItem;
+  nowMs: number;
+  timeZone: string | null | undefined;
+  side: ViewerSide;
+  onOpen: (entry: ActivityItem) => void;
+}): ReactElement {
+  const { entry } = props;
+  const { actor, text } = entryLine(entry, props.side);
+  const unread = entry.readAt === null;
+  return (
+    <PressableRow
+      data-activity-line={entry.id}
+      {...(unread ? { 'data-activity-line-unread': '' } : {})}
+      onClick={() => props.onOpen(entry)}
+      className="flex min-w-0 items-center gap-2 whitespace-nowrap"
+    >
+      <Avatar
+        name={actor}
+        {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
+        role="inline"
+        decorative
+      />
+      <span className={textRole('label', cn('shrink-0 truncate', !unread && 'text-fg-3'))}>
+        {actor}
+      </span>
+      <span
+        className={textRole('secondary', cn('min-w-0 flex-1 truncate', !unread && 'text-fg-3'))}
+      >
+        {text}
+      </span>
+      <span className={textRole('meta', 'shrink-0 whitespace-nowrap')}>
+        {entryAgo(entry, props.nowMs, props.timeZone)}
+      </span>
+      {unread ? (
+        <span
+          data-activity-line-dot=""
+          role="img"
+          aria-label="Unread"
+          className={LIST_CARD_UNREAD_DOT}
+        />
+      ) : null}
+    </PressableRow>
+  );
+}
+
+/**
+ * One digest group as one card (9 Nov 2026: every notification gets its own
+ * line, grouped by item; Android InboxStyle, Notion, Asana).
+ * - A chat row (isChatRow, or a chat task alert) keeps its one ui/ListCard: the who-did-what title,
+ *   the preview, the tag, the unread dot; a tap opens it.
+ * - Every other item (post, brief, plan, plan item, idea, anything else): a
+ *   head ListCard (the picture, the item title, the kind tag, "N new" while
+ *   anything is unread; a tap opens the item, unchanged), then one line per
+ *   notification, newest first, on the head's title column. The first 5 show;
+ *   more fold behind "+N more" (44 tall, aria-expanded), which unfolds the
+ *   rest in place (itemIn, Y) and becomes "Show less" (itemOut on fold). The
+ *   fold is per card, in memory. A line opens its own spot and marks only
+ *   that entry read.
  */
 export function ActivityCard({
   group,
@@ -388,14 +464,16 @@ export function ActivityCard({
   side = 'unknown',
   entering = false,
 }: ActivityCardProps) {
-  // A grouped card's tag folds its updates open under the card: itemIn (Y
-  // only) as they land, itemOut (clip) before they unmount; never a fade.
   const [open, setOpen] = useState(false);
-  const subRows = usePresence<HTMLDivElement>(open && group.length > 1, {
+  const lines = itemCardLines(group);
+  const hidden = Math.max(0, lines.length - ACTIVITY_LINES_SHOWN);
+  // The rest unfold in place: itemIn (Y only) as they land, itemOut (clip)
+  // before they unmount; never a fade; instant under Reduce Motion.
+  const rest = usePresence<HTMLDivElement>(open && hidden > 0, {
     enter: (el) => itemIn(el),
     exit: (el) => itemOut(el),
   });
-  const subRowsId = useId();
+  const restId = useId();
   // itemIn (docs/motion.md): a live-added card renders in place and rises
   // 8 px over its final state on its first frame. Y only, never a fade.
   // growFromCard: a tap remembers this card so the page grows out of it, and
@@ -408,23 +486,26 @@ export function ActivityCard({
   };
   const lead = group[0];
   if (lead === undefined) return null;
+  // Chat rows keep their one card: chat mentions, thread starts and chat task alerts.
+  const chat = isChatRow(lead) || lead.alert?.kind === 'task';
   // The head opens the newest entry that links to a comment, else the lead.
   const openEntry = groupOpenEntry(group) ?? lead;
   const alert = lead.alert ?? null;
-  const unread = groupHasUnread(group);
   const actor = newestEntry(group) ?? lead;
-  const title = activityCardTitle(group, side);
-  const previewText = activityPreviewText(group);
-  const preview: ReactNode =
-    lead.eventType === MENTION_EVENT_TYPE && lead.body !== null
+  const title = chat ? activityCardTitle(group, side) : itemCardTitle(lead, side);
+  const unreadLines = lines.filter((entry) => entry.readAt === null).length;
+  const preview: ReactNode = chat
+    ? lead.eventType === MENTION_EVENT_TYPE && lead.body !== null
       ? mentionPreview(lead.body, selfName, isChatMention(lead))
-      : previewText;
+      : activityPreviewText(group)
+    : unreadLines > 0
+      ? newLabel(unreadLines)
+      : undefined;
   const tappable = !opensNothing(lead, side);
-  const tag = activityCardTag(group);
+  const tag = chat ? activityCardTag(group) : activityKind(lead);
   // Line 1 trailing: how long ago, on the list's one clock ("just now", "3h", "Mon").
-  const time = entryAgo(lead, nowMs, timeZone);
+  const time = entryAgo(chat ? lead : actor, nowMs, timeZone);
   const bad = lead.eventType === 'task_due';
-  const grouped = group.length > 1;
 
   const card = (
     <ListCard
@@ -432,6 +513,7 @@ export function ActivityCard({
       surface={{
         'data-activity-event': lead.eventType,
         'data-activity-id': lead.id,
+        ...(chat ? {} : { 'data-activity-item-head': '' }),
         ...(entering ? { 'data-activity-entering': '' } : {}),
       }}
       picture={activityPicture(lead, actor, cache, presignEnabled, title)}
@@ -441,26 +523,15 @@ export function ActivityCard({
           ? { pictureHooks: { 'data-activity-plan-icon': '' } }
           : {})}
       title={title}
-      unread={unread}
+      unread={chat ? groupHasUnread(group) : unreadLines > 0}
       preview={preview}
-      previewHooks={{ 'data-activity-preview': '' }}
+      previewHooks={chat ? { 'data-activity-preview': '' } : { 'data-activity-new': '' }}
       time={time}
       timeHooks={{ 'data-activity-time': '' }}
       // A missed due time reads in bad.
       timeBad={bad}
       tag={tag}
-      tagHooks={grouped ? { 'data-activity-updates-tag': '' } : { 'data-activity-scope-tag': '' }}
-      // A grouped card's tag folds its updates open under the card.
-      tagToggle={
-        grouped
-          ? {
-              open,
-              onToggle: () => setOpen((was) => !was),
-              controls: subRowsId,
-              hooks: { 'data-activity-updates-toggle': '' },
-            }
-          : undefined
-      }
+      tagHooks={{ 'data-activity-scope-tag': '' }}
       {...(tappable
         ? {
             onPress: () => {
@@ -473,42 +544,49 @@ export function ActivityCard({
         : {})}
     />
   );
-  // The grid cell: the card, then (a grouped card, unfolded) its updates on
-  // its text column. Always this cell, so a card that gains a second entry
-  // keeps its tree (and its rootRef) in place.
+  if (chat) return card;
+  const line = (entry: ActivityItem): ReactElement => (
+    <EntryLine
+      key={entry.id}
+      entry={entry}
+      nowMs={nowMs}
+      timeZone={timeZone}
+      side={side}
+      onOpen={onOpenEntry}
+    />
+  );
+  // The grid cell: the head, then its lines on the head's title column.
   return (
     <div data-activity-card-cell="" className="flex min-w-0 flex-col">
       {card}
-      {subRows.rendered ? (
+      {lines.length > 0 ? (
         <div
-          ref={subRows.ref}
-          id={subRowsId}
-          data-activity-sub-rows=""
-          className={cn('flex flex-col pb-2', LIST_CARD_SUB_INSET)}
+          data-activity-lines=""
+          className={cn('flex min-w-0 flex-col pb-2', LIST_CARD_SUB_INSET)}
         >
-          {group.map((entry) => (
-            <PressableRow
-              key={entry.id}
-              data-activity-sub-row={entry.id}
-              onClick={() => onOpenEntry(entry)}
-              className="flex items-center gap-2"
+          {lines.slice(0, ACTIVITY_LINES_SHOWN).map(line)}
+          {rest.rendered ? (
+            <div
+              ref={rest.ref}
+              id={restId}
+              data-activity-lines-rest=""
+              className="flex min-w-0 flex-col"
             >
-              <span className={textRole('secondary', 'min-w-0 flex-1 truncate')}>
-                {activitySubRowLine(entry)}
-              </span>
-              <span className={textRole('meta', 'shrink-0 whitespace-nowrap')}>
-                {entryAgo(entry, nowMs, timeZone)}
-              </span>
-              {entry.readAt === null ? (
-                <span
-                  data-activity-sub-row-unread=""
-                  role="img"
-                  aria-label="Unread"
-                  className={LIST_CARD_UNREAD_DOT}
-                />
-              ) : null}
+              {lines.slice(ACTIVITY_LINES_SHOWN).map(line)}
+            </div>
+          ) : null}
+          {hidden > 0 ? (
+            <PressableRow
+              data-activity-more=""
+              aria-expanded={open}
+              aria-controls={restId}
+              aria-label={open ? 'Show less' : `Show ${hidden} more updates`}
+              onClick={() => setOpen((was) => !was)}
+              className={textRole('label', 'flex items-center text-fg-2')}
+            >
+              {open ? 'Show less' : moreLabel(hidden)}
             </PressableRow>
-          ))}
+          ) : null}
         </div>
       ) : null}
     </div>
