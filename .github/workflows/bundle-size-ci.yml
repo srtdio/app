@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
 
+# One run per PR: a newer push cancels the older run (main pushes always finish).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   bundle-size:
     runs-on: ubuntu-latest

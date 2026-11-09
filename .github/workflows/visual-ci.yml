@@ -5,7 +5,11 @@ name: Visual CI
 # visual: the one required check. It needs every shard and fails unless all four succeeded.
 #   Runs on every pull request and every push to main (no paths filter, so the check always reports).
 # Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines], each shard clears the baselines and re-renders its own screens (--update-snapshots=all) on this CI WebKit image and uploads them as visual-baselines-<N>,
-#   then commit-baselines merges all four artifacts into one full set and commits it to the PR's head branch. That push is made with GITHUB_TOKEN, so it starts no new run: push any later commit (without the tag) to get the visual check on it.
+#   then compares its screens again against those fresh baselines on the same tree (a render that is not stable fails here, not on a later push).
+#   commit-baselines merges all four artifacts into one full set and commits it to the PR's head branch. That push is made with GITHUB_TOKEN, so it starts no new run;
+#   instead commit-baselines reports the checks for the bot commit itself (no new secret): the bot commit changes only e2e/visual/__screenshots__, so it waits for every
+#   other check on the tested head commit to finish and copies each result onto the bot commit, and reports visual / visual-shard as passed (the screens were just
+#   rendered and compared on this tree). The PR ends green on the bot commit with no human re-run. If anything but the screenshots differs, it reports nothing.
 # Locally: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts (add --update-snapshots=all to refresh; local baselines differ from CI's, commit only CI-rendered ones).
 on:
   pull_request:
@@ -109,9 +113,15 @@ jobs:
             cp /var/cache/apt/archives/*.deb ~/webkit-debs/ 2>/dev/null || true
           fi
 
+      # Shard weights (PWTEST_SHARD_WEIGHTS, Playwright's per-shard share of the
+      # test groups): shard 4 takes the tail of the suite (the laptop-dark and
+      # ipad projects, the slowest screens per test) and was the slowest shard
+      # (up to 9.6 of the 10 minutes), so it gets a smaller share.
       - name: Compare screens with the baselines
         if: steps.mode.outputs.update != 'true'
-        timeout-minutes: 10
+        timeout-minutes: 15
+        env:
+          PWTEST_SHARD_WEIGHTS: '26:26:26:22'
         run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4
 
       # Each shard uploads only the screens it rendered, so the checked-out
@@ -124,7 +134,18 @@ jobs:
       - name: Render new baselines
         if: steps.mode.outputs.update == 'true'
         timeout-minutes: 25
+        env:
+          PWTEST_SHARD_WEIGHTS: '26:26:26:22'
         run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4 --update-snapshots=all
+
+      # The bot commit's visual check: the same screens compared against the
+      # baselines just rendered, on the same tree (layout checks run again too).
+      - name: Compare the new baselines on the rendered tree
+        if: steps.mode.outputs.update == 'true'
+        timeout-minutes: 15
+        env:
+          PWTEST_SHARD_WEIGHTS: '26:26:26:22'
+        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4 --update-snapshots=none
 
       - name: Upload new baselines
         if: steps.mode.outputs.update == 'true'
@@ -161,13 +182,17 @@ jobs:
           echo "visual shards: $SHARDS"
           [ "$SHARDS" = "success" ]
 
-  # Runs no PR code: it only copies the rendered images onto the head branch.
+  # Runs no PR code: it only copies the rendered images onto the head branch,
+  # then reports the bot commit's checks (see the header).
   commit-baselines:
     needs: visual-shard
     if: needs.visual-shard.result == 'success' && needs.visual-shard.outputs.update == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     permissions:
       contents: write
+      checks: write
+      statuses: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -184,6 +209,7 @@ jobs:
           path: e2e/visual/__screenshots__
 
       - name: Commit the baselines to the PR branch
+        id: commit
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
@@ -197,3 +223,79 @@ jobs:
           fi
           git commit -m "Visual CI: refresh baselines on the CI WebKit image"
           git push origin "HEAD:$HEAD_REF"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # A GITHUB_TOKEN push starts no workflow, so the bot commit would wait on
+      # its required checks forever. Its tree differs from the tested head only
+      # in e2e/visual/__screenshots__ (checked here), so every other check's
+      # result on the tested head holds for it: wait for them to finish and copy
+      # each one (check runs and commit statuses) onto the bot commit. The
+      # visual checks pass: the screens were rendered and compared on this tree.
+      - name: Report the checks for the bot commit
+        if: steps.commit.outputs.sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TESTED: ${{ github.event.pull_request.head.sha }}
+          BOT: ${{ steps.commit.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=2 origin "$TESTED"
+          other=$(git diff --name-only "$TESTED" "$BOT" | grep -v '^e2e/visual/__screenshots__/' || true)
+          if [ -n "$other" ]; then
+            echo "the bot commit changes more than the screenshots, reporting nothing:"
+            echo "$other"
+            exit 1
+          fi
+          own() { case "$1" in visual|visual-shard*|commit-baselines) return 0 ;; *) return 1 ;; esac; }
+          runs() {
+            gh api --paginate "repos/$REPO/commits/$TESTED/check-runs?per_page=100" \
+              --jq '.check_runs[] | [.name, .status, (.conclusion // ""), .html_url] | @tsv'
+          }
+          # Wait (up to 60 minutes) until every other check on the tested head is done.
+          for i in $(seq 1 120); do
+            pending=0
+            while IFS=$'\t' read -r name status conclusion url; do
+              [ -z "$name" ] && continue
+              own "$name" && continue
+              [ "$status" != completed ] && pending=$((pending + 1))
+            done < <(runs)
+            [ "$pending" -eq 0 ] && break
+            echo "waiting on $pending checks of $TESTED"
+            sleep 30
+          done
+          post() {
+            gh api -X POST "repos/$REPO/check-runs" \
+              -f name="$1" -f head_sha="$BOT" -f status=completed -f conclusion="$2" \
+              -f details_url="$3" -f "output[title]=$4" \
+              -f "output[summary]=Bot baseline commit: $4 (tested head $TESTED)." > /dev/null
+            echo "$1: $2"
+          }
+          # Only the newest run of each name counts (a re-run replaces the old one).
+          declare -A seen
+          while IFS=$'\t' read -r name status conclusion url; do
+            [ -z "$name" ] && continue
+            own "$name" && continue
+            [ -n "${seen[$name]:-}" ] && continue
+            seen[$name]=1
+            if [ "$status" != completed ]; then
+              echo "$name: still $status after 60 minutes, not reported"
+              continue
+            fi
+            post "$name" "$conclusion" "$url" "copied from the tested head ($conclusion)"
+          done < <(runs)
+          for n in 1 2 3 4; do
+            post "visual-shard ($n/4)" success "$RUN_URL" "rendered and compared on this tree"
+          done
+          post visual success "$RUN_URL" "rendered and compared on this tree"
+          # Commit statuses (non-Actions checks) carry over the same way.
+          gh api "repos/$REPO/commits/$TESTED/status" \
+            --jq '.statuses[] | [.context, .state, (.target_url // ""), (.description // "")] | @tsv' |
+            while IFS=$'\t' read -r context state target description; do
+              [ -z "$context" ] && continue
+              [ "$state" = pending ] && continue
+              gh api -X POST "repos/$REPO/statuses/$BOT" -f state="$state" -f context="$context" \
+                -f target_url="$target" -f description="${description:0:120}" > /dev/null
+              echo "status $context: $state"
+            done

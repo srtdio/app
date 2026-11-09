@@ -10,6 +10,11 @@ on:
   push:
     branches: [main]
 
+# One run per PR: a newer push cancels the older run (main pushes always finish).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # changes: on a PR, diffs against the merge base with the PR's base branch and
   # sets run=true only when a changed file matches PATTERNS below. A push to main
