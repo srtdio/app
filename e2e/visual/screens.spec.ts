@@ -6297,6 +6297,15 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await screen.steps(page);
   await stabilise(page, screen.hold === true);
   await settle(page);
+  // Steady for the checks as for the shot (animations: 'disabled'): every
+  // animation and transition still alive ends now, finite ones finished,
+  // infinite ones cancelled.
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) {
+      if (a.effect?.getComputedTiming().iterations === Infinity) a.cancel();
+      else a.finish();
+    }
+  });
   // Layout checks (layout-checks.ts) on the state as it is shot. A list
   // screen must show its ui/ListCards, so the list-card rule (equal heights,
   // the 40 picture at 16,10 in the bled row and 12 to the text) runs on it.
@@ -6315,7 +6324,8 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   if (screen.name.startsWith('catch-up-')) await assertCatchUpLayout(page, screen.name);
   // The reply at rest: the pill's field centred, its left on the photo column.
   if (CATCH_UP_REST_SCREENS.has(screen.name)) await checkCatchUpComposer(page, screen.name);
-  await expect(page).toHaveScreenshot(`${screen.name}.png`, {
+  // Soft: a layout failure above and a pixel diff here both report in one run.
+  await expect.soft(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
     animations: 'disabled',
     caret: 'hide',
