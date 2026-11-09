@@ -1,17 +1,24 @@
 name: Visual CI
 
-# visual-shard: renders every screen in e2e/visual/screens.spec.ts (iPhone 13 light and dark, 1280x800 light, four ipad-* tablet projects; WebKit, harness, no DB, no secrets) and compares each with its committed baseline in e2e/visual/__screenshots__/.
-#   The suite is split into 4 parallel shards (playwright --shard=N/4, fullyParallel, so each test runs in exactly one shard). Any screen over 0.2% different fails; that shard's diff, actual and expected images upload as the visual-diffs-<N> artifact.
-# visual: the one required check. It needs every shard and fails unless all four succeeded.
+# select: picks the screens this change can change (scripts/ci/visual-select.ts, the same selection pnpm prepush uses).
+#   Pull request: the selected screens only (a screen not run is not failed); ALL for a global file (CSS, fonts, tokens, tailwind / vite config,
+#   the app shell, layout-checks*.ts, playwright.visual.config.ts, shared code in screens.spec.ts, package.json, pnpm-lock.yaml, ...), an unknown
+#   file or a selection error; nothing for docs, scripts, Workers, unit tests and the like. Push to main: always ALL.
+#   20 or fewer selected screens run in one shard, more (and ALL) in 4.
+# visual-shard: renders the selected screens (iPhone 13 light and dark, 1280x800 light, four ipad-* tablet projects; WebKit, harness, no DB, no secrets)
+#   and compares each with its committed baseline in e2e/visual/__screenshots__/. Any screen over 0.2% different fails; that shard's diff, actual
+#   and expected images upload as the visual-diffs-<N> artifact.
+# visual: the one required check. Passes when every shard succeeded, or when nothing was selected (no shard runs).
 #   Runs on every pull request and every push to main (no paths filter, so the check always reports).
-# Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines], each shard clears the baselines and re-renders its own screens (--update-snapshots=all) on this CI WebKit image and uploads them as visual-baselines-<N>,
-#   then compares its screens again against those fresh baselines on the same tree (a render that is not stable fails here, not on a later push).
-#   commit-baselines merges all four artifacts into one full set and commits it to the PR's head branch. That push is made with GITHUB_TOKEN, so it starts no new run;
-#   instead commit-baselines gives the bot commit its checks itself (no new secret): it starts CI (ci.yml) on the branch by workflow_dispatch (the one event a
-#   GITHUB_TOKEN may start; its unit tests read the screenshots), reports visual / visual-shard as passed (the screens were just rendered and compared on this tree),
-#   and, since the bot commit changes only e2e/visual/__screenshots__, waits for every other workflow's checks on the tested head and copies each result onto it.
-#   The PR ends green on the bot commit with no human re-run. If anything but the screenshots differs, it reports nothing.
-# Locally: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts (add --update-snapshots=all to refresh; local baselines differ from CI's, commit only CI-rendered ones).
+# Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines] and whose author is not a bot
+#   (loop guard: the bot commit's message never carries the tag, and a bot-authored head never renders), each shard re-renders its selected screens
+#   (--update-snapshots=all) on this CI WebKit image, compares them again on the same tree, and uploads only the files it rendered as
+#   visual-baselines-<N>. Baselines of screens not run are never touched (ALL clears and re-renders the whole set).
+#   commit-baselines lays them over the PR's head branch and commits them. With the Sorted CI GitHub App (secrets SORTED_CI_APP_ID and
+#   SORTED_CI_APP_PRIVATE_KEY; the token is scoped to this repository, contents: write) the push is the App's, so every PR workflow runs on the bot
+#   commit for real. Without those secrets it pushes with GITHUB_TOKEN (which starts no run) and, as before, dispatches CI, reports visual /
+#   visual-shard as passed and copies every other check of the tested head onto the bot commit; a notice names the missing secrets.
+# Locally: pnpm prepush runs the layout checks on at most 12 selected screens; screenshots are never compared or committed from a local render.
 on:
   pull_request:
   push:
@@ -25,19 +32,16 @@ permissions:
   contents: read
 
 jobs:
-  visual-shard:
-    name: visual-shard (${{ matrix.shard }}/4)
+  select:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    # Room for a slow apt mirror (see e2e-webkit.yml): the system-deps install
-    # alone has taken 14 minutes on some runners. The screen step renders a
-    # quarter of the suite, so it gets 10.
-    timeout-minutes: 30
+    timeout-minutes: 15
     outputs:
       update: ${{ steps.mode.outputs.update }}
+      mode: ${{ steps.pick.outputs.mode }}
+      grep: ${{ steps.pick.outputs.grep }}
+      count: ${{ steps.pick.outputs.count }}
+      shards: ${{ steps.pick.outputs.shards }}
+      total: ${{ steps.pick.outputs.total }}
     steps:
       - name: Choose compare or baseline refresh
         id: mode
@@ -52,18 +56,93 @@ jobs:
           update=false
           if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REPO" = "$REPO" ]; then
             message=$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq .commit.message)
+            login=$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.author.login // ""')
+            name=$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq .commit.author.name)
             if printf '%s' "$message" | grep -qF '[update-visual-baselines]'; then
-              update=true
+              case "$login $name" in
+                *"[bot]"*) echo "::notice::head commit by a bot ($login $name): no baseline refresh (loop guard)" ;;
+                *) update=true ;;
+              esac
             fi
           fi
           echo "update=$update" >> "$GITHUB_OUTPUT"
           echo "baseline refresh: $update"
 
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # On a PR the checkout is the merge commit: its first parent is the base
+      # it merges into, so HEAD^1..HEAD is exactly this PR's change. A
+      # selection error selects ALL (the script prints ALL and mode=all).
+      - name: Select screens
+        id: pick
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/select.txt"
+          : > "$out"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            GITHUB_OUTPUT="$out" node --experimental-strip-types --no-warnings scripts/ci/visual-select.ts \
+              --base HEAD^1 --head HEAD --github-output || echo "mode=all" >> "$out"
+          fi
+          mode=$(grep '^mode=' "$out" | tail -1 | cut -d= -f2- || true)
+          grep=$(grep '^grep=' "$out" | tail -1 | cut -d= -f2- || true)
+          count=$(grep '^count=' "$out" | tail -1 | cut -d= -f2- || true)
+          [ -z "$mode" ] && mode=all
+          if [ "$mode" = all ]; then grep=''; fi
+          if [ "$mode" = some ] && [ "${count:-0}" -le 20 ]; then
+            shards='[1]'; total=1
+          else
+            shards='[1,2,3,4]'; total=4
+          fi
+          {
+            echo "mode=$mode"
+            echo "grep=$grep"
+            echo "count=${count:-0}"
+            echo "shards=$shards"
+            echo "total=$total"
+          } >> "$GITHUB_OUTPUT"
+          echo "visual: $mode, ${count:-?} screens, $total shard(s)"
+
+  visual-shard:
+    name: visual-shard (${{ matrix.shard }}/${{ needs.select.outputs.total }})
+    needs: select
+    if: needs.select.outputs.mode != 'none'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.select.outputs.shards) }}
+    # Room for a slow apt mirror (see e2e-webkit.yml): the system-deps install
+    # alone has taken 14 minutes on some runners.
+    timeout-minutes: 30
+    env:
+      UPDATE: ${{ needs.select.outputs.update }}
+      MODE: ${{ needs.select.outputs.mode }}
+      GREP: ${{ needs.select.outputs.grep }}
+      SHARD: ${{ matrix.shard }}/${{ needs.select.outputs.total }}
+      # Shard weights (Playwright's per-shard share of the test groups) for the
+      # 4-shard run: shard 4 takes the tail (laptop-dark and ipad projects, the
+      # slowest screens per test), so it gets a smaller share. One shard: none.
+      PWTEST_SHARD_WEIGHTS: ${{ needs.select.outputs.total == '4' && '26:26:26:22' || '' }}
+    steps:
       # A refresh renders the PR head itself (the commit the baselines land on);
       # a compare renders what checkout gives (the merge commit on a PR).
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.mode.outputs.update == 'true' && github.event.pull_request.head.sha || '' }}
+          ref: ${{ needs.select.outputs.update == 'true' && github.event.pull_request.head.sha || '' }}
 
       - uses: pnpm/action-setup@v4
 
@@ -114,47 +193,61 @@ jobs:
             cp /var/cache/apt/archives/*.deb ~/webkit-debs/ 2>/dev/null || true
           fi
 
-      # Shard weights (PWTEST_SHARD_WEIGHTS, Playwright's per-shard share of the
-      # test groups): shard 4 takes the tail of the suite (the laptop-dark and
-      # ipad projects, the slowest screens per test) and was the slowest shard
-      # (up to 9.6 of the 10 minutes), so it gets a smaller share.
       - name: Compare screens with the baselines
-        if: steps.mode.outputs.update != 'true'
+        if: env.UPDATE != 'true'
         timeout-minutes: 15
-        env:
-          PWTEST_SHARD_WEIGHTS: '26:26:26:22'
-        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4
+        run: |
+          set -euo pipefail
+          args=(--config e2e/visual/playwright.visual.config.ts --shard="$SHARD")
+          if [ "$MODE" = some ]; then args+=(-g "$GREP"); fi
+          pnpm exec playwright test "${args[@]}"
 
-      # Each shard uploads only the screens it rendered, so the checked-out
-      # baselines go first (the .gitkeep stays); the four artifacts then merge
-      # into one full set with no stale or duplicate files.
+      # ALL re-renders the whole set, so the checked-out baselines go first
+      # (screens removed from the spec lose theirs). A selection keeps every
+      # baseline it does not render.
       - name: Clear the checked-out baselines
-        if: steps.mode.outputs.update == 'true'
+        if: env.UPDATE == 'true' && env.MODE == 'all'
         run: find e2e/visual/__screenshots__ -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
       - name: Render new baselines
-        if: steps.mode.outputs.update == 'true'
+        if: env.UPDATE == 'true'
         timeout-minutes: 25
-        env:
-          PWTEST_SHARD_WEIGHTS: '26:26:26:22'
-        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4 --update-snapshots=all
+        run: |
+          set -euo pipefail
+          touch "$RUNNER_TEMP/render-start"
+          args=(--config e2e/visual/playwright.visual.config.ts --shard="$SHARD")
+          if [ "$MODE" = some ]; then args+=(-g "$GREP"); fi
+          pnpm exec playwright test "${args[@]}" --update-snapshots=all
 
       # The bot commit's visual check: the same screens compared against the
       # baselines just rendered, on the same tree (layout checks run again too).
       - name: Compare the new baselines on the rendered tree
-        if: steps.mode.outputs.update == 'true'
+        if: env.UPDATE == 'true'
         timeout-minutes: 15
-        env:
-          PWTEST_SHARD_WEIGHTS: '26:26:26:22'
-        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4 --update-snapshots=none
+        run: |
+          set -euo pipefail
+          args=(--config e2e/visual/playwright.visual.config.ts --shard="$SHARD")
+          if [ "$MODE" = some ]; then args+=(-g "$GREP"); fi
+          pnpm exec playwright test "${args[@]}" --update-snapshots=none
+
+      # Only the files this shard rendered, so the artifacts merge with no
+      # stale or duplicate file and no screen outside the selection.
+      - name: Collect the rendered baselines
+        if: env.UPDATE == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rendered"
+          cd e2e/visual/__screenshots__
+          find . -type f -name '*.png' -newer "$RUNNER_TEMP/render-start" -exec cp --parents {} "$RUNNER_TEMP/rendered/" \;
+          echo "rendered: $(find "$RUNNER_TEMP/rendered" -type f | wc -l) files"
 
       - name: Upload new baselines
-        if: steps.mode.outputs.update == 'true'
+        if: env.UPDATE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: visual-baselines-${{ matrix.shard }}
-          path: e2e/visual/__screenshots__
-          if-no-files-found: error
+          path: ${{ runner.temp }}/rendered
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload diffs on failure
@@ -168,26 +261,30 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  # The required check: one name however many shards run. Fails unless every
-  # shard succeeded (a failed, cancelled or skipped shard fails it).
+  # The required check: one name however many shards run. Passes when every
+  # shard succeeded, or when the selection picked no screen (no shard runs);
+  # fails on a failed, cancelled or skipped shard otherwise.
   visual:
-    needs: visual-shard
+    needs: [select, visual-shard]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check every shard passed
         env:
+          SELECT: ${{ needs.select.result }}
+          MODE: ${{ needs.select.outputs.mode }}
           SHARDS: ${{ needs.visual-shard.result }}
         run: |
-          echo "visual shards: $SHARDS"
-          [ "$SHARDS" = "success" ]
+          echo "select: $SELECT ($MODE), visual shards: $SHARDS"
+          [ "$SELECT" = "success" ] || exit 1
+          if [ "$MODE" = none ]; then [ "$SHARDS" = "skipped" ]; else [ "$SHARDS" = "success" ]; fi
 
-  # Runs no PR code: it only copies the rendered images onto the head branch,
-  # then reports the bot commit's checks (see the header).
+  # Runs no PR code: it only lays the rendered images onto the head branch
+  # (see the header).
   commit-baselines:
-    needs: visual-shard
-    if: needs.visual-shard.result == 'success' && needs.visual-shard.outputs.update == 'true'
+    needs: [select, visual-shard]
+    if: needs.visual-shard.result == 'success' && needs.select.outputs.update == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
@@ -195,13 +292,34 @@ jobs:
       checks: write
       statuses: write
       actions: write
+    env:
+      HAS_APP: ${{ secrets.SORTED_CI_APP_ID != '' && secrets.SORTED_CI_APP_PRIVATE_KEY != '' }}
     steps:
+      - name: Missing App secrets
+        if: env.HAS_APP != 'true'
+        run: echo "::notice::SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY are not both set; pushing with GITHUB_TOKEN and reporting the bot commit's checks (no PR workflow runs on it)."
+
+      # actions/create-github-app-token v3.3.0, pinned by commit.
+      - name: App token (this repository, contents write)
+        id: app
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+        with:
+          app-id: ${{ secrets.SORTED_CI_APP_ID }}
+          private-key: ${{ secrets.SORTED_CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.app.outputs.token || github.token }}
 
-      # Replace the project folders only (the .gitkeep stays).
+      # ALL replaces the project folders (the .gitkeep stays); a selection
+      # lays its files over the rest.
       - name: Clear the old baselines
+        if: needs.select.outputs.mode == 'all'
         run: find e2e/visual/__screenshots__ -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
       - uses: actions/download-artifact@v4
@@ -210,14 +328,23 @@ jobs:
           merge-multiple: true
           path: e2e/visual/__screenshots__
 
+      # The message never carries [update-visual-baselines] (loop guard).
       - name: Commit the baselines to the PR branch
         id: commit
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -n "$APP_SLUG" ]; then
+            uid=$(gh api "users/${APP_SLUG}%5Bbot%5D" --jq .id)
+            git config user.name "${APP_SLUG}[bot]"
+            git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          fi
           git add -A e2e/visual/__screenshots__
           if git diff --cached --quiet; then
             echo "baselines unchanged: nothing to commit"
@@ -227,16 +354,18 @@ jobs:
           git push origin "HEAD:$HEAD_REF"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # A GITHUB_TOKEN push starts no workflow, so the bot commit would wait on
-      # its required checks forever. CI runs for real on it (workflow_dispatch;
-      # its unit tests read the baselines). Visual passes: the screens were
-      # rendered and compared on this tree. Every other workflow's tree is the
-      # tested head's but for e2e/visual/__screenshots__ (checked here), so its
-      # results there hold: wait for them and copy each check run (and commit
-      # status) onto the bot commit.
+      # Without the App: a GITHUB_TOKEN push starts no workflow, so the bot
+      # commit would wait on its required checks forever. CI runs for real on
+      # it (workflow_dispatch; its unit tests read the baselines). Visual
+      # passes: the screens were rendered and compared on this tree. Every
+      # other workflow's tree is the tested head's but for
+      # e2e/visual/__screenshots__ (checked here), so its results there hold:
+      # wait for them and copy each check run (and commit status) onto the bot
+      # commit. With the App the push itself starts every PR workflow.
       - name: Report the checks for the bot commit
-        if: steps.commit.outputs.sha != ''
+        if: steps.commit.outputs.sha != '' && env.HAS_APP != 'true'
         env:
+          TOTAL: ${{ needs.select.outputs.total }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           TESTED: ${{ github.event.pull_request.head.sha }}
@@ -261,8 +390,8 @@ jobs:
               -f "output[summary]=Bot baseline commit: $4 (tested head $TESTED)." > /dev/null
             echo "$1: $2"
           }
-          for n in 1 2 3 4; do
-            post "visual-shard ($n/4)" success "$RUN_URL" "rendered and compared on this tree"
+          for n in $(seq 1 "$TOTAL"); do
+            post "visual-shard ($n/$TOTAL)" success "$RUN_URL" "rendered and compared on this tree"
           done
           post visual success "$RUN_URL" "rendered and compared on this tree"
           # The check suites of CI and Visual CI on the tested head are not copied.

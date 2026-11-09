@@ -1,4 +1,4 @@
-import { test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   alignmentViolations,
   boxText,
@@ -100,18 +100,24 @@ import {
 //     hit (the bar's keys 48), each checkpoint circle on its text's first
 //     line and the point text on the message text column, no card row over a
 //     sibling, the card on a surface of its own over the page tone.
-// LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
+// LAYOUT_CHECKS=strict (the default) fails the screen (soft: every check
+// and the screenshot still run, so one run reports every failure); LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
 
 const MODE = layoutMode(process.env.LAYOUT_CHECKS);
 
-/** Strict: fail with every finding. Report: annotate and log, then go on. */
+/**
+ * Strict: fail with every finding, as a soft failure, so the screen's other
+ * checks and its screenshot still run and one run reports every failure.
+ * Report: annotate and log, then go on.
+ */
 function settleFindings(screen: string, violations: readonly LayoutViolation[]): void {
   if (violations.length === 0) return;
   const text = formatViolations(screen, violations);
   if (MODE === 'strict') {
-    throw new Error(`layout checks failed (LAYOUT_CHECKS=strict):\n${text}`);
+    expect.soft(violations, `layout checks failed (LAYOUT_CHECKS=strict):\n${text}`).toEqual([]);
+    return;
   }
   test.info().annotations.push({ type: 'layout-checks', description: text });
   console.warn(`layout checks (report):\n${text}`);

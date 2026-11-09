@@ -4,18 +4,26 @@
 //   pnpm prepush
 //   PREPUSH_BASE=origin/main      the ref to diff against (default: merge base with origin/main)
 //   PREPUSH_SCREENS='a|b'         run exactly these visual screens (regex on the screen name)
-//   PREPUSH_SNAPSHOTS=1           also compare screenshots (local renders differ from CI's
+//   PREPUSH_SNAPSHOTS=1           also compare screenshots (local renders never match CI's
 //                                 WebKit image, so by default only the layout checks run)
 //
-// Steps, each timed: prettier --check, eslint, tsc (app, node, and the scripts /
-// e2e configs when those changed), vitest related --run (plus the tests that
-// read source as text, as ci.yml does), the design ratchet, and when
-// src/components or e2e/visual changed, the visual screens those files feed
-// (WebKit, playwright -g) with their layout checks (layout-checks.ts runs
-// inside every screen capture), then the WebKit e2e specs those files reach
-// (scripts/ci/e2e-select.ts, as e2e-webkit.yml). Exit 1 when any step fails.
+// Fast by design (target under 5 min; a slower run prints a warning). Steps,
+// each timed: prettier --check, eslint, tsc (app, node, and the scripts / e2e
+// configs when those changed), vitest related --run (plus the tests that read
+// source as text, as ci.yml does), the design ratchet, the layout checks on the
+// screens the changed files feed, then the WebKit e2e specs those files reach
+// (e2e-webkit.yml's split, then scripts/ci/e2e-select.ts; scripts/, docs and
+// other non-UI paths run no spec, as in CI).
+//
+// Layout checks: the screens scripts/ci/visual-select.ts picks (the same
+// selection Visual CI renders), never more than SCREEN_CAP (12) and never
+// every screen. When CI runs ALL (a global file: CSS, tokens, the shell,
+// layout-checks*.ts, the visual config, ...) the local run takes the screens
+// whose check code changed plus one screen per area. Above the cap the first
+// 12 by area run (round robin); the full set is Visual CI's. Screenshots are
+// not compared locally. Exit 1 when any step fails.
 import { spawn, execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -120,140 +128,30 @@ function unitArgs(files: string[], deleted: string[]): string[] | null {
 }
 
 // ---------------------------------------------------------------------------
-// Visual screen selection
+// Visual screens: scripts/ci/visual-select.ts (the copy Visual CI uses); a
+// local run takes at most SCREEN_CAP of them (localScreens), never ALL.
 
-/** Screen URL prefixes per e2e area (scripts/ci/e2e-areas.ts names). */
-const AREA_URLS: Readonly<Record<string, readonly string[]>> = {
-  chat: ['/chat'],
-  notifications: ['/activity'],
-  'plan-tab': ['/plan'],
-  pipeline: ['/pipeline'],
-  pcs: ['/posts'],
-  briefs: ['/briefs'],
-  assets: ['/assets', '/deleted'],
-  settings: ['/settings'],
-  unvisited: ['/help', '/signin'],
-  unsubscribe: ['/unsubscribe'],
-};
-
-interface ScreenDef {
-  name: string;
-  url: string | null;
-  start: number;
-  end: number;
+interface VisualPlan {
+  names: string[];
+  picked: number;
+  why: string;
 }
 
-/** Each SCREENS entry in screens.spec.ts: its name, url and line span (1-based). */
-function readScreens(): ScreenDef[] {
-  const src = readFileSync(path.join(ROOT, 'e2e/visual/screens.spec.ts'), 'utf8').split('\n');
-  const out: ScreenDef[] = [];
-  src.forEach((line, i) => {
-    const m = /^\s*name: [`']([^`']+)[`'],?\s*$/.exec(line);
-    if (m === null || m[1] === undefined) return;
-    let url: string | null = null;
-    for (let j = i + 1; j < Math.min(src.length, i + 12); j += 1) {
-      const u = /^\s*url: [`']([^`']*)[`']/.exec(src[j] ?? '');
-      if (u !== null) {
-        url = u[1] ?? null;
-        break;
-      }
-      if (/^\s*name: /.test(src[j] ?? '')) break;
-    }
-    out.push({ name: m[1], url, start: i + 1, end: i + 1 });
-  });
-  out.forEach((s, k) => {
-    s.end = (out[k + 1]?.start ?? src.length + 1) - 1;
-  });
-  return out;
-}
-
-/** A template name (`pipeline-${density}`) as a regex source. */
-const nameSource = (name: string): string =>
-  name
-    .split(/\$\{[^}]+\}/)
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('[\\w-]+');
-
-/** Changed line numbers (new side) of a file vs base. */
-function changedLines(base: string, file: string): number[] {
-  const diff = git('diff', '-U0', base, '--', file);
-  const out: number[] = [];
-  for (const m of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
-    const start = Number(m[1]);
-    const count = m[2] === undefined ? 1 : Number(m[2]);
-    for (let k = 0; k < Math.max(count, 1); k += 1) out.push(start + k);
-  }
-  return out;
-}
-
-/** null: no visual run; 'ALL': every screen; else a -g regex. */
-async function visualGrep(
-  base: string,
-  files: string[],
-): Promise<{ grep: string | null; why: string }> {
+async function visualPlan(base: string, files: string[]): Promise<VisualPlan | { grep: string }> {
   const env = process.env.PREPUSH_SCREENS;
-  if (env !== undefined && env !== '') return { grep: env, why: 'PREPUSH_SCREENS' };
-  const feeds = files.filter((f) => f.startsWith('src/components/') || f.startsWith('e2e/visual/'));
-  if (feeds.length === 0) return { grep: null, why: 'no src/components or e2e/visual change' };
-  const screens = readScreens();
-  const names = new Set<string>();
-  const urls = new Set<string>();
-  let all = false;
-  const why: string[] = [];
-  const comp = feeds.filter((f) => f.startsWith('src/components/'));
-  if (comp.length > 0) {
-    const { buildGraph, select } = await import('./ci/e2e-select.ts');
-    const { AREAS } = await import('./ci/e2e-areas.ts');
-    const graph = buildGraph();
-    const sel = select(comp, graph);
-    if (sel.all) {
-      all = true;
-      why.push('a changed component is in the app shell or no area');
-    } else {
-      for (const f of comp) {
-        const hit = AREAS.filter((a) => graph.closures.get(a.name)?.has(f));
-        for (const a of hit) {
-          const u = AREA_URLS[a.name];
-          if (u === undefined) {
-            all = true;
-            why.push(`${f}: area ${a.name} has no screen url`);
-          } else u.forEach((x) => urls.add(x));
-        }
-      }
-    }
-  }
-  for (const f of feeds.filter((x) => x.startsWith('e2e/visual/'))) {
-    if (f === 'e2e/visual/screens.spec.ts') {
-      const changed = changedLines(base, f);
-      for (const s of screens) {
-        if (changed.some((n) => n >= s.start && n <= s.end)) names.add(s.name);
-      }
-    } else if (f.startsWith('e2e/visual/__screenshots__/')) {
-      const m = /\/([^/]+)\.png$/.exec(f);
-      if (m?.[1] !== undefined) names.add(m[1]);
-    } else if (/layout-checks(-core)?\.ts$/.test(f) || f.endsWith('playwright.visual.config.ts')) {
-      all = true;
-      why.push(`${f}: runs inside every screen`);
-    } else if (f.endsWith('.spec.ts')) {
-      all = true;
-      why.push(`${f}: a visual spec`);
-    }
-  }
-  if (all) return { grep: 'ALL', why: why.join('; ') };
-  for (const s of screens) {
-    if (
-      s.url !== null &&
-      [...urls].some((u) => s.url === u || s.url?.startsWith(`${u}/`) || s.url?.startsWith(`${u}?`))
-    ) {
-      names.add(s.name);
-    }
-  }
-  if (names.size === 0) return { grep: null, why: 'no screen fed by the changed files' };
-  const alts = [...names].sort().map(nameSource);
-  return {
-    grep: `(?:^|\\s)(?:${alts.join('|')})(?:\\s|$)`,
-    why: `${names.size} screens (urls ${[...urls].join(', ') || 'none'})`,
-  };
+  if (env !== undefined && env !== '') return { grep: env };
+  const { localScreens, readScreenDefs, SCREEN_CAP, selectForDiff } =
+    await import('./ci/visual-select.ts');
+  const sel = await selectForDiff(base, undefined, files);
+  const { names, picked } = localScreens(sel, readScreenDefs());
+  const why = [
+    sel.all ? 'CI runs ALL' : `CI runs ${sel.names.length}`,
+    sel.all ? 'local: the targeted screens + one per area' : '',
+    picked > names.length ? `capped at ${SCREEN_CAP}, full set runs in CI` : '',
+  ]
+    .filter((r) => r !== '')
+    .join('; ');
+  return { names, picked, why: names.length === 0 ? 'no screen fed by the changed files' : why };
 }
 
 // ---------------------------------------------------------------------------
@@ -291,15 +189,38 @@ async function vitest(args: string[]): Promise<StepResult> {
   };
 }
 
+/** The paths e2e-webkit.yml counts as UI (its changes job); anything else runs no spec. */
+const E2E_UI =
+  /^(src\/|e2e\/|public\/|index\.html$|package\.json$|pnpm-lock\.yaml$|playwright\.config\.ts$|vite\.config\.ts$|tailwind\.config\.ts$|postcss\.config\.js$|tsconfig[^/]*\.json$|\.github\/workflows\/e2e-webkit\.yml$)/;
+
+/**
+ * e2e-webkit.yml's split of the changed files: Worker code, unit tests and
+ * non-UI paths (scripts/, docs, tests/, supabase/, ...) run nothing; an edited
+ * spec runs itself; src/ goes to the import-closure selector; any other UI
+ * file runs the whole suite. e2e/visual is the layout-check stage's.
+ */
+export function e2eReach(files: readonly string[]): {
+  own: string[];
+  app: string[];
+  whole: boolean;
+} {
+  const own: string[] = [];
+  const app: string[] = [];
+  let whole = false;
+  for (const f of files) {
+    if (!E2E_UI.test(f) || f.startsWith('src/server/') || f.startsWith('e2e/visual/')) continue;
+    if (/^src\/.*\.test\.tsx?$|^src\/__tests__\//.test(f)) continue;
+    if (/^e2e\/tests\/.+\.spec\.ts$/.test(f)) own.push(f);
+    else if (f.startsWith('src/')) app.push(f);
+    else whole = true;
+  }
+  return { own, app, whole };
+}
+
 /** null: no e2e spec; []: the whole suite; else the selected specs. */
 async function e2eSpecs(files: string[]): Promise<string[] | null> {
-  const code = files.filter(
-    (f) => !f.startsWith('docs/') && !f.endsWith('.md') && !f.startsWith('e2e/visual/'),
-  );
-  const own = code.filter((f) => /^e2e\/tests\/.+\.spec\.ts$/.test(f));
-  const app = code.filter((f) => !f.startsWith('e2e/') && !f.startsWith('.github/'));
-  const helpers = code.some((f) => /^e2e\/(helpers|fixtures|harness)\//.test(f));
-  if (helpers) return [];
+  const { own, app, whole } = e2eReach(files);
+  if (whole) return [];
   if (app.length === 0) return own.length > 0 ? own : null;
   const { select } = await import('./ci/e2e-select.ts');
   const sel = select(app);
@@ -307,6 +228,12 @@ async function e2eSpecs(files: string[]): Promise<string[] | null> {
   const specs = [...new Set([...sel.specs, ...own])];
   return specs.length > 0 ? specs : null;
 }
+
+const grepOf = async (names: readonly string[]): Promise<string> =>
+  (await import('./ci/visual-select.ts')).screensGrep(names);
+
+/** A run longer than this prints a warning (target: under 5 min). */
+const SLOW_MS = 5 * 60_000;
 
 function fmt(ms: number): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
@@ -374,17 +301,23 @@ async function main(): Promise<void> {
     ...fast,
     await (unit !== null ? vitest(unit) : skip('vitest', 'no unit-relevant change')),
   ];
-  const visual = await visualGrep(base, files);
-  if (visual.grep === null) {
-    results.push(await skip('visual + layout checks', visual.why));
+  // Layout checks only, on the screens the changed files feed (at most
+  // SCREEN_CAP); screenshots are never compared unless PREPUSH_SNAPSHOTS=1.
+  const visual = await visualPlan(base, files);
+  const grep =
+    'grep' in visual ? visual.grep : visual.names.length > 0 ? await grepOf(visual.names) : null;
+  if (grep === null) {
+    results.push(await skip('layout checks', 'why' in visual ? visual.why : ''));
   } else {
     const args = ['test', '--config', 'e2e/visual/playwright.visual.config.ts', '--reporter=line'];
     if (process.env.PREPUSH_SNAPSHOTS !== '1') args.push('--ignore-snapshots');
-    if (visual.grep !== 'ALL') args.push('-g', visual.grep);
+    args.push('-g', grep);
     process.stdout.write(
-      `prepush: visual ${visual.grep === 'ALL' ? 'all screens' : visual.why} (${visual.why})\n`,
+      'grep' in visual
+        ? `prepush: layout checks on PREPUSH_SCREENS\n`
+        : `prepush: layout checks on ${visual.names.length} of ${visual.picked} screens (${visual.why}): ${visual.names.join(' ')}\n`,
     );
-    results.push(await run('visual + layout checks', bin('playwright'), args));
+    results.push(await run('layout checks', bin('playwright'), args));
   }
 
   // The WebKit e2e specs the changed files reach (scripts/ci/e2e-select.ts, as
@@ -411,13 +344,25 @@ async function main(): Promise<void> {
     const state = r.skipped !== undefined ? `skip (${r.skipped})` : r.ok ? 'ok' : 'FAIL';
     process.stdout.write(`  ${r.name.padEnd(28)} ${fmt(r.ms).padStart(8)}  ${state}\n`);
   }
-  process.stdout.write(`  ${'total'.padEnd(28)} ${fmt(Date.now() - t0).padStart(8)}\n`);
+  const total = Date.now() - t0;
+  process.stdout.write(`  ${'total'.padEnd(28)} ${fmt(total).padStart(8)}\n`);
+  if (total > SLOW_MS) {
+    process.stdout.write(
+      `prepush: WARNING total ${fmt(total)} is over ${SLOW_MS / 60_000} min; the target is under 5 min\n`,
+    );
+  }
   if (failed) process.exit(1);
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(
-    `prepush: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
-  );
-  process.exit(1);
-});
+// Run only as the script (the unit test imports the selection functions).
+if (
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main().catch((err: unknown) => {
+    process.stderr.write(
+      `prepush: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
+    );
+    process.exit(1);
+  });
+}
