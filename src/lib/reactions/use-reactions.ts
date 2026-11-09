@@ -35,6 +35,8 @@ export interface ReactionsApi {
   rowsOf: (id: string) => readonly ReactionRow[];
   /** Toggle the viewer's `emoji` on a target (a chip tap). */
   toggle: (id: string, emoji: string) => void;
+  /** The viewer (null until known): who-reacted names them "You". */
+  me: string | null;
   /** A drawer pick: adds it (already mine: nothing changes). */
   pick: (id: string, emoji: string) => void;
 }
@@ -79,9 +81,13 @@ export function useReactions(params: {
   useEffect(() => {
     if (params.me !== undefined) return;
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setSessionMe(data.session?.user.id ?? null);
-    });
+    // The session the client already holds (no network); a failure leaves no viewer.
+    void Promise.resolve()
+      .then(() => supabase.auth.getSession())
+      .then(({ data }) => {
+        if (active) setSessionMe(data.session?.user.id ?? null);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -173,5 +179,5 @@ export function useReactions(params: {
     [rows, me],
   );
   const rowsOf = useCallback((id: string) => rows.get(id) ?? NO_ROWS, [rows]);
-  return { of, rowsOf, toggle, pick };
+  return { of, rowsOf, toggle, pick, me };
 }

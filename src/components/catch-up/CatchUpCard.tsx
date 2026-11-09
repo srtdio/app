@@ -33,6 +33,7 @@ import { KEEP_UNREAD, MARK_AS_READ } from '@/lib/catch-up/copy';
 import { dayBreaks, fillScrollTop } from '@/lib/catch-up/text';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import type { CatchUpBodyResult, CatchUpMessageRow, CatchUpRow } from '@/lib/catch-up/body';
+import { CatchUpRowReactions, useCatchUpReactions } from '@/components/catch-up/CatchUpReactions';
 import {
   BoneRows,
   CardError,
@@ -129,6 +130,10 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   const olderHeightRef = useRef<number | null>(null);
   const rows: CatchUpRow[] = ready !== null ? [...props.older, ...ready.rows] : [];
   const firstRowId = rows[0]?.id ?? null;
+  // Every shown message / comment's reactions: one batched read for the card
+  // (older rows add one more, for their ids only), after paint.
+  const reactionIds = rows.filter((r) => r.kind === 'message').map((r) => r.id);
+  const reactions = useCatchUpReactions(item, reactionIds, ready);
   const lastSentId = props.sent[props.sent.length - 1]?.id ?? null;
 
   // The fill rule, once per card when its rows land: at the "New" line when
@@ -194,6 +199,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           selfName={props.selfName}
           timeZone={props.timeZone}
           onOpenThread={ready?.threads === true ? () => props.onOpenThread(row) : null}
+          reactions={
+            <CatchUpRowReactions id={row.id} api={reactions} workspaceId={item.workspaceId} />
+          }
         />,
       );
     } else if (row.kind === 'points') {

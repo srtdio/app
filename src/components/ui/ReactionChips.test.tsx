@@ -86,17 +86,11 @@ describe('ReactionChips', () => {
     expect(onToggle).toHaveBeenCalledWith('❤️');
   });
 
-  it('no reactions: nothing renders; catch up can ask for the smiley alone', async () => {
+  it('no reactions: nothing renders', async () => {
     const empty = await mount(
       <ReactionChips reactions={[]} onToggle={() => {}} onPick={() => {}} />,
     );
     expect(empty.querySelector('[data-reaction-chips]')).toBeNull();
-    act(() => root?.unmount());
-    const alone = await mount(
-      <ReactionChips reactions={[]} addWhenEmpty onToggle={() => {}} onPick={() => {}} />,
-    );
-    expect(alone.querySelectorAll('[data-reaction-chip]')).toHaveLength(0);
-    expect(alone.querySelector('[data-reaction-add]')).not.toBeNull();
   });
 
   it('the smiley opens the one drawer titled "Add reaction"; a pick adds and feeds Frequently used', async () => {

@@ -168,9 +168,12 @@ function RowFrame(props: {
   photo?: ReactNode;
   /** A thread reply's time (threadWhen 'relative'); absent: the clock time. */
   when?: string | undefined;
+  /** The row's reactions (catch-up/CatchUpReactions): chips under the text, or the corner smiley. */
+  reactions?: ReactNode;
 }): ReactElement {
+  const reacts = props.reactions !== undefined && props.reactions !== null;
   return (
-    <li {...props.hook} className={cn('flex gap-3 py-2', CATCH_UP_ROW_X)}>
+    <li {...props.hook} className={cn('relative flex gap-3 py-2', CATCH_UP_ROW_X)}>
       <span className="w-8 shrink-0">
         {props.photo ?? (
           <Avatar
@@ -182,7 +185,8 @@ function RowFrame(props: {
         )}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex min-w-0 items-baseline gap-2">
+        {/* With reactions wired, the head line ends clear of the corner smiley (40 + 4). */}
+        <div className={cn('flex min-w-0 items-baseline gap-2', reacts && 'pr-11')}>
           <Text role="label" className="min-w-0 truncate text-fg" data-catch-up-name="">
             {props.author.name}
           </Text>
@@ -192,6 +196,7 @@ function RowFrame(props: {
         </div>
         {props.under}
         {props.children}
+        {props.reactions}
       </div>
     </li>
   );
@@ -225,10 +230,13 @@ export function MessageRow(props: {
   trailing?: ReactNode;
   /** Inside a thread: the reply's time as threadWhen 'relative' ("Today at 10:12 AM"). */
   threadTime?: boolean | undefined;
+  /** Its reactions (chips under the text, after the replies link); absent: none. */
+  reactions?: ReactNode;
 }): ReactElement {
   const { row } = props;
   return (
     <RowFrame
+      reactions={props.reactions}
       author={row.author}
       createdAt={row.createdAt}
       timeZone={props.timeZone}

@@ -725,6 +725,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             reply={replyFor(thread.target, threadKey, replyHint(current, true))}
             onRetryLoad={retryThread}
             onRetrySend={(id) => retrySend(threadKey, id)}
+            reactionsOf={current}
           />
         ) : null}
         <div

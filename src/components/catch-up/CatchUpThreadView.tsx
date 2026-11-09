@@ -22,6 +22,11 @@ import type { SentMessage } from '@/components/catch-up/CatchUpCard';
 import { RepliesSeparatorRow, ThreadRootHead } from '@/components/chat/ThreadRail';
 import { cn } from '@/lib/cn';
 import { threadWhen } from '@/lib/time';
+import {
+  CatchUpRowReactions,
+  useCatchUpReactions,
+  type CatchUpReactionSource,
+} from '@/components/catch-up/CatchUpReactions';
 
 /** The reply box's field inside the reply slot. */
 const REPLY_FIELD = 'textarea, input[type="text"], [contenteditable="true"]';
@@ -41,8 +46,21 @@ export function CatchUpThreadView(props: {
   onRetryLoad: () => void;
   onRetrySend: (id: string) => void;
   viewRef?: Ref<HTMLDivElement>;
+  /** The card the thread belongs to: its rows' reactions (one batched read). Absent: none. */
+  reactionsOf?: CatchUpReactionSource | undefined;
 }): ReactElement {
   const replies = props.thread !== null && props.thread !== 'error' ? props.thread.replies : [];
+  const source = props.reactionsOf;
+  const reactionIds = [props.root.id, ...replies.map((r) => r.id)];
+  const reactions = useCatchUpReactions(
+    source ?? { kind: 'post', entityId: '', workspaceId: '' },
+    source !== undefined ? reactionIds : [],
+    props.thread,
+  );
+  const rowReactions = (id: string, flush = false) =>
+    source !== undefined ? (
+      <CatchUpRowReactions id={id} api={reactions} workspaceId={source.workspaceId} flush={flush} />
+    ) : undefined;
   const count = replies.length + props.sent.filter((m) => m.state !== 'failed').length;
   const replyRef = useRef<HTMLDivElement>(null);
   // Synchronous in the tap (iOS opens the keyboard only then).
@@ -58,7 +76,7 @@ export function CatchUpThreadView(props: {
           <li
             data-catch-up-message={props.root.id}
             data-thread-root=""
-            className={cn('flex flex-col gap-2 pb-3 pt-3', CATCH_UP_ROW_X)}
+            className={cn('relative flex flex-col gap-2 pb-3 pt-3', CATCH_UP_ROW_X)}
           >
             <ThreadRootHead
               name={props.root.author.name}
@@ -67,6 +85,8 @@ export function CatchUpThreadView(props: {
               dateTime={props.root.createdAt}
             />
             <LongText text={props.root.text} selfName={props.selfName} />
+            {/* Chips sit under the root text, above the strip (12 to it stays the li's pb-3). */}
+            {rowReactions(props.root.id, true)}
           </li>
         </ul>
         <RepliesSeparatorRow
@@ -90,6 +110,7 @@ export function CatchUpThreadView(props: {
                 timeZone={props.timeZone}
                 onOpenThread={null}
                 threadTime
+                reactions={rowReactions(row.id)}
               />
             ))}
             {props.sent.map((message) => (
