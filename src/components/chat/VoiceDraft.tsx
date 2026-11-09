@@ -122,6 +122,11 @@ function Bar(props: { scale: number; className: string }): ReactElement {
  * | the elapsed m:ss (meta) | round check (Main) = stop and keep. Hook-free:
  * the caller hands the bar count (useRecordingBars) and the elapsed text.
  */
+/** A press that leaves focus where it is (the click still lands). */
+function keepFocus(event: { preventDefault: () => void }): void {
+  event.preventDefault();
+}
+
 export function RecordingRow(props: {
   elapsed: string;
   bars: number;
@@ -147,6 +152,8 @@ export function RecordingRow(props: {
         data-recording-cancel=""
         className="shrink-0"
         onClick={props.onCancel}
+        // Keep focus where it is: focusing a key reshapes the box between press and release.
+        onPointerDown={keepFocus}
       >
         <IconX size={ICON_SIZE.inline} />
       </Button>
@@ -173,6 +180,7 @@ export function RecordingRow(props: {
         busy={props.busy === true}
         className="shrink-0"
         onClick={props.onKeep}
+        onPointerDown={keepFocus}
       >
         <IconCheck size={ICON_SIZE.control} />
       </Button>

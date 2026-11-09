@@ -881,11 +881,16 @@ async function catchUpSendRefused(page: Page, text: string): Promise<void> {
   await waitFor([page.locator('[data-catch-up-not-sent]')], 'Not sent');
 }
 
-/** Hold a swipe on the card mid-way (`dx` px), the pointer kept down for the shot. */
-async function holdSwipe(page: Page, dx: number): Promise<void> {
+/**
+ * Hold a swipe on the card mid-way in `dir`, the pointer kept down for the
+ * shot. The travel is a share of the card width: past the tint at 15%, short
+ * of the decision at 30%.
+ */
+async function holdSwipe(page: Page, dir: 1 | -1): Promise<void> {
   const card = page.locator('[data-catch-up] [data-catch-up-card]');
   const box = await card.boundingBox();
   if (box === null) throw new Error('catch up card has no box');
+  const dx = dir * Math.round(box.width * 0.22);
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 3;
   await page.mouse.move(x, y);
@@ -1694,7 +1699,7 @@ const SCREENS: Screen[] = [
     url: `/activity?catchup=${CATCH_UP_MENTION}`,
     steps: async (page) => {
       await catchUpReady(page);
-      await holdSwipe(page, 90);
+      await holdSwipe(page, 1);
     },
   },
   {
@@ -1706,7 +1711,7 @@ const SCREENS: Screen[] = [
     url: `/activity?catchup=${CATCH_UP_MENTION}`,
     steps: async (page) => {
       await catchUpReady(page);
-      await holdSwipe(page, -90);
+      await holdSwipe(page, -1);
     },
   },
   {
