@@ -581,6 +581,16 @@ export function NotificationsPage() {
   const listLoading = workspaceId === null || (loading && items.length === 0);
   // The top bar (no sort): Threads | Catch up (topbar-actions). Threads opens
   // the same catch up on unread threads only (?catchup=threads).
+  // Catch up from the top bar opens on the newest unread (?catchup=newest);
+  // an entry id opens the queue at that entry (a cold link does the same).
+  const openCatchUp = useCallback(
+    (entryId: string | null) => {
+      const next = new URLSearchParams(searchParams);
+      next.set(CATCH_UP_PARAM, entryId ?? CATCH_UP_NEWEST);
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams],
+  );
   useActivityTopbar({
     workspaceId,
     totalUnread,
