@@ -904,7 +904,7 @@ export interface AlignFamily {
   sameGaps?: GapAt[];
 }
 
-const near = (a: number, b: number): boolean => Math.abs(a - b) <= ALIGN_TOLERANCE_PX;
+const sameEdge = (a: number, b: number): boolean => Math.abs(a - b) <= ALIGN_TOLERANCE_PX;
 const r1 = (n: number): number => Math.round(n * 10) / 10;
 
 /** The alignment rules 1, 2, 3 and 5 over measured families. Pure. */
@@ -914,7 +914,7 @@ export function alignmentViolations(families: readonly AlignFamily[]): string[] 
     const column = f.textLefts[0];
     if (column !== undefined) {
       for (const t of f.textLefts.slice(1)) {
-        if (!near(t.x, column.x)) {
+        if (!sameEdge(t.x, column.x)) {
           out.push(
             `${f.label}: ${t.label} starts at x ${r1(t.x)}, not on the text column (${column.label} ${r1(column.x)})`,
           );
@@ -924,7 +924,7 @@ export function alignmentViolations(families: readonly AlignFamily[]): string[] 
     const edge = f.rightEdges[0];
     if (edge !== undefined) {
       for (const e of f.rightEdges.slice(1)) {
-        if (!near(e.x, edge.x)) {
+        if (!sameEdge(e.x, edge.x)) {
           out.push(
             `${f.label}: ${e.label} ends at x ${r1(e.x)}, not on the right edge (${edge.label} ${r1(edge.x)})`,
           );
@@ -932,19 +932,19 @@ export function alignmentViolations(families: readonly AlignFamily[]): string[] 
       }
     }
     for (const h of f.hung ?? []) {
-      if (!near(h.photoRight, h.pictureRight)) {
+      if (!sameEdge(h.photoRight, h.pictureRight)) {
         out.push(
           `${f.label}: ${h.label} photo ends at ${r1(h.photoRight)}, not on the picture's right edge ${r1(h.pictureRight)}`,
         );
       }
-      if (!near(h.textLeft - h.photoRight, PHOTO_TEXT_GAP_PX)) {
+      if (!sameEdge(h.textLeft - h.photoRight, PHOTO_TEXT_GAP_PX)) {
         out.push(
           `${f.label}: ${h.label} photo to text is ${r1(h.textLeft - h.photoRight)}px, not ${PHOTO_TEXT_GAP_PX}`,
         );
       }
     }
     for (const g of f.gaps) {
-      if (g.equals !== undefined && !near(g.gap, g.equals)) {
+      if (g.equals !== undefined && !sameEdge(g.gap, g.equals)) {
         out.push(`${f.label}: ${g.label} is ${r1(g.gap)}px, not ${g.equals}`);
       }
       const min = g.min ?? (g.equals === undefined ? TEXT_TO_HAIRLINE_MIN_PX : undefined);
@@ -956,7 +956,7 @@ export function alignmentViolations(families: readonly AlignFamily[]): string[] 
     const first = same[0];
     if (first !== undefined) {
       for (const g of same.slice(1)) {
-        if (!near(g.gap, first.gap)) {
+        if (!sameEdge(g.gap, first.gap)) {
           out.push(
             `${f.label}: ${g.label} is ${r1(g.gap)}px, not the same as ${first.label} (${r1(first.gap)})`,
           );

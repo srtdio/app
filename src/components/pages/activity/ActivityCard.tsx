@@ -450,7 +450,7 @@ export const LINE_MAX_LINES = 3;
 const MIN_HIDDEN_WORDS = 3;
 
 /** Trailing punctuation a cut drops before "…". */
-const CUT_TRAIL = /[\s.,;:!?…\-–(\[{'"]+$/u;
+const CUT_TRAIL = /[\s.,;:!?…–([{'"-]+$/u;
 
 /**
  * Where a line's text is cut (9 Nov 2026): null when the whole text fits, else
