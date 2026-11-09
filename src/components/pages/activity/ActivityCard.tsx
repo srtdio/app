@@ -479,7 +479,7 @@ export function cutLine(text: string, fits: (candidate: string | null) => boolea
   return lo > 0 ? at(lo) : (words[0] ?? '');
 }
 
-/** The "… more" / " less" marker's look: muted, inline, 44 hit from its own box. */
+/** The "more" / "less" key after the marker: muted, inline, a 44 hit from its own child box. */
 const LINE_MARKER =
   'relative inline min-h-0 w-auto rounded-sm align-baseline text-fg-3 focus-visible:lit-focus';
 
@@ -552,7 +552,7 @@ function useLineCut(text: string): {
  * (medium, ink; muted when read), the text, the time (meta, kept whole by no-break spaces) inline at
  * the end. At most 3 lines: past that the text is cut at the last whole word
  * with "… more" before the time; "… more" unfolds this line in place
- * (" less" folds it). An 8px dot slot on the head's dot edge, kept when read
+ * ("less" folds it). An 8px dot slot on the head's dot edge, kept when read
  * so the text never shifts. The 44 tap comes from a hit overlay (12 above and
  * below the text, half the 24 gap), never from padding. A tap opens its own
  * spot and marks only it read. No reactions.
