@@ -851,8 +851,11 @@ async function openCatchUpTray(page: Page): Promise<void> {
     [catchUpReply(page).getByRole('button', { name: 'Add attachment', exact: true })],
     'reply + key',
   );
-  // The phone editor may lift the box out to <body>: look page-wide.
-  await waitFor([page.locator('[data-tray]')], 'reply tray');
+  // In the reply box, or page-wide (the phone editor may lift the box to <body>).
+  await waitFor(
+    [catchUpReply(page).locator('[data-tray]'), page.locator('[data-tray]')],
+    'reply tray',
+  );
   await page.mouse.move(0, 0);
 }
 

@@ -235,7 +235,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       align="center"
       data-catch-up-name-row-button=""
       aria-haspopup="menu"
-      className="flex min-w-0 max-w-full items-center justify-center gap-1 px-2"
+      className="flex min-w-11 max-w-full items-center justify-center gap-1 px-2"
     >
       <Text role="heading" as="h2" data-catch-up-title="" className="min-w-0 truncate">
         {title}
