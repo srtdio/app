@@ -243,9 +243,9 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(html).toMatch(
       /data-list-card-line="2"[^]*data-activity-new=""[^]*1 new[^]*data-activity-scope-tag=""[^]*data-list-card-unread=""/,
     );
-    // Its one line: the actor, the Activity line without the name, the dot.
+    // Its one line: the actor, the comment text (locked 9 Nov 2026), the dot.
     expect(html).toMatch(
-      /data-activity-line="e1"[^]*>Dev<[^]*Commented on Q3[^]*data-activity-line-dot=""/,
+      /data-activity-line="e1"[^]*>Dev<[^]*>Looks good<[^]*data-activity-line-dot=""/,
     );
   });
 

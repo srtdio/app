@@ -100,7 +100,8 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
     const preview = byText('1 new');
     expectRole(preview, ['text-md', 'text-fg-2', 'truncate']);
-    const line = byText('Commented on Q3 Launch');
+    // A comment line reads the comment text (locked 9 Nov 2026).
+    const line = byText('Looks good to me');
     expectRole(line, ['text-md', 'truncate']);
     expect(line.className).not.toContain('line-clamp-2');
   });

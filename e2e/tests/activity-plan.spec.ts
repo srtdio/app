@@ -71,7 +71,9 @@ test('agency: a plan_comment row is a Notifications card (All); a tap opens the 
   await page.goto('/notifications');
   const row = card(page, PLAN_CONCEPT_TITLE);
   await expect(row).toBeVisible({ timeout: 15_000 });
-  await expect(row).toContainText(new RegExp(`${PEER_NAME}\\s*Commented on ${PLAN_CONCEPT_TITLE}`));
+  // The line reads the actor, then the comment text (locked 9 Nov 2026).
+  await expect(row).toContainText(PEER_NAME);
+  await expect(row).toContainText(ACTIVITY_PLAN_COMMENT_BODY);
   await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(1);
 
   // No Plans chip (Activity's chips are All, Unread, Mentions): All lists it.
