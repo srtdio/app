@@ -341,6 +341,8 @@ comment_task_create(p_comment_id uuid, p_channel_id text, p_title text, p_priori
 
 PK (comment_id, user_id, emoji). Fields: workspace_id FK, emoji 1 to 32, created_at.
 
+plan_item_comment_reactions (20261109120000_comment_reactions, applied 9 Nov 2026): same shape for plan_item_comments, RLS on, authenticated SELECT only (plan_item_comment_reactions_select_visible: the comment is readable). Reactions are written only via comment_reaction_add/remove and plan_item_comment_reaction_add/remove (SECURITY DEFINER, search_path '', EXECUTE authenticated, not anon; add needs an active member and a live comment, plan add also a visible comment); reading only via RLS; no notifications on reactions (decision 9 Nov).
+
 ## 4. Briefs
 
 Client writes the brief; it lands in the Briefs section and can be linked to a post (origin=brief). Read-only after creation. Open or Closed, any member can reopen.
