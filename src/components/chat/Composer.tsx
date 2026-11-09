@@ -20,7 +20,7 @@ import type {
 import { logger } from '@/lib/logger';
 import { ClearButton } from '@/components/ui/Button';
 import { composerHint } from '@/components/ui/Composer';
-import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';
+import { RowKey, RowKeyHold, RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { Textarea } from '@/components/ui/Textarea';
 import { ICON_SIZE, IconBriefs, IconFile, IconMic, IconSend } from '@/components/ui/icons';
@@ -259,11 +259,6 @@ export interface ComposerProps {
 
 /** The draft link card appears once typing has paused this long. */
 export const DRAFT_CARD_DEBOUNCE_MS = 600;
-
-/** The mic's 36 slot held empty while a voice note sends (the row keeps its width). */
-const MIC_SLOT_HOLD = (
-  <span aria-hidden="true" data-mic-slot-hold="" className="inline-flex h-11 w-9 shrink-0" />
-);
 
 /**
  * The link the draft card previews: the draft's first external link, unless an
@@ -1912,7 +1907,7 @@ export function Composer(props: ComposerProps): ReactElement {
           pillEnd={showMic ? micKey : undefined}
           // While the kept note sends, the mic's slot keeps its width (states
           // keep their footprint): the row never narrows under the spinner.
-          mic={showMic ? micKey : voiceBusy ? MIC_SLOT_HOLD : undefined}
+          mic={showMic ? micKey : voiceBusy ? <RowKeyHold /> : undefined}
           overlay={pickers}
           strip={
             <>

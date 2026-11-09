@@ -60,7 +60,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { ComposerFrame, type ComposerState } from '@/components/ui/Composer';
 import {
   ICON_SIZE,
@@ -178,6 +178,15 @@ function scrollUpBy(el: HTMLElement, dy: number): void {
 /** Keep the field focused (and the keyboard up) when a row key is pressed. */
 function keepFocus(e: PointerEvent | MouseEvent): void {
   e.preventDefault();
+}
+
+/**
+ * A row key's 36 slot held empty (aria-hidden): a state that hides a key (the
+ * mic while a voice note sends) keeps the row's width (states keep their
+ * footprint).
+ */
+export function RowKeyHold(): ReactElement {
+  return <span aria-hidden="true" data-row-key-hold="" className="inline-flex h-11 w-9 shrink-0" />;
 }
 
 /**
