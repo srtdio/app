@@ -7,7 +7,7 @@
 // is ink and not a target; the root keys stay on the right.
 
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -29,8 +29,8 @@ import type { CatchUpMessageRow } from '@/lib/catch-up/body';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const src = (rel: string): string =>
-  readFileSync(fileURLToPath(new URL(`../../../${rel}`, import.meta.url)), 'utf8');
+// Vitest runs from the repo root (jsdom has no file: import.meta.url).
+const src = (rel: string): string => readFileSync(join(process.cwd(), 'src', rel), 'utf8');
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
