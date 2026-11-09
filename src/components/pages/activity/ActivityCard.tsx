@@ -457,6 +457,18 @@ const LINES_GAP = 'flex min-w-0 flex-col gap-3 compact:gap-2 calm:gap-4';
  */
 const LINE_HIT_Y = '-top-1 -bottom-2 compact:-bottom-1 calm:-top-2';
 
+/**
+ * The 44 tap (CLAUDE.md Alignment: a hit area, pseudo-element or overlay):
+ * a ::before grown past the row's own box (LINE_HIT_Y) to 44 for a one-line
+ * row: Compact 28 + 8 + 8, Cozy 32 + 4 + 8, Calm 36 + 4 + 4. The row boxes
+ * themselves meet edge to edge (layout check tap-overlap reads the boxes).
+ */
+const LINE_HIT_44 =
+  "before:absolute before:inset-x-0 before:-top-1 before:-bottom-2 before:content-[''] compact:before:-inset-y-2 calm:before:-inset-y-1";
+
+/** "+N more": its 20 text box, a ::before grown 12 above and below to 44. */
+const MORE_HIT_44 = "before:absolute before:inset-x-0 before:-inset-y-3 before:content-['']";
+
 /** A no-break space: "… more" and the time never split across lines. */
 const NBSP = '\u00a0';
 
@@ -570,7 +582,8 @@ function useLineCut(text: string): {
  * with "… more" before the time; "… more" unfolds this line in place
  * ("less" folds it). An 8px dot slot on the head's dot edge, kept when read
  * so the text never shifts. The tap comes from a hit overlay (half the line
- * gap above and below the text, LINE_HIT_Y), never from padding. A tap opens its own
+ * gap above and below the text, LINE_HIT_Y) whose ::before reaches 44 (LINE_HIT_44),
+ * never from padding. A tap opens its own
  * spot and marks only it read. No reactions.
  */
 function EntryLine(props: {
@@ -600,11 +613,10 @@ function EntryLine(props: {
       className="relative flex min-w-0 items-start"
     >
       <PressableRow
-        flat
         insetFocus
         data-activity-line-open=""
         aria-label={`${actor} ${text} ${time}${unread ? ', unread' : ''}`}
-        className={cn('absolute -left-8 right-0 min-h-0 w-auto', LINE_HIT_Y)}
+        className={cn('absolute -left-8 right-0 min-h-0 w-auto', LINE_HIT_Y, LINE_HIT_44)}
       />
       <span aria-hidden="true" data-activity-line-photo="" className="-ml-8 flex w-8 shrink-0">
         <Avatar
@@ -805,7 +817,8 @@ export function ActivityCard({
           // Density (9 Nov 2026, text box to text box): head card to line 1
           // 4 / 8 / 12, line to line (and to "+N more") 8 / 12 / 16, Compact /
           // Cozy / Calm; 12 under the last line to the next card (none on the
-          // day's last card). Hits meet in the gaps (LINE_HIT_Y), never overlap.
+          // day's last card). Row boxes meet in the gaps (LINE_HIT_Y); each row's
+          // ::before reaches 44 (LINE_HIT_44).
           className={cn(
             LINES_GAP,
             'pt-2 compact:pt-1 calm:pt-3',
@@ -826,12 +839,14 @@ export function ActivityCard({
               aria-controls={restId}
               aria-label={open ? 'Show less' : `Show ${hidden} more updates`}
               onClick={() => setOpen((was) => !was)}
-              // Its text box only (the label's 20 line; its gap is measured like a line's); the tap
-              // comes from the hit box (LINE_HIT_Y), never from padding.
-              className={textRole('label', 'relative flex min-h-0 items-center text-fg-2')}
+              // Its text box only (the label's 20 line; its gap is measured like a line's); the 44
+              // tap comes from its ::before (MORE_HIT_44), never from padding.
+              className={textRole(
+                'label',
+                cn('relative flex min-h-0 items-center text-fg-2', MORE_HIT_44),
+              )}
             >
               {open ? 'Show less' : moreLabel(hidden)}
-              <span aria-hidden="true" className={cn('absolute inset-x-0', LINE_HIT_Y)} />
             </PressableRow>
           ) : null}
         </div>

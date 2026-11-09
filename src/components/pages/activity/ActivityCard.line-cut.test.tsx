@@ -211,6 +211,17 @@ describe('Activity line: short, long, more, less, navigate', () => {
       expect.arrayContaining(['-top-1', '-bottom-2', 'compact:-bottom-1', 'calm:-top-2']),
     );
     expect(open?.className).toContain('min-h-0');
+    // The 44 tap: a ::before past the row box (E2E button system counts it), 8 radius (not flat).
+    expect(open?.className.split(' ')).toEqual(
+      expect.arrayContaining([
+        'before:absolute',
+        'before:-top-1',
+        'before:-bottom-2',
+        'compact:before:-inset-y-2',
+        'calm:before:-inset-y-1',
+      ]),
+    );
+    expect(open?.className).not.toContain('rounded-none');
   });
 
   it('the time is tied to the last word by a no-break space (never alone on a line)', () => {

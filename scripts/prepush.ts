@@ -12,7 +12,8 @@
 // read source as text, as ci.yml does), the design ratchet, and when
 // src/components or e2e/visual changed, the visual screens those files feed
 // (WebKit, playwright -g) with their layout checks (layout-checks.ts runs
-// inside every screen capture). Exit 1 when any step fails.
+// inside every screen capture), then the WebKit e2e specs those files reach
+// (scripts/ci/e2e-select.ts, as e2e-webkit.yml). Exit 1 when any step fails.
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -281,6 +282,23 @@ async function vitest(args: string[]): Promise<StepResult> {
   };
 }
 
+/** null: no e2e spec; []: the whole suite; else the selected specs. */
+async function e2eSpecs(files: string[]): Promise<string[] | null> {
+  const code = files.filter(
+    (f) => !f.startsWith('docs/') && !f.endsWith('.md') && !f.startsWith('e2e/visual/'),
+  );
+  const own = code.filter((f) => /^e2e\/tests\/.+\.spec\.ts$/.test(f));
+  const app = code.filter((f) => !f.startsWith('e2e/') && !f.startsWith('.github/'));
+  const helpers = code.some((f) => /^e2e\/(helpers|fixtures|harness)\//.test(f));
+  if (helpers) return [];
+  if (app.length === 0) return own.length > 0 ? own : null;
+  const { select } = await import('./ci/e2e-select.ts');
+  const sel = select(app);
+  if (sel.all) return [];
+  const specs = [...new Set([...sel.specs, ...own])];
+  return specs.length > 0 ? specs : null;
+}
+
 function fmt(ms: number): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
@@ -358,6 +376,18 @@ async function main(): Promise<void> {
       `prepush: visual ${visual.grep === 'ALL' ? 'all screens' : visual.why} (${visual.why})\n`,
     );
     results.push(await run('visual + layout checks', bin('playwright'), args));
+  }
+
+  // The WebKit e2e specs the changed files reach (scripts/ci/e2e-select.ts, as
+  // e2e-webkit.yml picks them): the button system and touch sweeps live there.
+  const e2e = await e2eSpecs(files);
+  if (e2e === null) {
+    results.push(await skip('e2e webkit', 'no spec reached'));
+  } else {
+    process.stdout.write(
+      `prepush: e2e ${e2e.length === 0 ? 'whole suite' : `${e2e.length} specs`}\n`,
+    );
+    results.push(await run('e2e webkit', bin('playwright'), ['test', '--reporter=line', ...e2e]));
   }
 
   let failed = false;

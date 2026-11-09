@@ -221,6 +221,7 @@ describe('Activity: one card per item, one line per notification', () => {
     expect(more()?.getAttribute('aria-label')).toBe('Show 3 more updates');
     // Its text box (the label's 20 line; gap measured like a line's); the tap is its hit box.
     expect(more()?.className).toContain('min-h-0');
+    expect(more()?.className).toContain('before:-inset-y-3');
     act(() => more()?.click());
     expect(lines()).toHaveLength(8);
     expect(more()?.textContent).toBe('Show less');
