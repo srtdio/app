@@ -82,7 +82,7 @@ function row(state: ComposerState, strip?: boolean): string {
 describe('chat Composer on ui/Composer', () => {
   it('renders through ui/WritingBox (chat mode), with no hand-built well left', () => {
     expect(SRC).toContain(
-      "import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';",
+      "import { RowKey, RowKeyHold, RowSend, WritingBox } from '@/components/ui/WritingBox';",
     );
     expect(FRAME).toContain('mode="chat"');
     expect(FRAME).toContain('strip={');
