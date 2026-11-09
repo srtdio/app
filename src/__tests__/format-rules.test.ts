@@ -68,7 +68,7 @@ describe('format rules', () => {
       [...read(rel).matchAll(/<WritingBox\s+mode="(\w+)"/g)].map((m) => m[1] ?? '');
     expect(modes('components/pages/CreatePostSheet.tsx')).toEqual(['caption', 'caption']);
     expect(modes('components/pages/PostDetailPage.tsx')).toEqual(['caption']);
-    expect(modes('components/pages/CreateBriefSheet.tsx')).toEqual(['field', 'field', 'field']);
+    expect(modes('components/pages/CreateBriefSheet.tsx')).toEqual(['field']);
     expect(modes('components/chat/ConceptSheet.tsx')).toEqual(['field']);
     expect(modes('components/pages/plan-tab/BankAddSheet.tsx')).toEqual(['field']);
     // The plan comment box is the chat composer's box: comment mode, send in its row.

@@ -18,6 +18,7 @@ import {
 } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconPlus, ICON_SIZE } from '@/components/ui/icons';
+import { useOptionalToast } from '@/components/ui/toast';
 
 export interface TopbarActions {
   /** The screen's sort control (an IconSort IconButton that opens its menu or sheet). */
@@ -85,21 +86,49 @@ export function useTopbarActions(actions: TopbarActions): void {
  * the screen's old create label ("New post", "New brief", "New file", "New
  * plan", "Add idea", "New chat"); the old data-induction key rides on it so the
  * tour keeps its target.
+ *
+ * Blocked (9 Nov 2026): a screen's create "+" always shows. Without the
+ * capability the caller passes `blocked`: same size, shape and slot, the
+ * disabled look via aria-disabled (NOT the disabled attribute, so taps still
+ * fire), and a tap only shows a toast saying who creates. The accessible name
+ * stays the label.
  */
 export function TopbarPlus({
   label,
   onClick,
   induction,
+  blocked,
   ...rest
 }: {
   label: string;
   onClick: () => void;
   induction?: string | undefined;
+  blocked?: { message: string } | undefined;
   'aria-haspopup'?: 'menu' | 'dialog' | undefined;
   'aria-expanded'?: boolean | undefined;
   buttonRef?: Ref<HTMLButtonElement> | undefined;
 }): ReactElement {
   const { buttonRef, ...aria } = rest;
+  const toast = useOptionalToast();
+  if (blocked !== undefined) {
+    return (
+      <Button
+        buttonRef={buttonRef}
+        type="button"
+        variant="primary"
+        aria-label={label}
+        aria-disabled="true"
+        data-topbar-plus=""
+        data-topbar-plus-blocked=""
+        {...(induction !== undefined ? { 'data-induction': induction } : {})}
+        onClick={() => toast?.show({ title: blocked.message })}
+        shape="round"
+        className="shrink-0 rounded-lg"
+      >
+        <IconPlus size={ICON_SIZE.control} />
+      </Button>
+    );
+  }
   return (
     <Button
       buttonRef={buttonRef}

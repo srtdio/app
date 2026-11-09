@@ -77,6 +77,7 @@ import {
   pipelineHeader,
   pipelineSelectActions,
   pipelineTopbarActions,
+  PIPELINE_PLUS_BLOCKED,
   pipelineSurface,
   postCountLabel,
   postsSkeleton,
@@ -239,7 +240,10 @@ function header(selectMode = false, onSelectToggle: () => void = () => {}): Reac
   });
 }
 
-function topbar(canCreate = true, sort: 'updated' | 'oldest' | 'target' = 'updated') {
+function topbar(
+  canCreate: boolean | null = true,
+  sort: 'updated' | 'oldest' | 'target' = 'updated',
+) {
   return pipelineTopbarActions({
     sort,
     onSortChange: () => {},
@@ -340,16 +344,31 @@ describe('pipelineTopbarActions (decision A: sort and "+" in the top bar)', () =
     expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-post');
   });
 
-  it('a person who cannot create posts (a client) gets no "+"; the sort stays', () => {
+  it('no post.create (an approver): the "+" still shows, blocked with who creates; the sort stays', () => {
     const { sort, primary } = topbar(false);
-    expect(primary).toBeUndefined();
+    expect(primary).toBeDefined();
+    expect(primary!.type).toBe(TopbarPlus);
+    const props = primary!.props as { label: string; blocked?: { message: string } };
+    expect(props.label).toBe('New post');
+    expect(props.blocked).toEqual({ message: 'Posts come from creators.' });
+    expect(PIPELINE_PLUS_BLOCKED).toBe('Posts come from creators.');
     expect(sort.type).toBe(PipelineFilterControl);
+  });
+
+  it('capability still unknown (null): empty slot, never a blocked "+" that turns live', () => {
+    const { primary } = topbar(null);
+    expect(primary).toBeUndefined();
+  });
+
+  it('post.create granted: the live "+" carries no blocked prop', () => {
+    const props = topbar(true).primary!.props as { blocked?: unknown };
+    expect(props.blocked).toBeUndefined();
   });
 
   it('the page publishes them with useTopbarActions and gates "+" on post.create', () => {
     const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
     expect(src).toContain('useTopbarActions(topbar)');
-    expect(src).toContain("useWorkspaceCapability('post.create') === true");
+    expect(src).toContain("useWorkspaceCapability('post.create');");
     expect(src).toMatch(/pipelineTopbarActions\(\{[\s\S]*?canCreate,[\s\S]*?\}\)/);
   });
 });
@@ -906,8 +925,8 @@ describe('target-date window narrows every surface (fix A)', () => {
 });
 
 describe('W4 fix 3: create gating', () => {
-  it('the "+" is icon-only with "New post" as its accessible label, only with post.create', () => {
-    expect(topbar(false).primary).toBeUndefined();
+  it('the "+" is icon-only with "New post" as its accessible label; live only with post.create', () => {
+    expect((topbar(false).primary!.props as { blocked?: unknown }).blocked).toBeDefined();
     const plus = topbar(true).primary!;
     expect((plus.props as { label: string }).label).toBe('New post');
     // The old labelled header button and its loading placeholder are gone.

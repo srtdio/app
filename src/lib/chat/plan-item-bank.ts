@@ -64,10 +64,9 @@ export function bucketSaveLabel(state: { saving: boolean; savedOnce: boolean }):
 // ---------------------------------------------------------------------------
 
 export const WHO_CAN_SEE_LABEL = 'Who can see this';
-export const TEAM_ONLY_LINE =
-  'The client sees it once it is in a shared plan, or when you show it.';
-export const SHOW_TO_CLIENT_LABEL = 'Show to client';
-export const HIDE_FROM_CLIENT_LABEL = 'Hide from client';
+export const TEAM_ONLY_LINE = 'Approvers see it once it is in a shared plan, or when you show it.';
+export const SHOW_TO_CLIENT_LABEL = 'Show to approvers';
+export const HIDE_FROM_CLIENT_LABEL = 'Hide from approvers';
 export const IDEA_HIDDEN_LABEL = 'Idea hidden';
 
 /** "{names} see this idea and all its comments." (none named: "Approvers"). Pure. */
@@ -155,7 +154,7 @@ export const EDIT_IDEA_ROW = 'Edit idea';
 
 /**
  * A bank idea's More menu (agency): Plan it, Edit idea, Send to chat, Show to
- * client or Hide from client, Star or Unstar, Archive or Unarchive, Delete
+ * approvers or Hide from approvers, Star or Unstar, Archive or Unarchive, Delete
  * last. Pure.
  */
 export function bankIdeaMenu(

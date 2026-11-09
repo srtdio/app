@@ -124,6 +124,20 @@ describe('Button design system', () => {
     }
   });
 
+  it('aria-disabled looks exactly like disabled (blocked twins, 9 Nov)', () => {
+    for (const variant of VARIANTS) {
+      expect(tokens(classOf({ variant }))).toContain('aria-disabled:cursor-default');
+    }
+    for (const variant of ['primary', 'success', 'danger'] as const) {
+      const t = tokens(classOf({ variant }));
+      expect(t).toContain('aria-disabled:bg-fg-3');
+      expect(t).toContain('aria-disabled:text-accent-fg');
+    }
+    for (const variant of ['secondary', 'ghost', 'link'] as const) {
+      expect(tokens(classOf({ variant }))).toContain('aria-disabled:text-fg-3');
+    }
+  });
+
   it("'default' is an alias of secondary and is the default", () => {
     expect(classOf({ variant: 'default' })).toBe(classOf({ variant: 'secondary' }));
     expect(classOf()).toBe(classOf({ variant: 'secondary' }));

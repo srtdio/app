@@ -8,7 +8,6 @@ import { WritingBox } from '@/components/ui/WritingBox';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { ComposerSheet } from '@/components/pages/create/ComposerSheet';
-import { Select, type SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import {
   AttachmentsField,
@@ -19,11 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { errorText } from '@/lib/error-copy';
 import { useNewTrace } from '@/lib/trace-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
-import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { briefCreate, type Client, type Result } from '@srtdio/rpc';
-import { FORMATS_BY_PLATFORM, type PostPlatform } from '@srtdio/posts';
-import { postFormatLabel } from '@/lib/post-format';
-import { createComment, type CreateCommentInput, type CommentResult } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 
 interface CreateBriefSheetProps {
@@ -33,61 +28,32 @@ interface CreateBriefSheetProps {
   onCreated: (created: BriefCreated) => void;
 }
 
-/** What the sheet hands back after a create: the new id, and whether the note failed to post. */
+/** What the sheet hands back after a create: the new brief's id. */
 export interface BriefCreated {
   briefId: string;
-  noteFailed: boolean;
 }
-
-// 'Any' is the absence of a format requirement: when selected, format_requested
-// is omitted from the payload rather than sent. It is not a POST_FORMATS value.
-const FORMAT_ANY = '';
 
 /**
- * The formats a brief may request on the workspace's platform. Briefs request a
- * deliverable format but never a 'link': a link is an asset, not a post the
- * agency produces, so it is dropped from the choices here.
+ * The New brief form (9 Nov 2026): Title, Objective, Due date, Attachments, in
+ * that order. No Brand requirements, no Format, no opening note: one write per
+ * create.
  */
-function briefFormatsFor(platform: PostPlatform): string[] {
-  return FORMATS_BY_PLATFORM[platform].filter((value) => value !== 'link');
-}
-
-/** The brief sheet's Format options: Any, then the platform's brief formats. */
-export function briefFormatOptions(platform: PostPlatform | null): SelectOption[] {
-  return [
-    { value: FORMAT_ANY, label: 'Any' },
-    ...(platform !== null
-      ? briefFormatsFor(platform).map((value) => ({
-          value,
-          label: postFormatLabel(value, platform),
-        }))
-      : []),
-  ];
-}
-
-/** The reset-on-open form state: every field cleared, format defaulted to Any. */
 interface CreateBriefFormState {
   title: string;
   objective: string;
-  brandRequirements: string;
-  format: string;
   targetDate: string;
-  initialComment: string;
   attachments: AttachmentItem[];
 }
 
 /**
- * The reset-on-open state: every field cleared and the format defaulted to Any.
- * Pure so the reset-on-open invariant is unit-tested without a DOM.
+ * The reset-on-open state: every field cleared. Pure so the reset-on-open
+ * invariant is unit-tested without a DOM.
  */
 export function initialBriefState(): CreateBriefFormState {
   return {
     title: '',
     objective: '',
-    brandRequirements: '',
-    format: FORMAT_ANY,
     targetDate: '',
-    initialComment: '',
     attachments: [],
   };
 }
@@ -95,9 +61,6 @@ export function initialBriefState(): CreateBriefFormState {
 export interface BuildBriefPayloadInput {
   title: string;
   objective: string;
-  /** Optional; sent as brand_requirements only when it has text. */
-  brandRequirements?: string;
-  format: string;
   targetDate: string;
   versionIds: readonly string[];
 }
@@ -105,9 +68,10 @@ export interface BuildBriefPayloadInput {
 /**
  * Validate title + objective inline (both required; no runtime schema is exported
  * for briefs) and shape the snake_case jsonb payload brief_create reads. Optional
- * keys are included only when supplied; format_requested is sent only for a real
- * format, never for Any. No created_by / actor id is ever sent: the proc derives
- * the actor from auth.uid() server-side. Pure so it unit-tests without a DOM.
+ * keys are included only when supplied; format_requested and brand_requirements
+ * are never sent (the sheet no longer asks for them; brief_create is unchanged).
+ * No created_by / actor id is ever sent: the proc derives the actor from
+ * auth.uid() server-side. Pure so it unit-tests without a DOM.
  */
 export function buildBriefCreatePayload(
   input: BuildBriefPayloadInput,
@@ -121,9 +85,6 @@ export function buildBriefCreatePayload(
     title: input.title.trim(),
     objective: input.objective.trim(),
   };
-  const brand = (input.brandRequirements ?? '').trim();
-  if (brand !== '') payload.brand_requirements = brand;
-  if (input.format !== FORMAT_ANY) payload.format_requested = input.format;
   if (input.targetDate !== '') payload.target_date = input.targetDate;
   if (input.versionIds.length > 0) {
     payload.attachment_asset_version_ids = [...input.versionIds];
@@ -135,27 +96,20 @@ export interface SubmitCreateBriefDeps {
   client: Client;
   workspaceId: string;
   payload: Json;
-  /** The trimmed-or-not opening note; seeded only when it is non-empty. */
-  initialComment: string;
   newTrace: () => string;
   briefCreate: (
     client: Client,
     args: { p_workspace_id: string; p_payload: Json; p_trace_id: string },
   ) => Promise<Result<string>>;
-  createComment: (client: Client, input: CreateCommentInput) => Promise<CommentResult<string>>;
 }
 
 /**
- * Create the brief via brief_create, then (only when an opening note was entered)
- * seed the brief's discussion thread with one comment. brief_create is the success
- * gate: a failure there surfaces and stops. The seed comment is best-effort: once
- * the brief exists the create has succeeded regardless of the comment's outcome,
- * and a rare lost seed comment is recoverable by commenting on the brief. Never
- * throws.
+ * Create the brief via brief_create: the one write. A failure surfaces as plain
+ * copy (never the server's text). Never throws.
  */
 export async function submitCreateBrief(
   deps: SubmitCreateBriefDeps,
-): Promise<{ ok: true; briefId: string; noteFailed: boolean } | { ok: false; message: string }> {
+): Promise<{ ok: true; briefId: string } | { ok: false; message: string }> {
   const created = await deps.briefCreate(deps.client, {
     p_workspace_id: deps.workspaceId,
     p_payload: deps.payload,
@@ -163,22 +117,7 @@ export async function submitCreateBrief(
   });
   // Plain copy only: the server's own text never reaches the sheet.
   if (!created.ok) return { ok: false, message: errorText('create the brief', created.error) };
-
-  const comment = deps.initialComment.trim();
-  let noteFailed = false;
-  if (comment !== '') {
-    // Best-effort: do not re-create the brief and do not block on a failure here.
-    // The caller tells the writer the note didn't post so they can add it.
-    const posted = await deps.createComment(deps.client, {
-      workspace_id: deps.workspaceId,
-      entity_type: 'brief',
-      entity_id: created.data,
-      body: comment,
-      trace_id: deps.newTrace(),
-    });
-    noteFailed = !posted.ok;
-  }
-  return { ok: true, briefId: created.data, noteFailed };
+  return { ok: true, briefId: created.data };
 }
 
 /** "1 file" / "3 files". */
@@ -188,7 +127,7 @@ function fileCount(count: number): string {
 
 /**
  * Whether the sheet holds anything a close would lose: any typed field, a
- * picked format or date, a completed attachment, or an upload in flight or
+ * picked date, a completed attachment, or an upload in flight or
  * failed. Drives the Sheet's discard confirm (X, backdrop, Escape, Back). Pure.
  */
 function isBriefFormDirty(
@@ -196,12 +135,9 @@ function isBriefFormDirty(
   pendingUploads: number,
   failedUploads: number,
 ): boolean {
-  const typed = [form.title, form.objective, form.brandRequirements, form.initialComment].some(
-    (value) => value.trim() !== '',
-  );
+  const typed = [form.title, form.objective].some((value) => value.trim() !== '');
   return (
     typed ||
-    form.format !== FORMAT_ANY ||
     form.targetDate !== '' ||
     form.attachments.length > 0 ||
     pendingUploads > 0 ||
@@ -279,7 +215,6 @@ function useFailedUploadCount(root: HTMLElement | null): number {
 
 export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: CreateBriefSheetProps) {
   const newTrace = useNewTrace();
-  const workspacePlatform = useWorkspacePlatform(open ? workspaceId : null);
   const [form, setForm] = useState<CreateBriefFormState>(() => initialBriefState());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -291,15 +226,13 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
   const attachmentsRef = useCallback((node: HTMLDivElement | null) => setAttachmentsRoot(node), []);
   // The writing boxes' fields (ui/WritingBox acts on them: Aa row, emoji).
   const objectiveRef = useRef<HTMLTextAreaElement | null>(null);
-  const brandRef = useRef<HTMLTextAreaElement | null>(null);
-  const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
   function patch(next: Partial<CreateBriefFormState>): void {
     setForm((prev) => ({ ...prev, ...next }));
   }
 
   // Reset the form each time the sheet opens so a prior draft never lingers,
-  // including the attachments list and the note.
+  // including the attachments list.
   useEffect(() => {
     if (!open) return;
     mark('brief:create:open');
@@ -319,7 +252,6 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
   }, [uploadNotice, pendingUploads, failedUploads]);
 
   const dirty = isBriefFormDirty(form, pendingUploads, failedUploads);
-  const formatOptions = briefFormatOptions(workspacePlatform);
 
   async function handleSubmit(): Promise<void> {
     if (workspaceId === null || submitting) return;
@@ -327,8 +259,6 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     const built = buildBriefCreatePayload({
       title: form.title,
       objective: form.objective,
-      brandRequirements: form.brandRequirements,
-      format: form.format,
       targetDate: form.targetDate,
       versionIds: attachmentVersionIds(form.attachments),
     });
@@ -356,10 +286,8 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       client: supabase,
       workspaceId,
       payload: built.payload,
-      initialComment: form.initialComment,
       newTrace,
       briefCreate,
-      createComment,
     });
 
     setSubmitting(false);
@@ -367,7 +295,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       setSubmitError(result.message);
       return;
     }
-    onCreated({ briefId: result.briefId, noteFailed: result.noteFailed });
+    onCreated({ briefId: result.briefId });
   }
 
   function fieldError(key: BriefErrorField): ReactElement | null {
@@ -457,56 +385,18 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           {fieldError('objective')}
         </Field>
 
-        <Field label="Brand requirements (optional)" htmlFor="brief-brand-requirements">
-          <WritingBox
-            mode="field"
-            field={() => brandRef.current}
-            hasText={form.brandRequirements !== ''}
-            expandTitle="Brand requirements"
-            input={
-              <Textarea
-                formatting
-                ref={brandRef}
-                id="brief-brand-requirements"
-                autoGrow
-                value={form.brandRequirements}
-                onChange={(event) => patch({ brandRequirements: event.target.value })}
-                placeholder="Colors, tone, logo use, words to avoid"
-              />
-            }
-          />
+        <Field label="Due date">
+          {(id) => (
+            <DatePicker
+              id={id}
+              label="Due date"
+              value={form.targetDate}
+              onChange={(value) => patch({ targetDate: value })}
+            />
+          )}
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="min-w-0">
-            <Field label="Format (optional)">
-              {(id) => (
-                <Select
-                  id={id}
-                  label="Format"
-                  value={form.format}
-                  options={formatOptions}
-                  onChange={(value) => patch({ format: value })}
-                />
-              )}
-            </Field>
-          </div>
-
-          <div className="min-w-0">
-            <Field label="Due date (optional)">
-              {(id) => (
-                <DatePicker
-                  id={id}
-                  label="Due date"
-                  value={form.targetDate}
-                  onChange={(value) => patch({ targetDate: value })}
-                />
-              )}
-            </Field>
-          </div>
-        </div>
-
-        <Field label="Attachments (optional)">
+        <Field label="Attachments">
           <div ref={attachmentsRef}>
             <AttachmentsField
               workspaceId={workspaceId}
@@ -525,26 +415,6 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
               {uploadNotice}
             </p>
           ) : null}
-        </Field>
-
-        <Field label="Note to the agency (optional)" htmlFor="brief-initial-comment">
-          <WritingBox
-            mode="field"
-            field={() => noteRef.current}
-            hasText={form.initialComment !== ''}
-            expandTitle="Note to the agency"
-            input={
-              <Textarea
-                formatting
-                ref={noteRef}
-                id="brief-initial-comment"
-                autoGrow
-                value={form.initialComment}
-                onChange={(event) => patch({ initialComment: event.target.value })}
-                placeholder="Anything the agency should know first"
-              />
-            }
-          />
         </Field>
 
         {submitError !== null ? <ErrorNote>{submitError}</ErrorNote> : null}

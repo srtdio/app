@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Sorted: a social media operations platform for agencies. A social-media approval tool: client writes a brief, agency drafts a post, the post moves through review to approved, rejected, or parked. Also shipped: Plan, chat scheduled send, voice note transcription, and Inbox. No post publishing or insights in the MVP.
+Sorted: a social media operations platform for agencies. A social-media approval tool: the Approver writes a brief, the Creator drafts a post, the post moves through review to approved, rejected, or parked. Also shipped: Plan, chat scheduled send, voice note transcription, and Inbox. No post publishing or insights in the MVP.
 
 ## Commands
 
@@ -54,7 +54,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 
 ## Invariants
 
-- One workspace = one client = one platform.
+- One workspace = one approver side (role key client) = one platform.
 - TypeScript strict mode everywhere; no loosening of compiler flags.
 - Multi-tenant isolation is enforced by Postgres RLS.
 - `post.stage` is the single workflow state: draft, review, approved, parked, rejected. There is no `publish_status` field in MVP.
@@ -96,6 +96,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 ## Design and layout (locked 6 Nov 2026; guards in `src/__tests__`, eslint designRules, `scripts/design-ratchet.ts`)
 
 - Use a part or add a slot to it; never hand-build its frame or fork it. If no part fits, stop and ask.
+- Roles in visible text (9 Nov 2026): Creator (role key agency), Approver (role key client). Never 'agency' or 'client' in UI copy; role keys unchanged. A screen's create '+' always shows; without the capability it is blocked (aria-disabled, toast says who creates). Guard: `src/__tests__/role-words-guard.test.ts`.
 - Parts (src/components/ui): Text, layout.ts, Card, Row, Tile, ChatCard, Composer, WritingBox (+ EmojiSheet, AddLinkSheet), HeaderBar, Toolbar, StatusDot, Sheet + SheetActions, ActionMenu + ActionMenuTrigger, Button / IconButton / PressableRow (44 tall), LoadMore, Chip (visible 32, hit 44), Tag, CountBadge, Avatar, PersonTrigger, NoResults, ErrorNote, SidePanel, PostPlaceholder.
 - Type roles (ui/Text only): display (post title only), title (bar titles), heading, body, secondary, label, meta (mono, tabular), section. Max 3 roles per part. leading-_, tracking-_, text-[..] live only in ui/Text (lint error).
 - Values: tailwind.config.ts holds only the allowed scale (type xs..3xl + input; 4px spacing grid, 0.5/1.5/5/7 only on sizes; radius roles; border 1/2 + named cut-out/rail; named z layers base..top; named panel widths). New exception = named token + one-line comment. No [Npx], no z-[N].
@@ -136,7 +137,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Behaviour: hide what a person can't do; Delete = UndoStrip; ⋯ menus = ActionMenu (Open, Copy link, others, Delete last); decisions only via PostDecisionBar; phone vs laptop via useIsLaptop; svh/dvh only.
 - Speed: first paint from what the device holds; no new await, hold, gate or read on a paint or tap path; parts are pure render.
 - Pinned exit bar: every HeaderBar with a back "<" on a screen that opens over the app stays pinned while the page scrolls (phone page mode: sticky at --shell-sticky-top, safe area kept). On the post screen the checkpoint progress row sits inside the pinned block under the bar.
-- Annotations are ink, never gold: caption highlight = fg underline + numbered ink circle; quote chip = fg rail + circle; photo pin = the checkpoint circle (resolved goes good). Agency pin = ink dot, no number.
+- Annotations are ink, never gold: caption highlight = fg underline + numbered ink circle; quote chip = fg rail + circle; photo pin = the checkpoint circle (resolved goes good). Creator pin = ink dot, no number.
 - Comment and slot composers = chat composer: leading "+" tray with Photos, File, Assets only; no paper clip. Personal notes composer hint stays "Note" (allowed exception).
 - Comments (8 Nov 2026, Linear way): one bordered action bar on the card's top edge, right, always visible: Reply, Resolve, To-do, Edit, hairline, Delete last (own only); no ⋯, no long-press menu, no role label. To-do makes a chat task (comment_task_create); tag under the body.
 - Plan item, concept, bank idea and Plan notes threads draw with chat's parts (MessageBubble, swipe core, MessageActionMenu, Not sent + Retry); never hand-build a plan comment row.

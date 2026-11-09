@@ -49,17 +49,11 @@ vi.mock('@/components/pages/create/AttachmentsField', () => ({
     ) : null;
   },
 }));
-vi.mock('@/components/ui/Select', () => ({ Select: () => null }));
 vi.mock('@/components/ui/DatePicker', () => ({ DatePicker: () => null }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
-vi.mock('@/lib/workspace-context-platform', () => ({ useWorkspacePlatform: () => 'instagram' }));
 const { briefCreate } = vi.hoisted(() => ({ briefCreate: vi.fn() }));
 vi.mock('@srtdio/rpc', () => ({ briefCreate: (...args: unknown[]) => briefCreate(...args) }));
-vi.mock('@srtdio/comments', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@srtdio/comments')>()),
-  createComment: vi.fn(async () => ({ ok: true, data: 'c' })),
-}));
 
 let root: Root | null = null;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -156,7 +150,7 @@ describe('CreateBriefSheet: dirty close paths ask first', () => {
 
   it('a backdrop tap with text asks', async () => {
     const { onClose } = await mount();
-    await type('brief-brand-requirements', 'Navy and gold only');
+    await type('brief-objective', 'Navy and gold only');
     await act(async () => {
       sheet()?.parentElement?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -166,7 +160,7 @@ describe('CreateBriefSheet: dirty close paths ask first', () => {
 
   it('system Back with text asks and the sheet stays', async () => {
     const { onClose } = await mount();
-    await type('brief-initial-comment', 'Hi team');
+    await type('brief-title', 'Hi team');
     await settle();
     await act(async () => {
       window.history.back();
@@ -215,7 +209,7 @@ describe('CreateBriefSheet: every close path is blocked while submitting', () =>
     expect(confirm()).toBeNull();
 
     await act(async () => finish({ ok: true, data: 'brief-9' }));
-    expect(onCreated).toHaveBeenCalledWith({ briefId: 'brief-9', noteFailed: false });
+    expect(onCreated).toHaveBeenCalledWith({ briefId: 'brief-9' });
   });
 });
 
@@ -302,18 +296,13 @@ describe('CreateBriefSheet: Create and uploads', () => {
 });
 
 describe('CreateBriefSheet: fields', () => {
-  it('orders the fields and labels the optional ones', async () => {
+  it('fields are Title, Objective, Due date, Attachments, in that order (9 Nov 2026)', async () => {
     await mount();
     const labels = [...document.querySelectorAll('label')].map((l) => l.textContent?.trim());
-    expect(labels).toEqual([
-      'Title*',
-      'Objective*',
-      'Brand requirements (optional)',
-      'Format (optional)',
-      'Due date (optional)',
-      'Attachments (optional)',
-      'Note to the agency (optional)',
-    ]);
+    expect(labels).toEqual(['Title*', 'Objective*', 'Due date', 'Attachments']);
+    expect(document.getElementById('brief-brand-requirements')).toBeNull();
+    expect(document.getElementById('brief-initial-comment')).toBeNull();
+    expect(document.body.textContent).not.toContain('(optional)');
     expect(document.body.textContent).not.toContain("Once sent, a brief can't be edited.");
     expect(document.body.textContent).not.toContain('Target date');
     expect(document.body.textContent).not.toContain('Briefs are written by approvers');
@@ -336,14 +325,16 @@ describe('CreateBriefSheet: fields', () => {
     expect(document.activeElement?.id).toBe('brief-objective');
   });
 
-  it('sends brand requirements as brand_requirements', async () => {
+  it('Create sends one write without format_requested or brand_requirements', async () => {
     briefCreate.mockResolvedValue({ ok: true, data: 'brief-1' });
-    await mount();
+    const { onCreated } = await mount();
     await fillRequired();
-    await type('brief-brand-requirements', 'Use the gold logo');
     await act(async () => createButton()?.click());
+    expect(briefCreate).toHaveBeenCalledTimes(1);
     const args = briefCreate.mock.calls[0]?.[1] as { p_payload: Record<string, unknown> };
-    expect(args.p_payload.brand_requirements).toBe('Use the gold logo');
+    expect('brand_requirements' in args.p_payload).toBe(false);
+    expect('format_requested' in args.p_payload).toBe(false);
+    expect(onCreated).toHaveBeenCalledWith({ briefId: 'brief-1' });
   });
 });
 
@@ -351,9 +342,9 @@ describe('CreateBriefSheet: writing boxes (ui/WritingBox field mode)', () => {
   const boxOf = (id: string): HTMLElement | null =>
     document.getElementById(id)?.closest<HTMLElement>('[data-writing-box]') ?? null;
 
-  it('Objective, Brand requirements and Note sit in field-mode boxes, labels still named', async () => {
+  it('Objective sits in a field-mode box, label still named', async () => {
     await mount();
-    for (const id of ['brief-objective', 'brief-brand-requirements', 'brief-initial-comment']) {
+    for (const id of ['brief-objective']) {
       expect(boxOf(id)?.dataset.mode).toBe('field');
       expect(document.querySelector(`label[for="${id}"]`)).not.toBeNull();
     }

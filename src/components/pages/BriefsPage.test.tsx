@@ -14,6 +14,7 @@ import {
   createdToast,
   deriveBriefGroups,
   deriveSortedBriefs,
+  BRIEFS_PLUS_BLOCKED,
 } from '@/components/pages/BriefsPage';
 import { BriefCard } from '@/components/pages/BriefCard';
 import { dispatchSorted } from '@/lib/events';
@@ -101,49 +102,45 @@ describe('briefsHeader (decisions A, B: chips only)', () => {
   });
 });
 
-describe('briefsTopbarActions (decision A: sort and "+" in the top bar)', () => {
-  it('agency side: sort is the shared SortMenu over Due date (default) and Newest first', () => {
-    const onChange = vi.fn();
-    const { sort, primary } = briefsTopbarActions({
-      canCreate: false,
-      sort: { value: 'due', onChange },
-    });
-    expect(sort).toBeDefined();
-    expect(sort!.type).toBe(SortMenu);
-    const props = sort!.props as {
-      options: { value: string; label: string }[];
-      value: string;
-      onChange: (value: string) => void;
-    };
-    expect(props.options.map((o) => o.label)).toEqual(['Due date', 'Newest first']);
-    expect(props.value).toBe('due');
-    props.onChange('updated');
-    expect(onChange).toHaveBeenCalledWith('updated');
-    // The agency side cannot raise a brief: no "+".
-    expect(primary).toBeUndefined();
-  });
-
-  it('client side (brief.create): "+" labelled New brief with the old induction key; no sort', () => {
-    const { sort, primary } = briefsTopbarActions({ canCreate: true });
-    expect(sort).toBeUndefined();
+describe('briefsTopbarActions (decision A: "+" in the top bar, no sort)', () => {
+  it('approver (brief.create): live "+" labelled New brief with the old induction key; no sort', () => {
+    const actions = briefsTopbarActions({ canCreate: true });
+    expect(actions).not.toHaveProperty('sort');
+    const { primary } = actions;
     expect(primary).toBeDefined();
     expect(primary!.type).toBe(TopbarPlus);
-    const props = primary!.props as { label: string; induction?: string; onClick: () => void };
+    const props = primary!.props as {
+      label: string;
+      induction?: string;
+      onClick: () => void;
+      blocked?: unknown;
+    };
     expect(props.label).toBe('New brief');
     expect(props.induction).toBe(INDUCTION_KEYS.briefsNew);
+    expect(props.blocked).toBeUndefined();
     props.onClick();
     expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-brief');
   });
 
-  it('without brief.create there is no "+"', () => {
-    expect(briefsTopbarActions({ canCreate: false }).primary).toBeUndefined();
+  it('creator (no brief.create): the "+" still shows, blocked with who creates', () => {
+    const { primary } = briefsTopbarActions({ canCreate: false });
+    expect(primary).toBeDefined();
+    expect(primary!.type).toBe(TopbarPlus);
+    const props = primary!.props as { label: string; blocked?: { message: string } };
+    expect(props.label).toBe('New brief');
+    expect(props.blocked).toEqual({ message: 'Briefs come from approvers.' });
+    expect(BRIEFS_PLUS_BLOCKED).toBe('Briefs come from approvers.');
   });
 
-  it('the page publishes them with useTopbarActions, sort only on the agency side', () => {
+  it('capability still unknown (null): empty slot, never a blocked "+" that turns live', () => {
+    expect(briefsTopbarActions({ canCreate: null }).primary).toBeUndefined();
+  });
+
+  it('the page publishes them with useTopbarActions from the raw capability; no Sort left', () => {
     const src = readFileSync(fileURLToPath(new URL('./BriefsPage.tsx', import.meta.url)), 'utf8');
     expect(src).toContain('useTopbarActions(topbar)');
-    expect(src).toContain('canCreate: canCreateBrief');
-    expect(src).toContain('...(showSort ? { sort: { value: sort, onChange: setSort } } : {})');
+    expect(src).toContain('briefsTopbarActions({ canCreate: briefCreate })');
+    expect(src).not.toMatch(/SortMenu|useSort|sanitizeBriefSort|BRIEF_SORT_/);
   });
 });
 
@@ -474,48 +471,48 @@ describe('briefsEmptyState', () => {
   });
 });
 
-describe('deriveSortedBriefs', () => {
+describe('deriveSortedBriefs (fixed order, 9 Nov 2026)', () => {
   const briefs = [
     makeBrief('none', { target_date: null, updated_at: '2026-07-09T00:00:00Z' }),
     makeBrief('late', { target_date: '2026-08-01', updated_at: '2026-07-01T00:00:00Z' }),
     makeBrief('soon', { target_date: '2026-07-20', updated_at: '2026-07-02T00:00:00Z' }),
-    makeBrief('shut', {
+    makeBrief('shut-old', {
       status: 'closed',
       target_date: '2026-07-10',
       updated_at: '2026-07-08T00:00:00Z',
+      closed_at: '2026-07-08T00:00:00Z',
+    }),
+    makeBrief('shut-new', {
+      status: 'closed',
+      target_date: null,
+      updated_at: '2026-07-03T00:00:00Z',
+      closed_at: '2026-07-11T00:00:00Z',
     }),
   ];
 
-  it('filters by chip, then sorts by due date (undated last)', () => {
-    expect(deriveSortedBriefs(briefs, 'open', 'due').map((b) => b.id)).toEqual([
-      'soon',
-      'late',
-      'none',
-    ]);
+  it('Open: by due date soonest first, undated last', () => {
+    expect(deriveSortedBriefs(briefs, 'open').map((b) => b.id)).toEqual(['soon', 'late', 'none']);
   });
 
-  it('recently updated puts the newest edit first, keeping object references', () => {
-    const out = deriveSortedBriefs(briefs, 'all', 'updated');
-    expect(out.map((b) => b.id)).toEqual(['none', 'shut', 'soon', 'late']);
-    expect(out[0]).toBe(briefs[0]);
+  it('Closed: by closed_at newest first', () => {
+    expect(deriveSortedBriefs(briefs, 'closed').map((b) => b.id)).toEqual(['shut-new', 'shut-old']);
+  });
+
+  it('All: the open block first, then the closed block, keeping object references', () => {
+    const out = deriveSortedBriefs(briefs, 'all');
+    expect(out.map((b) => b.id)).toEqual(['soon', 'late', 'none', 'shut-new', 'shut-old']);
+    expect(out[2]).toBe(briefs[0]);
   });
 });
 
 describe('createdToast', () => {
-  it('a lost note is an error toast with Add note, never the success style', () => {
+  it('a create is the success toast with Open', () => {
     const navigate = vi.fn();
-    const toast = createdToast({ briefId: 'b9', noteFailed: true }, navigate);
-    expect(toast.title).toBe('Brief created. Your note did not post.');
-    expect(toast.tone).toBe('error');
-    expect(toast.action?.label).toBe('Add note');
-    toast.action?.onPress();
-    expect(navigate).toHaveBeenCalledWith('/briefs/b9?note=1');
-  });
-
-  it('a clean create is the success toast with Open', () => {
-    const toast = createdToast({ briefId: 'b9', noteFailed: false }, vi.fn());
+    const toast = createdToast({ briefId: 'b9' }, navigate);
     expect(toast.title).toBe('Brief created');
     expect(toast.tone).toBe('success');
     expect(toast.action?.label).toBe('Open');
+    toast.action?.onPress();
+    expect(navigate).toHaveBeenCalledWith('/briefs/b9');
   });
 });

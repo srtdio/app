@@ -3489,22 +3489,30 @@ SCREENS.push(
     },
   },
   {
-    // The create-brief sheet's Format select open: the option list (lit-overlay)
-    // with the picked option ticked.
+    // A ui/Select open: the option list (lit-overlay). The New brief sheet has
+    // no Format select since 9 Nov 2026, so the on-behalf approve sheet's
+    // "Approving on behalf of" select hosts it.
     name: 'select-open',
-    seed: approver,
+    seed: creator,
     hold: true,
-    url: '/briefs',
+    url: `/posts/${POST}`,
     steps: async (page) => {
-      await briefsReady(page);
-      await tap([page.getByRole('button', { name: 'New brief', exact: true })], 'New brief');
-      const sheet = page.getByRole('dialog');
-      await waitFor([sheet], 'create brief sheet');
-      // The brief sheet always shows its Format select (the post sheet only
-      // with a platform preset).
+      await postDetailReady(page);
+      const direct = page.getByRole('button', { name: /^Approve on their behalf/ });
+      if (
+        !(await direct
+          .first()
+          .isVisible()
+          .catch(() => false))
+      ) {
+        await openPostMenu(page);
+      }
+      await tap([...menuRow(page, /^Approve on their behalf/), direct], 'Approve on their behalf');
+      const sheet = page.locator('[data-on-behalf-sheet]');
+      await waitFor([sheet], 'on-behalf sheet');
       await tap(
-        [sheet.getByRole('button', { name: 'Format', exact: true })],
-        'Format select trigger',
+        [sheet.getByRole('button', { name: /^Approving on behalf of/ })],
+        'on-behalf select trigger',
       );
       await waitFor([page.getByRole('listbox')], 'select options');
       // No hover on an option: the open list as it lands.
@@ -4906,9 +4914,42 @@ async function refuseUploads(page: Page): Promise<void> {
 }
 
 SCREENS.push(
-  // Briefs for the agency (the sort in the top bar; no "+": the slot keeps
-  // its width). briefs-approver is the client's (the "+", no sort).
+  // Briefs for the creator (no sort; the blocked "+": aria-disabled, the
+  // disabled look). briefs-approver is the approver's (the live "+", no sort).
   { name: 'briefs', seed: creator, url: '/briefs', steps: briefsReady },
+  // The blocked "+" (9 Nov 2026): a tap keeps it blocked and says who creates.
+  {
+    name: 'briefs-plus-blocked',
+    seed: creator,
+    url: '/briefs',
+    steps: async (page) => {
+      await briefsReady(page);
+      // aria-disabled (not disabled): taps still fire, but Playwright's
+      // actionability check counts it as not enabled, so force the click.
+      const blocked = await firstVisible(
+        [page.locator('[data-topbar-plus][aria-disabled="true"][aria-label="New brief"]')],
+        'blocked New brief',
+      );
+      await blocked.click({ force: true });
+      await waitFor([page.getByText('Briefs come from approvers.', { exact: true })], 'toast');
+    },
+  },
+  {
+    name: 'pipeline-plus-blocked',
+    seed: approver,
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      // aria-disabled (not disabled): taps still fire, but Playwright's
+      // actionability check counts it as not enabled, so force the click.
+      const blocked = await firstVisible(
+        [page.locator('[data-topbar-plus][aria-disabled="true"][aria-label="New post"]')],
+        'blocked New post',
+      );
+      await blocked.click({ force: true });
+      await waitFor([page.getByText('Posts come from creators.', { exact: true })], 'toast');
+    },
+  },
   // Each screen's sort, open.
   {
     name: 'pipeline-sort',
@@ -4916,15 +4957,6 @@ SCREENS.push(
     url: '/pipeline',
     steps: async (page) => {
       await pipelineReady(page);
-      await openTopbarSort(page);
-    },
-  },
-  {
-    name: 'briefs-sort',
-    seed: creator,
-    url: '/briefs',
-    steps: async (page) => {
-      await briefsReady(page);
       await openTopbarSort(page);
     },
   },
@@ -5801,10 +5833,11 @@ const LAPTOP_DARK_SCREENS = new Set([
   // One search, the top bar and the chip row (decisions A to F): phone and
   // laptop, light and dark. The top bar of the six list screens is shot on
   // their base screens above (pipeline, briefs-approver, assets, plan-tab,
-  // notifications, chat-list) plus briefs for the agency.
+  // notifications, chat-list) plus briefs for the creator and the blocked "+".
   'briefs',
+  'briefs-plus-blocked',
+  'pipeline-plus-blocked',
   'pipeline-sort',
-  'briefs-sort',
   'assets-sort',
   'plan-tab-sort',
   'plan-tab-bank-filter',

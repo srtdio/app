@@ -3,7 +3,9 @@
 Generated from live database movnexawfhsyuluspxoc after the MVP stripdown.
 This file is the human-readable design reference. The migrations folder is implementation truth.
 
-Sorted MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling. Plans exist from 9 Oct 2026 (plans tables, step 3a). Chat history is the Postgres record (chat_messages); Agora is live delivery only. Email is out-of-app catch-up.
+Sorted MVP is a social-media approval tool: the Approver writes a brief, the Creator drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling. Plans exist from 9 Oct 2026 (plans tables, step 3a). Chat history is the Postgres record (chat_messages); Agora is live delivery only. Email is out-of-app catch-up.
+
+Roles: Creator = role key agency, Approver = role key client. Visible text says Creator / Approver; below, `agency` and `client` name the role keys (roles, audiences, sides), which are unchanged. Briefs: the New brief sheet sends title, objective, target_date and attachment_asset_version_ids only (9 Nov 2026); format_requested and brand_requirements stay as nullable columns that brief_create still accepts.
 
 All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` unless noted. Timestamps are `timestamptz`. `*_by` FK columns are SET NULL on delete except `workspaces.owner_user_id` (RESTRICT) and `asset_attachments` (NO ACTION).
 

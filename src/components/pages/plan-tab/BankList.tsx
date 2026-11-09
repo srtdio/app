@@ -13,7 +13,7 @@
 // with nothing ticked (the page's useBankSelect); a tap then toggles.
 // The bottom select bar (BankSelectBar on ui/SelectBar) holds "N selected"
 // and every old menu row: Open, Plan it, Send to chat (the chat picker, then
-// chat_plan_item_share; IdeaShareFlow) for one idea; Show to client or Hide
+// chat_plan_item_share; IdeaShareFlow) for one idea; Show to approvers or Hide
 // from client, Star or Unstar, Archive or Unarchive, Delete last for any
 // count; All ticks every loaded idea. Plan it is usePlanIt (shared with a bank
 // idea's item screen). Writes go through the bank procs only and are
@@ -53,6 +53,7 @@ import { useToast } from '@/components/ui/toast';
 import { IdeaShareFlow, type IdeaShareTarget } from '@/components/chat/IdeaShareFlow';
 import type { BucketOption } from '@/lib/buckets';
 import type { BankIdea, PlanRow } from '@/lib/chat/plans';
+import { SHOW_TO_CLIENT_LABEL } from '@/lib/chat/plan-item-bank';
 import { cn } from '@/lib/cn';
 import { errorText } from '@/lib/error-copy';
 import { formatAdded } from '@/lib/time';
@@ -441,7 +442,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     [data],
   );
 
-  // Star and Show to client land at once (each idea patched first, the
+  // Star and Show to approvers land at once (each idea patched first, the
   // bank_idea_set writes BANK_BULK_LIMIT at a time, a failed one put back with
   // one error toast); Archive, Hide and Delete wait behind Undo.
   const flagNow = (
@@ -930,7 +931,7 @@ export function BankPlanItSheets(props: {
   );
 }
 
-/** Show to client: the warning naming the workspace's approvers (never a ConfirmDialog). */
+/** Show to approvers: the warning naming the workspace's approvers (never a ConfirmDialog). */
 export function BankShowSheet(props: {
   idea: BankIdea | null;
   /** Every idea being shown (the Bank's select bar); absent: just `idea`. */
@@ -944,7 +945,7 @@ export function BankShowSheet(props: {
     <Sheet
       open={idea !== null}
       onClose={props.onClose}
-      title="Show to client"
+      title={SHOW_TO_CLIENT_LABEL}
       footer={
         <div className="grid w-full grid-cols-2 gap-2">
           <Button variant="ghost" type="button" onClick={props.onClose}>
@@ -958,7 +959,7 @@ export function BankShowSheet(props: {
               if (idea !== null) props.onShow(idea);
             }}
           >
-            Show to client
+            {SHOW_TO_CLIENT_LABEL}
           </Button>
         </div>
       }

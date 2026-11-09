@@ -2,7 +2,7 @@
 
 Decisions only. No rationale.
 
-Sorted is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no insights in the MVP. Plans are in: a shared object in chat holding concepts and posts with team and client approval; a plan is not scheduling.
+Sorted is a social-media approval tool. The Approver writes a brief; the Creator drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no insights in the MVP. Plans are in: a shared object in chat holding concepts and posts with Creator and Approver approval; a plan is not scheduling.
 
 ## Index
 
@@ -51,7 +51,7 @@ Supabase project ID: movnexawfhsyuluspxoc. Pass it explicitly to every Supabase 
 
 ## 3. Operating principles
 
-- One workspace = one end-client = one platform. Locked invariant.
+- One workspace = one approver side (end customer) = one platform. Locked invariant.
 - TypeScript strict. No .js, .jsx, .mjs, .cjs. Ever.
 - Multi-tenant from day 1. Postgres RLS is the security boundary.
 - post.stage is the single workflow state: draft, review, approved, parked, rejected.
@@ -65,7 +65,7 @@ Supabase project ID: movnexawfhsyuluspxoc. Pass it explicitly to every Supabase 
 - Approval is per-post, deliberate. Inside Sorted only. No bulk approve.
 - Touch targets 44x44 minimum everywhere.
 - Email is out-of-app catch-up. Bundled, 9am-9pm workspace TZ.
-- No AI features. No publishing, scheduling, or insights in MVP. Plans are in scope (chat plans with team and client approval), not scheduling.
+- No AI features. No publishing, scheduling, or insights in MVP. Plans are in scope (chat plans with Creator and Approver approval), not scheduling.
 - All sensitive writes go through SECURITY DEFINER procs. INSERT/UPDATE/DELETE revoked from authenticated role on sensitive tables.
 - post_versions and post_annotations are immutable edit history. Never soft-deletable.
 - Users not hard-deleted from auth.users except for GDPR. public.users.deleted_at signals account removal; workspace_members.active=false signals workspace removal. Either surfaces as '(ex-member)' badge.
@@ -75,16 +75,18 @@ Supabase project ID: movnexawfhsyuluspxoc. Pass it explicitly to every Supabase 
 
 ### Roles
 
+Creator = role key agency, Approver = role key client. Visible text says Creator / Approver; role keys in code, DB and RLS are unchanged.
+
 | Role | Definition |
 | --- | --- |
 | Owner | Workspace creator. Billing, deletion, transfer. Cannot self-delete until ownership transferred. |
 | Admin | Full workspace power except billing and deletion. |
-| Agency | All sections except admin settings. |
-| Client | Pipeline (except Draft), Briefs (own only), Assets. |
+| Creator | All sections except admin settings. |
+| Approver | Pipeline (except Draft), Briefs (own only), Assets. |
 
 ### Visibility
 
-| Surface | Client sees |
+| Surface | Approver sees |
 | --- | --- |
 | Pipeline | All stages except Draft |
 | Briefs | Own briefs only |
@@ -116,7 +118,7 @@ All *_by columns reference public.users(id) ON DELETE SET NULL, except workspace
 | --- | --- | --- |
 | Solo | 499 | 1 |
 | Studio | 749 | 4 |
-| Agency | 999 | 8 |
+| Creator | 999 | 8 |
 | Enterprise | Custom | Unlimited |
 
 Subscription is per workspace. No caps on workspaces per account.
@@ -242,19 +244,19 @@ Chat messages do NOT land in Activity. Chat notification is Agora native push on
 | Visual cues | Owner colors, urgency colors |
 | Filters | Owner, channel, content_type, target_date range, has_blocking_comment, has_brief |
 | Saved views | Per workspace, per user |
-| Bulk actions (agency) | Move stage, assign owner, add tag, archive. Cap 10 per action. |
-| Bulk actions (client) | None |
-| Client visibility | All stages except Draft |
+| Bulk actions (creator) | Move stage, assign owner, add tag, archive. Cap 10 per action. |
+| Bulk actions (approver) | None |
+| Approver visibility | All stages except Draft |
 
 ### Stages
 
 | Stage | Definition |
 | --- | --- |
-| Draft | Agency private. Client cannot see. |
-| Review | Client approves or rejects; agency may act on behalf of client. |
-| Approved | Approved by client or agency on behalf of client. |
-| Parked | Held by agency. |
-| Rejected | Rejected by client or agency on behalf of client. |
+| Draft | Creator private. Approver cannot see. |
+| Review | Approver approves or rejects; creator may act on behalf of approver. |
+| Approved | Approved by approver or creator on behalf of approver. |
+| Parked | Held by creator. |
+| Rejected | Rejected by approver or creator on behalf of approver. |
 
 ### Stage transition map
 
@@ -266,25 +268,26 @@ Chat messages do NOT land in Activity. Chat notification is Agora native push on
 | parked | review |
 | rejected | review |
 
-Approved is not terminal. Approved can move to parked or rejected. When a client wants changes instead of approving, they comment and the post stays in review. Parked and rejected revive to review. There is no publishing step.
+Approved is not terminal. Approved can move to parked or rejected. When an approver wants changes instead of approving, they comment and the post stays in review. Parked and rejected revive to review. There is no publishing step.
 
 target_date is a nullable indicative field on posts. It carries no scheduling behaviour in MVP.
 
 ## 10. Briefs
 
-Client writes the brief; it lands in the Briefs section and can be linked to a post.
+The Approver writes the brief; it lands in the Briefs section and can be linked to a post.
 
 | Item | Decision |
 | --- | --- |
 | States | Open (default), Closed (soft) |
 | Closed behaviour | Hidden from default view, still readable, still accepts comments |
-| Created by | Client only |
-| Required fields | Title, objective |
-| Optional fields | Format requested, brand requirements, target date, references, initial comment |
-| Client can | Comment, close (withdraw) |
-| Agency can | Comment, close |
+| Created by | Approver only |
+| Create sheet fields (9 Nov 2026) | Title, Objective, Due date, Attachments, in that order. Title and Objective required. No Format, no Brand requirements, no opening note: one write per create. Old briefs that carry Format or Brand requirements still show them on the brief page. |
+| Approver can | Comment, close (withdraw) |
+| Creator can | Comment, close |
+| Close / Reopen (9 Nov 2026) | A header button (Button level) before the ⋮: "Close brief" while open and the viewer may close, "Reopen brief" while closed. The ⋮ menu holds Copy link and Copy brief only. |
+| List order (9 Nov 2026) | Creator side: fixed, no Sort. Open briefs by due date soonest first, undated last by newest updated; closed briefs by closed_at newest first; on All the open block comes first. Approver side keeps the time sections. Chips All, Open, Closed. |
 | Edit after creation | No one |
-| Post linkage | Optional. Agency picks Origin: Brief in Create sheet. |
+| Post linkage | Optional. The Creator picks Origin: Brief in Create sheet. |
 | Linked posts display | Read-only derived count on brief detail panel |
 | Email thread root | Brief if any post links to it; else post |
 
@@ -293,15 +296,15 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 | Element | Decision |
 | --- | --- |
 | Layout | Header, caption editor, asset gallery, metadata sidebar, comments |
-| Caption editing | Agency edits the caption inside PCS. |
+| Caption editing | Creator edits the caption inside PCS. |
 | Versioning | Auto-version on every edit. post_versions immutable; never deleted. |
 | Annotations | Caption span + image pin. Immutable, version-locked. |
 | Annotations on outdated versions | Display greyed out / 'copy changed' indicator. Never hidden from DB. |
 | Decision Records | Boolean flag on comment. Filterable view. |
 | Rollback | Pre-approval edit history via versions; versions are immutable. |
-| Approve button | PCS only. Not on Pipeline cards. Client must be logged in. |
+| Approve button | PCS only. Not on Pipeline cards. Approver must be logged in. |
 | Post screen (decided 7 Nov 2026) | Pinned "<" bar with the checkpoint progress row under it. Cut: Compare versions, caption on/off toggle, duplicate Delete image, reorder buttons (hold and drag only, saved on drop), Open in pipeline, resolution note, checkpoint Send back. Image removal is a 4 s undo. |
-| Checkpoints and pins (decided 7 Nov 2026) | Author once per group, numbered points; resolved points fold to one line at the bottom. A client pin is a one-point checkpoint linked to the pin and shows "On photo {n}". Annotations draw in ink, not gold. |
+| Checkpoints and pins (decided 7 Nov 2026) | Author once per group, numbered points; resolved points fold to one line at the bottom. A approver pin is a one-point checkpoint linked to the pin and shows "On photo {n}". Annotations draw in ink, not gold. |
 | Comment files (decided 7 Nov 2026) | Every comment photo and file opens in-app (lightbox or file viewer), never a new tab. |
 | Platform preview (decided 7 Nov 2026) | Placement from the post format; chips only for plain video on Instagram and Facebook. Each platform drawn in its own colours, no logos. One cut row with Show cut. No size picker, no Crop section. |
 
@@ -360,7 +363,7 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 | Workspace name | Editable by Admin/Owner |
 | Timezone | Editable by Admin/Owner |
 | Default email digest time | Workspace default, user can override |
-| Member roles | Add, remove, change role. Owners and Admins can invite members individually or as a group and select invitee roles. Clients can invite members individually or as a group, with invitee role restricted to Client (reviewer). |
+| Member roles | Add, remove, change role. Owners and Admins can invite members individually or as a group and select invitee roles. Approvers can invite members individually or as a group, with invitee role restricted to Approver (reviewer). |
 | Billing | Tier, payment method, invoices |
 | Workspace deletion | 7-day soft-delete. Recoverable via Recently deleted. After 7 days: hard delete. |
 | Transfer ownership | Immediate. Existing member only. Password confirm. Old owner downgrades to Admin. New owner gets persistent 'Update billing info' banner. Old owner's card continues billing until replaced. 30-day grace before billing-failure ladder. |
@@ -530,7 +533,7 @@ Chat messages never land in the Activity feed. Chat notification is Agora native
 | Group membership | Sorted is source of truth. Membership and rename changes to Agora flow through the chat_sync_events outbox, drained by the chat-agora-sync worker. |
 | Retired | chat_message_save and chat_webhook_ingest (drop pending). No webhook mirror, no reconciliation cron. |
 
-Plans: a shared object in chat holding concepts and posts with team and client approval. Schema step 3a applied 9 Oct 2026.
+Plans: a shared object in chat holding concepts and posts with Creator and Approver approval. Schema step 3a applied 9 Oct 2026.
 
 ### Work chat: threads and signals (decided 8 Nov 2026)
 
@@ -554,13 +557,13 @@ Plans: a shared object in chat holding concepts and posts with team and client a
 | Item | Decision |
 | --- | --- |
 | What | A concept with no plan (plan_items.plan_id null). Lives in the Plan tab behind the Bank chip (phone: first chip; laptop: side panel, expandable to a table). Not a Pipeline chip. |
-| Who sees | Team only by default. Per idea "Show to client" (Planable internal-post style) makes it visible to the client; Hide takes it back. Clients never see team-only ideas, their comments or their buckets. |
+| Who sees | Team only by default. Per idea "Show to approvers" (Planable internal-post style) makes it visible to approvers; Hide takes it back. Approvers never see team-only ideas, their comments or their buckets. |
 | Buckets | One workspace list. An idea holds several buckets; a post keeps one. Made, renamed and deleted from the Bank's Filter and sort sheet (delete archives the bucket and unlinks it, with Undo). Buckets show on Plan rows. Briefs have no bucket. |
 | Moves | Plan concept to bank: Move to bank (blocked while its linked post is approved; reviews drop; the plan it came from is remembered). Bank to plan: Plan it (one plan, Make plan, or pick; past dates refused; the review starts again). Moving creates no copy. |
-| Edit | Agency edits title, description and files of a bank idea (Edit idea). No date until planned. |
+| Edit | Creator edits title, description and files of a bank idea (Edit idea). No date until planned. |
 | Tile | A picture wins; else the first link's picture (link-preview Worker, asked when the row is in view); else a file glyph; else none. |
 | Stars, archive | Stars are shared by the team. Archive is manual; "Untouched for 90 days" is a filter with Archive all, never a count read. |
-| Chat | An idea goes to a chat as a live idea card (chat_plan_item_share). A team-only idea into a client chat asks "Show and send" or "Send in Team instead". A draft plan into a client chat asks "Open for approvers". |
+| Chat | An idea goes to a chat as a live idea card (chat_plan_item_share). A team-only idea into an approver chat asks "Show and send" or "Send in Team instead". A draft plan into an approver chat asks "Open for approvers". |
 | Alerts | Creators get every bank event (added, moved, planned, shown, hidden). Approvers get shown as a full alert, moved when the plan was shared (no link), planned through the plan's own alert. All ride Activity and the catch-up email's Plans section. |
 | Live | bank:<workspace_id> broadcast; every open Bank re-reads once per burst and merges in place. Own writes patch the kept page with no read. |
 | Speed | 12 ideas a page, keyset cursor, Recently active default sort. No counts, no reads before first paint, no waits on tap paths. |
@@ -573,13 +576,13 @@ Plans: a shared object in chat holding concepts and posts with team and client a
 | Density | Compact / Cozy / Calm per account (users.density, default Cozy). Switched only in the account menu (under Appearance), never in Settings. Text size is the same in all three. List row 60 / 72 / 80; row picture 40 / 48 / 48; chip 32 / 36 / 40 visible (tap 44); plan stack 4 / 8 / 12, plan padding 8 / 12 / 16. First paint from the device cache; the server value reconciles after paint. |
 | Spacing steps | Padding, margin, gap and space are 4 / 8 / 12 / 16 / 24 only (plus 32 and up). 4 lines in one item, 8 tight group, 12 row padding, 16 heading to content, 24 between sections. |
 | Flat Plan | Plan days are flat sections split by hairlines (no card frame, today marked by its date tile and Today pill). New plan rows are hairline rows, no boxes. |
-| Add from bank | New plan (agency only) adds bank ideas as items with a day ("No date" = first plan day from today). Create moves them out of the Bank in the same transaction. |
+| Add from bank | New plan (creator only) adds bank ideas as items with a day ("No date" = first plan day from today). Create moves them out of the Bank in the same transaction. |
 
 ### One search, one top bar, fewer chips, one upload look (decided 7 Nov 2026)
 
 | Item | Decision |
 | --- | --- |
-| A. Top bar | Phone and laptop: workspace switcher, Search (CommandPalette), Sort, filled "+" (always last), avatar. Laptop keeps the ⌘K button and the Activity bell. A page publishes its sort and "+" through useTopbarActions (pure render). "+" is icon only with the old label; hidden where a person can't create, keeping its width. Activity's slot is Mark all read (hidden at 0 unread). Sort opens what each screen opened before; Activity gains Newest first / Oldest first; Chat list gains Recent / Unread first / A to Z. |
+| A. Top bar | Phone and laptop: workspace switcher, Search (CommandPalette), Sort, filled "+" (always last), avatar. Laptop keeps the ⌘K button and the Activity bell. A page publishes its sort and "+" through useTopbarActions (pure render). "+" is icon only with the old label. Blocked "+" (9 Nov 2026): a screen's create "+" always shows; without the capability it is blocked (aria-disabled, the disabled look, taps still fire) and a tap shows a toast saying who creates ("Briefs come from approvers.", "Posts come from creators."). While the capability is still unknown the slot stays empty at its width, never a blocked "+" that turns live. Activity's slot is Mark all read (hidden at 0 unread). Sort opens what each screen opened before; Activity gains Newest first / Oldest first; Chat list gains Recent / Unread first / A to Z. |
 | B. One search | No search field on any screen: Pipeline, Briefs, Assets, Plan, Bank, Activity, Chat list, in-chat search and emoji search are gone, with their per-screen server search reads. CommandPalette is the one search; its group order is fixed. HelpPage and the operator Cockpit keep theirs. |
 | C. Pickers | Pickers search through CommandPalette pick mode (only the picker's kinds, a "<Kind> only" pill, tap ticks, footer "Send N" / "Add N"). Without search a picker shows its recent list and chips. |
 | D. Chips | Pipeline and Briefs unchanged. Assets: All, Media, Docs, Links (Docs = PDF + Docs + Sheets). Plan: Bank, Upcoming, Past (default Upcoming). Activity: All, Unread, Mentions. Chat list chips unchanged. |

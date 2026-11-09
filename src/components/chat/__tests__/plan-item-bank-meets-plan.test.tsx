@@ -299,7 +299,7 @@ describe('Who can see this (bank idea, agency)', () => {
     const card = $('[data-plan-who-can-see]');
     expect(card?.textContent).toContain('Team only');
     expect(card?.textContent).toContain(
-      'The client sees it once it is in a shared plan, or when you show it.',
+      'Approvers see it once it is in a shared plan, or when you show it.',
     );
     expect($('[data-plan-who-show]')).not.toBeNull();
   });
@@ -347,7 +347,7 @@ describe('More menu per kind', () => {
       'Plan it',
       'Edit idea',
       'Send to chat',
-      'Show to client',
+      'Show to approvers',
       'Star',
       'Archive',
       'Delete',

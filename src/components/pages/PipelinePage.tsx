@@ -177,6 +177,9 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
   );
 }
 
+/** The blocked "+" toast on the Pipeline (no post.create). */
+export const PIPELINE_PLUS_BLOCKED = 'Posts come from creators.';
+
 /** What the Pipeline publishes into the app top bar. */
 export interface PipelineTopbarProps {
   sort: PostSort;
@@ -187,16 +190,20 @@ export interface PipelineTopbarProps {
   customRange: DateRange | null;
   onCustomRangeChange: (range: DateRange | null) => void;
   weekStartDay: number;
-  /** post.create granted: only then is there a "+" (clients and approvers get none). */
-  canCreate: boolean;
+  /**
+   * post.create: true = live "+", false = blocked "+" (toast says who creates),
+   * null = still unknown, empty slot (never a blocked "+" that turns live).
+   */
+  canCreate: boolean | null;
 }
 
 /**
  * The top bar's sort and primary for the Pipeline (decision A): sort is the
  * one Sort + Due date control (PipelineFilterControl, an IconSort IconButton);
  * primary is the filled "+" labelled "New post", carrying the old New post
- * induction key, and only for a person who can create posts (the slot keeps its
- * width otherwise). Pure (no hooks).
+ * induction key. Without post.create the "+" still shows, blocked (9 Nov 2026);
+ * while the capability is unknown the slot stays empty (same width). Pure (no
+ * hooks).
  */
 export function pipelineTopbarActions(props: PipelineTopbarProps): {
   sort: ReactElement;
@@ -214,13 +221,15 @@ export function pipelineTopbarActions(props: PipelineTopbarProps): {
         weekStartDay={props.weekStartDay}
       />
     ),
-    primary: props.canCreate ? (
-      <TopbarPlus
-        label="New post"
-        induction={INDUCTION_KEYS.pipelineCreate}
-        onClick={() => dispatchSorted('sorted:create-post')}
-      />
-    ) : undefined,
+    primary:
+      props.canCreate === null ? undefined : (
+        <TopbarPlus
+          label="New post"
+          induction={INDUCTION_KEYS.pipelineCreate}
+          onClick={() => dispatchSorted('sorted:create-post')}
+          {...(props.canCreate ? {} : { blocked: { message: PIPELINE_PLUS_BLOCKED } })}
+        />
+      ),
   };
 }
 
@@ -782,8 +791,9 @@ export function PipelinePage() {
     [updateQuery],
   );
   const shownKey = showMoreKey(pipelineQueryParams(query, INITIAL_STAGE).toString());
-  // post.create: only then is there a "+" in the top bar (none for clients).
-  const canCreate = useWorkspaceCapability('post.create') === true;
+  // post.create: live "+" when granted, blocked "+" when not, empty slot while
+  // unknown (cached capability, no new read).
+  const canCreate = useWorkspaceCapability('post.create');
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   // Sanitize the persisted sort: a live workspace may hold a value the trimmed
   // menu no longer lists ('newest'/'title'). Fall back to the default for the
