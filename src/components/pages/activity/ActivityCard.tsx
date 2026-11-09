@@ -444,6 +444,9 @@ export function itemCardLines(group: readonly ActivityItem[]): ActivityItem[] {
 const NBSP = '\u00a0';
 
 /** The secondary role without its one-line truncate: the line wraps to 3 lines. */
+// min-h-5 at the call site: a one-line paragraph (18) is as tall as the 20 photo,
+// so every row is set by its text box and the 24 between rows never varies (rule 5),
+// and the hit overlay (12 past each side) is 44 even for one line.
 const LINE_BODY_ROLE = TEXT_ROLE.secondary.replace(/\btruncate\b/, '').trim();
 
 /** Lines a notification's text shows before "… more" (9 Nov 2026). */
@@ -598,7 +601,7 @@ function EntryLine(props: {
       <p
         ref={ref}
         data-activity-line-body=""
-        className={cn(LINE_BODY_ROLE, 'min-w-0 flex-1 break-words text-fg-2')}
+        className={cn(LINE_BODY_ROLE, 'min-h-5 min-w-0 flex-1 break-words text-fg-2')}
       >
         <span
           aria-hidden="true"
