@@ -392,6 +392,56 @@ export function DayLine(props: {
   );
 }
 
+/**
+ * The day line and the New line when they fall at the same row (the first
+ * unread row starts a new day): ONE line, Slack's way. The day on the left, one
+ * ink hairline, the ink "New" pill on the right; never two stacked dividers.
+ * Keeps data-new-line, so the fill rule scrolls to it like the New line. Ink
+ * tokens only (bg-fg / text-bg), so light and dark flip together.
+ */
+export function DayNewLine(props: { at: string; timeZone: string | undefined }): ReactElement {
+  const label = formatDayLabel(props.at, new Date(), props.timeZone);
+  return (
+    <li
+      role="separator"
+      aria-label={`${label}, New`}
+      data-new-line=""
+      data-catch-up-day-new=""
+      className="flex select-none items-center gap-2 px-4 pb-1 pt-3"
+    >
+      <span data-catch-up-day-label="" className={textRole('label', 'shrink-0 text-fg-2')}>
+        {label}
+      </span>
+      <span aria-hidden="true" data-new-rule="" className="h-px flex-1 bg-fg" />
+      <span
+        aria-hidden="true"
+        data-new-pill=""
+        className="flex h-5 shrink-0 items-center rounded-full bg-fg px-2 text-xs font-semibold text-bg"
+      >
+        New
+      </span>
+    </li>
+  );
+}
+
+/**
+ * What goes above row `i` (pure): the combined day + New line when both fall
+ * there, else the day line and/or the New line alone. Day lines only exist
+ * when the card spans more than one day (dayBreaks).
+ */
+export function dividersAt(
+  i: number,
+  rowId: string,
+  breaks: ReadonlySet<number>,
+  firstNewId: string | null,
+): 'day-new' | 'day' | 'new' | null {
+  const day = breaks.has(i);
+  const isNew = firstNewId !== null && rowId === firstNewId;
+  if (day && isNew) return 'day-new';
+  if (day) return 'day';
+  return isNew ? 'new' : null;
+}
+
 /** Loading rows (Bone), the rows' own footprint, no spinner. */
 export function BoneRows({ count = 3 }: { count?: number }): ReactElement {
   return (

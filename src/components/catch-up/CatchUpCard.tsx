@@ -38,6 +38,8 @@ import {
   CardError,
   ContextStrip,
   DayLine,
+  DayNewLine,
+  dividersAt,
   EventRow,
   MessageRow,
   PointsRow,
@@ -168,7 +170,11 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   const breaks = dayBreaks(rows, props.timeZone);
   const drawn: ReactNode[] = [];
   rows.forEach((row, i) => {
-    if (breaks.has(i)) {
+    // Day and New at the same row: one combined line (Slack parity, 9 Nov 2026).
+    const dividers = dividersAt(i, row.id, breaks, ready?.firstNewId ?? null);
+    if (dividers === 'day-new') {
+      drawn.push(<DayNewLine key="new" at={row.createdAt} timeZone={props.timeZone} />);
+    } else if (dividers === 'day') {
       drawn.push(
         <DayLine
           key={`day-${row.id}`}
@@ -177,9 +183,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           laptop={props.laptop}
         />,
       );
-    }
-    if (ready !== null && row.id === ready.firstNewId)
+    } else if (dividers === 'new') {
       drawn.push(<UnreadDivider key="new" count={1} />);
+    }
     if (row.kind === 'message') {
       drawn.push(
         <MessageRow
