@@ -8268,6 +8268,45 @@ export type Database = {
           },
         ]
       }
+      plan_item_comment_reactions: {
+        Row: {
+          comment_id: string
+          created_at: string
+          emoji: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          emoji: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          emoji?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_item_comment_reactions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "plan_item_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_comment_reactions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_item_comments: {
         Row: {
           author_user_id: string | null
@@ -10429,6 +10468,14 @@ export type Database = {
         Args: { p_body: string; p_comment_id: string; p_trace_id: string }
         Returns: string
       }
+      comment_reaction_add: {
+        Args: { p_comment_id: string; p_emoji: string; p_trace_id: string }
+        Returns: undefined
+      }
+      comment_reaction_remove: {
+        Args: { p_comment_id: string; p_emoji: string; p_trace_id: string }
+        Returns: undefined
+      }
       comment_resolve: {
         Args: {
           p_comment_id: string
@@ -10784,6 +10831,14 @@ export type Database = {
           p_visibility: string
         }
         Returns: string
+      }
+      plan_item_comment_reaction_add: {
+        Args: { p_comment_id: string; p_emoji: string; p_trace_id: string }
+        Returns: undefined
+      }
+      plan_item_comment_reaction_remove: {
+        Args: { p_comment_id: string; p_emoji: string; p_trace_id: string }
+        Returns: undefined
       }
       plan_item_from_bank: {
         Args: {
