@@ -566,6 +566,9 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     return { title, items };
   };
 
+  // Undo only after a decision on a card in this session, inside its window;
+  // never before the first decision, after the undo, while typing or in a thread.
+  const undoShown = cu.canUndo && !phoneTyping && !inThread;
   const barTitle = cu.done ? '' : inThread ? null : leftLabel(cu.left);
   const bar = (
     <div data-catch-up-bar="" className={cn(CATCH_UP_BAR_CLASS, laptop && 'pt-0')}>
@@ -597,11 +600,12 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
       <IconButton
         label={UNDO}
         data-catch-up-undo=""
-        disabled={!cu.canUndo}
-        aria-hidden={!cu.canUndo || undefined}
-        tabIndex={cu.canUndo ? 0 : -1}
+        disabled={!undoShown}
+        aria-hidden={!undoShown || undefined}
+        tabIndex={undoShown ? 0 : -1}
         onClick={cu.undo}
-        className={cn(CATCH_UP_ROUND_KEY, (!cu.canUndo || phoneTyping || inThread) && 'invisible')}
+        // Hidden keeps its slot (invisible) so "{n} left" stays centred.
+        className={cn(CATCH_UP_ROUND_KEY, !undoShown && 'invisible')}
       >
         <IconReply size={ICON_SIZE.nav} />
       </IconButton>

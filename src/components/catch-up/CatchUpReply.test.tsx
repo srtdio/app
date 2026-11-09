@@ -126,8 +126,8 @@ describe('CatchUpReply: the shared writing box', () => {
     const plus = q<HTMLButtonElement>('[data-catch-up-reply] [data-plus]');
     expect(plus).not.toBeNull();
     act(() => plus?.click());
-    const tiles = Array.from(document.querySelectorAll('[data-tray] [data-tray-tile]')).map(
-      (el) => el.getAttribute('data-tray-tile'),
+    const tiles = Array.from(document.querySelectorAll('[data-tray] [data-tray-tile]')).map((el) =>
+      el.getAttribute('data-tray-tile'),
     );
     expect(tiles).toEqual(['photos', 'file', 'assets']);
   });
@@ -174,9 +174,7 @@ describe('CatchUpReply: the shared writing box', () => {
     const send = q<HTMLButtonElement>('[data-row-send]');
     expect(send).not.toBeNull();
     act(() => send?.click());
-    expect(sent).toEqual([
-      { text: `thanks @[${ANN}]`, attachmentAssetIds: [], voice: null },
-    ]);
+    expect(sent).toEqual([{ text: `thanks @[${ANN}]`, attachmentAssetIds: [], voice: null }]);
     expect(q<HTMLTextAreaElement>('[data-catch-up-reply-input]')?.value).toBe('');
   });
 

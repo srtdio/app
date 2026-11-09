@@ -4034,12 +4034,10 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await startRecording(page);
-      // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+      // Over MIN_VOICE_NOTE_MS, so the recording is kept and not dropped.
       await page.waitForTimeout(1_100);
-      await tap(
-        [page.getByRole('button', { name: 'Stop and send voice note', exact: true })],
-        'Stop and send',
-      );
+      await keepRecording(page);
+      await tap([dmComposer(page).locator('[data-row-send]')], 'Send');
       const note = await firstVisible([page.getByTestId('voice-uploading')], 'voice uploading');
       await waitFor([note.locator('[data-voice-bars]')], 'voice bars');
       const ring = await firstVisible([note.locator('[data-upload-ring]')], 'voice upload ring');

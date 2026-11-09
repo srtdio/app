@@ -17,7 +17,14 @@ import { cn } from '@/lib/cn';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
-import { ICON_SIZE, IconCheck, IconCheckCircle, IconChevronDown, IconEyeOff } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconCheck,
+  IconCheckCircle,
+  IconChevronDown,
+  IconEyeOff,
+  IconKeyboardHide,
+} from '@/components/ui/icons';
 import { UnreadDivider } from '@/components/chat/ReadingLayer';
 import type { PresignCache } from '@/lib/asset-presign';
 import { KEEP_UNREAD, MARK_AS_READ } from '@/lib/catch-up/copy';
@@ -53,7 +60,7 @@ export interface CatchUpCardProps {
   selfName: string | null;
   timeZone?: string | undefined;
   laptop: boolean;
-  /** The swipe tint while dragging: read (ink) or keep (soft grey). */
+  /** The swipe tint while dragging: read (the accent ink, bg-accent; never green) or keep (soft grey). */
   tint: 'read' | 'keep' | null;
   /** Phone typing: the name row's slots (Hide keyboard, the check). */
   typing: { onHideKeyboard: () => void; onRead: () => void } | null;
@@ -86,7 +93,11 @@ function setRef<T>(ref: Ref<T> | undefined, value: T | null): void {
   else if (ref !== undefined && ref !== null) (ref as { current: T | null }).current = value;
 }
 
-/** The ink check (Mark as read + next) on the typing name row: round, primary. */
+/**
+ * The ink check (Mark as read + next) on the typing name row: round 48,
+ * primary (bg-accent: black in light, white in dark), never green; it matches
+ * Hide keyboard on the left in size and weight.
+ */
 export function TypingCheck(props: { onPress: () => void }): ReactElement {
   return (
     <Button
@@ -95,6 +106,7 @@ export function TypingCheck(props: { onPress: () => void }): ReactElement {
       shape="round"
       aria-label={MARK_AS_READ}
       data-catch-up-typing-read=""
+      className="h-12 w-12"
       // Keep the keyboard until the press lands.
       onPointerDown={(event) => event.preventDefault()}
       onClick={props.onPress}
@@ -237,7 +249,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
         data-catch-up-name-row=""
         className="flex min-h-14 shrink-0 items-center gap-2 border-b border-border bg-fg/[0.03] px-2"
       >
-        <span className="flex w-11 shrink-0 justify-start">
+        <span className="flex w-12 shrink-0 justify-start">
           {props.typing !== null ? (
             <button
               type="button"
@@ -245,9 +257,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
               data-catch-up-hide-keyboard=""
               onPointerDown={(event) => event.preventDefault()}
               onClick={props.typing.onHideKeyboard}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-fg/10 text-fg focus-visible:lit-focus"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-fg/10 text-fg focus-visible:lit-focus"
             >
-              <IconChevronDown size={ICON_SIZE.nav} />
+              <IconKeyboardHide size={ICON_SIZE.nav} />
             </button>
           ) : null}
         </span>
@@ -259,7 +271,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
             align="left"
           />
         </span>
-        <span className="flex w-11 shrink-0 justify-end">
+        <span className="flex w-12 shrink-0 justify-end">
           {props.typing !== null ? <TypingCheck onPress={props.typing.onRead} /> : null}
         </span>
       </div>

@@ -36,7 +36,7 @@ import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
 import { BACK_GUARD_STEP_KEY, stepMarkerOf } from '@/lib/chat/use-history-step';
 import { voiceDraftLabel, type VoiceDraft } from '@/lib/chat/voice-draft';
-import { formatDurationMs } from '@/lib/chat/media-items';
+import { clockLength } from '@/lib/catch-up/text';
 import { readHeader, rememberRecorderMime, voiceFileType } from '@/lib/chat/audio-sniff';
 import { voicePeaks } from '@/lib/chat/voice-peaks';
 import { MIN_VOICE_NOTE_MS, type RecordingResult } from '@/lib/chat/use-audio-recorder';
@@ -201,7 +201,7 @@ export function VoiceNoteChip(props: {
   upload?: VoiceChipUpload | undefined;
   dataAttrs?: DataAttrs | undefined;
 }): ReactElement {
-  const clock = formatDurationMs(props.durationMs);
+  const clock = clockLength(Math.round(props.durationMs / 1000));
   const upload = props.upload;
   return (
     <div
@@ -221,7 +221,11 @@ export function VoiceNoteChip(props: {
             className="absolute inset-0 m-auto"
           />
         ) : upload?.state === 'failed' ? (
-          <UploadRetry variant="voice" onRetry={upload.onRetry} className="absolute inset-0 m-auto" />
+          <UploadRetry
+            variant="voice"
+            onRetry={upload.onRetry}
+            className="absolute inset-0 m-auto"
+          />
         ) : (
           <Button
             type="button"

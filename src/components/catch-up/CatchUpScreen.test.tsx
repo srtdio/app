@@ -40,7 +40,11 @@ vi.mock('@/lib/catch-up/body', async (importOriginal) => ({
 }));
 // The reply box is the shared writing box (its own tests); a stub here.
 vi.mock('@/components/catch-up/CatchUpReply', () => ({
-  CatchUpReply: (props: { hint: string }) => <form data-catch-up-reply="" aria-label={props.hint} />,
+  CatchUpReply: (props: { hint: string; onFocusChange: (focused: boolean) => void }) => (
+    <form data-catch-up-reply="" aria-label={props.hint}>
+      <textarea data-catch-up-reply-input="" onFocus={() => props.onFocusChange(true)} />
+    </form>
+  ),
 }));
 
 import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
@@ -49,6 +53,10 @@ import type { CatchUpBodyResult } from '@/lib/catch-up/body';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import { cardOf, entry } from '@/lib/catch-up/test-fixtures';
 import { endLine, leftLabel } from '@/lib/catch-up/copy';
+import { CATCH_UP_UNDO_MS } from '@/lib/catch-up/use-catch-up';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -135,6 +143,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = null;
   document.body.innerHTML = '';
@@ -236,5 +245,93 @@ describe('catch-up screen', () => {
     click('[data-catch-up-back]');
     await settle();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+function undoState(): { visible: boolean; focusable: boolean; disabled: boolean } {
+  const undo = document.querySelector<HTMLButtonElement>('[data-catch-up-undo]');
+  if (undo === null) throw new Error('missing undo');
+  return {
+    visible: !undo.className.split(/\s+/).includes('invisible') && undo.getAttribute('aria-hidden') !== 'true',
+    focusable: undo.tabIndex >= 0,
+    disabled: undo.disabled,
+  };
+}
+
+describe('catch-up Undo visibility (addendum B)', () => {
+  it('fresh open: hidden, not focusable, disabled (the slot stays so the count is centred)', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    expect(undoState()).toEqual({ visible: false, focusable: false, disabled: true });
+    expect(document.querySelector('[data-catch-up-undo]')).not.toBeNull();
+  });
+
+  it('after one decision: visible; after undoing the only decision: hidden again', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-keep]');
+    expect(undoState()).toEqual({ visible: true, focusable: true, disabled: false });
+    click('[data-catch-up-undo]');
+    expect(undoState()).toEqual({ visible: false, focusable: false, disabled: true });
+  });
+
+  it('after the undo window runs out: hidden', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-keep]');
+    expect(undoState().visible).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(CATCH_UP_UNDO_MS + 1);
+    });
+    expect(undoState()).toEqual({ visible: false, focusable: false, disabled: true });
+  });
+
+  it('hidden while typing', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-keep]');
+    const input = document.querySelector<HTMLTextAreaElement>('[data-catch-up-reply-input]');
+    act(() => input?.focus());
+    expect(undoState().visible).toBe(false);
+  });
+});
+
+describe('catch-up ink, never green (addendum C)', () => {
+  it('typing: Hide keyboard (keyboard glyph, 48 round) and the ink tick (bg-accent)', async () => {
+    render([card('p1')]);
+    await settle();
+    const input = document.querySelector<HTMLTextAreaElement>('[data-catch-up-reply-input]');
+    act(() => input?.focus());
+    const hide = document.querySelector<HTMLButtonElement>('[data-catch-up-hide-keyboard]');
+    expect(hide?.getAttribute('aria-label')).toBe('Hide keyboard');
+    expect(hide?.className).toContain('h-12 w-12');
+    expect(hide?.className).toContain('rounded-full');
+    expect(hide?.querySelector('svg rect')).not.toBeNull();
+    const tick = document.querySelector<HTMLButtonElement>('[data-catch-up-typing-read]');
+    expect(tick?.className).toContain('bg-accent');
+    expect(tick?.className).toContain('h-12 w-12');
+    expect(tick?.className).not.toMatch(/\b(bg|text)-(good|success|green)/);
+  });
+
+  it('the swipe-read tint is the accent ink, never green', () => {
+    const src = readFileSync(
+      join(fileURLToPath(new URL('.', import.meta.url)), 'CatchUpCard.tsx'),
+      'utf8',
+    );
+    expect(src).toContain("props.tint === 'read' ? 'bg-accent text-accent-fg'");
+    expect(src).not.toMatch(/good-solid|bg-good|text-good|variant="success"/);
+  });
+
+  it('the accent ink is defined in light and dark (black in light, white in dark)', () => {
+    const css = readFileSync(
+      join(fileURLToPath(new URL('../../', import.meta.url)), 'index.css'),
+      'utf8',
+    );
+    const light = /:root\s*\{[\s\S]*?--accent:\s*([^;]+);/.exec(css)?.[1]?.trim();
+    const dark = /\n\.dark\s*\{[\s\S]*?--accent:\s*([^;]+);/.exec(css)?.[1]?.trim();
+    expect(light).toBeDefined();
+    expect(dark).toBeDefined();
+    expect(light).not.toBe(dark);
   });
 });

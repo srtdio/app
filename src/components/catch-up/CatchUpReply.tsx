@@ -141,7 +141,10 @@ export function catchUpBody(
 }
 
 /** The @ list's keys: Up / Down step, Enter / Tab pick, Escape closes. Pure. */
-export function mentionKey(key: string, composing: boolean): 'up' | 'down' | 'pick' | 'close' | null {
+export function mentionKey(
+  key: string,
+  composing: boolean,
+): 'up' | 'down' | 'pick' | 'close' | null {
   if (composing) return null;
   if (key === 'ArrowUp') return 'up';
   if (key === 'ArrowDown') return 'down';
@@ -360,7 +363,9 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
           if (prev === null || prev.abort !== kept.abort) return prev;
           return {
             ...prev,
-            status: outcome.ok ? { state: 'done', assetId: outcome.versionId } : { state: 'failed' },
+            status: outcome.ok
+              ? { state: 'done', assetId: outcome.versionId }
+              : { state: 'failed' },
           };
         });
       });
@@ -528,7 +533,11 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
             />
           </ComposerStrip>
         }
-        state={recorder.recording ? { kind: 'recording', elapsed: clockLength(recorder.seconds) } : { kind: 'idle' }}
+        state={
+          recorder.recording
+            ? { kind: 'recording', elapsed: clockLength(recorder.seconds) }
+            : { kind: 'idle' }
+        }
         recording={
           <RecordingRow
             elapsed={clockLength(recorder.seconds)}

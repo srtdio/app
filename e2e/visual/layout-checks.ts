@@ -970,6 +970,53 @@ export async function assertWritingBox(page: Page, screenName: string): Promise<
 }
 
 /**
+ * Check 11c: the catch-up reply at rest (CatchUpReply, ui/WritingBox
+ * restPill). The pill ([data-catch-up-reply] [data-writing-frame]) holds its
+ * field's placeholder on its vertical centre (the one-row textarea's centre
+ * within 1px of the pill's), and its left edge sits on the card's photo
+ * column (within 1px of the first [data-catch-up-message] photo's left edge).
+ * Call on a catch-up screen with the reply at rest (not focused).
+ */
+export async function checkCatchUpComposer(page: Page, screenName: string): Promise<void> {
+  const geom = await page.evaluate(() => {
+    const frame = document.querySelector('[data-catch-up-reply] [data-writing-frame]');
+    const field = document.querySelector('[data-catch-up-reply] [data-catch-up-reply-input]');
+    const photo =
+      document.querySelector('[data-catch-up-message] [data-avatar-kind]') ??
+      document.querySelector('[data-catch-up-message] img');
+    const rect = (el: Element | null) => {
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    return { frame: rect(frame), field: rect(field), photo: rect(photo) };
+  });
+  const violations: LayoutViolation[] = [];
+  const add = (message: string): void => {
+    violations.push({ check: 'writing-box', message });
+  };
+  if (geom.frame === null || geom.field === null) {
+    add('no catch-up reply pill ([data-catch-up-reply] [data-writing-frame]) or its field');
+  } else {
+    const pillMid = geom.frame.y + geom.frame.height / 2;
+    const fieldMid = geom.field.y + geom.field.height / 2;
+    if (Math.abs(pillMid - fieldMid) > 1) {
+      add(
+        `catch-up reply placeholder off centre: field centre ${fieldMid.toFixed(1)} vs pill centre ${pillMid.toFixed(1)}`,
+      );
+    }
+    if (geom.photo === null) {
+      add('no [data-catch-up-message] photo to line the catch-up reply up with');
+    } else if (Math.abs(geom.frame.x - geom.photo.x) > 1) {
+      add(
+        `catch-up reply pill left ${geom.frame.x.toFixed(1)} is not on the photo column ${geom.photo.x.toFixed(1)}`,
+      );
+    }
+  }
+  settleFindings(screenName, violations);
+}
+
+/**
  * Check 11a: an open + tray is the top of its writing box (8 Nov 2026). The
  * tray ([data-tray]) sits inside the box's frame ([data-writing-frame]), at
  * its top and within its sides, in flow; it draws no fill, edge (bar its

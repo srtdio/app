@@ -23,13 +23,7 @@ import { composerHint } from '@/components/ui/Composer';
 import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { Textarea } from '@/components/ui/Textarea';
-import {
-  ICON_SIZE,
-  IconBriefs,
-  IconFile,
-  IconMic,
-  IconSend,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs, IconFile, IconMic, IconSend } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { isCoarsePointer } from '@/lib/use-is-laptop';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
