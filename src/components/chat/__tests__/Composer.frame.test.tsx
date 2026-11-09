@@ -155,7 +155,8 @@ describe('chat Composer on ui/Composer', () => {
   });
 
   it('voice busy never collapses the row: the mic spins in the send slot', () => {
-    expect(FRAME).toMatch(/aria-label="Sending voice note"[\s\S]{0,80}\bbusy\b/);
+    // The busy RowSend keeps send's own width (label = its aria-label).
+    expect(FRAME).toMatch(/label="Sending voice note"[\s\S]{0,80}\bbusy\b/);
     expect(FRAME).toContain('voiceBusy || editBusy');
     const html = renderToStaticMarkup(
       <ComposerFrame

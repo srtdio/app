@@ -816,6 +816,29 @@
   }
 }
 
+/* Catch up (9 Nov 2026): the page tone and the card surface per theme, one
+   class each so call sites carry no dark: and no shadow. Light: the card is
+   the panel on the panel-3 page with a hairline. Dark: the card is panel-3 on
+   the bg page with the strong edge and the floating layer's shadow (the card
+   floats over the page; the guard keeps card and page tokens distinct). */
+@layer components {
+  .catch-up-page {
+    background-color: var(--panel-3);
+  }
+  .dark .catch-up-page {
+    background-color: var(--bg);
+  }
+  .catch-up-card {
+    background-color: var(--panel);
+    border-color: var(--border);
+  }
+  .dark .catch-up-card {
+    background-color: var(--panel-3);
+    border-color: var(--border-strong);
+    box-shadow: var(--lit-overlay);
+  }
+}
+
 /* Outlines: one family, a crisp line from --sel-edge (ink in light, white in
    dark). No accent tint, no glow. In @layer utilities, at the end, so the line
    always beats a border-* / bg-* utility or a lit-* edge on the same element
@@ -872,28 +895,5 @@
      both themes; the quoted text keeps full ink. */
   .fmt-quote {
     border-left: 3px solid color-mix(in srgb, currentColor 45%, transparent);
-  }
-}
-
-/* Catch up (9 Nov 2026): the page tone and the card surface per theme, one
-   class each so call sites carry no dark: and no shadow. Light: the card is
-   the panel on the panel-3 page with a hairline. Dark: the card is panel-3 on
-   the bg page with the strong edge and the floating layer's shadow (the card
-   floats over the page; the guard keeps card and page tokens distinct). */
-@layer components {
-  .catch-up-page {
-    background-color: var(--panel-3);
-  }
-  .dark .catch-up-page {
-    background-color: var(--bg);
-  }
-  .catch-up-card {
-    background-color: var(--panel);
-    border-color: var(--border);
-  }
-  .dark .catch-up-card {
-    background-color: var(--panel-3);
-    border-color: var(--border-strong);
-    box-shadow: var(--lit-overlay);
   }
 }

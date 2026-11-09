@@ -333,9 +333,11 @@ describe("Activity: the page's own write reaches device-saved chip pages", () =>
     act(() => lead?.click());
     await settle();
     expect(document.querySelector('[data-catch-up-card]')).toBeNull();
-    expect(h.rpc).toHaveBeenCalledWith(
-      'inbox_mark_read',
-      expect.objectContaining({ p_entry_id: 'e1' }),
+    expect(h.markEntryRead).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'e1' }),
+      'w1',
+      expect.any(String),
     );
     expect(peekActivityPage(MENTIONS_KEY)?.[0]?.readAt).toEqual(expect.any(String));
   });

@@ -16,6 +16,8 @@ import type { HTMLAttributes, ReactElement, ReactNode, Ref, UIEvent } from 'reac
 import { cn } from '@/lib/cn';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import {
   ICON_SIZE,
@@ -228,11 +230,12 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
 
   const title = ready?.title ?? props.menu.title;
   const nameButton = (
-    <button
-      type="button"
+    <PressableRow
+      inline
+      align="center"
       data-catch-up-name-row-button=""
       aria-haspopup="menu"
-      className="flex min-h-11 min-w-0 max-w-full items-center justify-center gap-1 px-2 focus-visible:lit-focus"
+      className="flex min-w-0 max-w-full items-center justify-center gap-1 px-2"
     >
       <Text role="heading" as="h2" data-catch-up-title="" className="min-w-0 truncate">
         {title}
@@ -240,7 +243,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       <span className="shrink-0 text-fg-2">
         <IconChevronDown size={ICON_SIZE.inline} />
       </span>
-    </button>
+    </PressableRow>
   );
 
   return (
@@ -257,16 +260,16 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       >
         <span className="flex w-12 shrink-0 justify-start">
           {props.typing !== null ? (
-            <button
+            <IconButton
               type="button"
-              aria-label="Hide keyboard"
+              label="Hide keyboard"
               data-catch-up-hide-keyboard=""
               onPointerDown={(event) => event.preventDefault()}
               onClick={props.typing.onHideKeyboard}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-fg/10 text-fg focus-visible:lit-focus"
+              className="h-12 w-12 rounded-full bg-fg/10"
             >
               <IconKeyboardHide size={ICON_SIZE.nav} />
-            </button>
+            </IconButton>
           ) : null}
         </span>
         <span className="flex min-w-0 flex-1 justify-center">

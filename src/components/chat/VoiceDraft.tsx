@@ -137,7 +137,7 @@ export function RecordingRow(props: {
       data-recording-row=""
       role="group"
       aria-label="Recording voice note"
-      className="flex min-h-11 min-w-0 flex-1 items-center gap-2"
+      className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1"
     >
       <Button
         type="button"
@@ -209,7 +209,7 @@ export function VoiceNoteChip(props: {
       data-voice-chip={upload?.state ?? 'ready'}
       role="group"
       aria-label={`Voice note ${clock}`}
-      className="relative inline-flex min-w-0 max-w-full items-center gap-2 self-start rounded-xl border bg-panel py-1 pl-1 pr-4"
+      className="lit-chip relative inline-flex min-w-0 max-w-full items-center gap-2 self-start rounded-xl border bg-panel py-1 pl-1 pr-4"
     >
       <span data-voice-chip-play="" className="relative grid h-11 w-11 shrink-0 place-items-center">
         {upload?.state === 'uploading' ? (
@@ -249,23 +249,21 @@ export function VoiceNoteChip(props: {
         ))}
       </span>
       <span className={textRole('meta', 'shrink-0')}>{clock}</span>
-      <button
+      <IconButton
         type="button"
-        aria-label="Remove voice note"
+        label="Remove voice note"
         data-voice-chip-remove=""
-        className="absolute -right-4 -top-4 rounded-full focus-visible:lit-focus"
+        // The 44 hit box; the visible disc inside it is 24.
+        className="absolute -right-4 -top-4 rounded-full"
         onClick={props.onRemove}
       >
-        {/* The 44 hit box; the visible disc inside it is 24. */}
-        <span className="grid h-11 w-11 place-items-center">
-          <span
-            aria-hidden="true"
-            className="grid h-6 w-6 place-items-center rounded-full bg-fg text-bg"
-          >
-            <IconX size={ICON_SIZE.inline} />
-          </span>
+        <span
+          aria-hidden="true"
+          className="grid h-6 w-6 place-items-center rounded-full bg-fg text-bg"
+        >
+          <IconX size={ICON_SIZE.inline} />
         </span>
-      </button>
+      </IconButton>
     </div>
   );
 }

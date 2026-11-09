@@ -667,7 +667,7 @@ export function WritingBox(props: WritingBoxProps) {
         <div
           data-writing-frame=""
           data-writing-recording=""
-          className="flex min-h-11 min-w-0 max-w-full items-center overflow-x-clip rounded-full border bg-panel-2 pl-1 pr-1"
+          className="lit-well flex min-h-11 min-w-0 max-w-full items-center overflow-x-clip rounded-full border bg-panel-2"
         >
           {recording}
         </div>

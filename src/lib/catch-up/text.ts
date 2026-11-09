@@ -5,6 +5,8 @@
 // rule (open at the "New" line when what follows it is taller than the body,
 // else at the bottom). Pure.
 
+import { civilDay } from '@/lib/time';
+
 /** Lines a body shows before it clamps with "more". */
 export const CLAMP_LINES = 6;
 
@@ -62,16 +64,9 @@ export function overClampLines(text: string, lines = CLAMP_LINES): boolean {
   return text.split('\n').length > lines;
 }
 
-/** The local day key (YYYY-MM-DD) of a time in `timeZone`. Pure. */
+/** The local day key (YYYY-MM-DD) of a time in `timeZone` (src/lib/time.ts). Pure. */
 export function dayKey(at: string, timeZone?: string): string {
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
+  return civilDay(at, timeZone);
 }
 
 /**

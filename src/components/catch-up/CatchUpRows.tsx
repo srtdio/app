@@ -15,6 +15,7 @@ import { Bone, ITEM_OUT, DUR_SLOW_MS, EASE, MOVE_CLASS, play } from '@/lib/motio
 import { Text, textRole } from '@/components/ui/Text';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
   IconAlertTriangle,
@@ -131,7 +132,7 @@ export function LongText(props: { text: string; selfName: string | null }): Reac
       <div
         ref={windowRef}
         data-catch-up-more-window=""
-        className="max-h-64 overflow-y-auto overscroll-contain rounded-lg border border-border bg-panel-2 p-3"
+        className="lit-well max-h-64 overflow-y-auto overscroll-contain rounded-lg border border-border bg-panel-2 p-3"
       >
         <RichText text={props.text} selfName={props.selfName} />
       </div>
@@ -140,7 +141,8 @@ export function LongText(props: { text: string; selfName: string | null }): Reac
   return (
     <div className="flex flex-col items-start">
       <RichText text={props.text} selfName={props.selfName} className="line-clamp-6" />
-      <button
+      <PressableRow
+        inline
         type="button"
         data-catch-up-more=""
         onClick={() => setOpen(true)}
@@ -150,7 +152,7 @@ export function LongText(props: { text: string; selfName: string | null }): Reac
         )}
       >
         more
-      </button>
+      </PressableRow>
     </div>
   );
 }
@@ -196,7 +198,8 @@ function RowFrame(props: {
 /** "N replies" under a message: opens its thread full screen. */
 function RepliesLink(props: { count: number; onOpen: () => void }): ReactElement {
   return (
-    <button
+    <PressableRow
+      inline
       type="button"
       data-catch-up-replies=""
       onClick={props.onOpen}
@@ -206,7 +209,7 @@ function RepliesLink(props: { count: number; onOpen: () => void }): ReactElement
       )}
     >
       {props.count === 1 ? '1 reply' : `${props.count} replies`}
-    </button>
+    </PressableRow>
   );
 }
 
@@ -239,14 +242,14 @@ export function MessageRow(props: {
         </div>
       ) : null}
       {props.onOpenThread !== null ? (
-        <button
+        <PressableRow
           type="button"
           data-catch-up-open-thread=""
           onClick={props.onOpenThread}
           className="text-left focus-visible:lit-focus"
         >
           <LongText text={row.text} selfName={props.selfName} />
-        </button>
+        </PressableRow>
       ) : (
         <LongText text={row.text} selfName={props.selfName} />
       )}
@@ -301,7 +304,9 @@ export function PointsRow(props: {
         const isOpen = expanded.has(point.id);
         return (
           <li key={point.id} data-catch-up-point={point.id} data-open={isOpen ? '' : undefined}>
-            <button
+            <PressableRow
+              flat
+              insetFocus
               type="button"
               aria-expanded={isOpen}
               onClick={() => toggle(point.id)}
@@ -330,7 +335,7 @@ export function PointsRow(props: {
               <span className="flex h-11 shrink-0 items-center text-fg-3">
                 <IconChevronRight size={ICON_SIZE.inline} />
               </span>
-            </button>
+            </PressableRow>
             {isOpen && point.open ? (
               <div className={cn('flex gap-3', CATCH_UP_ROW_X)}>
                 <span className="w-8 shrink-0" />
@@ -432,7 +437,7 @@ function StripPicture(props: {
 }): ReactElement {
   const first = props.pictures[0] ?? null;
   return (
-    <button
+    <PressableRow
       type="button"
       data-catch-up-strip-picture=""
       onClick={() => props.onOpen(0)}
@@ -448,12 +453,15 @@ function StripPicture(props: {
       />
       {props.pictures.length > 1 ? (
         <span
-          className={textRole('meta', 'absolute right-2 top-2 rounded-full bg-bg px-2 text-fg')}
+          className={textRole(
+            'meta',
+            'lit-pill absolute right-2 top-2 rounded-full bg-bg px-2 text-fg',
+          )}
         >
           {`1/${props.pictures.length}`}
         </span>
       ) : null}
-    </button>
+    </PressableRow>
   );
 }
 
@@ -465,7 +473,6 @@ function StripVideo(props: {
   const { url } = useAttachmentUrl(props.versionId, props.cache, props.presignEnabled);
   return url !== null ? (
     // A video post plays inline with its controls (muted captions are the post's own).
-    // eslint-disable-next-line jsx-a11y/media-has-caption
     <video
       data-catch-up-strip-video=""
       src={url}
@@ -505,7 +512,9 @@ export function ContextStrip(props: {
       data-open={open ? '' : undefined}
       className="shrink-0 border-b border-border"
     >
-      <button
+      <PressableRow
+        flat
+        insetFocus
         type="button"
         aria-expanded={open}
         data-catch-up-strip-toggle=""
@@ -550,12 +559,12 @@ export function ContextStrip(props: {
         <span className={cn('shrink-0 text-fg-2', MOVE_CLASS.turn, open && 'rotate-180')}>
           <IconChevronDown size={ICON_SIZE.inline} />
         </span>
-      </button>
+      </PressableRow>
       {open ? (
         <div
           ref={windowRef}
           data-catch-up-strip-window=""
-          className="mx-4 mb-3 flex max-h-64 flex-col gap-3 overflow-y-auto overscroll-contain rounded-lg border border-border bg-panel-2 p-3"
+          className="lit-well mx-4 mb-3 flex max-h-64 flex-col gap-3 overflow-y-auto overscroll-contain rounded-lg border border-border bg-panel-2 p-3"
         >
           {context.video !== null ? (
             <StripVideo

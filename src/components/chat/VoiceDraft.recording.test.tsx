@@ -63,7 +63,9 @@ describe('RecordingRow', () => {
     expect(html.match(/data-voice-bar=""/g)).toHaveLength(3);
     expect(html).toContain('bg-fg');
     expect(html).toMatch(/style="transform:scaleY\(0\.\d+\)"/);
-    expect(html).not.toMatch(/height:|opacity|transition|animate-/);
+    // The icons' own svg size (width/height style) is not motion; check the rest.
+    const noSvg = html.replace(/<svg[\s\S]*?<\/svg>/g, '');
+    expect(noSvg).not.toMatch(/height:|opacity|transition|animate-/);
     // The m:ss is the meta role (mono, tabular).
     expect(html).toMatch(/data-recording-elapsed=""[^>]*class="[^"]*font-mono/);
   });

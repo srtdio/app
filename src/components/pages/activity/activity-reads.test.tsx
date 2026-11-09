@@ -374,9 +374,11 @@ describe('Activity: a return paints the kept view', () => {
     act(() => lead?.click());
     await settle();
     expect(document.querySelector('[data-catch-up-card]')).toBeNull();
-    expect(h.rpc).toHaveBeenCalledWith(
-      'inbox_mark_read',
-      expect.objectContaining({ p_entry_id: 'e1' }),
+    expect(h.markEntryRead).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'e1' }),
+      'w1',
+      expect.any(String),
     );
     act(() => root?.unmount());
     vi.setSystemTime(new Date(Date.now() + READ_FRESH_MS + 1));

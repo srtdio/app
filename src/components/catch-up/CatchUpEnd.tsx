@@ -27,7 +27,7 @@ export function CatchUpEnd(props: { wentThrough: number; onDone: () => void }): 
       </div>
       <Button
         type="button"
-        variant="success"
+        variant="primary"
         className="w-full md:w-auto"
         data-catch-up-done=""
         onClick={props.onDone}

@@ -56,7 +56,6 @@ import { endLine, leftLabel } from '@/lib/catch-up/copy';
 import { CATCH_UP_UNDO_MS } from '@/lib/catch-up/use-catch-up';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -336,7 +335,7 @@ describe('catch-up ink, never green (addendum C)', () => {
 
   it('the swipe-read tint is the accent ink, never green', () => {
     const src = readFileSync(
-      join(fileURLToPath(new URL('.', import.meta.url)), 'CatchUpCard.tsx'),
+      join(process.cwd(), 'src/components/catch-up/CatchUpCard.tsx'),
       'utf8',
     );
     expect(src).toContain("props.tint === 'read' ? 'bg-accent text-accent-fg'");
@@ -344,10 +343,7 @@ describe('catch-up ink, never green (addendum C)', () => {
   });
 
   it('the accent ink is defined in light and dark (black in light, white in dark)', () => {
-    const css = readFileSync(
-      join(fileURLToPath(new URL('../../', import.meta.url)), 'index.css'),
-      'utf8',
-    );
+    const css = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
     const light = /:root\s*\{[\s\S]*?--accent:\s*([^;]+);/.exec(css)?.[1]?.trim();
     const dark = /\n\.dark\s*\{[\s\S]*?--accent:\s*([^;]+);/.exec(css)?.[1]?.trim();
     expect(light).toBeDefined();
