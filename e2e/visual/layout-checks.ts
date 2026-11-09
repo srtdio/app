@@ -1818,3 +1818,110 @@ export function assertActivityTwinsPlan(
     })),
   );
 }
+
+// Check 15, the top bar part (Activity, 10 Nov 2026): Threads and Catch up are
+// ONE box. Same width and height (exactly), radius, padding, border and type,
+// in the 0 (outline) and > 0 (filled) states alike; the fixed 112 x 44 box;
+// Threads first, 8 to Catch up; no 44 slots beside them; nothing past the
+// viewport (the workspace name truncates first).
+export const ACTIVITY_PAIR_W_PX = 112;
+export const ACTIVITY_PAIR_H_PX = 44;
+export const ACTIVITY_PAIR_GAP_PX = 8;
+
+interface PairBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: string;
+  padding: string;
+  border: string;
+  type: string;
+  count: string | null;
+}
+
+export async function assertActivityTopbarPair(page: Page, screenName: string): Promise<void> {
+  const got = await page.evaluate(() => {
+    const read = (sel: string): PairBoxRaw | null => {
+      const el = document.querySelector(`header [data-topbar-pair] ${sel}`);
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+        radius: s.borderTopLeftRadius,
+        padding: `${s.paddingLeft} ${s.paddingRight}`,
+        border: s.borderTopWidth,
+        type: `${s.fontSize} ${s.fontWeight}`,
+        count: el.getAttribute('data-count'),
+      };
+    };
+    type PairBoxRaw = {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      radius: string;
+      padding: string;
+      border: string;
+      type: string;
+      count: string | null;
+    };
+    return {
+      threads: read('[data-topbar-threads]'),
+      catchUp: read('[data-topbar-catch-up]'),
+      slots: document.querySelectorAll('header [data-topbar-slot]').length,
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    };
+  });
+  const out: string[] = [];
+  const { threads, catchUp } = got as { threads: PairBox | null; catchUp: PairBox | null };
+  if (threads === null || catchUp === null) {
+    out.push('no Threads | Catch up pair in the top bar ([data-topbar-pair])');
+  } else {
+    const label = `Threads (${threads.count}) / Catch up (${catchUp.count})`;
+    if (threads.width !== catchUp.width || threads.height !== catchUp.height) {
+      out.push(
+        `${label}: boxes ${threads.width}x${threads.height} vs ${catchUp.width}x${catchUp.height}, not one size`,
+      );
+    }
+    for (const [name, b] of [
+      ['Threads', threads],
+      ['Catch up', catchUp],
+    ] as const) {
+      if (
+        Math.abs(b.width - ACTIVITY_PAIR_W_PX) > 0.01 ||
+        Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01
+      ) {
+        out.push(
+          `${name} is ${b.width}x${b.height}, not the fixed ${ACTIVITY_PAIR_W_PX}x${ACTIVITY_PAIR_H_PX}`,
+        );
+      }
+      if (b.radius !== '8px') out.push(`${name} radius ${b.radius}, not 8px`);
+      if (b.x + b.width > got.viewport + 0.5) out.push(`${name} ends past the viewport`);
+    }
+    for (const key of ['radius', 'padding', 'border', 'type'] as const) {
+      if (threads[key] !== catchUp[key]) {
+        out.push(`${label}: ${key} ${threads[key]} vs ${catchUp[key]}, not the same box`);
+      }
+    }
+    const gap = catchUp.x - (threads.x + threads.width);
+    if (Math.abs(gap - ACTIVITY_PAIR_GAP_PX) > 0.5) {
+      out.push(`Threads to Catch up is ${gap}px, not ${ACTIVITY_PAIR_GAP_PX} (Threads first)`);
+    }
+    if (threads.y !== catchUp.y) out.push(`${label}: tops ${threads.y} vs ${catchUp.y}`);
+  }
+  if (got.slots !== 0)
+    out.push(`${got.slots} sort / "+" slots beside the pair (Activity has none)`);
+  if (got.scrollWidth > got.viewport) {
+    out.push(`the page scrolls sideways (${got.scrollWidth} > ${got.viewport})`);
+  }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}

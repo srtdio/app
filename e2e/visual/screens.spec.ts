@@ -6,6 +6,7 @@ import {
   type HarnessNetwork,
 } from '../fixtures/harness-routes';
 import {
+  assertActivityTopbarPair,
   assertCommentBars,
   assertCommentTray,
   assertThreadHeader,
@@ -1698,10 +1699,10 @@ const SCREENS: Screen[] = [
     url: '/activity',
     steps: async (page) => {
       await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
-      // Unread rows on All: Mark all read fills the top bar's primary slot.
+      // Unread rows on All: Catch up (filled, with its count) beside Threads.
       await waitFor(
-        [page.locator('[data-topbar-slot="primary"] [data-activity-mark-all]')],
-        'Mark all read',
+        [page.locator('header [data-topbar-pair] [data-topbar-catch-up]:not([data-count="0"])')],
+        'Catch up',
       );
     },
   },
@@ -5638,16 +5639,20 @@ SCREENS.push(
     },
   },
   {
-    // Nothing unread: no Mark all read, the primary slot empty at its 44 width.
+    // Nothing unread (10 Nov): Threads and Catch up both outlined, one size.
     name: 'activity-all-read',
     seed: creator,
-    extra: seedActivityAllRead,
+    extra: (network) => {
+      seedActivityAllRead(network);
+      seedThreadsRead(network);
+    },
     url: '/activity',
     steps: async (page) => {
       await activityReady(page);
-      await waitFor([topbarSlot(page, 'primary')], 'primary slot');
+      await activityPairAt(page, { threads: 0, catchUp: 0 });
       await expect(page.locator('[data-activity-mark-all]')).toHaveCount(0);
     },
+    after: async (page) => assertActivityTopbarPair(page, 'activity-all-read'),
   },
   {
     // Forward's search: the palette in pick mode over the picker ("Chats
@@ -6582,8 +6587,127 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-box-format-row',
   'chat-bubble-blocks',
   'post-comment-box',
+  // Activity's Threads | Catch up (10 Nov 2026): phone and laptop, light and dark.
+  'activity-threads-new',
+  'activity-catch-up-menu',
+  'threads-stack-card',
 ]);
 
+// --- Activity's top bar: Threads | Catch up (10 Nov 2026) ------------------
+// Phone and laptop, light and dark. Check 15's top bar part
+// (assertActivityTopbarPair) measures the pair on each: one box, both states.
+
+/** Every thread of the fixture world read for me, except `unread` (read rows, as the proc reads them). */
+function seedThreadsRead(network: HarnessNetwork, unread: readonly string[] = []): void {
+  const t = network.world.tables;
+  const roots = new Set(
+    (t.chat_messages ?? []).flatMap((m) =>
+      m.thread_root_message_id != null ? [String(m.thread_root_message_id)] : [],
+    ),
+  );
+  const reads = (t.chat_thread_reads ??= []);
+  for (const root of roots) {
+    const at = unread.includes(root) ? new Date(0) : new Date(NOW + 60_000);
+    const row = reads.find((r) => r.root_message_id === root && r.user_id === ME);
+    if (row !== undefined) row.last_read_at = at.toISOString();
+    else reads.push({ root_message_id: root, user_id: ME, last_read_at: at.toISOString() });
+  }
+}
+
+/** Threads launched 8 Nov 2026 (thread-signals THREADS_SINCE_MS); the fixture clock is 21 Oct. */
+const AFTER_THREADS_LAUNCH = '2026-11-08T09:00:00.000Z';
+
+/**
+ * The catch-up thread unread, every other thread read. Its newest reply moves
+ * past the threads launch: a thread whose newest reply predates it reads as
+ * read (readBeforeLaunch), as every fixture thread at the 21 Oct clock does.
+ */
+function seedOneThreadNew(network: HarnessNetwork): void {
+  seedCatchUp(network);
+  const root = THREAD_IDS.gr ?? '';
+  const replies = (network.world.tables.chat_messages ?? [])
+    .filter((m) => m.thread_root_message_id === root)
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  const last = replies[replies.length - 1];
+  if (last !== undefined) last.created_at = AFTER_THREADS_LAUNCH;
+  seedThreadsRead(network, [root]);
+}
+
+/** The pair in the given states ('on' = filled with a count, 'off' = outlined at 0). */
+async function activityPairAt(
+  page: Page,
+  want: { threads: 0 | 'on'; catchUp: 0 | 'on' },
+): Promise<void> {
+  const state = (n: 0 | 'on'): string => (n === 0 ? '[data-count="0"]' : ':not([data-count="0"])');
+  await waitFor(
+    [page.locator(`header [data-topbar-pair] [data-topbar-threads]${state(want.threads)}`)],
+    `Threads ${want.threads}`,
+  );
+  await waitFor(
+    [page.locator(`header [data-topbar-pair] [data-topbar-catch-up]${state(want.catchUp)}`)],
+    `Catch up ${want.catchUp}`,
+  );
+}
+
+SCREENS.push(
+  {
+    // Threads filled (1 new), Catch up outlined (nothing unread): one size.
+    name: 'activity-threads-new',
+    seed: creator,
+    extra: (network) => {
+      seedOneThreadNew(network);
+      seedActivityAllRead(network);
+    },
+    url: '/activity',
+    steps: async (page) => {
+      await activityReady(page);
+      await activityPairAt(page, { threads: 'on', catchUp: 0 });
+    },
+    after: async (page) => assertActivityTopbarPair(page, 'activity-threads-new'),
+  },
+  {
+    // Catch up's long-press (phone) / right-click (laptop): one row, Mark all
+    // as read. Both buttons filled here, still one size.
+    name: 'activity-catch-up-menu',
+    seed: creator,
+    extra: seedOneThreadNew,
+    url: '/activity',
+    hold: true,
+    steps: async (page) => {
+      await activityReady(page);
+      await activityPairAt(page, { threads: 'on', catchUp: 'on' });
+      await assertActivityTopbarPair(page, 'activity-catch-up-menu');
+      await page.locator('header [data-topbar-catch-up]').click({ button: 'right' });
+      await waitFor(
+        [
+          page.getByRole('menuitem', { name: 'Mark all as read' }),
+          page.getByText('Mark all as read'),
+        ],
+        'Mark all as read',
+      );
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Threads tapped: the same catch up, threads only (one card per unread
+    // thread), its first card.
+    name: 'threads-stack-card',
+    seed: creator,
+    extra: (network) => {
+      seedOneThreadNew(network);
+      seedActivityAllRead(network);
+    },
+    url: '/activity',
+    steps: async (page) => {
+      await activityReady(page);
+      await activityPairAt(page, { threads: 'on', catchUp: 0 });
+      await tap([page.locator('header [data-topbar-threads]')], 'Threads');
+      await catchUpReady(page);
+      await expect(page.locator('[data-catch-up-left]')).toHaveText('1 left');
+    },
+    after: async (page) => assertCatchUpLayout(page, 'threads-stack-card'),
+  },
+);
 for (const screen of SCREENS) {
   const tag = LAPTOP_DARK_SCREENS.has(screen.name) ? ' @laptop-dark' : '';
   test(`${screen.name}${tag}`, async ({ page }) => capture(screen, page));
@@ -6598,7 +6722,8 @@ const TOPBAR_LIST_SCREENS: ReadonlyArray<{ url: string; ready: (page: Page) => P
   { url: '/briefs', ready: briefsReady },
   { url: '/assets', ready: assetsReady },
   { url: '/plan', ready: planTabReady },
-  { url: '/activity', ready: activityReady },
+  // Activity (10 Nov): no sort and no "+"; Threads | Catch up stand in place of
+  // the slots (check 15 measures them), so it is not in the slot walk.
   { url: '/chat', ready: chatListReady },
 ];
 

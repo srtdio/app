@@ -359,6 +359,10 @@ const REQUIRED: readonly string[] = [
   'activity-rows',
   'activity-rows-calm',
   'activity-rows-compact',
+  // Activity's Threads | Catch up (10 Nov 2026); activity-all-read re-shot above.
+  'activity-threads-new',
+  'activity-catch-up-menu',
+  'threads-stack-card',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
