@@ -152,6 +152,7 @@ describe('icon set', () => {
       tray: 22,
       picture: 24,
       status: 28,
+      boxed: 14,
     });
   });
 

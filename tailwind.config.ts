@@ -112,6 +112,8 @@ export default {
       inset: '4px',
       // rounded-picture: a list row's 40 picture squircle (10), Slack style.
       picture: '10px',
+      // rounded-plus-box: the phone top bar "+" outlined square (shell/topbar-actions TopbarPlus).
+      'plus-box': '7px',
     },
     // Edges: 1 (DEFAULT) and 2; 0 removes a side. The named widths are the only
     // thicker lines.
@@ -125,6 +127,8 @@ export default {
       'cutout-lg': '4px',
       // The quote rail on an annotation draft (Pin / Caption annotation composers).
       rail: '4px',
+      // The phone top bar "+" outlined square's line (shell/topbar-actions TopbarPlus).
+      'plus-box': '1.75px',
     },
     // No line-height utilities: font sizes carry theirs (CLAUDE.md L9).
     // leading-emoji: an emoji glyph with no line box (chat-type.ts emoji roles).
@@ -312,6 +316,10 @@ export default {
         'rail-glyph': '13px',
         // Catch up's centred window on laptop (components/catch-up, 9 Nov 2026: 640 wide).
         'catch-up': '640px',
+        // The phone top bar "+" outlined square's face (shell/topbar-actions TopbarPlus).
+        'plus-box': '22px',
+        // A phone top bar key's hit strip: 36 wide, 44 tall, 36 apart (shell/Topbar).
+        'topbar-key': '36px',
       },
       height: {
         // Catch up's centred window on laptop: at most 85vh (9 Nov 2026).
@@ -322,6 +330,8 @@ export default {
         dense: '22px',
         // The thread rail glyph in ui/icons.
         'rail-glyph': '13px',
+        // The phone top bar "+" outlined square's face (shell/topbar-actions TopbarPlus).
+        'plus-box': '22px',
       },
       margin: {
         // Room for the plan panel beside the page (PlanBesideLayout, ChatConnected).

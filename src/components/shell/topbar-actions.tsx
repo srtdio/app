@@ -112,16 +112,24 @@ export function useTopbarActions(actions: TopbarActions): void {
 }
 
 /**
- * The filled "+": Button variant primary, icon only (IconPlus). The label is
- * the screen's old create label ("New post", "New brief", "New file", "New
- * plan", "Add idea", "New chat"); the old data-induction key rides on it so the
- * tour keeps its target.
+ * The top bar "+" (10 Nov 2026): ONE Button with two faces switched by CSS
+ * only (no JS width read). The label is the screen's create label ("New
+ * post", "New brief", "New file", "New plan", "Add idea", "New chat"); the old
+ * data-induction key rides on it so the tour keeps its target.
+ *
+ * - Below md: a 36 x 44 hit strip (Topbar's key spacing) around an outlined
+ *   22 square, 1.75 line in currentColor, radius 7, no fill, a 14 glyph; fg ink
+ *   like Search and Sort, the Tool hover overlay only.
+ * - md and up: a 112 x 44 hit around the Main face, 112 x 32, rounded-lg,
+ *   accent fill, "+ <label>".
+ *
+ * Both faces are aria-hidden, so the accessible name (aria-label) is read once.
  *
  * Blocked (9 Nov 2026): a screen's create "+" always shows. Without the
  * capability the caller passes `blocked`: same size, shape and slot, the
  * disabled look via aria-disabled (NOT the disabled attribute, so taps still
- * fire), and a tap only shows a toast saying who creates. The accessible name
- * stays the label.
+ * fire): fg-3 ink on the phone face, a fg-3 fill on the laptop face. A tap
+ * only shows a toast saying who creates.
  */
 export function TopbarPlus({
   label,
@@ -140,42 +148,47 @@ export function TopbarPlus({
 }): ReactElement {
   const { buttonRef, ...aria } = rest;
   const toast = useOptionalToast();
-  if (blocked !== undefined) {
-    return (
-      <Button
-        buttonRef={buttonRef}
-        type="button"
-        variant="primary"
-        aria-label={label}
-        aria-disabled="true"
-        data-topbar-plus=""
-        data-topbar-plus-blocked=""
-        {...(induction !== undefined ? { 'data-induction': induction } : {})}
-        onClick={() => toast?.show({ title: blocked.message })}
-        shape="round"
-        className="shrink-0 rounded-lg"
-      >
-        <IconPlus size={ICON_SIZE.control} />
-      </Button>
-    );
-  }
   return (
     <Button
       buttonRef={buttonRef}
       type="button"
-      variant="primary"
+      variant="ghost"
       aria-label={label}
       data-topbar-plus=""
+      {...(blocked !== undefined
+        ? { 'aria-disabled': 'true' as const, 'data-topbar-plus-blocked': '' }
+        : aria)}
       {...(induction !== undefined ? { 'data-induction': induction } : {})}
-      {...aria}
-      onClick={onClick}
-      shape="round"
-      className="shrink-0 rounded-lg"
+      onClick={blocked !== undefined ? () => toast?.show({ title: blocked.message }) : onClick}
+      className={TOPBAR_PLUS_HIT}
     >
-      <IconPlus size={ICON_SIZE.control} />
+      <span aria-hidden="true" data-topbar-plus-face="phone" className={TOPBAR_PLUS_PHONE_FACE}>
+        <IconPlus size={ICON_SIZE.boxed} />
+      </span>
+      <span
+        aria-hidden="true"
+        data-topbar-plus-face="laptop"
+        className={cn(
+          TOPBAR_PLUS_LAPTOP_FACE,
+          blocked !== undefined ? 'bg-fg-3' : 'bg-accent group-hover:bg-accent-hover',
+        )}
+      >
+        <IconPlus size={ICON_SIZE.inline} className="shrink-0" />
+        <span className="truncate">{label}</span>
+      </span>
     </Button>
   );
 }
+
+/** The "+" hit area: a 36 x 44 strip below md, 112 x 44 from md (the Main face's slot). */
+const TOPBAR_PLUS_HIT =
+  'group shrink-0 px-0 text-fg w-topbar-key min-w-0 md:w-28 md:hover:bg-none md:active:bg-none';
+/** Below md: the outlined 22 square, currentColor line (fg, fg-3 when blocked), no fill. */
+const TOPBAR_PLUS_PHONE_FACE =
+  'inline-flex h-plus-box w-plus-box items-center justify-center rounded-plus-box border-plus-box border-current bg-transparent md:hidden';
+/** md and up: the Main face, 112 x 32, accent fill (fg-3 when blocked), "+ <label>". */
+const TOPBAR_PLUS_LAPTOP_FACE =
+  'hidden h-8 w-28 items-center justify-center gap-2 rounded-lg px-2 text-accent-fg md:inline-flex';
 
 // --- Activity: Threads | Catch up (10 Nov 2026) ------------------------------
 //

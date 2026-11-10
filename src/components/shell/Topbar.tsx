@@ -16,13 +16,37 @@ import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 import { useTopbarActionsValue } from '@/components/shell/topbar-actions';
 
 /**
- * One fixed 44 slot: the page's control, or an empty box of the same width so
+ * A phone top bar key (below md, 10 Nov 2026): a 36 wide x 44 tall hit strip,
+ * strips touching (cluster gap 0), so Search, sort, "+" and the avatar sit 36
+ * apart centre to centre and a tap goes to the nearest key. The second written
+ * exception to 44 x 44 (the first: the composer row keys). md and up keep the
+ * 44 boxes, gap-1. Guard: src/__tests__/topbar-keys.test.ts.
+ */
+export const TOPBAR_KEY = 'max-md:w-topbar-key max-md:min-w-0';
+
+/**
+ * One fixed slot: the page's control, or an empty box of the same width so
  * search and sort never move between tabs (an empty slot keeps the width).
+ * Below md each is a 36 strip (the sort's IconButton is held to it); md and
+ * up the sort is 44 and the primary 112 (TopbarPlus' Main face).
  */
 function Slot({ name, children }: { name: 'sort' | 'primary'; children: ReactNode }) {
   return (
-    <span data-topbar-slot={name} className="inline-flex h-11 min-w-11 shrink-0 items-center">
-      {children ?? <span aria-hidden="true" className="h-11 w-11" />}
+    <span
+      data-topbar-slot={name}
+      className={cn(
+        'inline-flex h-11 w-topbar-key shrink-0 items-center justify-center',
+        name === 'sort'
+          ? 'md:w-auto md:min-w-11 max-md:[&_button]:w-topbar-key max-md:[&_button]:min-w-0'
+          : 'md:w-28',
+      )}
+    >
+      {children ?? (
+        <span
+          aria-hidden="true"
+          className={cn('h-11 w-topbar-key', name === 'sort' ? 'md:w-11' : 'md:w-28')}
+        />
+      )}
     </span>
   );
 }
@@ -46,7 +70,9 @@ export function TopbarSlots() {
   // 8 apart. Only Activity publishes a pair, so no other screen's bar moves.
   if (actions.pair !== undefined && actions.pair !== null) {
     return (
-      <span data-topbar-pair="" className="inline-flex shrink-0 items-center gap-2">
+      // Below md the cluster gap is 0 and Search and the avatar are 36 strips:
+      // mx-2 keeps the pair's visible distance to both glyphs as before.
+      <span data-topbar-pair="" className="inline-flex shrink-0 items-center gap-2 max-md:mx-2">
         {actions.pair}
       </span>
     );
@@ -169,10 +195,14 @@ export function Topbar({
         </Button>
       )}
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center md:gap-1">
         <TestSiteAnywhereStart inline />
         {onCreateWorkspace !== undefined ? null : (
-          <IconButton label="Search" className="md:hidden" onClick={onOpenPalette}>
+          <IconButton
+            label="Search"
+            className={cn('md:hidden', TOPBAR_KEY)}
+            onClick={onOpenPalette}
+          >
             <IconSearch size={ICON_SIZE.control} />
           </IconButton>
         )}
@@ -190,10 +220,13 @@ export function Topbar({
             workspace-less state has no sort and no "+". */}
         {inWorkspace ? <TopbarSlots /> : null}
 
-        {/* A press starts the Settings chunk and the members read it shows. */}
+        {/* A press starts the Settings chunk and the members read it shows. Below
+            md a 36 strip, 4 in from the gutter, so the 32 photo's right edge
+            stays where it was (6 in from the gutter edge). */}
         <IconButton
           type="button"
           label="Account menu"
+          className={cn(TOPBAR_KEY, 'max-md:mr-1')}
           onClick={onOpenAvatar}
           {...settingsPrefetchProps()}
         >

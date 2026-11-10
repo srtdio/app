@@ -40,6 +40,8 @@ describe('design tokens: type and radius scales', () => {
       pill: '9999px',
       // rounded-picture: a list row's 40 picture squircle (flat look, 7 Nov 2026).
       picture: '10px',
+      // The phone top bar "+" outlined square (10 Nov 2026).
+      'plus-box': '7px',
     });
     expect(extend).not.toHaveProperty('borderRadius');
   });
@@ -66,6 +68,8 @@ describe('design tokens: type and radius scales', () => {
       cutout: '3px',
       'cutout-lg': '4px',
       rail: '4px',
+      // The phone top bar "+" outlined square's line (10 Nov 2026).
+      'plus-box': '1.75px',
     });
   });
 
