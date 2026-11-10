@@ -54,11 +54,11 @@ import { newMessageId } from '@/lib/chat/message-id';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { useCatchUp } from '@/lib/catch-up/use-catch-up';
 import {
-  THREAD_TIP_TEXT,
-  THREAD_TIP_TEXT_LAPTOP,
   dismissThreadTip,
   noteThreadTipShown,
   threadTipVisible,
+  tipText,
+  wordsFamily,
 } from '@/lib/catch-up/tip';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import {
@@ -89,6 +89,8 @@ import { CatchUpCard, type SentMessage } from '@/components/catch-up/CatchUpCard
 import { CatchUpThreadView } from '@/components/catch-up/CatchUpThreadView';
 import { CatchUpReply } from '@/components/catch-up/CatchUpReply';
 import { CatchUpEnd } from '@/components/catch-up/CatchUpEnd';
+import { useCatchUpActions } from '@/components/catch-up/CatchUpActionLayer';
+import { firstName } from '@/components/catch-up/CatchUpRows';
 
 /** Move this far (px) before a press becomes a swipe (or a scroll, if it went up or down first). */
 const SWIPE_START_PX = 10;
@@ -189,12 +191,39 @@ export function boxDraft(sheetBox: boolean, sheetOpen: boolean, draft: CatchUpDr
   return sheetBox === sheetOpen ? draft : EMPTY_DRAFT;
 }
 
-/** The reply box's hint. Pure. */
-export function replyHint(item: CatchUpItem, inThread: boolean): string {
+/**
+ * The reply box's hint. Chat cards: thread words. Comment cards: "Comment"
+ * when it posts to the item, "Reply to <first name>" into a comment's replies. Pure.
+ */
+export function replyHint(
+  item: CatchUpItem,
+  inThread: boolean,
+  rootAuthorName: string | null = null,
+): string {
+  if (wordsFamily(item.kind) === 'comment') {
+    if (!inThread) return 'Comment';
+    return rootAuthorName !== null ? `Reply to ${firstName(rootAuthorName)}` : 'Reply';
+  }
   if (inThread || item.kind === 'chat-thread') return 'Reply in thread';
-  if (item.kind === 'chat-main')
-    return `Message ${item.lead.chatName ?? item.lead.actorName ?? 'chat'}`;
-  return 'Reply';
+  return `Message ${item.lead.chatName ?? item.lead.actorName ?? 'chat'}`;
+}
+
+/** The thread sheet's title: "Thread" on chat cards, "Replies" on comment cards. Pure. */
+export function sheetTitle(item: CatchUpItem): string {
+  return wordsFamily(item.kind) === 'chat' ? 'Thread' : 'Replies';
+}
+
+/** The root a card's Slack-way target posts under (its author names the box). Pure. */
+export function targetRootOf(
+  body: CatchUpBody | null,
+  target: CatchUpReplyTarget | null,
+): CatchUpMessageRow | null {
+  if (target?.kind !== 'comment' || target.parentCommentId === null) return null;
+  for (const row of body?.rows ?? []) {
+    if (row.kind === 'message' && row.threadRoot?.id === target.parentCommentId)
+      return row.threadRoot;
+  }
+  return null;
 }
 
 interface Drag {
@@ -269,6 +298,15 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const closingRef = useRef(false);
 
   useModalFocus(rootRef, true, { initial: () => backRef.current });
+
+  // The one message action layer (strip keys and long-press): the same sheets as chat and comments.
+  const actions = useCatchUpActions({
+    workspaceId,
+    currentUserId,
+    side,
+    timeZone: props.timeZone,
+    linkOf: (item) => entityHref(item.lead, props.workspaceKey ?? null, side),
+  });
 
   // Open: phone rises from the bottom, laptop grows from the centre (no fade).
   useLayoutEffect(() => {
@@ -789,12 +827,21 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             tint={tint}
             typing={phoneTyping ? { onHideKeyboard: hideKeyboard, onRead: typingRead } : null}
             menu={menuFor(current, ready)}
-            reply={replyFor(cardTarget, key, replyHint(current, inCardThread !== null))}
+            reply={replyFor(
+              cardTarget,
+              key,
+              replyHint(
+                current,
+                inCardThread !== null,
+                targetRootOf(ready, inCardThread)?.author.name ?? null,
+              ),
+            )}
             tip={
               tipShown
-                ? { text: laptop ? THREAD_TIP_TEXT_LAPTOP : THREAD_TIP_TEXT, onDismiss: dropTip }
+                ? { text: tipText(wordsFamily(current.kind), laptop), onDismiss: dropTip }
                 : null
             }
+            onHoldMessage={(row, from) => actions.hold({ item: current, row }, from)}
             onRetrySend={(id) => retrySend(key, id)}
             onRetryLoad={() => retryLoad(current)}
             onOpenThread={(root) =>
@@ -884,7 +931,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
                 </IconButton>
                 <div className="flex min-w-0 flex-1 flex-col items-center text-center">
                   <Text role="label" as="h2" data-catch-up-thread-title="">
-                    Thread
+                    {sheetTitle(current)}
                   </Text>
                   <Text role="secondary" className="max-w-full truncate text-fg-3">
                     {menuTitle()}
@@ -898,10 +945,16 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
                 sent={sent.get(threadKey) ?? []}
                 selfName={props.selfName}
                 timeZone={props.timeZone}
-                reply={replyFor(thread.target, threadKey, replyHint(current, true))}
+                reply={replyFor(
+                  thread.target,
+                  threadKey,
+                  replyHint(current, true, thread.root.author.name),
+                )}
                 onRetryLoad={retryThread}
                 onRetrySend={(id) => retrySend(threadKey, id)}
                 reactionsOf={current}
+                actions={actions.rootActions({ item: current, row: thread.root })}
+                onHold={(row, from) => actions.hold({ item: current, row }, from)}
               />
             </>
           ) : null}
@@ -975,6 +1028,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         {bar}
         {body}
       </div>
+      {actions.layer}
       {lightbox !== null ? (
         <ImageLightbox
           images={lightbox.pictures.map((id, i) => ({ assetId: id, name: `Picture ${i + 1}` }))}

@@ -11,10 +11,11 @@
 // The reply box sits at the bottom. Read only: no edit, no resolve. Pure
 // render: the screen owns every read and write.
 
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import type { ComponentType } from 'react';
 import type { HTMLAttributes, ReactElement, ReactNode, Ref, UIEvent } from 'react';
 import { cn } from '@/lib/cn';
-import { Text } from '@/components/ui/Text';
+import { Text, textRole } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -23,15 +24,22 @@ import {
   ICON_SIZE,
   IconCheck,
   IconCheckCircle,
+  IconBank,
+  IconBriefs,
+  IconChat,
   IconChevronDown,
   IconEyeOff,
   IconKeyboardHide,
+  IconPipeline,
+  IconPlan,
+  type IconProps,
 } from '@/components/ui/icons';
 import { UnreadDivider } from '@/components/chat/ReadingLayer';
 import type { PresignCache } from '@/lib/asset-presign';
 import { KEEP_UNREAD, MARK_AS_READ } from '@/lib/catch-up/copy';
 import { dayBreaks, fillScrollTop } from '@/lib/catch-up/text';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
+import { wordsFamily } from '@/lib/catch-up/tip';
 import type { CatchUpBodyResult, CatchUpMessageRow, CatchUpRow } from '@/lib/catch-up/body';
 import { CatchUpRowReactions, useCatchUpReactions } from '@/components/catch-up/CatchUpReactions';
 import {
@@ -79,6 +87,8 @@ export interface CatchUpCardProps {
   onRetryLoad: () => void;
   /** Open a message's or comment's thread full screen (null rows open none). */
   onOpenThread: (root: CatchUpMessageRow) => void;
+  /** Long-press / right-click a message: the one message action layer. */
+  onHoldMessage?: ((row: CatchUpMessageRow, from: HTMLElement) => void) | undefined;
   /** Open a feedback point's thread. */
   onOpenPoint: (pointId: string, row: CatchUpRow) => void;
   /** Scroll near the top: load older rows (the screen ignores repeats). */
@@ -103,6 +113,42 @@ export function snapToRowTop(scrollTop: number, rowTops: readonly number[]): num
     at = top;
   }
   return Math.max(0, at);
+}
+
+/** The kind sticker on a card's name row: the nav icon + word. Pure. */
+export function stickerOf(kind: CatchUpItem['kind']): {
+  label: string;
+  Icon: ComponentType<IconProps>;
+} {
+  switch (kind) {
+    case 'post':
+      return { label: 'Post', Icon: IconPipeline };
+    case 'plan-item':
+      return { label: 'Plan', Icon: IconPlan };
+    case 'brief':
+      return { label: 'Brief', Icon: IconBriefs };
+    case 'idea':
+      return { label: 'Idea', Icon: IconBank };
+    default:
+      return { label: 'Chat', Icon: IconChat };
+  }
+}
+
+/** The solid kind sticker (ink: black in light, white in dark; never grey, never faded). */
+export function KindSticker(props: { kind: CatchUpItem['kind'] }): ReactElement {
+  const { label, Icon } = stickerOf(props.kind);
+  return (
+    <span
+      data-catch-up-sticker={props.kind}
+      className={textRole(
+        'section',
+        'mr-1 flex h-5 shrink-0 items-center gap-1 rounded-md bg-accent px-2 text-xs text-accent-fg',
+      )}
+    >
+      <Icon size={ICON_SIZE.inline} />
+      {label}
+    </span>
+  );
 }
 
 function setRef<T>(ref: Ref<T> | undefined, value: T | null): void {
@@ -139,6 +185,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   const ready = body !== undefined && body !== 'skip' && body !== 'error' ? body : null;
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const placedRef = useRef(false);
+  // The scrollTop the fill rule last wrote; a scroll elsewhere is the person's own.
+  const placedTopRef = useRef<number | null>(null);
+  const userScrolledRef = useRef(false);
   const olderHeightRef = useRef<number | null>(null);
   const rows: CatchUpRow[] = ready !== null ? [...props.older, ...ready.rows] : [];
   const firstRowId = rows[0]?.id ?? null;
@@ -148,12 +197,11 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   const reactions = useCatchUpReactions(item, reactionIds, ready);
   const lastSentId = props.sent[props.sent.length - 1]?.id ?? null;
 
-  // The fill rule, once per card when its rows land: at the "New" line when
-  // what follows is taller than the body, else at the bottom.
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (el === null || ready === null || placedRef.current) return;
-    placedRef.current = true;
+  // The fill rule, when the card's rows land: at the "New" line when what
+  // follows is taller than the body, else at the bottom. Until the person
+  // scrolls, rows that grow later (reactions, link previews, photos) re-apply
+  // it, so the newest row never ends under the reply box.
+  const place = (el: HTMLDivElement): void => {
     const line = el.querySelector<HTMLElement>('[data-new-line]');
     const top = fillScrollTop({
       newTop: line !== null ? line.offsetTop : null,
@@ -167,7 +215,30 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       top,
       Array.from(rowEls, (r) => r.offsetTop - base),
     );
+    placedTopRef.current = el.scrollTop;
+  };
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el === null || ready === null || placedRef.current) return;
+    placedRef.current = true;
+    place(el);
+    // Once per card; place reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
+  const placed = ready !== null;
+  useEffect(() => {
+    const el = scrollRef.current;
+    const list = el?.querySelector('[data-catch-up-rows]');
+    if (el == null || list == null || typeof ResizeObserver === 'undefined') return;
+    const watch = new ResizeObserver(() => {
+      if (userScrolledRef.current) watch.disconnect();
+      else place(el);
+    });
+    watch.observe(list);
+    return () => watch.disconnect();
+    // Once the rows list exists; place reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placed]);
 
   // Older rows above: keep the reading position (add what grew above).
   useLayoutEffect(() => {
@@ -181,12 +252,17 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   // A sent message shows at once (scrolled to the bottom).
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (el !== null && lastSentId !== null) el.scrollTop = el.scrollHeight;
+    if (el === null || lastSentId === null) return;
+    userScrolledRef.current = true;
+    el.scrollTop = el.scrollHeight;
   }, [lastSentId]);
 
   const onScroll = (event: UIEvent<HTMLDivElement>): void => {
     const el = event.currentTarget;
+    const at = placedTopRef.current;
+    if (at !== null && Math.abs(el.scrollTop - at) > 1) userScrolledRef.current = true;
     if (ready === null || !ready.hasOlder || el.scrollTop > OLDER_AT_PX) return;
+    userScrolledRef.current = true;
     if (olderHeightRef.current === null) olderHeightRef.current = el.scrollHeight;
     props.onNearTop();
   };
@@ -219,6 +295,12 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           timeZone={props.timeZone}
           onOpenThread={
             ready?.threads === true ? () => props.onOpenThread(row.threadRoot ?? row) : null
+          }
+          family={wordsFamily(item.kind)}
+          onHold={
+            props.onHoldMessage !== undefined
+              ? (from) => props.onHoldMessage?.(row, from)
+              : undefined
           }
           reactions={
             <CatchUpRowReactions id={row.id} api={reactions} workspaceId={item.workspaceId} />
@@ -272,6 +354,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       aria-haspopup="menu"
       className="flex min-w-11 max-w-full items-center justify-center gap-1 px-2"
     >
+      <KindSticker kind={item.kind} />
       <Text role="heading" as="h2" data-catch-up-title="" className="min-w-0 truncate">
         {title}
       </Text>

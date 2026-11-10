@@ -7,7 +7,20 @@ import type { TipStorage } from '@/lib/chat/thread-tip';
 
 export const THREAD_TIP_TEXT = 'Tap a message to reply in thread.';
 export const THREAD_TIP_TEXT_LAPTOP = 'Click a message to reply in thread.';
+export const COMMENT_TIP_TEXT = 'Tap a comment to reply to it.';
+export const COMMENT_TIP_TEXT_LAPTOP = 'Click a comment to reply to it.';
 export const THREAD_TIP_MAX_SHOWS = 3;
+
+/** A card's words family: chat cards say thread, every other card says comment. Pure. */
+export function wordsFamily(kind: string): 'chat' | 'comment' {
+  return kind === 'chat-main' || kind === 'chat-thread' ? 'chat' : 'comment';
+}
+
+/** The tip's text by family and width. Pure. */
+export function tipText(family: 'chat' | 'comment', laptop: boolean): string {
+  if (family === 'chat') return laptop ? THREAD_TIP_TEXT_LAPTOP : THREAD_TIP_TEXT;
+  return laptop ? COMMENT_TIP_TEXT_LAPTOP : COMMENT_TIP_TEXT;
+}
 
 const goneThisLoad = new Set<string>();
 const keyOf = (userId: string): string => `srtd:catchUp:threadTip:${userId}`;

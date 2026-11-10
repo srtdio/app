@@ -19,7 +19,11 @@ import {
   MessageRow,
 } from '@/components/catch-up/CatchUpRows';
 import type { SentMessage } from '@/components/catch-up/CatchUpCard';
-import { RepliesSeparatorRow, ThreadRootHead } from '@/components/chat/ThreadRail';
+import {
+  RepliesSeparatorRow,
+  ThreadRootHead,
+  type RootActions,
+} from '@/components/chat/ThreadRail';
 import { cn } from '@/lib/cn';
 import { threadWhen } from '@/lib/time';
 import {
@@ -48,6 +52,10 @@ export function CatchUpThreadView(props: {
   viewRef?: Ref<HTMLDivElement>;
   /** The card the thread belongs to: its rows' reactions (one batched read). Absent: none. */
   reactionsOf?: CatchUpReactionSource | undefined;
+  /** The strip's keys on the root (to-do, forward, more): the one message action layer. */
+  actions?: RootActions | undefined;
+  /** Long-press / right-click a reply: the same layer. */
+  onHold?: ((row: CatchUpMessageRow, from: HTMLElement) => void) | undefined;
 }): ReactElement {
   const replies = props.thread !== null && props.thread !== 'error' ? props.thread.replies : [];
   const source = props.reactionsOf;
@@ -94,6 +102,7 @@ export function CatchUpThreadView(props: {
           family="catch-up"
           label={count > 0 ? repliesLabel(count) : null}
           through={false}
+          actions={props.actions}
           onFocusReply={focusReply}
         />
         {props.thread === 'error' ? (
@@ -111,6 +120,9 @@ export function CatchUpThreadView(props: {
                 onOpenThread={null}
                 threadTime
                 reactions={rowReactions(row.id)}
+                onHold={
+                  props.onHold !== undefined ? (from) => props.onHold?.(row, from) : undefined
+                }
               />
             ))}
             {props.sent.map((message) => (

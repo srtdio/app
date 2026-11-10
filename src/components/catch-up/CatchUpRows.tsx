@@ -15,6 +15,8 @@ import { Bone, ITEM_OUT, DUR_SLOW_MS, EASE, MOVE_CLASS, play } from '@/lib/motio
 import { Text, textRole } from '@/components/ui/Text';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { useLongPress } from '@/components/ui/useLongPress';
 import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
@@ -202,8 +204,36 @@ function RowFrame(props: {
   );
 }
 
-/** "N replies" under a message: opens its thread full screen. */
-function RepliesLink(props: { count: number; onOpen: () => void }): ReactElement {
+/** A person's first name ("Priya Shah" -> "Priya"). Pure. */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
+/** The first link in a text (its preview card), or null. Pure. */
+export function firstLinkOf(text: string): string | null {
+  for (const run of linkRuns(text)) if (run.kind === 'link') return run.href;
+  return null;
+}
+
+/** The grey line on a reply drawn on its card, by the card's words family. Pure. */
+export function repliedLine(family: 'chat' | 'comment', root: CatchUpMessageRow): string {
+  return family === 'chat'
+    ? `Replied in thread: ${root.text}`
+    : `Replied to ${firstName(root.author.name)}: ${root.text}`;
+}
+
+/**
+ * "N replies" under a message (chat's RepliesRow look): up to 2 replier photos,
+ * bold count, the full last reply time on one line. Photos wrap away (hidden)
+ * before the time ever truncates. Opens its thread.
+ */
+function RepliesLink(props: {
+  count: number;
+  repliers: readonly CatchUpAuthor[];
+  lastAt: string | undefined;
+  timeZone: string | undefined;
+  onOpen: () => void;
+}): ReactElement {
   return (
     <PressableRow
       inline
@@ -211,12 +241,38 @@ function RepliesLink(props: { count: number; onOpen: () => void }): ReactElement
       data-catch-up-replies=""
       onPointerDown={(event) => event.preventDefault()}
       onClick={props.onOpen}
-      className={textRole(
-        'label',
-        'flex min-h-11 min-w-11 items-center self-start text-fg focus-visible:lit-focus',
-      )}
+      className="flex min-h-11 min-w-11 max-w-full items-center gap-2 self-start text-left focus-visible:lit-focus"
     >
-      {props.count === 1 ? '1 reply' : `${props.count} replies`}
+      {props.repliers.length > 0 ? (
+        <span
+          data-catch-up-replies-photos=""
+          className="flex h-8 min-w-0 flex-wrap gap-1 overflow-hidden"
+        >
+          {props.repliers.map((r, i) => (
+            <Avatar
+              key={r.id ?? i}
+              role="stack"
+              name={r.name}
+              {...(r.avatarUrl !== null ? { src: r.avatarUrl } : {})}
+              decorative
+            />
+          ))}
+        </span>
+      ) : null}
+      <Text role="label" className="shrink-0 font-semibold text-fg">
+        {props.count === 1 ? '1 reply' : `${props.count} replies`}
+      </Text>
+      {props.lastAt !== undefined ? (
+        <Text
+          role="meta"
+          as="time"
+          dateTime={props.lastAt}
+          data-catch-up-replies-time=""
+          className="shrink-0 whitespace-nowrap"
+        >
+          {threadWhen(props.lastAt, 'relative', new Date(), props.timeZone)}
+        </Text>
+      ) : null}
     </PressableRow>
   );
 }
@@ -233,8 +289,19 @@ export function MessageRow(props: {
   threadTime?: boolean | undefined;
   /** Its reactions (chips under the text, after the replies link); absent: none. */
   reactions?: ReactNode;
+  /** The card's words family (the grey "Replied ..." line); default chat. */
+  family?: 'chat' | 'comment' | undefined;
+  /** Long-press / right-click: the one message action layer, anchored on the row. */
+  onHold?: ((from: HTMLElement) => void) | undefined;
 }): ReactElement {
   const { row } = props;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const hold = (): void => {
+    if (rowRef.current !== null) props.onHold?.(rowRef.current);
+  };
+  const press = useLongPress(hold, { ignoreMouse: true });
+  const link = firstLinkOf(row.text);
+  const text = <LongText text={row.text} selfName={props.selfName} />;
   return (
     <RowFrame
       reactions={props.reactions}
@@ -261,26 +328,57 @@ export function MessageRow(props: {
       ) : null}
       {row.threadRoot !== undefined ? (
         <Text role="secondary" as="p" data-catch-up-in-thread="" className="truncate">
-          Replied in thread: {row.threadRoot.text}
+          {repliedLine(props.family ?? 'chat', row.threadRoot)}
         </Text>
       ) : null}
-      {props.onOpenThread !== null ? (
-        <PressableRow
-          type="button"
-          data-catch-up-open-thread=""
-          // Keep focus (and the keyboard) in the reply box until the press
-          // lands: a blur here reflows the card and the click would miss.
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={props.onOpenThread}
-          className="text-left focus-visible:lit-focus"
-        >
-          <LongText text={row.text} selfName={props.selfName} />
-        </PressableRow>
-      ) : (
-        <LongText text={row.text} selfName={props.selfName} />
-      )}
+      <div
+        ref={rowRef}
+        {...(props.onHold !== undefined ? press.handlers : {})}
+        onContextMenu={
+          props.onHold !== undefined
+            ? (event) => {
+                event.preventDefault();
+                hold();
+              }
+            : undefined
+        }
+        onClickCapture={(event) => {
+          if (props.onHold !== undefined && press.consumeClickSuppression()) event.stopPropagation();
+        }}
+        className="flex min-w-0 flex-col gap-1"
+      >
+        {props.onOpenThread !== null ? (
+          <PressableRow
+            type="button"
+            data-catch-up-open-thread=""
+            // Keep focus (and the keyboard) in the reply box until the press
+            // lands: a blur here reflows the card and the click would miss.
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={props.onOpenThread}
+            className="text-left focus-visible:lit-focus"
+          >
+            {text}
+          </PressableRow>
+        ) : (
+          text
+        )}
+        {link !== null ? (
+          <LinkPreviewCard
+            url={link}
+            size="compact"
+            tone="plain"
+            className="w-full max-w-sm"
+          />
+        ) : null}
+      </div>
       {props.onOpenThread !== null && row.replyCount > 0 ? (
-        <RepliesLink count={row.replyCount} onOpen={props.onOpenThread} />
+        <RepliesLink
+          count={row.replyCount}
+          repliers={row.repliers ?? []}
+          lastAt={row.lastReplyAt}
+          timeZone={props.timeZone}
+          onOpen={props.onOpenThread}
+        />
       ) : null}
       {props.trailing}
     </RowFrame>

@@ -15,6 +15,7 @@
 // body.ts would take for a feedback batch.
 
 import type { HarnessNetwork } from './harness-routes';
+import { COMMENT_LINE } from './link-previews';
 import type { Row } from './postgrest';
 import {
   BUCKET_ID,
@@ -90,6 +91,9 @@ export const CU_GROUP_MAIN_ENTRY = cid(ENTRY, 15);
 export const CU_THREAD_REPLY_POST = cid(POST, 0x30);
 export const CU_THREAD_REPLY_ENTRY = cid(ENTRY, 16);
 export const CU_THREAD_REPLY_ID = cid(COMMENT, 0x314);
+
+/** A comment with a link the preview stub knows (10 Nov 2026): its compact card under the text. */
+export const CU_LINK_PREVIEW_ENTRY = cid(ENTRY, 17);
 
 /** The 25-character display name. */
 export const CU_LONG_NAME = 'Bartholomew Fitzgerald Jr';
@@ -806,4 +810,17 @@ export function seedCatchUpThreadReply(network: HarnessNetwork, now: number): vo
   (t.inbox_entries ??= []).push(
     commentEntry(CU_THREAD_REPLY_ENTRY, postId, CU_THREAD_REPLY_ID, COLLEAGUE_A, now, 5),
   );
+}
+
+/** A post comment carrying a link the preview stub answers with a title. */
+export function seedCatchUpLinkPreview(network: HarnessNetwork, now: number): void {
+  seedPostCard(network, now, {
+    postId: cid(POST, 0x40),
+    number: 0x40,
+    entryId: CU_LINK_PREVIEW_ENTRY,
+    title: 'Hamper reel',
+    caption: 'Festive hampers, 45 seconds.',
+    format: 'text',
+    comments: [{ author: PEER, body: COMMENT_LINE, minsAgo: 3 }],
+  });
 }

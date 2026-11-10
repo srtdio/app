@@ -342,6 +342,16 @@ const REQUIRED: readonly string[] = [
   // menu, + trays, recording, voice chip, thread full screen, every card type
   // and the long-content, failure and end states.
   'catch-up-bank-idea',
+  // Catch-up polish (10 Nov 2026): kind sticker, replies row, strip keys, link previews.
+  'catch-up-kind-post',
+  'catch-up-kind-plan',
+  'catch-up-kind-brief',
+  'catch-up-kind-idea',
+  'catch-up-kind-chat',
+  'catch-up-replies-row',
+  'catch-up-post-replies-sheet',
+  'catch-up-strip-more-open',
+  'catch-up-link-preview',
   'catch-up-blank-lines',
   'catch-up-brief-no-due',
   'catch-up-caption-open',
