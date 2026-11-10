@@ -3601,11 +3601,17 @@ describe('J7 only a real "@[all]" token draws bold', () => {
       expect(html).not.toContain('font-semibold">@all');
       expect(html).not.toContain(ALL_MARK);
     }
-    for (const html of [list(token), draft(token), activity(token)]) {
+    for (const html of [list(token), draft(token)]) {
       expect(html).toMatch(/<span data-mention-all="" class="font-semibold[^"]*">@all<\/span>/);
       expect(html).not.toContain(ALL_MARK);
       expect(html).not.toContain('@[');
     }
+    // Activity previews are plain text (Part 6, 10 Nov 2026): "@all", never bold.
+    const row = activity(token);
+    expect(row).toContain('@all standup');
+    expect(row).not.toContain('data-mention-all');
+    expect(row).not.toContain(ALL_MARK);
+    expect(row).not.toContain('@[');
     expect(bubble(token)).toContain(`data-mention="all" class="${mentionClass(false, true)}">@all`);
     expect(mentionClass(false, true)).toContain('font-semibold');
   });

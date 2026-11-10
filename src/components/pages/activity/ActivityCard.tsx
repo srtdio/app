@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { ALL_MARK } from '@/lib/chat/mentions';
 import { Button } from '@/components/ui/Button';
 import { ListCard, LIST_CARD_UNREAD_DOT, type ListCardPicture } from '@/components/ui/ListCard';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
@@ -475,7 +476,7 @@ export function ActivityCard({
   // whole word with "… more" (Part 6, 10 Nov 2026).
   const previewText: string = chat
     ? lead.eventType === MENTION_EVENT_TYPE && lead.body !== null
-      ? stripFormat(lead.body)
+      ? stripFormat(lead.body).replaceAll(ALL_MARK, '')
       : activityPreviewText(group)
     : itemPreviewText(newest, side);
   const tappable = !opensNothing(newest, side);
