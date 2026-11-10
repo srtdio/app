@@ -26,7 +26,7 @@ import {
   visibleChannels,
   type ChannelSelectMode,
 } from '@/components/chat/ChannelList';
-import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import { SectionHeader } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconEyeOff } from '@/components/ui/icons';
 import { ListCardBox, type ListCardSelect } from '@/components/ui/ListCard';
@@ -58,7 +58,7 @@ function isElement(node: ReactNode): node is ReactElement {
   return typeof node === 'object' && node !== null && 'props' in node;
 }
 
-// SectionHeader is hookless and holds the chips and the Select in props, so it
+// SectionHeader is hookless and holds the chips in props, so it
 // is expanded by calling its render once (mirroring SectionHeader's own tests).
 function expandSectionHeader(el: ReactElement): ReactElement {
   return (el.type as unknown as (props: unknown) => ReactElement)(el.props);
@@ -99,8 +99,14 @@ function ariaLabel(el: ReactElement): string | undefined {
   return (el.props as { 'aria-label'?: string })['aria-label'];
 }
 
+/** A Select key anywhere (gone 10 Nov 2026: long-press or right-click selects). */
 function isSectionSelect(el: ReactElement): boolean {
-  return el.type === SectionSelect;
+  const props = el.props as Record<string, unknown>;
+  return (
+    props['data-section-select'] !== undefined ||
+    props['data-chip-row-select'] !== undefined ||
+    props.children === 'Select'
+  );
 }
 
 function isNewChat(el: ReactElement): boolean {
@@ -234,7 +240,6 @@ describe('select mode', () => {
       active: false,
       selectedIds: new Set(),
       onEnter: vi.fn(),
-      onStart: vi.fn(),
       onCancel: vi.fn(),
       onToggle: vi.fn(),
       onDelete: vi.fn(),
@@ -267,14 +272,10 @@ describe('select mode', () => {
     return findAll(barOf(t), (el) => el.type === IconButton);
   }
 
-  it('the chip row ends in Select (off); a long-press or right-click on a card enters too', () => {
+  it('no Select key in the chip row; a long-press or right-click on a card enters', () => {
     const mode = select({});
     const t = tree(mode);
-    const selects = findAll(t, isSectionSelect);
-    expect(selects).toHaveLength(1);
-    expect((selects[0]!.props as { active: boolean }).active).toBe(false);
-    (selects[0]!.props as { onToggle: () => void }).onToggle();
-    expect(mode.onStart).toHaveBeenCalledTimes(1);
+    expect(findAll(t, isSectionSelect)).toHaveLength(0);
     expect(findAll(t, isNewChat)).toHaveLength(0);
     expect(barOf(t)).toBeUndefined();
     // The old Select IconButton beside New chat is gone.
@@ -292,22 +293,15 @@ describe('select mode', () => {
     expect(mode.onEnter).toHaveBeenCalledWith('b');
   });
 
-  it('a chip view keeps the same Select at the chip row end', () => {
-    const mode = select({});
-    const button = findAll(tree(mode, 'photo'), isSectionSelect)[0];
-    expect(button).toBeDefined();
-    (button!.props as { onToggle: () => void }).onToggle();
-    expect(mode.onStart).toHaveBeenCalledTimes(1);
+  it('a chip view has no Select key either', () => {
+    expect(findAll(tree(select({}), 'photo'), isSectionSelect)).toHaveLength(0);
   });
 
-  it('in select mode the header stays, Select is on (a tap ends it), cards tick and taps toggle', () => {
+  it('in select mode the header stays (no Select key), cards tick and taps toggle', () => {
     const mode = select({ active: true, selectedIds: new Set(['b']) });
     const t = tree(mode);
     expect(findAll(t, (el) => el.type === SectionHeader)).toHaveLength(1);
-    const on = findAll(t, isSectionSelect)[0]!.props as { active: boolean; onToggle: () => void };
-    expect(on.active).toBe(true);
-    on.onToggle();
-    expect(mode.onCancel).toHaveBeenCalledTimes(1);
+    expect(findAll(t, isSectionSelect)).toHaveLength(0);
     const cards = findAll(t, (el) => el.type === ChannelCard);
     const selects = cards.map((c) => (c.props as { select: ListCardSelect }).select);
     expect(selects.map((s) => s.active)).toEqual([true, true]);
@@ -388,7 +382,6 @@ describe('load status', () => {
         active: false,
         selectedIds: new Set(),
         onEnter: () => {},
-        onStart: () => {},
         onCancel: () => {},
         onToggle: () => {},
         onDelete: () => {},

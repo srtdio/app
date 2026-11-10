@@ -240,10 +240,8 @@ describe('7. select mode', () => {
     expect(pageSource).toContain('useListSelection()');
     expect(pageSource).toContain('<SelectBar');
     expect(pageSource).toContain('selectMode.selectFor(item.id)');
-    // Decision E: the chip row's visible Select toggles the same select mode.
-    expect(pageSource).toContain(
-      'select={<SectionSelect active={selectMode.on} onToggle={selectMode.toggle} />}',
-    );
+    // No Select key (10 Nov 2026): long-press or right-click only.
+    expect(pageSource).not.toContain('SectionSelect');
     expect(pageSource).toContain('Select all');
     expect(pageSource).not.toContain('onStartSelect');
     expect(pageSource).not.toContain('startSelectWith');

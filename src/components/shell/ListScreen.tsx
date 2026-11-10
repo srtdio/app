@@ -3,8 +3,6 @@ import { cn } from '@/lib/cn';
 import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 
-export { SectionSelect } from '@/components/shell/SectionHeader';
-
 /*
  * The one list-screen shell (10 Nov 2026): what sits under the top bar on a
  * list tab. Literal classes (the compiler needs them); named-sizes.test.ts
@@ -16,9 +14,7 @@ export { SectionSelect } from '@/components/shell/SectionHeader';
 export const LIST_SCREEN_CHIPS_TOP = 'mt-3';
 /** The chip row's leading pad: SCREEN_GUTTER_PHONE / SCREEN_GUTTER_LAPTOP. */
 export const LIST_SCREEN_CHIPS_PAD = 'pl-4 md:pl-6';
-/** The chip row's trailing pad with Select: its 44 box pulled out 12 (trailing rule). */
-export const LIST_SCREEN_CHIPS_END_SELECT = 'pr-1 md:pr-3';
-/** The chip row's trailing pad with no Select: the gutter. */
+/** The chip row's trailing pad: the gutter (no Select key, 10 Nov 2026). */
 export const LIST_SCREEN_CHIPS_END = 'pr-4 md:pr-6';
 /** Chip row to the first content row: SCREEN_CONTENT_TOP (16). */
 export const LIST_SCREEN_CONTENT_TOP = 'pt-4';
@@ -28,10 +24,8 @@ export const LIST_SCREEN_GUTTER = 'px-4 md:px-6';
 export const LIST_SCREEN_LEAD = 'pt-3';
 
 export interface ListScreenChips {
-  /** The filter chips; they scroll sideways under the pinned Select. */
+  /** The filter chips (only chips: no Select key); they scroll sideways. */
   chips?: ReactNode;
-  /** The visible Select (SectionSelect), pinned at the chip row's end. */
-  select?: ReactNode;
   /** Pin the chip row under the top bar while the list scrolls. */
   stickyChips?: boolean;
   /** Test and tour hooks for the chip row's wrapper (e.g. data-pipeline-toolbar). */
@@ -55,20 +49,15 @@ export interface ListScreenProps extends ListScreenChips {
  */
 export function listScreenChipRow({
   chips,
-  select,
   stickyChips = false,
   chipsHook,
 }: ListScreenChips): ReactElement {
   return (
     <div data-shell="chips" {...chipsHook}>
       <SectionHeader
-        {...(select !== undefined ? { select } : {})}
         stickyChildren={stickyChips}
         topClass={LIST_SCREEN_CHIPS_TOP}
-        padClass={cn(
-          LIST_SCREEN_CHIPS_PAD,
-          select !== undefined ? LIST_SCREEN_CHIPS_END_SELECT : LIST_SCREEN_CHIPS_END,
-        )}
+        padClass={cn(LIST_SCREEN_CHIPS_PAD, LIST_SCREEN_CHIPS_END)}
       >
         {chips}
       </SectionHeader>
@@ -85,7 +74,6 @@ export function listScreenChipRow({
 export function ListScreen({
   title,
   chips,
-  select,
   stickyChips,
   chipsHook,
   lead,
@@ -97,7 +85,6 @@ export function ListScreen({
       <PageHead title={title} hidden />
       {listScreenChipRow({
         chips,
-        select,
         ...(stickyChips !== undefined ? { stickyChips } : {}),
         ...(chipsHook !== undefined ? { chipsHook } : {}),
       })}

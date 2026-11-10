@@ -18,7 +18,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import {
   LIST_SCREEN_CONTENT_TOP,
   LIST_SCREEN_GUTTER,
-  SectionSelect,
   listScreenChipRow,
 } from '@/components/shell/ListScreen';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
@@ -153,8 +152,6 @@ export interface ChannelSelectMode {
   selectedIds: ReadonlySet<string>;
   /** Enter select mode with this chat ticked (a chat card's long-press or right-click). */
   onEnter: (channelId: string) => void;
-  /** The chip row's Select (SectionSelect): enter with nothing ticked. */
-  onStart: () => void;
   onCancel: () => void;
   /** Tick or untick; unticking the last chat leaves select mode (the list's own wiring). */
   onToggle: (channelId: string) => void;
@@ -1058,13 +1055,13 @@ function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
 }
 
 /**
- * The full channel list pane: shell/ListScreen's chip row (the filter chips, the
- * Select pinned at the chip row's end) above the body; New chat and the sort
+ * The full channel list pane: shell/ListScreen's chip row (the filter chips; no
+ * Select key) above the body; New chat and the sort
  * live in the app top bar (ChannelList publishes them). While loading the body
  * is skeleton rows and on error a Retry state; rows and the empty state appear
  * only once the store is ready, already hidden-filtered and sorted. A chat's
  * long-press or right-click enters select mode with it ticked, as does a chip
- * view item's; the Select enters with nothing ticked. In select mode the
+ * view item's. In select mode the
  * select bar sits under the body. Pure (no hooks) so the wiring and the
  * single-header guarantee are unit tested by walking the returned tree.
  */
@@ -1076,14 +1073,6 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
   const select = ready ? props.select : undefined;
   const selecting = select?.active === true ? select : undefined;
   const kind = props.kind ?? null;
-  // The chip row's Select: on the chat list and on a chip view alike.
-  const sectionSelect =
-    select !== undefined && hasChannels ? (
-      <SectionSelect
-        active={selecting !== undefined}
-        onToggle={selecting !== undefined ? select.onCancel : select.onStart}
-      />
-    ) : undefined;
   const chipView = props.chipResults !== undefined && kind !== null;
   const onKindChange = props.onKindChange;
   const layout = channelListClasses(props.pageScroll === true);
@@ -1102,7 +1091,6 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
           ...(onKindChange !== undefined
             ? { chips: searchChips({ kind, onChange: onKindChange }) }
             : {}),
-          ...(sectionSelect !== undefined ? { select: sectionSelect } : {}),
         })}
       </div>
       <div
@@ -1434,12 +1422,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
                 onEnter: (channelId: string) => {
                   setMediaSelection(EMPTY_MEDIA_SELECTION);
                   setSelectedIds(new Set([channelId]));
-                  setSelecting(true);
-                },
-                // The chip row's Select: nothing ticked yet.
-                onStart: () => {
-                  setSelectedIds(new Set());
-                  setMediaSelection(EMPTY_MEDIA_SELECTION);
                   setSelecting(true);
                 },
                 onCancel: exitSelect,

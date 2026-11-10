@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { useActivityTopbar } from '@/components/shell/topbar-actions';
+import { useActivityLeadRow } from '@/components/shell/topbar-actions';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { ICON_SIZE, IconActivity, IconAt } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
@@ -564,7 +564,7 @@ export function NotificationsPage() {
     [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
-  // Catch up's long-press "Mark all as read" (the top bar): every unread row
+  // Catch up's long-press "Mark all as read" (the lead row): every unread row
   // of the workspace read at once by ONE inbox_mark_all_read, whatever chip is
   // on; no Undo and no toast. A failure puts the rows back with the fixed
   // toast. Then the Mentions count and the nav badge refetch.
@@ -668,10 +668,10 @@ export function NotificationsPage() {
     workspaceId === null ||
     (loading && items.length === 0) ||
     (filling && buckets.length === 0 && !error);
-  // The top bar (no sort): Threads | Catch up (topbar-actions). Threads opens
+  // The lead row under the pills: Threads | Catch up (topbar-actions). Threads opens
   // the Threads list (?threads=1); ?catchup=threads (old links) still opens
   // the threads-only card stack.
-  // Catch up from the top bar opens on the newest unread (?catchup=newest);
+  // Catch up from the lead row opens on the newest unread (?catchup=newest);
   // an entry id opens the queue at that entry (a cold link does the same).
   const openCatchUp = useCallback(
     (entryId: string | null) => {
@@ -681,7 +681,7 @@ export function NotificationsPage() {
     },
     [searchParams, setSearchParams],
   );
-  useActivityTopbar({
+  const leadRow = useActivityLeadRow({
     workspaceId,
     totalUnread,
     ready: !listLoading,
@@ -848,8 +848,9 @@ export function NotificationsPage() {
   return (
     <>
       {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page
-          starts with the shell's chip row (Mark all read lives in the top
-          bar); ListScreen keeps the sr-only h1 for screen readers and e2e. The
+          starts with the shell's chip row, then Threads | Catch up in the
+          lead slot (Mark all read is Catch up's long-press); ListScreen keeps
+          the sr-only h1 for screen readers and e2e. The
           list sits in the shell's content: 16 under the chips, the gutter. */}
       <ListScreen
         title={ACTIVITY_TITLE}
@@ -861,6 +862,7 @@ export function NotificationsPage() {
             mentionCount={mentionCount}
           />
         }
+        lead={leadRow}
       >
         {error && items.length === 0 ? (
           <LoadFailed onRetry={() => void loadActivity()} />
@@ -965,8 +967,8 @@ export function NotificationsPage() {
   );
 }
 
-/** Before the list paints: a guess at its top (top bar + chip row + the 16 under it). */
-const ACTIVITY_LIST_TOP_GUESS = 128;
+/** Before the list paints: a guess at its top (top bar + chip row + the 40 lead row + the 16 under it). */
+const ACTIVITY_LIST_TOP_GUESS = 168;
 /** A section heading (16 line) and its 16 step to the rows (Plan's list frame). */
 const ACTIVITY_HEADING_PX = 32;
 /** Between sections (Plan's list frame). */

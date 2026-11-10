@@ -820,63 +820,6 @@ export function topbarDriftViolations(rows: readonly TopbarSlotsAt[]): string[] 
   return out;
 }
 
-/** One chip row ([data-chip-row]) with a pinned Select ([data-chip-row-select]). */
-export interface ChipRowGeom {
-  label: string;
-  /** The row's box. */
-  row: Box;
-  /** The row's right padding (the Select's 44 box is pulled out toward the edge). */
-  paddingRight: number;
-  /** The chips' scroller ([data-chip-scroll]). */
-  scroll: Box | null;
-  /** The pinned Select's wrapper ([data-chip-row-select]). */
-  select: Box | null;
-  /** The Select button itself ([data-section-select]). */
-  button: Box | null;
-}
-
-/**
- * Decision E: the visible Select is pinned at the chip row's end (its right
- * edge on the row's content edge), the chips scroll in their own box that
- * ends before it (never under it), the Select's tap box is at least 44 tall
- * and it sits on the chips' line (centred with them). Rows without a Select
- * are not checked. Pure.
- */
-export function chipRowViolations(rows: readonly ChipRowGeom[]): string[] {
-  const out: string[] = [];
-  for (const r of rows) {
-    if (r.select === null) continue;
-    const contentRight = r.row.x + r.row.width - r.paddingRight;
-    const selectRight = r.select.x + r.select.width;
-    if (Math.abs(selectRight - contentRight) > 1) {
-      out.push(
-        `${r.label} Select ends at ${selectRight}, the row's content edge is ${contentRight} (not pinned at the end)`,
-      );
-    }
-    if (r.scroll !== null && r.scroll.x + r.scroll.width > r.select.x + LIST_CARD_PX_TOLERANCE) {
-      out.push(
-        `${r.label} chips run to ${r.scroll.x + r.scroll.width}, under the Select at ${r.select.x}`,
-      );
-    }
-    if (r.button === null) {
-      out.push(`${r.label} has no Select button ([data-section-select])`);
-      continue;
-    }
-    if (r.button.height < CHIP_HIT_PX - LIST_CARD_PX_TOLERANCE) {
-      out.push(`${r.label} Select is ${r.button.height}px tall, under 44`);
-    }
-    if (r.scroll !== null && r.scroll.height > 0) {
-      const mid = (b: Box): number => b.y + b.height / 2;
-      if (Math.abs(mid(r.button) - mid(r.scroll)) > 1) {
-        out.push(
-          `${r.label} Select is off the chips' line (centre ${mid(r.button)} vs ${mid(r.scroll)})`,
-        );
-      }
-    }
-  }
-  return out;
-}
-
 /** A visible progress bar ([role=progressbar] or <progress>) on an upload screen. */
 export interface UploadBarItem {
   label: string;
@@ -1116,7 +1059,7 @@ export function alignmentViolations(families: readonly AlignFamily[]): string[] 
 }
 
 /*
- * The list-screen axis (shell/ListScreen, 10 Nov 2026): five positions read on
+ * The list-screen axis (shell/ListScreen, 10 Nov 2026): six positions read on
  * a list tab's plain page, each against the screen's own frame (the top bar's
  * bottom, <main>'s left and right). NaN = not found on that tab.
  */
@@ -1126,8 +1069,19 @@ export interface ListScreenAxis {
   chipsTop: number;
   /** (b) <main> left to the first chip's left. */
   chipX: number;
-  /** (c) Chip row bottom to the first content row top. */
+  /**
+   * (c) The block above the content (the chip row, or the lead strip when one
+   * shows) bottom to the first content's top: the first row, or the section
+   * heading that opens the list.
+   */
   contentTop: number;
+  /**
+   * (c2) The first REAL ROW ([data-list-card]) top, from the bottom of what
+   * sits right above it in the shell: the section heading that opens its
+   * section, else the lead strip, else the chip row. Never the content
+   * wrapper, so a pad inside the list (Briefs' old pt-3 grid, +12) fails.
+   */
+  rowTop: number;
   /** (d) <main> left to the first row's text start (its title). */
   textX: number;
   /** (e) The first line's right-most row content edge to <main> right. */
@@ -1140,6 +1094,7 @@ export const LIST_SCREEN_AXIS_KEYS: readonly ListScreenAxisKey[] = [
   'chipsTop',
   'chipX',
   'contentTop',
+  'rowTop',
   'textX',
   'rightInset',
 ];
@@ -1151,6 +1106,8 @@ export function listScreenAxisExpected(laptop: boolean): Record<ListScreenAxisKe
     chipsTop: SCREEN_CHIPS_TOP,
     chipX: gutter,
     contentTop: SCREEN_CONTENT_TOP,
+    // A heading's 16 step to its rows is the same 16 (Plan's list frame).
+    rowTop: SCREEN_CONTENT_TOP,
     textX: gutter + ROW_TEXT_START,
     rightInset: gutter,
   };
@@ -1174,7 +1131,7 @@ export function listScreenAxisViolations(
 }
 
 /**
- * The measure-only report: one line per tab, its five numbers and each one's
+ * The measure-only report: one line per tab, its six numbers and each one's
  * delta from the base tab (Pipeline). Never fails. Pure.
  */
 export function listScreenAxisReport(
@@ -1195,4 +1152,84 @@ export function listScreenAxisReport(
       ).join(' | ')}`,
   );
   return [head, ...lines].join('\n');
+}
+
+// --- Nothing moves when you switch tabs (10 Nov 2026) -----------------------
+
+/** Tolerance for the tab-frame compare (px). */
+export const TAB_FRAME_DRIFT_PX = 1;
+
+/**
+ * One list tab's frame: what must sit in the same place on all six tabs.
+ * null = not shown at this width (the phone name and bottom bar on laptop).
+ */
+export interface TabFrameAt {
+  screen: string;
+  /** The top bar's workspace name, left x (phone; laptop has it in the Sidebar). */
+  nameX: number | null;
+  /** The visible Search key or field, left x. */
+  searchX: number | null;
+  /** The Account menu (avatar), left x. */
+  avatarX: number | null;
+  /** The phone bottom bar's pill tabs: each one's centre x, in order. */
+  tabCentres: readonly number[];
+  /** The Chat circle's centre x. */
+  chatCentre: number | null;
+  /** The bottom bar's width. */
+  barWidth: number | null;
+  /** Controls in the filter row that are not chips (a label each). */
+  nonChips: readonly string[];
+}
+
+function frameDrift(
+  out: string[],
+  what: string,
+  r: { screen: string; v: number | null },
+  first: { screen: string; v: number | null },
+): void {
+  if (r.v === null && first.v === null) return;
+  if (r.v === null || first.v === null || Math.abs(r.v - first.v) > TAB_FRAME_DRIFT_PX) {
+    out.push(`${r.screen}: ${what} at ${String(r.v)}, ${first.screen} at ${String(first.v)}`);
+  }
+}
+
+/**
+ * The top bar (name, search, avatar x), the bottom bar (each tab's and the
+ * Chat circle's centre x, the bar's width) hold one place on every tab (each
+ * against the first, +-1), and the filter row holds only chips. Pure.
+ */
+export function tabFrameViolations(rows: readonly TabFrameAt[]): string[] {
+  const out: string[] = [];
+  for (const r of rows) {
+    for (const label of r.nonChips) out.push(`${r.screen}: filter row holds a non-chip (${label})`);
+  }
+  const first = rows[0];
+  if (first === undefined) return out;
+  for (const r of rows.slice(1)) {
+    const pair = (k: 'nameX' | 'searchX' | 'avatarX' | 'chatCentre' | 'barWidth') =>
+      [
+        { screen: r.screen, v: r[k] },
+        { screen: first.screen, v: first[k] },
+      ] as const;
+    frameDrift(out, 'top bar name x', ...pair('nameX'));
+    frameDrift(out, 'top bar search x', ...pair('searchX'));
+    frameDrift(out, 'top bar avatar x', ...pair('avatarX'));
+    frameDrift(out, 'Chat circle centre x', ...pair('chatCentre'));
+    frameDrift(out, 'bottom bar width', ...pair('barWidth'));
+    if (r.tabCentres.length !== first.tabCentres.length) {
+      out.push(
+        `${r.screen}: ${r.tabCentres.length} bottom bar tabs, ${first.screen} has ${first.tabCentres.length}`,
+      );
+      continue;
+    }
+    r.tabCentres.forEach((c, i) =>
+      frameDrift(
+        out,
+        `bottom bar tab ${i + 1} centre x`,
+        { screen: r.screen, v: c },
+        { screen: first.screen, v: first.tabCentres[i] ?? null },
+      ),
+    );
+  }
+  return out;
 }

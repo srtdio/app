@@ -81,7 +81,6 @@ describe('X7 FT43: Hide chat is not a destructive action', () => {
     active: true,
     selectedIds: new Set(['g1']),
     onEnter: () => {},
-    onStart: () => {},
     onCancel: () => {},
     onToggle: () => {},
     onDelete: () => {},

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ListScreen, SectionSelect, listScreenChipRow } from '@/components/shell/ListScreen';
+import { ListScreen, listScreenChipRow } from '@/components/shell/ListScreen';
 
 const SOURCE = readFileSync(fileURLToPath(new URL('./ListScreen.tsx', import.meta.url)), 'utf8');
 
@@ -13,27 +13,26 @@ function html(node: Parameters<typeof renderToStaticMarkup>[0]): string {
 describe('ListScreen: the one list-screen shell', () => {
   it('renders the sr-only h1, the chip row, and the content on the gutter, 16 under', () => {
     const out = html(
-      <ListScreen
-        title="Pipeline"
-        chips={<button type="button">All</button>}
-        select={<SectionSelect active={false} onToggle={() => {}} />}
-      >
+      <ListScreen title="Pipeline" chips={<button type="button">All</button>}>
         <p>row</p>
       </ListScreen>,
     );
     expect(out).toContain('<h1 tabindex="-1" class="sr-only">Pipeline</h1>');
     expect(out).toMatch(/data-shell="chips"/);
     expect(out).toMatch(
-      /data-chip-row="" class="flex items-center gap-2 pl-4 md:pl-6 pr-1 md:pr-3 mt-3"/,
+      /data-chip-row="" class="flex items-center gap-2 pl-4 md:pl-6 pr-4 md:pr-6 mt-3"/,
     );
     expect(out).toContain('<div data-shell="content" class="pt-4 px-4 md:px-6"><p>row</p></div>');
     expect(out).not.toContain('data-shell="lead"');
     expect(out).not.toContain('data-shell="footer"');
   });
 
-  it('with no Select the chip row ends on the gutter', () => {
+  it('the chip row holds only chips and ends on the gutter (no Select key)', () => {
     const out = html(listScreenChipRow({ chips: <span>chip</span> }));
     expect(out).toContain('pl-4 md:pl-6 pr-4 md:pr-6 mt-3');
+    expect(out).not.toContain('data-chip-row-select');
+    expect(out).not.toContain('data-section-select');
+    expect(SOURCE).not.toMatch(/\bselect\?:|SectionSelect|CHIPS_END_SELECT/);
   });
 
   it('a sticky row drops the top gap and pins under the top bar', () => {

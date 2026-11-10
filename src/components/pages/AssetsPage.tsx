@@ -7,7 +7,7 @@ import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { SortMenu } from '@/components/ui/SortMenu';
-import { ListScreen, SectionSelect } from '@/components/shell/ListScreen';
+import { ListScreen } from '@/components/shell/ListScreen';
 import { useTopbarActions } from '@/components/shell/topbar-actions';
 import { useSelectMode } from '@/components/pages/pipeline/use-select-mode';
 import { ICON_SIZE, IconAssets } from '@/components/ui/icons';
@@ -874,11 +874,10 @@ export function AssetsPage() {
 
   return (
     <>
-      {/* The type chips with Select pinned at the row's end; the tab panel is
+      {/* The type chips (no Select key: long-press or right-click selects); the tab panel is
           the shell's content (16 under the chips, the side gutter). */}
       <ListScreen
         title="Assets"
-        select={<SectionSelect active={selectMode.on} onToggle={selectMode.toggle} />}
         chips={
           assetsFailed ? null : (
             <AssetTabs value={tab} counts={counts ?? NO_COUNTS} onChange={setTab} />

@@ -4,7 +4,6 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import {
   NOTIFICATIONS_PATH,
-  NOTIFICATIONS_TITLE,
   notificationsLabel,
   onNotifications,
 } from '@/components/shell/NotificationsButton';
@@ -105,22 +104,22 @@ export function chatTabLabel(unread: number): string {
 }
 
 /**
- * A pill tab, always a 44x44 target or wider: inactive is the icon alone in
- * fg-2; active is the panel-3 fill in fg ink with its label (the label hides
- * while the dock is shrunk). Flat: no ink fill, no pill light.
+ * A pill tab: one fixed 44x44 slot on every tab, icon only, so no tab and no
+ * icon moves when the active tab changes. Inactive is the icon in fg-2;
+ * active is the panel-3 fill behind the icon in fg ink. Flat: no ink fill, no
+ * pill light.
  */
-export function tabClass(active: boolean, shrunk = false): string {
+export function tabClass(active: boolean): string {
   return cn(
-    'relative flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
+    'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
     MOVE_CLASS.dock,
-    active ? 'bg-panel-3 text-fg' : 'w-11 text-fg-2',
-    active && (shrunk ? 'w-11' : 'gap-2 px-3'),
+    active ? 'bg-panel-3 text-fg' : 'text-fg-2',
   );
 }
 
 /** One pill tab of the primary nav (Pipeline, Briefs, Assets, Plan). */
-function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number; shrunk: boolean }) {
-  const { item, planUnread, shrunk } = props;
+function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
+  const { item, planUnread } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
   // Plan with unread comments: the tap lands on the newest one (jump to latest).
   const newest = useNewestPlanUnread();
@@ -131,7 +130,7 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number; s
       data-selected={active ? 'true' : undefined}
       aria-label={item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label}
       {...navPrefetchProps(item.to)}
-      className={() => tabClass(active, shrunk)}
+      className={() => tabClass(active)}
     >
       {item.showPlanBadge === true ? (
         // Plan: the icon carries the unread plan comments badge.
@@ -147,23 +146,17 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number; s
       ) : (
         <item.Icon size={ICON_SIZE.control} />
       )}
-      <TabLabel active={active && !shrunk} label={item.label} />
     </NavLink>
   );
 }
 
-function TabLabel({ active, label }: { active: boolean; label: string }) {
-  return active ? (
-    <span className="shrink-0 whitespace-nowrap text-md font-medium">{label}</span>
-  ) : null;
-}
-
 /**
  * Phone nav (below md): a centred floating pill (Pipeline, Briefs, Assets,
- * Plan, Activity) and a separate Chat circle, 16px above the bottom, only as
- * wide as its tabs; only the active tab shows its label. Flat: hairline edge,
- * no shadow. 52 at rest, 44 while scrolling down (labels hide, icons stay),
- * back at rest on scroll up or near the top (useDockShrunk, MOVE_CLASS.dock). A fade strip behind it keeps content that
+ * Plan, Activity) and a separate Chat circle, 16px above the bottom. Every
+ * tab is one fixed 44 slot, icons only, so the bar has one width on every tab
+ * and nothing slides when the tab changes. Flat: hairline edge, no shadow. 52
+ * at rest, 44 while scrolling down, back at rest on scroll up or near the top
+ * (useDockShrunk, MOVE_CLASS.dock). A fade strip behind it keeps content that
  * scrolls under the bar readable. Badges read the chat and inbox stores the
  * shell already holds: no read, no effect, no measuring.
  */
@@ -203,7 +196,7 @@ export function BottomTabs() {
           )}
         >
           {PILL_NAV.map((item) => (
-            <PillTab key={item.to} item={item} planUnread={planUnread} shrunk={shrunk} />
+            <PillTab key={item.to} item={item} planUnread={planUnread} />
           ))}
           {/* Activity: last in the pill on phone (the top bar's button is laptop only). */}
           <NavLink
@@ -214,7 +207,7 @@ export function BottomTabs() {
             {...(activityActive ? { 'aria-current': 'page' as const } : {})}
             {...activityPrefetchProps()}
             data-selected={activityActive ? 'true' : undefined}
-            className={tabClass(activityActive, shrunk)}
+            className={tabClass(activityActive)}
           >
             <span className="relative">
               <span ref={activityNudgeRef} className="inline-flex">
@@ -227,7 +220,6 @@ export function BottomTabs() {
                 />
               ) : null}
             </span>
-            <TabLabel active={activityActive && !shrunk} label={NOTIFICATIONS_TITLE} />
           </NavLink>
         </div>
         {CHAT_NAV !== undefined ? (

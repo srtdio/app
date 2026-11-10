@@ -83,12 +83,11 @@ vi.mock('@/components/shell/InboxStoreProvider', async (importOriginal) => ({
 
 /** Stands in for Topbar: renders what the page published into its two slots. */
 function TopbarProbe() {
-  const { sort, primary, pair } = useTopbarActionsValue();
+  const { sort, primary } = useTopbarActionsValue();
   return (
     <div data-test-topbar="">
       <span data-test-topbar-sort="">{sort}</span>
       <span data-test-topbar-primary="">{primary}</span>
-      <span data-test-topbar-pair="">{pair}</span>
     </div>
   );
 }
@@ -221,17 +220,19 @@ describe('Notifications type roles', () => {
 });
 
 describe('Activity header, order and the Unread zero state', () => {
-  it('no search field and no sort (decided 7 Nov): Threads | Catch up live in the top bar', async () => {
+  it('no search field and no sort (decided 7 Nov): Threads | Catch up live in the lead row', async () => {
     await mount();
     expect(document.querySelector('input[aria-label="Search activity"]')).toBeNull();
     expect(document.querySelector('[data-search-group]')).toBeNull();
     const bar = document.querySelector('[data-test-topbar]');
     expect(document.querySelector('[aria-label="Sort activity"]')).toBeNull();
     expect(document.querySelector('[data-test-topbar-sort]')?.childElementCount).toBe(0);
-    const threads = document.querySelector('[data-test-topbar-pair] [data-topbar-threads]');
+    const lead = document.querySelector('[data-shell="lead"]');
+    const threads = lead?.querySelector('[data-topbar-threads]');
     const catchUp = document.querySelector('[data-topbar-catch-up]');
     expect(threads).not.toBeNull();
-    expect(bar?.contains(catchUp)).toBe(true);
+    expect(lead?.contains(catchUp)).toBe(true);
+    expect(bar?.contains(catchUp)).toBe(false);
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
   });
 

@@ -6,8 +6,8 @@ import {
   type HarnessNetwork,
 } from '../fixtures/harness-routes';
 import {
-  assertActivityTopbarPair,
-  assertActivityTopbarNarrow,
+  assertActivityLeadRow,
+  assertActivityLeadRowNarrow,
   assertActivityLoadMoreBand,
   assertActivityCounts,
   assertActivityPreviews,
@@ -20,6 +20,7 @@ import {
   assertProgressRowUnderBar,
   assertSameWidth,
   assertTopbarSlotsStill,
+  assertTabFrameStill,
   assertListScreenAxis,
   readListScreenAxis,
   reportListScreenAxis,
@@ -32,6 +33,7 @@ import {
   checkLayout,
   type AlignScope,
   readTopbarSlots,
+  readTabFrame,
   assertActivityTwinsPlan,
   readActivityBoxes,
   readListTwin,
@@ -1838,12 +1840,12 @@ const SCREENS: Screen[] = [
       await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
       // Unread rows on All: Catch up (filled, with its count) beside Threads.
       await waitFor(
-        [page.locator('header [data-topbar-pair] [data-topbar-catch-up]:not([data-count="0"])')],
+        [page.locator('[data-shell="lead"] [data-topbar-catch-up]:not([data-count="0"])')],
         'Catch up',
       );
     },
-    // The pair's face, text, pill and hit; phone name and spacing; laptop Sidebar.
-    after: async (page) => assertActivityTopbarPair(page, 'notifications'),
+    // The lead row's faces, text, pills and hits; the row's edges; laptop Sidebar.
+    after: async (page) => assertActivityLeadRow(page, 'notifications'),
   },
   // Activity's Load more (10 Nov 2026): depth in item rows, never entries; the
   // button sits half a screen below the fold. Measured at the page top, then
@@ -1926,7 +1928,7 @@ const SCREENS: Screen[] = [
       await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
       await waitFor([page.locator('[data-sidebar-activity][data-selected="true"]')], 'Activity');
     },
-    after: async (page) => assertActivityTopbarPair(page, 'sidebar-activity-active'),
+    after: async (page) => assertActivityLeadRow(page, 'sidebar-activity-active'),
   },
   {
     // The idea bank's Activity rows (team viewer): added, shown, hidden, moved, planned.
@@ -4995,16 +4997,10 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       const results = await openMediaChip(page, 'photo');
-      // The chip row's Select, pinned at the row's end.
-      await tap([page.locator('[data-chip-row-select] [data-section-select]')], 'Select');
+      // No Select key (10 Nov 2026): a long-press (phone) or right-click
+      // (laptop) on the first photo enters select mode with its message picked.
       const first = results.locator('[data-media-tile]').first();
-      // The check sits over the tile's top right (over its centre on a laptop
-      // tile): tap the check, which toggles the same message.
-      const check = results
-        .locator('[data-media-select-item]')
-        .first()
-        .locator('[data-select-circle]');
-      await tap([check], 'first photo check');
+      await selectGesture(page, first);
       await expect(first).toHaveAttribute('aria-pressed', 'true');
       await waitFor([page.getByTestId('media-select-bar')], 'chip select bar');
     },
@@ -5909,8 +5905,8 @@ SCREENS.push(
 // (notifications), its slot empty at 0 unread (activity-all-read). A picker's
 // search opens the palette in pick mode ("Chats only", ticks, "Send 1"); the
 // pickers themselves are forward-picker, post-picker, plan-picker,
-// asset-picker and plan-from-bank. The chip row's Select sits pinned at the
-// row's end (each base screen) and pressed in select mode (*-select-on). Every
+// asset-picker and plan-from-bank. The chip row holds only chips (no Select
+// key, 10 Nov 2026; select mode is the *-select screens' long-press). Every
 // upload shows ui/UploadRing or Retry, never a bar or a % (check 10:
 // UPLOAD_SCREENS).
 
@@ -5922,12 +5918,6 @@ const topbarSlot = (page: Page, name: 'sort' | 'primary'): Locator =>
 async function openTopbarSort(page: Page): Promise<void> {
   await tap([topbarSlot(page, 'sort').locator('button')], 'top bar sort');
   await waitFor([page.locator('[role="menuitemradio"]')], 'sort options');
-}
-
-/** The chip row's Select tapped: select mode on, nothing ticked, Select pressed. */
-async function chipRowSelectOn(page: Page): Promise<void> {
-  await tap([page.locator('[data-chip-row-select] [data-section-select="off"]')], 'Select');
-  await waitFor([page.locator('[data-chip-row-select] [data-section-select="on"]')], 'Select on');
 }
 
 const planTabReady = async (page: Page): Promise<void> =>
@@ -6123,7 +6113,7 @@ SCREENS.push(
       await activityPairAt(page, { threads: 0, catchUp: 0 });
       await expect(page.locator('[data-activity-mark-all]')).toHaveCount(0);
     },
-    after: async (page) => assertActivityTopbarPair(page, 'activity-all-read'),
+    after: async (page) => assertActivityLeadRow(page, 'activity-all-read'),
   },
   {
     // Forward's search: the palette in pick mode over the picker ("Chats
@@ -6144,44 +6134,6 @@ SCREENS.push(
       await tap([row], `${GROUP_NAME} row`);
       await expect(row).toHaveAttribute('data-palette-pick', 'on');
       await expect(palette.locator('[data-palette-pick-footer] button')).toHaveText('Send 1');
-    },
-  },
-  // The chip row's Select tapped: select mode with nothing ticked, Select pressed.
-  {
-    name: 'pipeline-select-on',
-    seed: creator,
-    url: '/pipeline',
-    steps: async (page) => {
-      await pipelineReady(page);
-      await chipRowSelectOn(page);
-    },
-  },
-  {
-    name: 'assets-select-on',
-    seed: creator,
-    url: '/assets',
-    steps: async (page) => {
-      await assetsReady(page);
-      await chipRowSelectOn(page);
-    },
-  },
-  {
-    name: 'plan-tab-bank-select-on',
-    seed: creator,
-    extra: seedBank,
-    url: '/plan?week=bank',
-    steps: async (page) => {
-      await bankReady(page);
-      await chipRowSelectOn(page);
-    },
-  },
-  {
-    name: 'chat-list-select-on',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await chatListAllRows(page);
-      await chipRowSelectOn(page);
     },
   },
   // Uploads (decision F): the ring with its X, or Retry, in the same spot.
@@ -7127,10 +7079,6 @@ const LIST_CARD_SCREENS = new Set([
   'pipeline-select-1',
   'pipeline-select-2',
   'pipeline-overdue',
-  'pipeline-select-on',
-  'assets-select-on',
-  'plan-tab-bank-select-on',
-  'chat-list-select-on',
 ]);
 
 // Laptop dark: these screens also run in the laptop-dark project
@@ -7287,10 +7235,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'plan-picker',
   'asset-picker',
   'plan-from-bank',
-  'pipeline-select-on',
-  'assets-select-on',
-  'plan-tab-bank-select-on',
-  'chat-list-select-on',
   'assets-upload-uploading',
   'post-tile-uploading',
   'concept-chip-uploading',
@@ -7308,9 +7252,9 @@ const LAPTOP_DARK_SCREENS = new Set([
   'threads-stack-card',
 ]);
 
-// --- Activity's top bar: Threads | Catch up (10 Nov 2026) ------------------
-// Phone and laptop, light and dark. Check 15's top bar part
-// (assertActivityTopbarPair) measures the pair on each: one box, both states.
+// --- Activity's lead row: Threads | Catch up (10 Nov 2026) -----------------
+// Phone and laptop, light and dark. Check 15's lead row part
+// (assertActivityLeadRow) measures the pair on each: one box, both states.
 
 /** Every thread of the fixture world read for me, except `unread` (read rows, as the proc reads them). */
 function seedThreadsRead(network: HarnessNetwork, unread: readonly string[] = []): void {
@@ -7355,11 +7299,11 @@ async function activityPairAt(
 ): Promise<void> {
   const state = (n: 0 | 'on'): string => (n === 0 ? '[data-count="0"]' : ':not([data-count="0"])');
   await waitFor(
-    [page.locator(`header [data-topbar-pair] [data-topbar-threads]${state(want.threads)}`)],
+    [page.locator(`[data-shell="lead"] [data-topbar-threads]${state(want.threads)}`)],
     `Threads ${want.threads}`,
   );
   await waitFor(
-    [page.locator(`header [data-topbar-pair] [data-topbar-catch-up]${state(want.catchUp)}`)],
+    [page.locator(`[data-shell="lead"] [data-topbar-catch-up]${state(want.catchUp)}`)],
     `Catch up ${want.catchUp}`,
   );
 }
@@ -7379,10 +7323,10 @@ SCREENS.push(
       await activityPairAt(page, { threads: 'on', catchUp: 0 });
     },
     after: async (page) => {
-      await assertActivityTopbarPair(page, 'activity-threads-new');
-      // Narrow phones (390, 375): the name keeps 8 characters, the pair goes icon + count.
+      await assertActivityLeadRow(page, 'activity-threads-new');
+      // Narrow phones (390, 375): the lead row fits, in words.
       if ((page.viewportSize()?.width ?? 0) < 768) {
-        await assertActivityTopbarNarrow(page, 'activity-threads-new');
+        await assertActivityLeadRowNarrow(page, 'activity-threads-new');
       }
     },
   },
@@ -7397,8 +7341,8 @@ SCREENS.push(
     steps: async (page) => {
       await activityReady(page);
       await activityPairAt(page, { threads: 'on', catchUp: 'on' });
-      await assertActivityTopbarPair(page, 'activity-catch-up-menu');
-      await page.locator('header [data-topbar-catch-up]').click({ button: 'right' });
+      await assertActivityLeadRow(page, 'activity-catch-up-menu');
+      await page.locator('[data-shell="lead"] [data-topbar-catch-up]').click({ button: 'right' });
       await waitFor(
         [
           page.getByRole('menuitem', { name: 'Mark all as read' }),
@@ -7422,7 +7366,7 @@ SCREENS.push(
     steps: async (page) => {
       await activityReady(page);
       await activityPairAt(page, { threads: 'on', catchUp: 0 });
-      await tap([page.locator('header [data-topbar-threads]')], 'Threads');
+      await tap([page.locator('[data-shell="lead"] [data-topbar-threads]')], 'Threads');
       await catchUpReady(page);
       await expect(page.locator('[data-catch-up-left]')).toHaveText('1 left');
     },
@@ -7443,8 +7387,8 @@ const TOPBAR_LIST_SCREENS: ReadonlyArray<{ url: string; ready: (page: Page) => P
   { url: '/briefs', ready: briefsReady },
   { url: '/assets', ready: assetsReady },
   { url: '/plan', ready: planTabReady },
-  // Activity (10 Nov): no sort and no "+"; Threads | Catch up stand in place of
-  // the slots (check 15 measures them), so it is not in the slot walk.
+  // Activity: no sort and no "+"; both slots stay empty boxes of the same width.
+  { url: '/activity', ready: activityReady },
   { url: '/chat', ready: chatListReady },
 ];
 
@@ -7524,6 +7468,36 @@ test('list-screen axis: the six list tabs', async ({ page }, testInfo) => {
   }
   if (darkTab === undefined) reportListScreenAxis(project, rows);
   for (const row of rows) assertListScreenAxis(row, project.startsWith('laptop'));
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+// Nothing moves when you switch tabs (10 Nov 2026): on the six list tabs the
+// top bar's name, search and avatar x, the phone bottom bar's tab and Chat
+// centres and its width hold one place (+-1, each against Pipeline), and the
+// filter row holds only chips (layout-checks.ts readTabFrame,
+// layout-checks-core.ts tabFrameViolations). iphone-light and laptop-light.
+// No screenshot.
+test('tab frame: nothing moves across the six list tabs', async ({ page }, testInfo) => {
+  const project = testInfo.project.name;
+  test.skip(project !== 'iphone-light' && project !== 'laptop-light', 'iphone and laptop, light');
+  await page.clock.setFixedTime(NOW);
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(page);
+  Object.assign(network.world, buildWorld(NOW));
+  seedAudit(network, creator, NOW);
+  seedTab(network);
+  await installDeletedRoutes(page, network);
+  const rows: Array<Awaited<ReturnType<typeof readTabFrame>>> = [];
+  for (const tab of LIST_SCREEN_TABS) {
+    await page.goto(tab.url);
+    await tab.ready(page);
+    await waitFor([page.locator('header [aria-label="Account menu"]')], `${tab.tab} top bar`);
+    rows.push(await readTabFrame(page, tab.tab));
+  }
+  assertTabFrameStill('tab frame across the six list tabs', rows);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 

@@ -287,8 +287,6 @@ describe('post flow C: header, count and filters', () => {
         onStageChange: () => {},
         counts: { all: 4, draft: 2, review: 1, approved: 1 },
         hideDraft,
-        selectMode: false,
-        onSelectToggle: () => {},
       }),
     );
   }

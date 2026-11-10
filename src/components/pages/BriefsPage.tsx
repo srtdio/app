@@ -261,12 +261,17 @@ export function briefsLoadMore(
 }
 
 /**
- * The loading state: a static skeleton in the real list's shape (a section
- * header bar, a day label, then ui/ListCardBox: the ListCard's 60 frame, 40
- * picture and two lines), in the same container and grid, so nothing
- * jumps when the cards arrive. Shared Bone boxes (a top-lit sweep, never a pulse).
+ * The loading state: a static skeleton in the real list's shape, in the same
+ * container and grid, so nothing jumps when the cards arrive. `flat` (the
+ * creator's fixed-order list): the rows alone, the first one on the shell's 16
+ * like Pipeline's. Sections (approvers): a section header bar, a day label,
+ * then the day grid. ui/ListCardBox is the ListCard's frame. Shared Bone boxes
+ * (a top-lit sweep, never a pulse).
  */
-export function BriefsListSkeleton(): ReactElement {
+export function BriefsListSkeleton({ flat = false }: { flat?: boolean } = {}): ReactElement {
+  const rows = Array.from({ length: getFillCount() }, (_unused, key) => (
+    <ListCardBox key={key} data-brief-card-skeleton="" />
+  ));
   return (
     <BoxSkeleton
       lit="flat"
@@ -274,19 +279,19 @@ export function BriefsListSkeleton(): ReactElement {
       data-testid="briefs-skeleton"
       className={LIST_CLASS}
     >
-      <section>
-        <div className="py-2">
-          <Bone lit="flat" as="div" className="h-5 w-24 rounded" />
-        </div>
-        <div className="pt-3 pb-1">
-          <Bone lit="flat" as="div" className="h-4 w-14 rounded" />
-        </div>
-        <div className={GRID_CLASS}>
-          {Array.from({ length: getFillCount() }, (_unused, key) => (
-            <ListCardBox key={key} data-brief-card-skeleton="" />
-          ))}
-        </div>
-      </section>
+      {flat ? (
+        <div className={FLAT_GRID_CLASS}>{rows}</div>
+      ) : (
+        <section>
+          <div className="py-2">
+            <Bone lit="flat" as="div" className="h-5 w-24 rounded" />
+          </div>
+          <div className="pt-3 pb-1">
+            <Bone lit="flat" as="div" className="h-4 w-14 rounded" />
+          </div>
+          <div className={GRID_CLASS}>{rows}</div>
+        </section>
+      )}
     </BoxSkeleton>
   );
 }
@@ -863,7 +868,7 @@ export function BriefsPage() {
         {listFailed ? (
           <LoadError title="briefs" onRetry={() => void loadBriefs()} retrying={loading} />
         ) : listLoading ? (
-          <BriefsListSkeleton />
+          <BriefsListSkeleton flat={showFlat} />
         ) : shownCount === 0 ? (
           briefsEmptyView(briefsEmptyState(filter, workspaceBriefs.length, canCreateBrief))
         ) : showFlat ? (

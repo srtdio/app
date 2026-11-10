@@ -294,7 +294,7 @@ describe('PlanTabPage', () => {
       expect(html).not.toContain('data-section-select');
     });
 
-    it(`${width}: the Bank chip publishes Filter and sort (IconSort) and Add idea; Select on its chip row`, () => {
+    it(`${width}: the Bank chip publishes Filter and sort (IconSort) and Add idea; no Select key`, () => {
       Object.assign(env, { desktop, side: 'agency', data: DATA, guide: 'off' });
       const html = render('/plan?week=bank');
       const bar = topbar();
@@ -304,9 +304,9 @@ describe('PlanTabPage', () => {
       expect(bar.primary).not.toContain('New plan');
       // No search of its own.
       expect(html).not.toContain('Search ideas');
-      // The visible Select at the chip row's end, off until tapped.
-      expect(html).toContain('data-chip-row-select');
-      expect(html).toContain('data-section-select="off"');
+      // No Select key (10 Nov 2026): long-press or right-click a card selects.
+      expect(html).not.toContain('data-chip-row-select');
+      expect(html).not.toContain('data-section-select');
       // The side panel, its Expand and the table are gone.
       expect(html).not.toContain('data-bank-expand');
       expect(html).not.toContain('data-bank-table');

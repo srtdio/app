@@ -9,6 +9,9 @@ import { describe, expect, it } from 'vitest';
 // - one upload look: no role="progressbar" outside ui/UploadRing, except the
 //   non-upload progress listed in PROGRESS_ALLOWED;
 // - one select circle: no hand-built rounded-full tick circle outside ui/SelectCheck;
+// - no Select key (10 Nov 2026): select mode starts only by long-press (phone)
+//   or right-click / Shift / Cmd-click (laptop); no SectionSelect, no
+//   data-section-select, no select slot on the chip row;
 // - one pending-file chip: PendingChip is defined only in ui/PendingChip.
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -62,6 +65,21 @@ export function progressBars(rel: string, src: string): string[] {
   return out;
 }
 
+/** "file:line" for each Select key: the old SectionSelect or its hooks. Pure. */
+export function selectKeys(rel: string, src: string): string[] {
+  const out: string[] = [];
+  src.split('\n').forEach((line, i) => {
+    if (
+      /<SectionSelect\b|function SectionSelect\b|data-section-select|data-chip-row-select/.test(
+        line,
+      )
+    ) {
+      out.push(`${rel}:${i + 1}`);
+    }
+  });
+  return out;
+}
+
 /**
  * "file:line" for each hand-built select circle: a rounded-full box with a
  * tick (IconCheck) within six lines and a selection fill or state word. Pure.
@@ -81,7 +99,7 @@ export function handBuiltSelectCircles(rel: string, src: string): string[] {
   return out;
 }
 
-describe('one search, one upload look, one select circle (7 Nov 2026)', () => {
+describe('one search, one upload look, one select circle, no Select key', () => {
   it('no tone="search" Input outside CommandPalette, HelpPage and the Cockpit', () => {
     expect(FILES.flatMap((f) => searchFields(f.rel, f.src))).toEqual([]);
   });
@@ -92,6 +110,16 @@ describe('one search, one upload look, one select circle (7 Nov 2026)', () => {
 
   it('no hand-built rounded-full select circle outside ui/SelectCheck', () => {
     expect(FILES.flatMap((f) => handBuiltSelectCircles(f.rel, f.src))).toEqual([]);
+  });
+
+  it('no Select key: long-press or right-click starts select mode (10 Nov 2026)', () => {
+    expect(FILES.flatMap((f) => selectKeys(f.rel, f.src))).toEqual([]);
+    const shell = FILES.find((f) => f.rel === 'components/shell/ListScreen.tsx')?.src ?? '';
+    expect(shell).not.toMatch(/\bselect\?:/);
+    expect(selectKeys('components/x/Y.tsx', '<SectionSelect active />')).toEqual([
+      'components/x/Y.tsx:1',
+    ]);
+    expect(selectKeys('components/x/Y.tsx', '<ListCard select={s} />')).toEqual([]);
   });
 
   it('PendingChip is defined only in ui/PendingChip', () => {

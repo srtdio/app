@@ -265,12 +265,10 @@ const REQUIRED: readonly string[] = [
   // One search, the top bar and the chip row (7 Nov 2026): sorts, Activity at
   // 0 unread, palette pick mode, Select pressed, upload states.
   'activity-all-read',
-  'assets-select-on',
   'assets-sort',
   'assets-upload-uploading',
   'briefs',
   'briefs-plus-blocked',
-  'chat-list-select-on',
   'chat-list-sort',
   'concept-chip-failed',
   'concept-chip-ready',
@@ -278,9 +276,7 @@ const REQUIRED: readonly string[] = [
   'onboarding-first-post-uploading',
   'palette-pick',
   'pipeline-plus-blocked',
-  'pipeline-select-on',
   'pipeline-sort',
-  'plan-tab-bank-select-on',
   'plan-tab-chip-past',
   'plan-tab-sort',
   'post-tile-uploading',

@@ -173,7 +173,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(chat.some((c) => c.startsWith('shadow'))).toBe(false);
   });
 
-  it('only the active tab shows its label; the rest are icon only with an aria-label', () => {
+  it('every tab is icon only with an aria-label; the active one is the fill, no word', () => {
     const container = render('/briefs');
     const links = pillLinks(container);
     expect(links.map((a) => a.getAttribute('aria-label'))).toEqual([
@@ -183,21 +183,17 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
       'Plan',
       'Activity',
     ]);
-    expect(links.map((a) => a.textContent)).toEqual(['', 'Briefs', '', '', '']);
+    expect(links.map((a) => a.textContent)).toEqual(['', '', '', '', '']);
     const active = links[1];
     if (active === undefined) throw new Error('no Briefs tab');
     expect(classes(active)).toEqual(
-      expect.arrayContaining(['bg-panel-3', 'text-fg', 'gap-2', 'px-3', MOVE_CLASS.dock]),
+      expect.arrayContaining(['bg-panel-3', 'text-fg', 'h-11', 'w-11', MOVE_CLASS.dock]),
     );
+    expect(classes(active)).not.toContain('px-3');
     expect(active.getAttribute('data-selected')).toBe('true');
     for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill', 'bg-accent-soft']) {
       expect(classes(active)).not.toContain(c);
     }
-    const label = active.querySelector('span');
-    expect(classes(label ?? active)).toEqual(
-      expect.arrayContaining(['whitespace-nowrap', 'text-md', 'font-medium']),
-    );
-    expect(classes(label ?? active)).not.toContain('font-semibold');
     for (const idle of [links[0], links[2], links[3], links[4]]) {
       expect(classes(idle ?? active)).toContain('text-fg-2');
       expect(classes(idle ?? active)).toContain('w-11');
@@ -207,21 +203,28 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     }
   });
 
-  it('Activity is active on /notifications with its label and aria-current', () => {
+  it('Activity is active on /notifications: the fill and aria-current, no word', () => {
     const container = render('/notifications');
     const activity = container.querySelector('[data-activity-tab]');
-    expect(activity?.textContent).toBe('Activity');
+    expect(activity?.textContent).toBe('');
+    expect(activity?.getAttribute('aria-label')).toBe('Activity');
     expect(activity?.getAttribute('aria-current')).toBe('page');
-    expect(pillLinks(container).filter((a) => (a.textContent ?? '') !== '')).toHaveLength(1);
+    expect(classes(activity ?? container)).toContain('bg-panel-3');
   });
 
-  it('every target is at least 44x44: pill tabs h-11 with w-11 or min-w-11, Chat 52x52 at rest', () => {
-    const container = render('/pipeline');
-    for (const a of pillLinks(container)) {
-      const cls = classes(a);
-      expect(cls).toContain('h-11');
-      expect(cls).toContain('min-w-11');
+  it('every tab is one fixed 44x44 slot on every route; Chat 52x52 at rest', () => {
+    for (const route of ['/pipeline', '/briefs', '/assets', '/plan', '/notifications', '/chat']) {
+      const container = render(route);
+      for (const a of pillLinks(container)) {
+        const cls = classes(a);
+        expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11']));
+        expect(cls).not.toContain('min-w-11');
+        expect(cls).not.toContain('px-3');
+      }
+      act(() => root?.unmount());
+      container.remove();
     }
+    const container = render('/pipeline');
     const chat = classes(chatLink(container));
     expect(chat).toEqual(expect.arrayContaining(['h-13', 'w-13', 'rounded-full']));
     expect(chat).not.toContain('h-15');
@@ -356,34 +359,32 @@ describe('Plan tab unread comments badge', () => {
   });
 });
 
-describe('tabClass: the flat pill tab', () => {
-  it('active at rest: the panel-3 fill in fg ink, label room (gap-2 px-3); never the ink fill', () => {
+describe('tabClass: the flat pill tab, one fixed 44 slot', () => {
+  it('active: the panel-3 fill in fg ink in the same 44 box; never the ink fill, no label room', () => {
     const cls = tabClass(true).split(' ');
     expect(cls).toEqual(
-      expect.arrayContaining(['h-11', 'min-w-11', 'rounded-full', 'bg-panel-3', 'text-fg']),
+      expect.arrayContaining(['h-11', 'w-11', 'rounded-full', 'bg-panel-3', 'text-fg']),
     );
-    expect(cls).toEqual(expect.arrayContaining(['gap-2', 'px-3', MOVE_CLASS.dock]));
-    expect(cls).not.toContain('w-11');
-    for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill', 'mv-tint']) {
+    for (const c of ['min-w-11', 'gap-2', 'px-3', 'bg-accent', 'text-accent-fg', 'lit-pill']) {
       expect(cls).not.toContain(c);
     }
   });
 
-  it('active while shrunk: the same fill, squeezed to the 44 circle (no label room)', () => {
-    const cls = tabClass(true, true).split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['bg-panel-3', 'text-fg', 'w-11', MOVE_CLASS.dock]));
-    expect(cls).not.toContain('px-3');
-    expect(cls).not.toContain('gap-2');
+  it('inactive: the icon alone in fg-2 in the same 44 box', () => {
+    const cls = tabClass(false).split(' ');
+    expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'text-fg-2']));
+    expect(cls).not.toContain('bg-panel-3');
+    expect(cls).not.toContain('bg-accent');
+    expect(cls).not.toContain('lit-pill');
   });
 
-  it('inactive: the icon alone in fg-2 in a 44 box, shrunk or not', () => {
-    for (const shrunk of [false, true]) {
-      const cls = tabClass(false, shrunk).split(' ');
-      expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'text-fg-2', MOVE_CLASS.dock]));
-      expect(cls).not.toContain('bg-panel-3');
-      expect(cls).not.toContain('bg-accent');
-      expect(cls).not.toContain('lit-pill');
-    }
+  it('active and inactive differ only in fill and ink (no width change)', () => {
+    const strip = (c: string) =>
+      c
+        .split(' ')
+        .filter((x) => !['bg-panel-3', 'text-fg', 'text-fg-2'].includes(x))
+        .sort();
+    expect(strip(tabClass(true))).toEqual(strip(tabClass(false)));
   });
 });
 
@@ -485,7 +486,7 @@ describe('useDockShrunk: one passive capture scroll listener on document', () =>
 });
 
 describe('BottomTabs: the dock shrinks on scroll down', () => {
-  it('rest: data-dock="rest", 52 pill and Chat circle, the active label shows', () => {
+  it('rest: data-dock="rest", 52 pill and Chat circle, icons only', () => {
     const container = render('/briefs');
     const bar = nav(container);
     expect(bar.getAttribute('data-dock')).toBe('rest');
@@ -493,10 +494,10 @@ describe('BottomTabs: the dock shrinks on scroll down', () => {
     const pill = container.querySelector('[data-tab-pill]');
     expect(classes(pill ?? bar)).toEqual(expect.arrayContaining(['h-13', 'px-1']));
     expect(classes(chatLink(container))).toEqual(expect.arrayContaining(['h-13', 'w-13']));
-    expect(pillLinks(container).map((a) => a.textContent)).toEqual(['', 'Briefs', '', '', '']);
+    expect(pillLinks(container).map((a) => a.textContent)).toEqual(['', '', '', '', '']);
   });
 
-  it('shrunk: data-dock="shrunk", 44 pill and Chat circle, nudged down, labels hidden (icons stay)', () => {
+  it('shrunk: data-dock="shrunk", 44 pill and Chat circle, nudged down, icons stay', () => {
     const container = render('/briefs');
     const scroller = document.createElement('div');
     document.body.appendChild(scroller);
@@ -512,7 +513,7 @@ describe('BottomTabs: the dock shrinks on scroll down', () => {
     expect(chat).toEqual(expect.arrayContaining(['h-11', 'w-11']));
     expect(chat).not.toContain('h-13');
     expect(pillLinks(container).map((a) => a.textContent)).toEqual(['', '', '', '', '']);
-    // The icon stays on the active tab; only its label hides.
+    // The icon stays on the active tab.
     expect(pillLinks(container)[1]?.querySelector('svg')).not.toBeNull();
     scroller.remove();
   });

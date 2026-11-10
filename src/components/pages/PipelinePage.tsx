@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
-import { ListScreen, SectionSelect, type ListScreenChips } from '@/components/shell/ListScreen';
+import { ListScreen, type ListScreenChips } from '@/components/shell/ListScreen';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import {
   ICON_SIZE,
@@ -126,10 +126,6 @@ interface PipelineHeaderProps {
   counts: Record<string, number>;
   /** Approvers never see the Draft chip. */
   hideDraft?: boolean;
-  /** Select mode is on: the chip row's Select is pressed (decision E). */
-  selectMode: boolean;
-  /** The chip row's Select tap: enter select mode with none ticked, or leave. */
-  onSelectToggle: () => void;
 }
 
 /** The stage chips in transition-map order (Draft left out for approvers), All last. */
@@ -150,8 +146,8 @@ export function stageChipItems(
 
 /**
  * The Pipeline chip row (decisions A, B, E): the shell's chip slots
- * (shell/ListScreen) with the stage chips and the visible Select pinned at
- * its end, the row's wrapper keeping [data-pipeline-toolbar]. Sort and New post live
+ * (shell/ListScreen) with the stage chips only (no Select key: long-press or
+ * right-click a row selects), the row's wrapper keeping [data-pipeline-toolbar]. Sort and New post live
  * in the app top bar ({@link pipelineTopbarActions}); search lives only in the
  * top bar's command palette. Each chip carries its label and post count as
  * discrete fields (StageChips renders the count as a trailing badge). Pure (no
@@ -164,7 +160,6 @@ export function pipelineHeader(props: PipelineHeaderProps): ListScreenChips {
   const items = stageChipItems(props.counts, hideDraft);
   return {
     chipsHook: { 'data-pipeline-toolbar': '' },
-    select: <SectionSelect active={props.selectMode} onToggle={props.onSelectToggle} />,
     chips: (
       <StageRow hideDraft={hideDraft}>
         <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
@@ -1239,8 +1234,6 @@ export function PipelinePage() {
           onStageChange: setStage,
           counts,
           hideDraft: isClient(role),
-          selectMode: selectMode.on,
-          onSelectToggle: selectMode.toggle,
         })}
         // Counts live on the chips. While a date filter narrows the view: the
         // honest "{shown} of {total} posts", and the undated posts the date

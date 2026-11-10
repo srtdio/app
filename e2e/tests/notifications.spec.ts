@@ -121,8 +121,8 @@ test(
     for (const name of ['Briefs', 'Plans']) {
       await expect(chipRow.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
-    // The top bar: Threads | Catch up (10 Nov); Catch up filled with the unread count.
-    await expect(page.locator('header [data-topbar-pair] [data-topbar-catch-up]')).toHaveAttribute(
+    // The lead row under the pills: Threads | Catch up; Catch up filled with the unread count.
+    await expect(page.locator('[data-shell="lead"] [data-topbar-catch-up]')).toHaveAttribute(
       'aria-label',
       /^Catch up, \d+ unread$/,
     );
@@ -374,17 +374,22 @@ test(
     for (const link of await page.locator('[data-tab-pill] a').all()) {
       expectMinTouchTarget(await link.boundingBox());
     }
-    // Only the active tab (Pipeline) shows its label, on one line.
+    // Every tab is one fixed 44 slot, icons only (10 Nov 2026): the active one
+    // (Pipeline) is the fill, no word.
     const active = page.locator('[data-tab-pill] a[aria-current="page"]');
-    await expect(active).toHaveText('Pipeline');
-    expect((await active.boundingBox())?.height).toBeCloseTo(44, 0);
+    await expect(active).toHaveText('');
+    await expect(active).toHaveAttribute('aria-label', 'Pipeline');
+    const activeBox = await active.boundingBox();
+    expect(activeBox?.height).toBeCloseTo(44, 0);
+    expect(activeBox?.width).toBeCloseTo(44, 0);
 
-    // The tab opens Activity and takes the label.
+    // The tab opens Activity; the bar keeps its width and Chat its place.
     await tab.click();
     await expect(page).toHaveURL(/\/notifications$/);
     await expect(tab).toHaveAttribute('aria-current', 'page');
-    await expect(tab).toContainText('Activity');
-    await expect(page.locator('[data-tab-pill] a', { hasText: 'Pipeline' })).toHaveCount(0);
+    await expect(tab).toHaveText('');
+    expect((await nav.boundingBox())?.width).toBeCloseTo(row.width, 0);
+    expect((await page.locator('[data-chat-tab]').boundingBox())?.x).toBeCloseTo(chat.x, 0);
 
     // Chat: the circle opens the normal chat page.
     await page.locator('[data-chat-tab]').click();
