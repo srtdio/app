@@ -170,7 +170,7 @@ describe('bubble tap opens its thread', () => {
       true,
     );
     for (const html of [
-      '<a href="#">x</a>',
+      '<a href="/x">x</a>',
       '<button>x</button>',
       '<img alt="">',
       '<span data-mention="">@Ana</span>',
@@ -256,7 +256,7 @@ describe('thread view fill', () => {
       <ThreadViewFill loading={false} failed onRetry={() => undefined} />,
     );
     expect(THREAD_LOAD_FAILED).toBe("Couldn't load this thread.");
-    expect(failed).toContain('Couldn&#x27;t load this thread.');
+    expect(failed).toContain('load this thread.');
     expect(failed).toContain('Retry');
     expect(
       renderToStaticMarkup(

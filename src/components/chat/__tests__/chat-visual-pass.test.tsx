@@ -79,7 +79,8 @@ describe('chat visual pass', () => {
       /<ThreadHoldTip\s+userId=\{props\.currentUserId \?\? ''\}\s+layout=\{layout\}\s+empty=\{props\.messages\.length === 0\}/,
     );
     const tip = read('../ThreadHoldTip.tsx');
-    expect(tip).toContain('if (show && !empty) noteHoldTipShown(userId);');
+    expect(tip).toContain('if (!show || empty) return;');
+    expect(tip).toContain('noteHoldTipShown(userId);');
     expect(tip).toContain('if (!show || empty) return null;');
   });
 
