@@ -377,7 +377,7 @@ test(
     // Every tab is one fixed 44 slot, icons only (10 Nov 2026): the active one
     // (Pipeline) is the fill, no word.
     const active = page.locator('[data-tab-pill] a[aria-current="page"]');
-    await expect(active).toHaveText('');
+    await expect(active).not.toContainText('Pipeline');
     await expect(active).toHaveAttribute('aria-label', 'Pipeline');
     const activeBox = await active.boundingBox();
     expect(activeBox?.height).toBeCloseTo(44, 0);
@@ -387,7 +387,8 @@ test(
     await tab.click();
     await expect(page).toHaveURL(/\/notifications$/);
     await expect(tab).toHaveAttribute('aria-current', 'page');
-    await expect(tab).toHaveText('');
+    // No word on the active tab (its unread badge count may show).
+    await expect(tab).not.toContainText('Activity');
     expect((await nav.boundingBox())?.width).toBeCloseTo(row.width, 0);
     expect((await page.locator('[data-chat-tab]').boundingBox())?.x).toBeCloseTo(chat.x, 0);
 
