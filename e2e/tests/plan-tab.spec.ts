@@ -114,10 +114,13 @@ test('the Plan tab lists plans as ListCards in sections and a tap opens the plan
     if (a === null || b === null) throw new Error('card boxes');
     expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(1);
   }
-  // New plan is the top bar's filled "+" (icon only, named New plan).
+  // New plan is the top bar's "+" (named New plan): 44 tall; 36 wide below md
+  // (the top bar key strip, topbar-keys.test.ts), 112 wide from md.
   const add = page.locator('[data-topbar-slot="primary"] [data-topbar-plus]');
   await expect(add).toHaveAccessibleName('New plan');
-  expectMinTouchTarget(await add.boundingBox());
+  const addBox = await add.boundingBox();
+  expectMinTouchTarget(addBox, { dimension: 'height' });
+  expectMinTouchTarget(addBox, { min: 36, dimension: 'width' });
 
   await shootBoth(page, 'plan-tab-list', async () => {
     await expect(page.locator('[data-plan-tab-list]')).toBeVisible({ timeout: 15_000 });
@@ -129,15 +132,18 @@ test('the Plan tab lists plans as ListCards in sections and a tap opens the plan
   expectClean(network);
 });
 
-test('Load more ends the list while older plans remain, then appends them @desktop @theme', async ({
+test('a short chip reads the older plans silently: no Load more under a short list @desktop @theme', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   seedPlanTab(network.world, { sender: ME });
-  // 14 older shared plans, a week apart: with the two of this week that is 16,
-  // so the first page (12, newest starts_on first) leaves 4 for Load more.
+  // 30 older shared plans, a week apart: with the two of this week that is 32.
+  // Page one (12, newest starts_on first) holds this week's two and the 10
+  // newest older ones, so Past (10) is short of its depth (one page, 12): it
+  // reads page two silently (no button) and shows 22, then Load more while
+  // the server has more (10 November 2026: Load more only when there is more).
   const template = (network.world.tables.plans ?? []).find((p) => p.id === TAB_SHARED_PLAN_ID);
-  const older = Array.from({ length: 14 }, (_, k) => {
+  const older = Array.from({ length: 30 }, (_, k) => {
     const starts = civilPlus(MONDAY, -7 * (k + 1));
     return {
       ...template,
@@ -149,43 +155,40 @@ test('Load more ends the list while older plans remain, then appends them @deskt
   });
   (network.world.tables.plans ??= []).push(...older);
   await openTab(page);
-  // Every chip reads every plan, a page at a time: Past paints from the one
-  // read Upcoming made, with no request of its own. The first page holds this
-  // week's two (Upcoming) and the 10 newest older ones (Past).
-  await page.locator('[data-plan-tab-when="past"]').click();
-  await expect(page.locator('[data-plan-tab-when="past"]')).toHaveAttribute('aria-pressed', 'true');
-
+  // Upcoming holds only this week's two, short of its depth (one page, 12):
+  // it reads the older pages silently, no button, until the server is done.
   const list = page.locator('[data-plan-tab-list]');
   const more = list.locator('[data-plan-tab-load-more]');
-  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(10);
-  await expect(more).toHaveText('Load more');
-  expectMinTouchTarget(await more.boundingBox());
-  const allReads = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
-  expect(allReads).toHaveLength(1);
-  expect(allReads[0]?.args.p_range_start).toBeUndefined();
-  expect(allReads[0]?.args.p_before_starts_on).toBeUndefined();
-
-  await shootBoth(page, 'plan-tab-load-more', async () => {
-    await expect(page.locator('[data-plan-tab-load-more]')).toBeVisible({ timeout: 15_000 });
-  });
-
-  const before = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read').length;
-  await more.click();
-  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(14);
-  // The last page: the control is gone.
+  await expect
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'plan_bundle_read').length)
+    .toBe(3);
   await expect(more).toHaveCount(0);
-  const calls = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
-  expect(calls).toHaveLength(before + 1);
-  const page2 = calls[calls.length - 1]?.args;
-  // The cursor is the first page's last plan: the 12th newest (this week's
-  // two, then the 10 newest older ones).
-  expect(page2?.p_before_starts_on).toBe(civilPlus(MONDAY, -7 * 10));
-  expect(page2?.p_before_id).toBe(older[9]?.id);
-  // Every past plan once (no duplicates by id).
+  const reads = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
+  expect(reads[0]?.args.p_before_starts_on).toBeUndefined();
+  // Page two starts after page one's last plan (the 10th older one).
+  expect(reads[1]?.args.p_before_starts_on).toBe(civilPlus(MONDAY, -7 * 10));
+  expect(reads[1]?.args.p_before_id).toBe(older[9]?.id);
+
+  // Past paints from those reads: every past plan once, and no Load more
+  // under a list the server has finished.
+  await page.locator('[data-plan-tab-when="past"]').click();
+  await expect(page.locator('[data-plan-tab-when="past"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(30);
+  await expect(more).toHaveCount(0);
   const ids = await list
     .locator('[data-plan-tab-card]')
     .evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-tab-card')));
-  expect(new Set(ids).size).toBe(14);
+  expect(new Set(ids).size).toBe(30);
+  // A reload lands on Past: page one holds 10 there (short), so page two is
+  // read silently; 22 then fill the depth and Load more shows (more remain).
+  await shootBoth(page, 'plan-tab-past-reload', async () => {
+    await expect(page.locator('[data-plan-tab-card]')).toHaveCount(22, { timeout: 15_000 });
+    await expect(page.locator('[data-plan-tab-load-more]')).toHaveText('Load more');
+  });
+  expectMinTouchTarget(await more.boundingBox());
+  await more.click();
+  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(30);
+  await expect(more).toHaveCount(0);
   expectClean(network);
 });
 

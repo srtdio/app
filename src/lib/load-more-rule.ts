@@ -67,16 +67,18 @@ export function useLoadMoreFill(input: {
 }): { busy: boolean; onMore: () => void } | null {
   const { filterKey, matching, loaded, page, serverMore, busy, onMore } = input;
   const [depth, setDepth] = useState(page);
+  // The loaded count the last silent read started from, and the last tap's.
+  const [triedAt, setTriedAt] = useState<number | null>(null);
+  const [pressedAt, setPressedAt] = useState<number | null>(null);
   const [depthFor, setDepthFor] = useState(filterKey);
   if (depthFor !== filterKey) {
     setDepthFor(filterKey);
     setDepth(page);
+    setTriedAt(null);
+    setPressedAt(null);
   }
   // Every loaded row of the filter shows, so none is held back.
   const rule = loadMoreRule({ matching, depth: Math.max(depth, matching), serverMore });
-  // The loaded count the last silent read started from, and the last tap's.
-  const [triedAt, setTriedAt] = useState<number | null>(null);
-  const [pressedAt, setPressedAt] = useState<number | null>(null);
   const fill = rule.fill && triedAt !== loaded && onMore !== undefined;
   useEffect(() => {
     if (!fill || busy || onMore === undefined) return;

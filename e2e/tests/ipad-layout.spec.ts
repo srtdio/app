@@ -27,8 +27,9 @@ test('iPad portrait: Pipeline renders the laptop shell and laptop popovers', asy
   await expect(sidebar.getByRole('link', { name: /^Pipeline/ })).toBeVisible();
   // BottomTabs is the nav carrying the bottom anchor (src/lib/bottom-inset.ts).
   await expect(page.locator('nav[data-undo-anchor]')).toBeHidden();
-  // Activity stays in the laptop top bar; the phone pill's Activity tab is hidden.
-  await expect(page.locator('header [data-notifications-button]')).toBeVisible();
+  // Activity is the laptop Sidebar's last item (10 Nov 2026); the phone pill's tab is hidden.
+  await expect(page.locator('aside [data-sidebar-activity]')).toBeVisible();
+  await expect(page.locator('header [data-notifications-button]')).toHaveCount(0);
   await expect(page.locator('[data-activity-tab]')).toBeHidden();
   // useIsLaptop: Filter and sort opens the laptop popover, not the phone sheet.
   await page.getByRole('button', { name: 'Filter and sort', exact: true }).click();
