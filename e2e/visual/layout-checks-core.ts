@@ -8,6 +8,11 @@ import {
   ROW_HEIGHT,
   ROW_INSET,
   ROW_PICTURE,
+  ROW_TEXT_START,
+  SCREEN_CHIPS_TOP,
+  SCREEN_CONTENT_TOP,
+  SCREEN_GUTTER_LAPTOP,
+  SCREEN_GUTTER_PHONE,
 } from '../../src/components/ui/layout';
 
 /** A box in CSS px, viewport coordinates (getBoundingClientRect). */
@@ -287,7 +292,8 @@ export interface LayoutViolation {
     | 'comment-bar'
     | 'thread-header'
     | 'catch-up'
-    | 'alignment';
+    | 'alignment'
+    | 'list-screen';
   message: string;
 }
 
@@ -1107,4 +1113,86 @@ export function alignmentViolations(families: readonly AlignFamily[]): string[] 
     }
   }
   return out;
+}
+
+/*
+ * The list-screen axis (shell/ListScreen, 10 Nov 2026): five positions read on
+ * a list tab's plain page, each against the screen's own frame (the top bar's
+ * bottom, <main>'s left and right). NaN = not found on that tab.
+ */
+export interface ListScreenAxis {
+  screen: string;
+  /** (a) Top bar bottom to the chip row top. */
+  chipsTop: number;
+  /** (b) <main> left to the first chip's left. */
+  chipX: number;
+  /** (c) Chip row bottom to the first content row top. */
+  contentTop: number;
+  /** (d) <main> left to the first row's text start (its title). */
+  textX: number;
+  /** (e) The first line's right-most row content edge to <main> right. */
+  rightInset: number;
+}
+
+export type ListScreenAxisKey = Exclude<keyof ListScreenAxis, 'screen'>;
+
+export const LIST_SCREEN_AXIS_KEYS: readonly ListScreenAxisKey[] = [
+  'chipsTop',
+  'chipX',
+  'contentTop',
+  'textX',
+  'rightInset',
+];
+
+/** What the shell draws: the SCREEN_* constants at the phone or laptop gutter. Pure. */
+export function listScreenAxisExpected(laptop: boolean): Record<ListScreenAxisKey, number> {
+  const gutter = laptop ? SCREEN_GUTTER_LAPTOP : SCREEN_GUTTER_PHONE;
+  return {
+    chipsTop: SCREEN_CHIPS_TOP,
+    chipX: gutter,
+    contentTop: SCREEN_CONTENT_TOP,
+    textX: gutter + ROW_TEXT_START,
+    rightInset: gutter,
+  };
+}
+
+/** Each position off its expected value by more than ALIGN_TOLERANCE_PX (or missing). Pure. */
+export function listScreenAxisViolations(
+  axis: ListScreenAxis,
+  expected: Record<ListScreenAxisKey, number>,
+): string[] {
+  const out: string[] = [];
+  for (const key of LIST_SCREEN_AXIS_KEYS) {
+    const got = axis[key];
+    if (!Number.isFinite(got)) {
+      out.push(`${axis.screen}: ${key} not found`);
+    } else if (Math.abs(got - expected[key]) > ALIGN_TOLERANCE_PX) {
+      out.push(`${axis.screen}: ${key} is ${r1(got)}px, not ${expected[key]}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * The measure-only report: one line per tab, its five numbers and each one's
+ * delta from the base tab (Pipeline). Never fails. Pure.
+ */
+export function listScreenAxisReport(
+  rows: readonly ListScreenAxis[],
+  base: ListScreenAxis,
+): string {
+  const cell = (n: number): string => (Number.isFinite(n) ? String(r1(n)) : 'n/a');
+  const delta = (n: number, b: number): string => {
+    if (!Number.isFinite(n) || !Number.isFinite(b)) return 'n/a';
+    const d = r1(n - b);
+    return d === 0 ? '0' : d > 0 ? `+${d}` : String(d);
+  };
+  const head = `screen | ${LIST_SCREEN_AXIS_KEYS.join(' | ')}`;
+  const lines = rows.map(
+    (row) =>
+      `${row.screen} | ${LIST_SCREEN_AXIS_KEYS.map(
+        (k) => `${cell(row[k])} (${delta(row[k], base[k])})`,
+      ).join(' | ')}`,
+  );
+  return [head, ...lines].join('\n');
 }

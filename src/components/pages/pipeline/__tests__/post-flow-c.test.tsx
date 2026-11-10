@@ -73,6 +73,7 @@ import {
 } from '@/components/pages/PipelinePage';
 import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { SectionHeader } from '@/components/shell/SectionHeader';
+import { listScreenChipRow } from '@/components/shell/ListScreen';
 import { filterByWindow, isUndated, sortPosts } from '@/lib/list-sort';
 import type { UndoableAction } from '@/lib/use-undoable-action';
 import { formatAgo } from '@/lib/time';
@@ -280,14 +281,16 @@ describe('post flow C: Pipeline card', () => {
 
 describe('post flow C: header, count and filters', () => {
   function header(hideDraft: boolean): ReactElement {
-    return pipelineHeader({
-      stage: 'review',
-      onStageChange: () => {},
-      counts: { all: 4, draft: 2, review: 1, approved: 1 },
-      hideDraft,
-      selectMode: false,
-      onSelectToggle: () => {},
-    });
+    return listScreenChipRow(
+      pipelineHeader({
+        stage: 'review',
+        onStageChange: () => {},
+        counts: { all: 4, draft: 2, review: 1, approved: 1 },
+        hideDraft,
+        selectMode: false,
+        onSelectToggle: () => {},
+      }),
+    );
   }
 
   it('fix 6: approvers get no Draft chip (stageChipItems and pipelineHeader hideDraft)', () => {

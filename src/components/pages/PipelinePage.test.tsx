@@ -115,6 +115,7 @@ import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
 import { groupByStage } from '@/lib/post-board';
 import { POST_SORT_DEFAULT, filterByWindow, sortPosts, type DateWindow } from '@/lib/list-sort';
 import { SectionHeader } from '@/components/shell/SectionHeader';
+import { listScreenChipRow } from '@/components/shell/ListScreen';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
@@ -231,13 +232,15 @@ function texts(tree: ReactNode): string[] {
 }
 
 function header(selectMode = false, onSelectToggle: () => void = () => {}): ReactElement {
-  return pipelineHeader({
-    stage: 'all',
-    onStageChange: () => {},
-    counts: { all: 3, draft: 2, review: 1 },
-    selectMode,
-    onSelectToggle,
-  });
+  return listScreenChipRow(
+    pipelineHeader({
+      stage: 'all',
+      onStageChange: () => {},
+      counts: { all: 3, draft: 2, review: 1 },
+      selectMode,
+      onSelectToggle,
+    }),
+  );
 }
 
 function topbar(
@@ -399,13 +402,15 @@ describe('opens on the Review chip by default', () => {
     // (b) The chip order is the stages in transition-map order, then All;
     // the review default only shifts which chip is selected, never the list.
     const chips = findAll(
-      pipelineHeader({
-        stage: initial,
-        onStageChange: () => {},
-        counts: { all: 3, draft: 2, review: 1 },
-        selectMode: false,
-        onSelectToggle: () => {},
-      }),
+      listScreenChipRow(
+        pipelineHeader({
+          stage: initial,
+          onStageChange: () => {},
+          counts: { all: 3, draft: 2, review: 1 },
+          selectMode: false,
+          onSelectToggle: () => {},
+        }),
+      ),
       (el) => el.type === StageChips,
     );
     expect(chips).toHaveLength(1);

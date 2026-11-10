@@ -20,6 +20,9 @@ import {
   assertProgressRowUnderBar,
   assertSameWidth,
   assertTopbarSlotsStill,
+  assertListScreenAxis,
+  readListScreenAxis,
+  reportListScreenAxis,
   assertWritingBox,
   assertAlignment,
   assertCatchUpLayout,
@@ -7464,6 +7467,54 @@ test('top bar: sort and "+" hold one x on the six list screens', async ({ page }
     rows.push(await readTopbarSlots(page, screen.url));
   }
   assertTopbarSlotsStill('top bar across the six list screens', rows);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+// The list-screen axis (shell/ListScreen, 10 Nov 2026): the five positions
+// the shell owns (top bar to chips, first chip x, chips to the first row, the
+// row's text x, the row's right edge), read on the plain page of the six list
+// tabs. Pipeline is on the shell and is asserted against the SCREEN_*
+// constants (+-1); the other five are measured only and printed with their
+// delta from Pipeline under "list-screen axis" in the Visual CI log (the next
+// PR moves them). iphone-light and laptop-light; no screenshot.
+const LIST_SCREEN_TABS: ReadonlyArray<{
+  tab: string;
+  url: string;
+  ready: (page: Page) => Promise<void>;
+}> = [
+  { tab: 'pipeline', url: '/pipeline', ready: pipelineReady },
+  { tab: 'briefs', url: '/briefs', ready: briefsReady },
+  { tab: 'assets', url: '/assets', ready: assetsReady },
+  { tab: 'plan', url: '/plan', ready: planTabReady },
+  { tab: 'chat-list', url: '/chat', ready: chatListReady },
+  { tab: 'activity', url: '/activity', ready: activityReady },
+];
+
+test('list-screen axis: the six list tabs', async ({ page }, testInfo) => {
+  const project = testInfo.project.name;
+  test.skip(
+    project !== 'iphone-light' && project !== 'laptop-light',
+    'iphone-light and laptop-light only',
+  );
+  await page.clock.setFixedTime(NOW);
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(page);
+  Object.assign(network.world, buildWorld(NOW));
+  seedAudit(network, creator, NOW);
+  seedTab(network);
+  await installDeletedRoutes(page, network);
+  const rows: Array<Awaited<ReturnType<typeof readListScreenAxis>>> = [];
+  for (const tab of LIST_SCREEN_TABS) {
+    await page.goto(tab.url);
+    await tab.ready(page);
+    rows.push(await readListScreenAxis(page, tab.tab));
+  }
+  const pipeline = rows[0];
+  if (pipeline !== undefined) assertListScreenAxis(pipeline, project.startsWith('laptop'));
+  reportListScreenAxis(project, rows);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 
