@@ -16,6 +16,7 @@ import { parseMentions, stripFormat } from '@srtdio/comments';
 import { mentionNamesIn, resolveMentionPreview } from '@/lib/chat/mentions';
 import { logger } from '@/lib/logger';
 import { chatPointOf } from '@/lib/catch-up/writes';
+import { replyStatsOf, type ReplyInfo } from '@/lib/catch-up/types';
 
 /** One message as a catch-up card draws it (the chat's work layout). */
 export interface CatchUpMessage {
@@ -42,6 +43,8 @@ export interface CatchUpChatContent {
   latestReplyId: string | null;
   /** Main chat: replies under each top-level message (its threads row). */
   replyCounts: ReadonlyMap<string, number>;
+  /** Main chat: each top-level message's repliers and last reply time (same read). */
+  replyInfo?: ReadonlyMap<string, ReplyInfo>;
   /** Older messages exist above (scroll up loads them). */
   hasOlder: boolean;
 }
@@ -202,17 +205,20 @@ export async function readCatchUpChat(
     mainIds.length > 0
       ? await client
           .from('chat_messages')
-          .select('thread_root_message_id')
+          .select('thread_root_message_id, sender_user_id, created_at')
           .in('thread_root_message_id', mainIds)
           .is('deleted_at', null)
+          .order('created_at', { ascending: false })
       : null;
-  const replyCounts = new Map<string, number>();
-  if (countsRes !== null && countsRes.error === null) {
-    for (const r of countsRes.data ?? []) {
-      const root = r.thread_root_message_id;
-      if (root !== null) replyCounts.set(root, (replyCounts.get(root) ?? 0) + 1);
-    }
-  }
+  const { counts: replyCounts, info: replyInfo } = replyStatsOf(
+    countsRes !== null && countsRes.error === null
+      ? (countsRes.data ?? []).map((r) => ({
+          parent: r.thread_root_message_id,
+          author: r.sender_user_id,
+          at: r.created_at,
+        }))
+      : [],
+  );
   const cards = rootIds.flatMap((id) => {
     const row = rows.get(id);
     const card = row !== undefined ? cardRef(row) : null;
@@ -228,6 +234,7 @@ export async function readCatchUpChat(
         ...parseMentions(r.body ?? ''),
       ]),
     ),
+    ...[...replyInfo.values()].flatMap((r) => r.repliers),
   ];
   const [titles] = await Promise.all([
     readTitles(client, {
@@ -263,6 +270,7 @@ export async function readCatchUpChat(
         threadName: null,
         latestReplyId: null,
         replyCounts,
+        replyInfo,
         hasOlder: (mainByChannel.get(point.channelId) ?? []).length >= CATCH_UP_REPLIES,
       });
       continue;

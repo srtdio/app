@@ -80,6 +80,7 @@ import {
   seedRemovedLine,
 } from '../fixtures/remove-files';
 import {
+  COMMENT_TITLE,
   installLinkPreviewStub,
   TEXT_LINE,
   TEXT_TITLE,
@@ -99,6 +100,7 @@ import {
   CU_IDEA_ENTRY,
   CU_LINK_ENTRY,
   CU_LONG_CAPTION_ENTRY,
+  CU_LINK_PREVIEW_ENTRY,
   CU_LONG_NAME_ENTRY,
   CU_LONG_TITLE_ENTRY,
   CU_MANY_ENTRY,
@@ -115,6 +117,7 @@ import {
   seedCatchUpEmoji,
   seedCatchUpFeedback,
   seedCatchUpGroupMain,
+  seedCatchUpLinkPreview,
   seedCatchUpLongCaption,
   seedCatchUpLongLink,
   seedCatchUpLongName,
@@ -1005,6 +1008,14 @@ async function activitySectionsReady(page: Page, earlier = true): Promise<void> 
       `${key} section`,
     ).toBeAttached();
   }
+}
+
+/** A catch-up card's solid kind sticker (10 Nov 2026): the nav icon + word. */
+async function kindStickerReady(page: Page, kind: string, word: string): Promise<void> {
+  await catchUpReady(page);
+  const sticker = page.locator(`[data-catch-up-sticker="${kind}"]`);
+  await waitFor([sticker], `${word} sticker`);
+  await expect(sticker).toHaveText(word);
 }
 
 /**
@@ -2308,6 +2319,9 @@ const SCREENS: Screen[] = [
     name: 'catch-up-long-link',
     seed: creator,
     extra: (network) => seedCatchUpLongLink(network, NOW),
+    prepare: async (_network, page) => {
+      await installLinkPreviewStub(page);
+    },
     url: `/activity?catchup=${CU_LINK_ENTRY}`,
     steps: async (page) => {
       await catchUpReady(page);
@@ -2531,6 +2545,125 @@ const SCREENS: Screen[] = [
         [page.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
         'replies',
       );
+    },
+  },
+  // Catch-up polish (10 Nov 2026): the kind sticker on every card, the replies
+  // row (photos + full time on one line), comment words, the strip keys (one
+  // action layer), link previews.
+  {
+    name: 'catch-up-kind-post',
+    seed: creator,
+    extra: (network) => seedCatchUpRest(network, NOW),
+    url: `/activity?catchup=${CU_REST_ENTRY}`,
+    steps: (page) => kindStickerReady(page, 'post', 'Post'),
+  },
+  {
+    name: 'catch-up-kind-plan',
+    seed: creator,
+    extra: (network) => seedCatchUpPlanItem(network, NOW),
+    url: `/activity?catchup=${CU_PLAN_ENTRY}`,
+    steps: (page) => kindStickerReady(page, 'plan-item', 'Plan'),
+  },
+  {
+    name: 'catch-up-kind-brief',
+    seed: creator,
+    extra: (network) => seedCatchUpBrief(network, NOW),
+    url: `/activity?catchup=${CU_BRIEF_ENTRY}`,
+    steps: (page) => kindStickerReady(page, 'brief', 'Brief'),
+  },
+  {
+    name: 'catch-up-kind-idea',
+    seed: creator,
+    extra: (network) => seedCatchUpBankIdea(network, NOW),
+    url: `/activity?catchup=${CU_IDEA_ENTRY}`,
+    steps: (page) => kindStickerReady(page, 'idea', 'Idea'),
+  },
+  {
+    name: 'catch-up-kind-chat',
+    seed: creator,
+    extra: (network) => seedCatchUpChatMain(network, NOW),
+    url: `/activity?catchup=${CU_CHAT_MAIN_ENTRY}`,
+    steps: (page) => kindStickerReady(page, 'chat-main', 'Chat'),
+  },
+  {
+    // "4 replies" on the main chat card: replier photos, bold count, the full
+    // last reply time on one line (never truncated; photos go first).
+    name: 'catch-up-replies-row',
+    seed: creator,
+    extra: (network) => seedCatchUpGroupMain(network, NOW),
+    url: `/activity?catchup=${CU_GROUP_MAIN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      const row = page.locator('[data-catch-up-replies]', { hasText: '4 replies' });
+      await waitFor([row.locator('[data-catch-up-replies-photos]')], 'replier photos');
+      const time = row.locator('[data-catch-up-replies-time]');
+      await waitFor([time], 'last reply time');
+      const fits = await time.evaluate(
+        (el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().height < 32,
+      );
+      expect(fits, 'the full time on one line').toBe(true);
+    },
+  },
+  {
+    // A post reply's text tapped: the "Replies" sheet, "Reply to <name>" box,
+    // and the strip's to-do, forward and more keys on the root comment.
+    name: 'catch-up-post-replies-sheet',
+    seed: creator,
+    extra: (network) => seedCatchUpThreadReply(network, NOW),
+    url: `/activity?catchup=${CU_THREAD_REPLY_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap(
+        [
+          page.locator(
+            `[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`,
+          ),
+        ],
+        'reply text',
+      );
+      const sheet = page.locator('[data-catch-up-thread-sheet]');
+      await waitFor(
+        [sheet.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
+        'replies',
+      );
+      await expect(sheet.locator('[data-catch-up-thread-title]')).toHaveText('Replies');
+      for (const key of ['tasks', 'forward', 'more'])
+        await waitFor([sheet.locator(`[data-thread-root-action="${key}"]`)], `${key} key`);
+    },
+  },
+  {
+    // The strip's more key: chat's message action sheet for the root comment.
+    name: 'catch-up-strip-more-open',
+    seed: creator,
+    extra: (network) => seedCatchUpThreadReply(network, NOW),
+    url: `/activity?catchup=${CU_THREAD_REPLY_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap(
+        [
+          page.locator(
+            `[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`,
+          ),
+        ],
+        'reply text',
+      );
+      await tap([page.locator('[data-thread-root-action="more"]')], 'more key');
+      await waitFor([page.getByRole('menu', { name: 'Message actions' })], 'message actions');
+    },
+  },
+  {
+    // A comment with a link: the compact preview card under its text.
+    name: 'catch-up-link-preview',
+    seed: creator,
+    extra: (network) => seedCatchUpLinkPreview(network, NOW),
+    prepare: async (_network, page) => {
+      await installLinkPreviewStub(page);
+    },
+    url: `/activity?catchup=${CU_LINK_PREVIEW_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      const card = page.locator('[data-catch-up-card] [data-link-card][data-card-size="compact"]');
+      await waitFor([card.getByText(COMMENT_TITLE, { exact: true })], 'preview title');
     },
   },
   {

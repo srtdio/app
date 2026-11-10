@@ -39,3 +39,27 @@ export interface CatchUpDraft {
 }
 
 export const EMPTY_DRAFT: CatchUpDraft = { text: '', picks: [] };
+
+/** Per parent: up to 2 unique repliers (newest first) and the newest reply's time. */
+export interface ReplyInfo {
+  repliers: string[];
+  lastAt: string;
+}
+
+/** Reply counts and per-parent ReplyInfo from the reply rows (any order). Pure. */
+export function replyStatsOf(
+  rows: readonly { parent: string | null; author: string | null; at: string }[],
+): { counts: Map<string, number>; info: Map<string, ReplyInfo> } {
+  const counts = new Map<string, number>();
+  const info = new Map<string, ReplyInfo>();
+  const newestFirst = [...rows].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  for (const r of newestFirst) {
+    if (r.parent === null) continue;
+    counts.set(r.parent, (counts.get(r.parent) ?? 0) + 1);
+    const got = info.get(r.parent) ?? { repliers: [], lastAt: r.at };
+    if (r.author !== null && got.repliers.length < 2 && !got.repliers.includes(r.author))
+      got.repliers.push(r.author);
+    info.set(r.parent, got);
+  }
+  return { counts, info };
+}
