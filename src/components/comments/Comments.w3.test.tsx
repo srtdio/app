@@ -71,8 +71,7 @@ vi.mock('@/lib/workspace-members', async (importOriginal) => ({
   useMentionCandidates: () => ({ candidates: [] }),
 }));
 
-import { getFillCount } from '@/lib/use-fill-count';
-import { Comments } from '@/components/comments/Comments';
+import { Comments, COMMENTS_READ_PAGE } from '@/components/comments/Comments';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -168,20 +167,18 @@ describe('Comments W3', () => {
     expect(deleteSpy).not.toHaveBeenCalled();
   });
 
-  it('a failed older page keeps the list and offers Retry at the bottom', async () => {
-    // A full page is one screen's worth (the panel pages by the fill count).
-    const full = Array.from({ length: getFillCount() }, (_u, i) => row(`c-${i}`, `body ${i}`));
+  it('comments never page: every page of 1000 is read, merged, painted once, no Load more', async () => {
+    // A full page means more: the next page is read before anything paints.
+    const full = Array.from({ length: COMMENTS_READ_PAGE }, (_u, i) => row(`c-${i}`, `body ${i}`));
     queue.push({ ok: true, data: full });
-    queue.push({ ok: false, error: { code: 'unknown', message: 'fetch failed' } });
+    queue.push({ ok: true, data: [row('c-last', 'the very last one')] });
     await mount();
 
-    act(() => button('Load more')?.click());
-    await settle();
-
     expect(host?.textContent).toContain('body 0');
-    expect(host?.textContent).toContain("Couldn't load older comments.");
-    expect(host?.textContent).not.toContain('fetch failed');
-    expect(button('Retry')).toBeDefined();
+    expect(host?.textContent).toContain('the very last one');
+    expect(button('Load more')).toBeUndefined();
+    expect(host?.querySelector('[data-comments-load-more]')).toBeNull();
+    expect(host?.textContent).not.toContain("Couldn't load older comments.");
   });
 
   it('an initial load failure shows plain copy with Retry, never the raw error', async () => {

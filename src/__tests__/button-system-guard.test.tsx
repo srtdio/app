@@ -107,7 +107,6 @@ describe('3. Load more is one part', () => {
     'src/components/pages/AssetsPage.tsx',
     'src/components/pages/NotificationsPage.tsx',
     'src/components/pages/pipeline/PipelineFeed.tsx',
-    'src/components/comments/Comments.tsx',
     'src/components/chat/ChatInfoTabs.tsx',
     'src/components/chat/PostPicker.tsx',
     'src/components/chat/AssetPicker.tsx',
@@ -137,9 +136,30 @@ describe('4. Load more lists page by the fill count', () => {
     ['src/components/chat/PostPicker.tsx', 'return getFillCount();'],
     ['src/lib/chat/plans.ts', 'return getFillCount();'],
     ['src/lib/chat/asset-picker.ts', 'getTileFillCount('],
-    ['src/components/comments/Comments.tsx', 'const pageSize = getFillCount();'],
   ])('%s derives its page from the fill count', (rel, needle) => {
     expect(read(rel)).toContain(needle);
+  });
+
+  it('comments never page (10 Nov 2026): a post or brief reads every comment, no Load more', () => {
+    const src = read('src/components/comments/Comments.tsx');
+    expect(src).not.toContain('<LoadMore');
+    expect(src).not.toContain('getFillCount');
+    expect(src).toContain('export const COMMENTS_READ_PAGE = 1000;');
+  });
+
+  it('every Load more list decides through the one rule (src/lib/load-more-rule)', () => {
+    for (const rel of [
+      'src/components/pages/BriefsPage.tsx',
+      'src/components/pages/AssetsPage.tsx',
+      'src/components/pages/NotificationsPage.tsx',
+      'src/components/pages/pipeline/PipelineFeed.tsx',
+      'src/components/pages/plan-tab/PlanTabList.tsx',
+      'src/components/chat/ChatInfoTabs.tsx',
+      'src/components/chat/PostPicker.tsx',
+      'src/components/chat/AssetPicker.tsx',
+    ]) {
+      expect(read(rel), rel).toMatch(/loadMoreRule\(|useLoadMoreFill\(/);
+    }
   });
 
   it('the one exception: the Plan tab page is plan_bundle_read c_page (12), a proc constant with no limit argument', () => {
