@@ -18,7 +18,11 @@ export interface PreviewCut {
   lines: 1 | 2;
 }
 
-/** Greedy word wrap: how many lines `words` take in `width`. */
+/**
+ * Greedy word wrap: how many lines `words` take in `width`. A word wider than
+ * the line (a long link) breaks across lines (the preview wraps with
+ * break-words), so it takes as many lines as its width needs.
+ */
 function lineCount(
   words: readonly string[],
   width: number,
@@ -32,6 +36,13 @@ function lineCount(
       lines += 1;
       line = word;
     } else line = next;
+    while (measure(line) > width) {
+      // The overflowing long word: whole lines of it, the rest carries on.
+      let fit = 1;
+      while (fit < line.length && measure(line.slice(0, fit + 1)) <= width) fit += 1;
+      lines += 1;
+      line = line.slice(fit);
+    }
   }
   return line === '' ? lines : lines + 1;
 }
@@ -63,6 +74,10 @@ export function cutPreview(
     const withMarker = `${kept}${PREVIEW_MORE}`.split(' ');
     if (lineCount(withMarker, width, measure) <= 2) return { text: kept, cut: true, lines: 2 };
   }
-  // One word longer than 2 lines: show it with the marker (the line wraps it).
-  return { text: stripCutEnd(words[0] ?? ''), cut: true, lines: 2 };
+  // The first word alone is longer than 2 lines (a long link): cut that one
+  // token by characters, the only cut a single unbroken token allows.
+  const first = words[0] ?? '';
+  let n = first.length - 1;
+  while (n > 1 && lineCount([`${first.slice(0, n)}${PREVIEW_MORE}`], width, measure) > 2) n -= 1;
+  return { text: first.slice(0, n), cut: true, lines: 2 };
 }

@@ -56,7 +56,10 @@ test('the operator: dot left of Activity, grey then coloured by the idle status 
   const network = await installHarnessNetwork(page, { operator: true, cockpitLevel: 'red' });
   await page.goto('/pipeline');
   await expect(dot(page)).toBeVisible({ timeout: 15_000 });
-  expectMinTouchTarget(await dot(page).boundingBox());
+  // 44 tall; below md a 36 wide top bar key strip (topbar-keys.test.ts), 44 from md.
+  const dotBox44 = await dot(page).boundingBox();
+  expectMinTouchTarget(dotBox44, { dimension: 'height' });
+  expectMinTouchTarget(dotBox44, { min: isLaptop(page) ? 44 : 36, dimension: 'width' });
   // Activity is in the laptop Sidebar / the phone tab bar (10 Nov 2026), so
   // the dot sits left of the account avatar on both.
   const dotBox = await dot(page).boundingBox();

@@ -622,11 +622,25 @@ function ActivityPreview({
       </>
     );
   }
+  // Folded at 2 lines: one fixed two-line box (36), so a taller glyph line
+  // (emoji) never makes the row taller than density + 20.
   if (cut !== null && cut.cut) {
     return (
       <>
-        {cut.text}
-        {marker(PREVIEW_MORE)}
+        <span data-activity-preview-fold="" className={PREVIEW_FOLD}>
+          {cut.text}
+          {marker(PREVIEW_MORE)}
+        </span>
+        {anchor}
+      </>
+    );
+  }
+  if (cut !== null && cut.lines === 2) {
+    return (
+      <>
+        <span data-activity-preview-fold="" className={PREVIEW_FOLD}>
+          {text}
+        </span>
         {anchor}
       </>
     );
@@ -638,6 +652,9 @@ function ActivityPreview({
     </>
   );
 }
+
+/** The folded 2-line preview: two 18 lines, fixed, so the row is exactly density + 20. */
+const PREVIEW_FOLD = 'block h-9';
 
 /** "… more" / " less": fg-3 words in the line, a 44 x 44 hit centred on them (::before). */
 const PREVIEW_TOGGLE =

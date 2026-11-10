@@ -44,4 +44,12 @@ describe('cutPreview', () => {
     const got = cutPreview('aaaa, bbbb, cccc, dddd, eeee, ffff, gggg, hhhh, iiii', 20, measure);
     expect(got.text.endsWith(',')).toBe(false);
   });
+
+  it('a long unbroken link counts the lines its width needs; the cut still fits 2', () => {
+    const link = `https://example.com/${'a'.repeat(80)}`;
+    const got = cutPreview(`${link} and more words after it`, 20, measure);
+    expect(got.cut).toBe(true);
+    expect(got.lines).toBe(2);
+    expect(`${got.text}${PREVIEW_MORE}`.length).toBeLessThanOrEqual(40);
+  });
 });
