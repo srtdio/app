@@ -75,6 +75,11 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 
 - pnpm prepush before every push: fast checks + layout checks for affected screens only, target under 5 min. Never render all screens or update screenshots locally; full visual runs are CI's job. WebKit e2e locally only for spec files you edited (max 3); the full e2e suite is CI's job. Run it on the exact tree. One push per finished step. [update-visual-baselines] only on a PR's last push. A red CI run means prepush missed something: fix prepush too.
 - When CI is red, read every failing job's full log and fix ALL failures in one push.
+- CI budget (10 Nov 2026, after a 13-hour PR): a PR gets at most 2 CI cycles (first push + one fix push). Before a third push, stop and tell Shubham what failed and why prepush missed it. Never push while a CI run on the same head is still running; wait until every workflow on it has finished, then fix everything in one push.
+- Scope freeze: a new ask that arrives while a PR is open goes in a new PR after that one merges, never onto the open PR, unless Shubham says "same PR".
+- Before changing a size, gap or count, grep `e2e/visual/layout-checks*.ts`, `e2e/tests` and `src/__tests__` for the old value and update every check that asserts it in the same commit.
+- A unit test with big data (hundreds of rows) must finish under 1s locally; CI is about 3x slower and times out at 5s.
+- Screenshot-only commits (`e2e/visual/__screenshots__/` only) skip code CI when the push before was green (scripts/ci/screenshot-only.sh). Keep baseline commits screenshot-only: never mix code into them.
 - Shared check files (`e2e/visual/layout-checks*.ts`, `e2e/visual/screens.spec.ts`, `src/__tests__/visual-coverage.test.ts`, playwright configs, `.github/workflows`) change in their own small PR first, merged before feature PRs that rely on them.
 - One PR per prompt. Aim under 400 changed lines per PR, excluding generated files and screenshots. One feature per PR.
 - Never auto-merge a PR.

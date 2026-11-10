@@ -18,6 +18,9 @@ name: Visual CI
 #   SORTED_CI_APP_PRIVATE_KEY; the token is scoped to this repository, contents: write) the push is the App's, so every PR workflow runs on the bot
 #   commit for real. Without those secrets it pushes with GITHUB_TOKEN (which starts no run) and, as before, dispatches CI, reports visual /
 #   visual-shard as passed and copies every other check of the tested head onto the bot commit; a notice names the missing secrets.
+# Screenshot-only push: when a PR push changes only e2e/visual/__screenshots__/ since the last push, that push was a baseline refresh
+#   ([update-visual-baselines]) and this workflow passed on it (scripts/ci/screenshot-only.sh --refresh), select picks nothing: those are the
+#   baselines that run rendered and compared. Any other screenshot-only push (baselines committed by hand) compares as usual.
 # Locally: pnpm prepush runs the layout checks on at most 12 selected screens; screenshots are never compared or committed from a local render.
 on:
   pull_request:
@@ -35,6 +38,10 @@ jobs:
   select:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # actions: read for the screenshot-only check (reads this workflow's runs).
+    permissions:
+      contents: read
+      actions: read
     outputs:
       update: ${{ steps.mode.outputs.update }}
       mode: ${{ steps.pick.outputs.mode }}
@@ -89,11 +96,18 @@ jobs:
         id: pick
         env:
           EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action }}
+          BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/select.txt"
           : > "$out"
-          if [ "$EVENT_NAME" = "pull_request" ]; then
+          if [ "$(scripts/ci/screenshot-only.sh visual-ci.yml --refresh)" = true ]; then
+            echo "mode=none" >> "$out"
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
             GITHUB_OUTPUT="$out" node --experimental-strip-types --no-warnings scripts/ci/visual-select.ts \
               --base HEAD^1 --head HEAD --github-output || echo "mode=all" >> "$out"
           fi
