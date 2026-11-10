@@ -63,7 +63,7 @@ describe('ActivityFilterBar', () => {
     expect(moreToRight({ scrollLeft: 0, clientWidth: 390, scrollWidth: 390 })).toBe(false);
   });
 
-  it('fix 3: no negative right margin; a trailing spacer ends the row; no fade before measuring', () => {
+  it('fix 3: the chips only, no row frame of its own (the shell draws it); no fade before measuring', () => {
     const html = renderToStaticMarkup(
       <ActivityFilterBar
         state="all"
@@ -74,11 +74,11 @@ describe('ActivityFilterBar', () => {
     );
     const row = /<div data-activity-chips=""[^>]*class="([^"]*)"[^>]*style="([^"]*)"/.exec(html);
     expect(row).not.toBeNull();
-    expect(row?.[1]).not.toMatch(/-mr-/);
-    expect(row?.[2]).not.toContain('padding-right:0');
+    const classes = (row?.[1] ?? '').split(/\s+/);
+    // No top gap, no side pads, no negative margin: shell/ListScreen owns them.
+    expect(classes.some((c) => /^(-?m[trblxy]?-|p[lrx]-)/.test(c))).toBe(false);
+    expect(classes).toEqual(expect.arrayContaining(['min-w-0', 'flex-1', 'overflow-x-auto']));
     expect(row?.[2]).toContain('mask-image:none');
-    expect(html).toMatch(
-      /<span aria-hidden="true" data-activity-chips-end=""[^>]*><\/span><\/div>$/,
-    );
+    expect(html).not.toContain('data-activity-chips-end');
   });
 });

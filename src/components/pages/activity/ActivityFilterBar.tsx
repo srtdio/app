@@ -81,13 +81,13 @@ export function ActivityFilterBar({
   const mask = fade ? OVERFLOW_MASK : 'none';
 
   return (
-    // One horizontally scrollable line of chips, never wraps, running to the
-    // screen's right edge. A trailing spacer (plus the chip gap) makes the right
-    // gutter equal the left one, so the last chip is fully visible at the end.
+    // The chips only: shell/ListScreen's chip row draws the frame (its top
+    // gap, side pads and the gutter at the end). This line scrolls sideways
+    // inside it and fades at its right edge while chips remain past it.
     <div
       ref={rowRef}
       data-activity-chips=""
-      className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pl-4 md:pl-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{ WebkitMaskImage: mask, maskImage: mask }}
     >
       {STATE_CHIPS.map((item) => (
@@ -101,7 +101,6 @@ export function ActivityFilterBar({
           onClick={() => onStateChange(item.key)}
         />
       ))}
-      <span aria-hidden="true" data-activity-chips-end="" className="h-px w-2 flex-none md:w-4" />
     </div>
   );
 }

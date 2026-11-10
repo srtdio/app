@@ -154,8 +154,9 @@ describe('the page', () => {
       'utf8',
     );
     expect(src).toContain("export const ACTIVITY_TITLE = 'Activity';");
-    // The h1 is focusable from script (tabIndex -1) so a route change can move focus to it.
-    expect(src).toMatch(/<h1 tabIndex=\{-1\} className="sr-only">\s*\{ACTIVITY_TITLE\}\s*<\/h1>/);
+    // The h1 (shell/ListScreen's PageHead hidden) is focusable from script
+    // (tabIndex -1) so a route change can move focus to it.
+    expect(src).toMatch(/<ListScreen\s+title=\{ACTIVITY_TITLE\}/);
     expect(src).not.toContain('NOTIFICATIONS_TITLE');
     expect(src).not.toContain("state === 'plans'");
     expect(src).not.toContain("state === 'briefs'");
@@ -171,9 +172,10 @@ describe('the page', () => {
     );
     expect(src).not.toContain('PageHead');
     expect(src).not.toContain('@/components/shell/PageHead');
-    expect(src.indexOf('<h1 tabIndex={-1} className="sr-only">')).toBeLessThan(
-      src.indexOf('<ActivityFilterBar'),
-    );
+    // shell/ListScreen draws the sr-only h1, then the chip row with the chips.
+    expect(src).toContain('<ListScreen');
+    expect(src).toContain('title={ACTIVITY_TITLE}');
+    expect(src.indexOf('<ListScreen')).toBeLessThan(src.indexOf('<ActivityFilterBar'));
   });
 });
 

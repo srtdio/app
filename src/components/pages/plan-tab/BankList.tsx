@@ -30,7 +30,7 @@ import { stripFormat } from '@srtdio/comments';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { Thumbnail } from '@/components/media/Thumbnail';
-import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
+import { CONTROL_IN_LINE } from '@/components/ui/layout';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -318,10 +318,7 @@ export function BankFilterLine(props: {
   const pills = filterPills(props.filter, props.buckets);
   if (pills.length === 0) return null;
   return (
-    <div
-      data-bank-filter-line=""
-      className={cn('flex min-w-0 flex-wrap items-center gap-2 pb-1 pt-1', GUTTER)}
-    >
+    <div data-bank-filter-line="" className="flex min-w-0 flex-wrap items-center gap-2 pb-3">
       <span className="text-sm text-fg-3">Showing</span>
       <span aria-hidden="true" className="text-sm text-fg-3">
         ·
@@ -634,8 +631,8 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   }
 
   return (
-    <div data-bank="list" className="flex flex-col gap-2 pb-8 pt-2">
-      <div className={cn('flex flex-col gap-3', GUTTER)}>
+    <div data-bank="list" className="flex flex-col gap-2 pb-8">
+      <div className="flex flex-col gap-3">
         {body}
         {more !== null && ideas !== null && ideas.length > 0 ? (
           <PlanTabLoadMore more={more} />

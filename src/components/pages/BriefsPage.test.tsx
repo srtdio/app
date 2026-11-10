@@ -19,6 +19,7 @@ import {
 import { BriefCard } from '@/components/pages/BriefCard';
 import { dispatchSorted } from '@/lib/events';
 import { SectionHeader } from '@/components/shell/SectionHeader';
+import { listScreenChipRow } from '@/components/shell/ListScreen';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { Chip } from '@/components/ui/Chip';
 import { TopbarPlus } from '@/components/shell/topbar-actions';
@@ -58,7 +59,7 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
 }
 
 function header(onFilterChange: (filter: BriefFilter) => void = () => {}): ReactElement {
-  return briefsHeader({ filter: 'all', onFilterChange });
+  return listScreenChipRow(briefsHeader({ filter: 'all', onFilterChange }));
 }
 
 describe('briefsHeader (decisions A, B: chips only)', () => {
@@ -90,11 +91,13 @@ describe('briefsHeader (decisions A, B: chips only)', () => {
   });
 
   it('hands each chip its count (ui/Chip shows it only above 0)', () => {
-    const tree = briefsHeader({
-      filter: 'all',
-      onFilterChange: () => {},
-      counts: { all: 3, open: 3, closed: 0 },
-    });
+    const tree = listScreenChipRow(
+      briefsHeader({
+        filter: 'all',
+        onFilterChange: () => {},
+        counts: { all: 3, open: 3, closed: 0 },
+      }),
+    );
     const counts = findAll(tree, (el) => el.type === Chip).map(
       (c) => (c.props as { count?: number }).count,
     );
