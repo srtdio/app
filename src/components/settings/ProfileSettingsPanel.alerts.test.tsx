@@ -86,9 +86,7 @@ describe('Alerts on this device', () => {
     for (const chip of all) {
       expect(chip.className).toContain('min-h-11');
       expect(chip.className).toContain('w-full');
-      expect(chip.querySelector('[data-chip-face]')?.className).toContain(
-        'min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10',
-      );
+      expect(chip.querySelector('[data-chip-face]')?.className).toContain('min-h-9 px-4');
       expect(chip.getAttribute('aria-pressed')).toBe('false');
     }
     expect(el.querySelector('[data-alerts-paused]')).toBeNull();

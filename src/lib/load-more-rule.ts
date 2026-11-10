@@ -105,7 +105,7 @@ export interface RowsLayout {
   sections: readonly number[];
   /** Laptop list columns (fillColumns); 1 on a phone. */
   columns: number;
-  /** One row's height in the active density (60 / 72 / 80). */
+  /** One row's height (ROW_HEIGHT, 72). */
   rowPx: number;
   /** A section heading with its step to the rows. */
   headingPx: number;
@@ -155,7 +155,7 @@ export const ACTIVITY_FIRST_SCREENS = 1.45;
 /**
  * Activity's Load more (10 Nov 2026): the depth is counted in ITEM ROWS after
  * grouping, never in inbox entries. The first depth is the rows that fill
- * 1.45 viewports from the list's top (headings, gaps, the density row,
+ * 1.45 viewports from the list's top (headings, gaps, the 72 row,
  * laptop columns); each Load more adds one viewport. Pure.
  */
 export function activityLoadMore(input: {

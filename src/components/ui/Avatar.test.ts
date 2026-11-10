@@ -50,7 +50,7 @@ describe('Avatar roles', () => {
     expect(html).not.toContain('text-lg');
   });
 
-  it('renders each role at its size (inline style; card by density classes)', () => {
+  it('renders each role at its size (inline style; card by its h-12 w-12 classes)', () => {
     for (const role of Object.keys(AVATAR_PX) as AvatarRole[]) {
       const html = renderToStaticMarkup(createElement(Avatar, { role, name: 'Priya Shah' }));
       const px = AVATAR_PX[role];
@@ -64,18 +64,17 @@ describe('Avatar roles', () => {
     }
   });
 
-  it('card follows the density through classes: 48 (h-12 w-12), 40 in Compact, 48 in Calm', () => {
+  it('card is 48 through classes (h-12 w-12, ROW_PICTURE), no inline size', () => {
     for (const props of [
       { role: 'card' as const, name: 'Priya Shah' },
       { role: 'card' as const, name: 'Priya Shah', src: 'https://cdn/p.png' },
     ]) {
       const html = renderToStaticMarkup(createElement(Avatar, props));
-      expect(html).toContain('h-12 w-12 compact:h-10 compact:w-10');
-      expect(html).not.toMatch(/calm:[hw]-/);
+      expect(html).toContain('h-12 w-12');
       expect(html).not.toContain('style="width');
     }
     const row = renderToStaticMarkup(createElement(Avatar, { role: 'row', name: 'A B' }));
-    expect(row).not.toContain('compact:');
+    expect(row).not.toContain('h-12 w-12');
   });
 });
 

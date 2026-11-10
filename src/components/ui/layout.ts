@@ -49,3 +49,32 @@ export const LANE_BOTTOM_CLEAR = 'scroll-pb-16';
 
 /** The tip strip's lane: in flow above the composer, on the chat edge (12). */
 export const LANE_STRIP = 'mx-3 mb-2';
+
+/*
+ * Named sizes (10 Nov 2026: one list size, the former Cozy). px numbers the
+ * parts draw with literal Tailwind classes (the compiler needs the literals);
+ * src/__tests__/named-sizes.test.ts proves each part's class equals its constant.
+ */
+
+/** A list row (ui/ListCard): 12 + 48 + 12. */
+export const ROW_HEIGHT = 72;
+/** The list row picture box and Avatar 'card'. */
+export const ROW_PICTURE = 48;
+/** The list row's top and bottom inset. */
+export const ROW_INSET = 12;
+/** The row's text column x: picture 48 + its 12 gap (Activity sub rows). */
+export const ROW_TEXT_START = 60;
+/** A chip's visible face height (ui/Chip CHIP_FACE_SIZE). */
+export const CHIP_FACE = 36;
+/** A chip's tap height. */
+export const CHIP_TAP = 44;
+/** The gap between stacked Plan day items (PLAN_DAY_STACK). */
+export const PLAN_STACK = 8;
+/** A Plan day's top and bottom padding (PLAN_DAY_PAD). */
+export const PLAN_PAD = 12;
+/** The top bar Threads | Catch up box face height. */
+export const PAIR_BOX_HEIGHT = 28;
+/** The count pill inside a Threads | Catch up box. */
+export const PAIR_PILL_HEIGHT = 16;
+/** Activity's ink "N new" chip height. */
+export const NEW_CHIP_HEIGHT = 18;

@@ -2,9 +2,8 @@
 // Pipeline, Briefs, Assets, the Chat list (Personal notes, Groups, People),
 // Activity and the Plan tab (plans and the Bank) renders
 // through ui/ListCard, and every card has the identical height structure
-// (the flat density row bled 16 each side: h-18 72 Cozy, compact:h-15 60,
-// calm:h-20 80; the 48 picture, 40 in Compact; a 20 title + time line, a 20
-// preview + tag + unread line; density 8 Nov 2026). The page lists sit in LIST_CARD_GRID (one
+// (the flat 72 row bled 16 each side: h-18; the 48 picture; a 20 title + time
+// line, a 20 preview + tag + unread line; one size since 10 Nov 2026). The page lists sit in LIST_CARD_GRID (one
 // column on phone, auto-fill on laptop); the chat list in LIST_CARD_STACK.
 // The old hand-built layouts (the PostCard frame, AssetCard / AssetGrid,
 // PEOPLE_TILE_GRID, the Plan tab's own cards and calendar, the Bank's own
@@ -280,9 +279,7 @@ function heightShape(html: string): string[][] {
     'data-list-card-line="2"',
   ].map((attr) =>
     classOf(html, attr)
-      .filter((c) =>
-        /^(compact:|calm:)?(-?mx|h|w|min-h|p|px|py|pt|pb|gap|line-clamp|items)-/.test(c),
-      )
+      .filter((c) => /^(-?mx|h|w|min-h|p|px|py|pt|pb|gap|line-clamp|items)-/.test(c))
       .sort(),
   );
 }
@@ -297,13 +294,9 @@ describe('Pipeline, Briefs, Assets, Chat, Activity and the Plan tab render throu
 
   it('every card has the identical height structure', () => {
     const base = heightShape(SCREENS.briefs ?? '');
-    expect(base[0]).toEqual(
-      expect.arrayContaining(['-mx-4', 'h-18', 'compact:h-15', 'calm:h-20', 'px-4']),
-    );
+    expect(base[0]).toEqual(expect.arrayContaining(['-mx-4', 'h-18', 'px-4']));
     expect(base[1]).not.toContain('p-3');
-    expect(base[2]).toEqual(
-      expect.arrayContaining(['h-12', 'w-12', 'compact:h-10', 'compact:w-10']),
-    );
+    expect(base[2]).toEqual(expect.arrayContaining(['h-12', 'w-12']));
     expect(base[3]).toContain('h-5');
     expect(base[4]).toContain('h-5');
     for (const [name, html] of Object.entries(SCREENS)) {
@@ -473,14 +466,10 @@ describe('the old layouts are gone', () => {
 const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
 const px = (rem: string): number => parseFloat(rem) * 16;
 
-describe('equal height: the density row on every list (Pipeline, Briefs, Assets, Chat, Activity, Plan tab, Bank)', () => {
-  it.each([
-    ['cozy', '18', '12', '3', 72, 48, 12],
-    ['compact', '15', '10', 'row-inset', 60, 40, 10],
-    ['calm', '20', '12', '4', 80, 48, 16],
-  ] as const)(
+describe('equal height: the 72 row on every list (Pipeline, Briefs, Assets, Chat, Activity, Plan tab, Bank)', () => {
+  it.each([['one size', '18', '12', '3', 72, 48, 12]] as const)(
     'the arithmetic, %s: inset + picture + inset = the row, the 44 text column centred inside, no border',
-    (_density, rowStep, pictureStep, insetStep, rowPx, picturePx, insetPx) => {
+    (_size, rowStep, pictureStep, insetStep, rowPx, picturePx, insetPx) => {
       const padding = tailwindConfig.theme?.extend?.padding as Record<string, string>;
       const row = px(spacing[rowStep] ?? '');
       const picture = px(spacing[pictureStep] ?? '');
@@ -498,7 +487,7 @@ describe('equal height: the density row on every list (Pipeline, Briefs, Assets,
     },
   );
 
-  it('picture 48 (40 Compact) at 16 from the bled row edge (the frame px-4), 12 to the text', () => {
+  it('picture 48 at 16 from the bled row edge (the frame px-4), 12 to the text', () => {
     expect(LIST_CARD_BODY.split(' ')).toContain('gap-3');
     expect(LIST_CARD_BODY.split(' ')).not.toContain('p-3');
     for (const [name, html] of Object.entries(SCREENS)) {
@@ -529,9 +518,9 @@ describe('equal height: the density row on every list (Pipeline, Briefs, Assets,
   });
 });
 
-describe('S3: the picture box is 48x48 (40 in Compact) whatever the picture, before and after it arrives', () => {
-  it('every picture kind keeps h-12 w-12 compact:h-10 compact:w-10 shrink-0 on the slot', () => {
-    const slot = ['h-12', 'w-12', 'compact:h-10', 'compact:w-10', 'shrink-0'];
+describe('S3: the picture box is 48x48 whatever the picture, before and after it arrives', () => {
+  it('every picture kind keeps h-12 w-12 shrink-0 on the slot', () => {
+    const slot = ['h-12', 'w-12', 'shrink-0'];
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(expect.arrayContaining(slot));
     for (const [name, html] of Object.entries(SCREENS)) {
       expect(classOf(html, 'data-list-card-picture='), name).toEqual(expect.arrayContaining(slot));
@@ -549,12 +538,10 @@ describe('S3: the picture box is 48x48 (40 in Compact) whatever the picture, bef
     const pending = slot(<span data-pending="" />);
     const arrived = slot(<img src="https://cdn/x.png" alt="" width={1600} height={400} />);
     expect(arrived).toEqual(pending);
-    expect(pending).toEqual(
-      expect.arrayContaining(['h-12', 'w-12', 'compact:h-10', 'compact:w-10', 'shrink-0']),
-    );
+    expect(pending).toEqual(expect.arrayContaining(['h-12', 'w-12', 'shrink-0']));
   });
 
-  it('zero layout shift: the image fills the box and never sizes it (a 1600x400 picture stays 48, 40 in Compact)', () => {
+  it('zero layout shift: the image fills the box and never sizes it (a 1600x400 picture stays 48)', () => {
     const html = renderToStaticMarkup(
       <ListCard
         picture={{

@@ -50,15 +50,14 @@ const BUNDLE: PlanBundle = {
   postInfo: {},
 };
 
-describe('Plan screen flat (density)', () => {
-  it('density constants: Cozy default with compact: and calm: variants', () => {
-    // Within a day (title, PLAN, POST, Add): 4 / 8 / 12.
-    expect(PLAN_DAY_STACK).toBe('gap-2 compact:gap-1 calm:gap-3');
-    // Day padding top/bottom (and so the space between two days): 8 / 12 / 16.
-    expect(PLAN_DAY_PAD).toBe('py-3 compact:py-2 calm:py-4');
+describe('Plan screen flat (one size)', () => {
+  it('day constants: one size, no density variants', () => {
+    // Within a day (title, PLAN, POST, Add): 8 (PLAN_STACK).
+    expect(PLAN_DAY_STACK).toBe('gap-2');
+    // Day padding top/bottom (and so the space between two days): 12 (PLAN_PAD).
+    expect(PLAN_DAY_PAD).toBe('py-3');
     for (const value of [PLAN_DAY_STACK, PLAN_DAY_PAD, PLAN_ROW_RULE]) {
-      expect(value).toMatch(/\bcompact:/);
-      expect(value).toMatch(/\bcalm:/);
+      expect(value).not.toMatch(/\b(compact|calm):/);
     }
     expect(PLAN_ROW_RULE).toContain('border-t border-border');
   });
@@ -122,7 +121,7 @@ describe('Plan screen flat (density)', () => {
     // The Add row under a day's rows overlaps too; no hand tuck.
     expect(src).toContain("!props.empty && cn(CONTROL_IN_LINE, 'pl-17')");
     expect(src).not.toContain('-mb-3 -mt-2 pl-17');
-    // Rows in a day stack by density, the hairline rule centred in the gap.
+    // Rows in a day stack by PLAN_DAY_STACK, the hairline rule centred in the gap.
     expect(src).toContain('const rowLine = props.tile === null && PLAN_ROW_RULE;');
     expect(src).not.toContain('-mt-2 border-t border-border pt-2');
   });

@@ -358,16 +358,6 @@ export function userOnboardingSave(
   return callProc(client, 'user_onboarding_save', args);
 }
 
-/** Row density per account (users.density). Own row only; invalid value raises invalid_payload. */
-export type Density = 'compact' | 'cozy' | 'calm';
-export type UserDensitySetArgs = { p_density: Density; p_trace_id: string };
-export function userDensitySet(
-  client: Client,
-  args: UserDensitySetArgs,
-): Promise<Result<ProcReturns<'user_density_set'>>> {
-  return callProc(client, 'user_density_set', args);
-}
-
 export type UsernameAvailableArgs = ProcArgs<'username_available'>;
 export function usernameAvailable(
   client: Client,

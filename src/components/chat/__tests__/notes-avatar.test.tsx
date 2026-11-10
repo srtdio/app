@@ -152,7 +152,7 @@ describe('the same notes avatar on the list card, header, picker and search', ()
     expect(tile).toContain('data-list-card-picture="person"');
     expect(tile).toContain('data-notes-picture=""');
     expect(tile).toContain('data-avatar-role="card"');
-    expect(tile).toContain('h-12 w-12 compact:h-10 compact:w-10');
+    expect(tile).toContain('h-12 w-12');
     expect(tile).toContain('rounded-lg');
     expect(tile).not.toContain('rounded-full');
     expect(tile).not.toContain('data-notes-avatar');

@@ -82,7 +82,7 @@ import {
 } from '@/lib/catch-up/route';
 import { activityLoadMore, readViewport } from '@/lib/load-more-rule';
 import { fillColumns } from '@/lib/use-fill-count';
-import { listCardHeightPx } from '@/components/ui/ListCard';
+import { ROW_HEIGHT } from '@/components/ui/layout';
 
 /** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
@@ -604,9 +604,7 @@ export function NotificationsPage() {
     layout: {
       sections: buckets.map((bucket) => bucket.groups.length),
       columns: fillColumns(viewport.width),
-      rowPx: listCardHeightPx(
-        typeof document === 'undefined' ? undefined : document.documentElement.dataset.density,
-      ),
+      rowPx: ROW_HEIGHT,
       headingPx: ACTIVITY_HEADING_PX,
       gapPx: ACTIVITY_SECTION_GAP_PX,
       rowHeights,

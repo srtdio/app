@@ -63,7 +63,7 @@ describe('ChannelList on ui/ListCard', () => {
     const out = list();
     expect(out.match(/data-list-card=""/g)).toHaveLength(3);
     expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-12 w-12/);
-    expect(out).toContain('h-12 w-12 compact:h-10 compact:w-10');
+    expect(out).toContain('h-12 w-12');
     expect(out).not.toContain('data-row-divider');
   });
 

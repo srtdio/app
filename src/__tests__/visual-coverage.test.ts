@@ -20,21 +20,12 @@ const DEFAULT_PROJECTS: readonly Project[] = ['iphone-light', 'iphone-dark', 'la
 
 /** Every screen name, sorted. */
 const REQUIRED: readonly string[] = [
-  'account-menu-density',
   'activity-bank',
   'activity-chip-mentions',
   'activity-chip-unread',
-  'activity-load-more-calm',
-  'activity-load-more-compact',
   'activity-load-more-cozy',
-  'activity-preview-expanded-calm',
-  'activity-preview-expanded-compact',
   'activity-preview-expanded-cozy',
-  'activity-preview-more-calm',
-  'activity-preview-more-compact',
   'activity-preview-more-cozy',
-  'activity-topbar-calm',
-  'activity-topbar-compact',
   'approve-confirm-approver',
   'asset-picker',
   'asset-rename-saving',
@@ -81,8 +72,6 @@ const REQUIRED: readonly string[] = [
   'chat-idea-share-sheet',
   'chat-info-group',
   'chat-list',
-  'chat-list-calm',
-  'chat-list-compact',
   'chat-list-notes-photo',
   'chat-list-select',
   'chat-media-lightbox-details',
@@ -295,13 +284,9 @@ const REQUIRED: readonly string[] = [
   'plan-tab-chip-past',
   'plan-tab-sort',
   'post-tile-uploading',
-  // Density (Compact / Cozy / Calm, 8 Nov 2026): the account menu row, New
-  // plan's Add from bank, and the plan screen and two lists per density.
+  // New plan's Add from bank and the plan screen (its -cozy name keeps the
+  // baseline file; one size since 10 Nov 2026).
   'new-plan-bank',
-  'pipeline-calm',
-  'pipeline-compact',
-  'plan-screen-calm',
-  'plan-screen-compact',
   'plan-screen-cozy',
   // The writing box (ui/WritingBox, Slack style, 8 Nov 2026): the chat pill,
   // the card focused and typing, the Aa row, @, the + drawer from the card,
@@ -394,11 +379,9 @@ const REQUIRED: readonly string[] = [
   'chat-replies-row-today',
   'chat-replies-row-older',
   'who-reacted-sheet',
-  // Activity twins Plan (10 Nov 2026): sections and rows in each density.
+  // Activity twins Plan (10 Nov 2026): sections and rows.
   'activity-sections',
   'activity-rows',
-  'activity-rows-calm',
-  'activity-rows-compact',
   // Activity's Threads | Catch up (10 Nov 2026); activity-all-read re-shot above.
   'activity-threads-new',
   'activity-catch-up-menu',
@@ -432,33 +415,12 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   ),
   'name: `assets-tab-${tab}`': ['media', 'docs', 'links'].map((tab) => `assets-tab-${tab}`),
   'name: `activity-chip-${chip}`': ['unread', 'mentions'].map((chip) => `activity-chip-${chip}`),
-  // Activity's top bar and Load more by density (10 Nov 2026).
-  'name: `activity-topbar-${density}`': ['compact', 'calm'].map((d) => `activity-topbar-${d}`),
-  'name: `activity-preview-more-${density}`': ['compact', 'cozy', 'calm'].map(
-    (d) => `activity-preview-more-${d}`,
-  ),
-  'name: `activity-preview-expanded-${density}`': ['compact', 'cozy', 'calm'].map(
-    (d) => `activity-preview-expanded-${d}`,
-  ),
-  'name: `activity-load-more-${density}`': ['compact', 'cozy', 'calm'].map(
-    (d) => `activity-load-more-${d}`,
-  ),
   // Chat media sweep (7 Nov 2026): single photos by shape, albums by count.
   'name: `chat-photo-single-${shape}`': ['portrait', 'landscape', 'square'].map(
     (shape) => `chat-photo-single-${shape}`,
   ),
   'name: `chat-album-${count}`': [2, 3, 4].map((count) => `chat-album-${count}`),
   'name: `plan-tab-chip-${chip}`': ['past'].map((chip) => `plan-tab-chip-${chip}`),
-  // Density (Compact / Cozy / Calm, 8 Nov 2026).
-  'name: `plan-screen-${density}`': ['compact', 'cozy', 'calm'].map(
-    (density) => `plan-screen-${density}`,
-  ),
-  'name: `pipeline-${density}`': ['compact', 'calm'].map((density) => `pipeline-${density}`),
-  'name: `chat-list-${density}`': ['compact', 'calm'].map((density) => `chat-list-${density}`),
-  // Activity's rows in Compact and Calm (10 Nov 2026).
-  'name: `activity-rows-${density}`': ['compact', 'calm'].map(
-    (density) => `activity-rows-${density}`,
-  ),
   // The platform preview, one per platform (post screen redo, 7 Nov 2026).
   'name: `post-preview-${p.slug}`': [
     'instagram',

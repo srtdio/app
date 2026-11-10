@@ -423,14 +423,12 @@ describe('week list layout (L1-L4)', () => {
       /data-plan-day-empty="" class="flex min-h-11 items-center text-md text-fg-3">Planned posts show up here\./,
     );
     // Day block: a flat section (no Card frame), GUTTER sides, a hairline under,
-    // the density stack inside.
+    // the day stack inside.
     expect(html).toMatch(
-      /data-plan-day="[^"]+"[^>]*class="flex flex-col border-b border-border px-4 md:px-6 py-3 compact:py-2 calm:py-4"/,
+      /data-plan-day="[^"]+"[^>]*class="flex flex-col border-b border-border px-4 md:px-6 py-3"/,
     );
     expect(html).not.toMatch(/data-plan-day="[^"]+"[^>]*data-card=""/);
-    expect(html).toContain(
-      '<div data-plan-day-stack="" class="flex flex-col gap-2 compact:gap-1 calm:gap-3">',
-    );
+    expect(html).toContain('<div data-plan-day-stack="" class="flex flex-col gap-2">');
     expect(html).toContain('flex min-w-0 flex-1 flex-col gap-1');
     // A client sees no Add, no drag.
     expect(html).not.toContain('data-plan-add=');

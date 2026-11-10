@@ -1,5 +1,4 @@
 import type { Config } from 'tailwindcss';
-import plugin from 'tailwindcss/plugin';
 
 // Spacing steps (CLAUDE.md "Spacing", 8 Nov 2026): padding, margin, gap and
 // space take 4 / 8 / 12 / 16 / 24 (plus 32+ layout values). The off-steps
@@ -34,9 +33,8 @@ export default {
       '3xl': ['28px', '34px'],
       // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
       input: ['16px', '22px'],
-      // Threads/Catch up count pill only (Compact 9 / Cozy 10; Calm uses xs 11).
-      'pair-pill-compact': ['9px', '14px'],
-      'pair-pill-cozy': ['10px', '16px'],
+      // Threads/Catch up count pill text only (shell/topbar-actions).
+      'pair-pill': ['10px', '16px'],
     },
     // Spacing: the 4px grid (step N = 4N px) as used in src, plus px (hairline),
     // 0.5 (2px, inside badges and pills) and 1.5 (6px). 2.5 and 3.5 are gone.
@@ -323,13 +321,8 @@ export default {
         'plus-box': '22px',
         // A phone top bar key's hit strip: 36 wide, 44 tall, 36 apart (shell/Topbar).
         'topbar-key': '36px',
-        // Activity's Threads | Catch up boxes: 96 wide in every density (shell/topbar-actions).
+        // Activity's Threads | Catch up boxes: 96 wide (shell/topbar-actions).
         'topbar-pair': '96px',
-      },
-      minWidth: {
-        // The Threads | Catch up count pill, Compact (14) and Calm (18) (shell/topbar-actions).
-        'pair-pill-compact': '14px',
-        'pair-pill-calm': '18px',
       },
       gap: {
         // Inside a Threads | Catch up box: the label to its count pill (shell/topbar-actions).
@@ -346,9 +339,6 @@ export default {
         'rail-glyph': '13px',
         // The phone top bar "+" outlined square's face (shell/topbar-actions TopbarPlus).
         'plus-box': '22px',
-        // The Threads | Catch up count pill, Compact (14) and Calm (18) (shell/topbar-actions).
-        'pair-pill-compact': '14px',
-        'pair-pill-calm': '18px',
       },
       margin: {
         // Room for the plan panel beside the page (PlanBesideLayout, ChatConnected).
@@ -359,11 +349,8 @@ export default {
       padding: {
         // Text field vertical inset (10px): a one-line Textarea / MentionInput is 44 with its edge.
         'field-y': '0.625rem',
-        // Compact list row inset (10px): 10 + 40 picture + 10 = the 60 Compact row (ui/ListCard).
-        'row-inset': '0.625rem',
-        // Activity's "N new" chip padding-x, Compact (6) and Cozy (7) (activity/ActivityCard).
-        'new-chip-compact': '6px',
-        'new-chip-cozy': '7px',
+        // Activity's "N new" chip padding-x (7) (activity/ActivityCard).
+        'new-chip': '7px',
       },
       // Auto-fill grids that fill the laptop width (ui/Tile TILE_GRID, ui/Card CARD_GRID).
       gridTemplateColumns: {
@@ -409,14 +396,5 @@ export default {
       },
     },
   },
-  plugins: [
-    // Density (Compact / Cozy / Calm, users.density): <html data-density> is set
-    // at boot from the device cache (src/lib/density.ts). Cozy is the default
-    // class; compact: and calm: override it. Parts only (ListCard, Chip, Avatar
-    // 'card', plan spacing), never a screen.
-    plugin(({ addVariant }) => {
-      addVariant('compact', 'html[data-density="compact"] &');
-      addVariant('calm', 'html[data-density="calm"] &');
-    }),
-  ],
+  plugins: [],
 } satisfies Config;

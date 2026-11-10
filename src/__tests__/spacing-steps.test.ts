@@ -1,6 +1,6 @@
 // Guard: the vertical spacing rule (CLAUDE.md "Spacing", 8 Nov 2026). Padding,
 // margin, gap and space take 4 / 8 / 12 / 16 / 24 only (plus 32 and up, the
-// field-y and row-inset tokens). The off-steps 0.5 (2), 1.5 (6), 5 (20) and
+// field-y token). The off-steps 0.5 (2), 1.5 (6), 5 (20) and
 // 7 (28) stay in width / height only, so tailwind.config.ts no longer builds
 // them for spacing and no class in src/** uses them.
 
@@ -33,9 +33,9 @@ describe('spacing steps: tailwind lock', () => {
     }
   });
 
-  it('the two named insets: field-y (10) and row-inset (10, the Compact row)', () => {
+  it('the one named inset: field-y (10); row-inset is gone with the densities', () => {
     expect(resolved.padding?.['field-y']).toBe('0.625rem');
-    expect(resolved.padding?.['row-inset']).toBe('0.625rem');
+    expect(resolved.padding?.['row-inset']).toBeUndefined();
   });
 });
 
