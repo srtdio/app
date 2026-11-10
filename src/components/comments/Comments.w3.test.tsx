@@ -169,7 +169,11 @@ describe('Comments W3', () => {
 
   it('comments never page: every page of 1000 is read, merged, painted once, no Load more', async () => {
     // A full page means more: the next page is read before anything paints.
-    const full = Array.from({ length: COMMENTS_READ_PAGE }, (_u, i) => row(`c-${i}`, `body ${i}`));
+    // One root and 999 replies to it (folded behind "View N earlier
+    // replies"), so the page is full but cheap to render.
+    const full = Array.from({ length: COMMENTS_READ_PAGE }, (_u, i) =>
+      i === 0 ? row('c-0', 'body 0') : { ...row(`c-${i}`, `reply ${i}`), parent_comment_id: 'c-0' },
+    );
     queue.push({ ok: true, data: full });
     queue.push({ ok: true, data: [row('c-last', 'the very last one')] });
     await mount();
