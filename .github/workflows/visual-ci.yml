@@ -21,8 +21,9 @@ name: Visual CI
 #   visual-baselines-1. Baselines of screens not run are never touched; a PR never clears the whole set.
 #   commit-baselines lays them over the PR's head branch and commits them. With the Sorted CI GitHub App (secrets SORTED_CI_APP_ID and
 #   SORTED_CI_APP_PRIVATE_KEY; the token is scoped to this repository, contents: write) the push is the App's, so every PR workflow runs on the bot
-#   commit for real. Without those secrets it pushes with GITHUB_TOKEN (which starts no run) and, as before, dispatches CI, reports visual /
-#   visual-shard as passed and copies every other check of the tested head onto the bot commit; a notice names the missing secrets.
+#   commit for real. Without those secrets it commits as github-actions[bot] with [skip ci] in the message and pushes with GITHUB_TOKEN, so no
+#   workflow runs on the bot commit and nothing waits for approval; it reports visual / visual-shard as passed and copies every other check
+#   and status of the tested head onto the bot commit; a notice names the missing secrets.
 # Screenshot-only push: when a PR push changes only e2e/visual/__screenshots__/ (and e2e/visual/screen-files.json) since the last push, that push
 #   was a baseline refresh ([update-visual-baselines]) and this workflow passed on it (scripts/ci/screenshot-only.sh --refresh), select picks
 #   nothing: those are the baselines that run rendered and compared. Any other screenshot-only push (baselines committed by hand) compares as usual.
@@ -335,13 +336,13 @@ jobs:
       contents: write
       checks: write
       statuses: write
-      actions: write
+      actions: read
     env:
       HAS_APP: ${{ secrets.SORTED_CI_APP_ID != '' && secrets.SORTED_CI_APP_PRIVATE_KEY != '' }}
     steps:
       - name: Missing App secrets
         if: env.HAS_APP != 'true'
-        run: echo "::notice::SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY are not both set; pushing with GITHUB_TOKEN and reporting the bot commit's checks (no PR workflow runs on it)."
+        run: echo "::notice::SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY are not both set; pushing with GITHUB_TOKEN and [skip ci], and reporting the bot commit's checks (no workflow runs on it)."
 
       # actions/create-github-app-token v3.3.0, pinned by commit.
       - name: App token (this repository, contents write)
@@ -368,6 +369,8 @@ jobs:
           path: e2e/visual/__screenshots__
 
       # The message never carries [update-visual-baselines] (loop guard).
+      # Without the App it carries [skip ci]: nothing runs again on the bot
+      # commit and GitHub asks for no approval; its checks are reported below.
       - name: Commit the baselines to the PR branch
         id: commit
         env:
@@ -389,13 +392,16 @@ jobs:
             echo "baselines unchanged: nothing to commit"
             exit 0
           fi
-          git commit -m "Visual CI: refresh baselines on the CI WebKit image"
+          if [ -n "$APP_SLUG" ]; then
+            git commit -m "Visual CI: refresh baselines on the CI WebKit image"
+          else
+            git commit -m "Visual CI: refresh baselines on the CI WebKit image [skip ci]"
+          fi
           git push origin "HEAD:$HEAD_REF"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # Without the App: a GITHUB_TOKEN push starts no workflow, so the bot
-      # commit would wait on its required checks forever. CI runs for real on
-      # it (workflow_dispatch; its unit tests read the baselines). Visual
+      # commit ([skip ci]) would wait on its required checks forever. Visual
       # passes: the screens were rendered and compared on this tree. Every
       # other workflow's tree is the tested head's but for
       # e2e/visual/__screenshots__ (checked here), so its results there hold:
@@ -409,7 +415,6 @@ jobs:
           REPO: ${{ github.repository }}
           TESTED: ${{ github.event.pull_request.head.sha }}
           BOT: ${{ steps.commit.outputs.sha }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -420,8 +425,6 @@ jobs:
             echo "$other"
             exit 1
           fi
-          gh workflow run ci.yml --repo "$REPO" --ref "$HEAD_REF"
-          echo "CI dispatched on $HEAD_REF ($BOT)"
           post() {
             gh api -X POST "repos/$REPO/check-runs" \
               -f name="$1" -f head_sha="$BOT" -f status=completed -f conclusion="$2" \

@@ -7,9 +7,12 @@ name: Visual nightly
 #   compares again on the same tree (must pass: a layout failure or a flaky screen fails the night, no PR), and uploads the new images.
 # publish: merges every shard's fragments into e2e/visual/screen-files.json (the per-screen map visual-select.ts reads) and lays the new
 #   images over main. Nothing changed: ends green. Otherwise it force-pushes branch bot/visual-baselines (main + those files only:
-#   e2e/visual/__screenshots__/ and e2e/visual/screen-files.json) with the Sorted CI GitHub App token and opens, or updates, ONE pull request
-#   "Visual baselines refresh" (body: changed images per project folder, whether the map changed). Never pushes to main, never merges.
-#   Without SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY it fails with a notice naming them.
+#   e2e/visual/__screenshots__/ and e2e/visual/screen-files.json) and opens, or updates, ONE pull request "Visual baselines refresh" (body:
+#   changed images per project folder, whether the map changed). Never pushes to main, never merges. With the Sorted CI GitHub App
+#   (SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY) it pushes and opens the PR as the App. Without them it does the same with GITHUB_TOKEN as
+#   github-actions[bot] (job permissions contents and pull-requests write); the commit carries no [skip ci], so the PR's checks run once a
+#   maintainer approves them. That needs the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings, Actions,
+#   General, Workflow permissions); if it is off, creating the PR fails with an error naming it.
 on:
   schedule:
     - cron: '0 21 * * *'
@@ -185,10 +188,14 @@ jobs:
     needs: render
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # GITHUB_TOKEN pushes and opens the PR when the App secrets are absent.
+    permissions:
+      contents: write
+      pull-requests: write
     env:
       HAS_APP: ${{ secrets.SORTED_CI_APP_ID != '' && secrets.SORTED_CI_APP_PRIVATE_KEY != '' }}
     steps:
-      # No stored credentials: the push uses the App token only.
+      # No stored credentials: the push sets its token on the remote itself.
       - uses: actions/checkout@v4
         with:
           ref: main
@@ -252,14 +259,12 @@ jobs:
 
       - name: Missing App secrets
         if: steps.diff.outputs.changed == 'true' && env.HAS_APP != 'true'
-        run: |
-          echo "::error::SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY are not both set: the nightly cannot push bot/visual-baselines or open its PR."
-          exit 1
+        run: echo "::notice::SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY are not both set; pushing bot/visual-baselines and opening its PR with GITHUB_TOKEN as github-actions[bot]."
 
       # actions/create-github-app-token v3.3.0, pinned by commit.
       - name: App token (this repository, contents and pull requests write)
         id: app
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && env.HAS_APP == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         with:
           app-id: ${{ secrets.SORTED_CI_APP_ID }}
@@ -275,13 +280,18 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         env:
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          uid=$(gh api "users/${APP_SLUG}%5Bbot%5D" --jq .id)
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
+          if [ -n "$APP_SLUG" ]; then
+            uid=$(gh api "users/${APP_SLUG}%5Bbot%5D" --jq .id)
+            git config user.name "${APP_SLUG}[bot]"
+            git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          fi
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
           git checkout -B bot/visual-baselines
           git commit -m "Visual baselines refresh (nightly on main)"
@@ -290,7 +300,13 @@ jobs:
           if [ -n "$number" ]; then
             gh pr edit "$number" --repo "$REPO" --title "Visual baselines refresh" --body-file "$RUNNER_TEMP/body.md"
             echo "updated PR #$number"
+          elif ! out=$(gh pr create --repo "$REPO" --base main --head bot/visual-baselines \
+            --title "Visual baselines refresh" --body-file "$RUNNER_TEMP/body.md" 2>&1); then
+            echo "$out"
+            if [ -z "$APP_SLUG" ]; then
+              echo "::error::Couldn't open the PR with GITHUB_TOKEN. Turn on the repository setting \"Allow GitHub Actions to create and approve pull requests\" (Settings, Actions, General, Workflow permissions); bot/visual-baselines is pushed."
+            fi
+            exit 1
           else
-            gh pr create --repo "$REPO" --base main --head bot/visual-baselines \
-              --title "Visual baselines refresh" --body-file "$RUNNER_TEMP/body.md"
+            echo "$out"
           fi
