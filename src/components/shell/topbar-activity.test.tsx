@@ -199,10 +199,11 @@ describe('taps and the long-press', () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
-  it('Catch up at 0: greyed (aria-disabled), no action, the same box; above 0 it opens', async () => {
+  it('Catch up at 0: never greyed (same outline as Threads), no action; above 0 it opens', async () => {
     const open = vi.fn();
     await mount(<CatchUpButton count={0} armed onOpen={open} onMarkAllRead={() => undefined} />);
-    expect(catchUp()?.getAttribute('aria-disabled')).toBe('true');
+    expect(catchUp()?.hasAttribute('aria-disabled')).toBe(false);
+    expect(catchUp()?.className).toContain('text-fg');
     expect(catchUp()?.className).toContain('w-topbar-pair');
     act(() => catchUp()?.click());
     expect(open).not.toHaveBeenCalled();
