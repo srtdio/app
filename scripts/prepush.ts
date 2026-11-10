@@ -6,14 +6,20 @@
 //   PREPUSH_SCREENS='a|b'         run exactly these visual screens (regex on the screen name)
 //   PREPUSH_SNAPSHOTS=1           also compare screenshots (local renders never match CI's
 //                                 WebKit image, so by default only the layout checks run)
+//   PREPUSH_E2E=all               deliberate local full run: the WebKit specs the changed
+//                                 files reach (e2e-webkit.yml's split + scripts/ci/e2e-select.ts,
+//                                 the whole suite for a shared file)
 //
 // Fast by design (target under 5 min; a slower run prints a warning). Steps,
 // each timed: prettier --check, eslint, tsc (app, node, and the scripts / e2e
 // configs when those changed), vitest related --run (plus the tests that read
 // source as text, as ci.yml does), the design ratchet, the layout checks on the
-// screens the changed files feed, then the WebKit e2e specs those files reach
-// (e2e-webkit.yml's split, then scripts/ci/e2e-select.ts; scripts/, docs and
-// other non-UI paths run no spec, as in CI).
+// screens the changed files feed, then WebKit e2e on ONLY the spec files this
+// branch added or edited (e2e/tests/**/*.spec.ts, at most E2E_CAP = 3). No
+// edited spec: skipped, e2e runs in CI. Never the e2e-select set or the whole
+// suite by default: a shared file (tailwind.config.ts, e2e fixtures, global
+// CSS) selects the whole suite, ~30 min and out-of-memory kills on one box,
+// which E2E WebKit already runs across 6 shards.
 //
 // Layout checks: the screens scripts/ci/visual-select.ts picks (the same
 // selection Visual CI renders), never more than SCREEN_CAP (12) and never
@@ -217,8 +223,28 @@ export function e2eReach(files: readonly string[]): {
   return { own, app, whole };
 }
 
-/** null: no e2e spec; []: the whole suite; else the selected specs. */
-async function e2eSpecs(files: string[]): Promise<string[] | null> {
+/** Most edited spec files a default local run takes; the rest run in CI. */
+export const E2E_CAP = 3;
+
+export type E2ePlan =
+  | { mode: 'all' }
+  | { mode: 'skip'; why: string }
+  | { mode: 'edited'; specs: string[]; dropped: string[] };
+
+/**
+ * The local e2e stage: PREPUSH_E2E=all keeps the CI-style selection
+ * (e2eSpecs); otherwise only the spec files this branch added or edited, at
+ * most E2E_CAP, and none when no spec changed.
+ */
+export function e2ePlan(files: readonly string[], env = process.env.PREPUSH_E2E): E2ePlan {
+  if (env === 'all') return { mode: 'all' };
+  const edited = files.filter((f) => /^e2e\/tests\/.+\.spec\.ts$/.test(f));
+  if (edited.length === 0) return { mode: 'skip', why: 'e2e runs in CI' };
+  return { mode: 'edited', specs: edited.slice(0, E2E_CAP), dropped: edited.slice(E2E_CAP) };
+}
+
+/** PREPUSH_E2E=all only. null: no e2e spec; []: the whole suite; else the selected specs. */
+export async function e2eSpecs(files: string[]): Promise<string[] | null> {
   const { own, app, whole } = e2eReach(files);
   if (whole) return [];
   if (app.length === 0) return own.length > 0 ? own : null;
@@ -320,16 +346,31 @@ async function main(): Promise<void> {
     results.push(await run('layout checks', bin('playwright'), args));
   }
 
-  // The WebKit e2e specs the changed files reach (scripts/ci/e2e-select.ts, as
-  // e2e-webkit.yml picks them): the button system and touch sweeps live there.
-  const e2e = await e2eSpecs(files);
-  if (e2e === null) {
-    results.push(await skip('e2e webkit', 'no spec reached'));
-  } else {
-    process.stdout.write(
-      `prepush: e2e ${e2e.length === 0 ? 'whole suite' : `${e2e.length} specs`}\n`,
+  // WebKit e2e: only the spec files this branch edited (E2E_CAP); the full
+  // suite is E2E WebKit's. PREPUSH_E2E=all: the specs the changed files reach.
+  const plan = e2ePlan(files);
+  if (plan.mode === 'skip') {
+    results.push(await skip('e2e webkit', plan.why));
+  } else if (plan.mode === 'edited') {
+    if (plan.dropped.length > 0) {
+      process.stdout.write(
+        `prepush: ${plan.specs.length + plan.dropped.length} specs edited, running the first ${E2E_CAP}; the rest run in CI: ${plan.dropped.join(' ')}\n`,
+      );
+    }
+    process.stdout.write(`prepush: e2e on edited specs: ${plan.specs.join(' ')}\n`);
+    results.push(
+      await run('e2e webkit', bin('playwright'), ['test', '--reporter=line', ...plan.specs]),
     );
-    results.push(await run('e2e webkit', bin('playwright'), ['test', '--reporter=line', ...e2e]));
+  } else {
+    const e2e = await e2eSpecs(files);
+    if (e2e === null) {
+      results.push(await skip('e2e webkit', 'no spec reached'));
+    } else {
+      process.stdout.write(
+        `prepush: e2e (PREPUSH_E2E=all) ${e2e.length === 0 ? 'whole suite' : `${e2e.length} specs`}\n`,
+      );
+      results.push(await run('e2e webkit', bin('playwright'), ['test', '--reporter=line', ...e2e]));
+    }
   }
 
   let failed = false;

@@ -18,7 +18,7 @@ Node 22 (`.nvmrc`), pnpm. Run `pnpm install` first.
 - `pnpm format` / `pnpm format:check` - Prettier
 - `pnpm types:supabase` - regenerate `packages/schemas/src/supabase.generated.ts` (needs `SUPABASE_PROJECT_ID`); never edit that file by hand
 
-- `pnpm prepush` - the fast CI checks on the files changed vs origin/main (prettier, eslint, tsc, vitest related, design ratchet, layout checks on at most 12 affected screens, selected WebKit e2e specs); see `scripts/prepush.ts`
+- `pnpm prepush` - the fast CI checks on the files changed vs origin/main (prettier, eslint, tsc, vitest related, design ratchet, layout checks on at most 12 affected screens; WebKit e2e locally only for spec files you edited (max 3); the full e2e suite is CI's job); see `scripts/prepush.ts`
 
 Single unit test: `pnpm exec vitest run src/lib/foo.test.ts`.
 
@@ -73,7 +73,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 
 ## Rules for Claude Code
 
-- pnpm prepush before every push: fast checks + layout checks for affected screens only, target under 5 min. Never render all screens or update screenshots locally; full visual runs are CI's job. Run it on the exact tree. One push per finished step. [update-visual-baselines] only on a PR's last push. A red CI run means prepush missed something: fix prepush too.
+- pnpm prepush before every push: fast checks + layout checks for affected screens only, target under 5 min. Never render all screens or update screenshots locally; full visual runs are CI's job. WebKit e2e locally only for spec files you edited (max 3); the full e2e suite is CI's job. Run it on the exact tree. One push per finished step. [update-visual-baselines] only on a PR's last push. A red CI run means prepush missed something: fix prepush too.
 - When CI is red, read every failing job's full log and fix ALL failures in one push.
 - Shared check files (`e2e/visual/layout-checks*.ts`, `e2e/visual/screens.spec.ts`, `src/__tests__/visual-coverage.test.ts`, playwright configs, `.github/workflows`) change in their own small PR first, merged before feature PRs that rely on them.
 - One PR per prompt. Aim under 400 changed lines per PR, excluding generated files and screenshots. One feature per PR.
