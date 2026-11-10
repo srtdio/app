@@ -600,12 +600,43 @@ export function trayTileViolations(
   ];
 }
 
-/** The top bar's sort and primary slots (shell/Topbar TopbarSlots): fixed 44 boxes. */
+/** The top bar's sort slot from md (shell/Topbar TopbarSlots): a fixed 44 box. */
 export const TOPBAR_SLOT_PX = 44;
-/** The top bar's controls sit gap-1 apart (4px), plus sub-pixel rounding. */
+/** The top bar's primary ("+") slot from md: the 112 wide Main face's slot, 44 tall. */
+export const TOPBAR_PRIMARY_MD_PX = 112;
+/** Below md (10 Nov 2026): every top bar key is a 36 wide x 44 tall strip, 36 apart. */
+export const TOPBAR_KEY_PX = 36;
+/** The top bar's laptop breakpoint (Tailwind md). */
+export const TOPBAR_MD_PX = 768;
+/** From md the top bar's controls sit gap-1 apart (4px), plus sub-pixel rounding. */
 export const TOPBAR_GAP_MAX_PX = 4.5;
+/** Phone: the 32 avatar photo's right edge stays 6 in from the 16 gutter (as on main). */
+export const TOPBAR_AVATAR_RIGHT_INSET_PX = 22;
+/** The phone "+" face: an outlined 22 square, 1.75 line, radius 7, no fill, a 14 glyph. */
+export const TOPBAR_PLUS_PHONE = { face: 22, line: 1.75, radius: 7, glyph: 14 } as const;
+/** The laptop "+" face: the 112 x 32 Main, radius 8, accent fill. */
+export const TOPBAR_PLUS_LAPTOP = { width: 112, height: 32, radius: 8 } as const;
 /** A slot holds one x across screens within this many px. */
 const TOPBAR_DRIFT_PX = 0.5;
+/** Centres and edges compare within 1px (CLAUDE.md alignment: +-1). */
+const TOPBAR_ALIGN_PX = 1;
+
+/** The top bar "+" face as measured (the shown [data-topbar-plus-face]). */
+export interface TopbarPlusGeom {
+  /** Which face shows: 'phone' below md, 'laptop' from md. */
+  face: 'phone' | 'laptop';
+  box: Box;
+  borderWidth: number;
+  radius: number;
+  /** The face's computed background colour. */
+  background: string;
+  /** The computed colour of bg-accent on this page (the Main fill). */
+  accent: string;
+  /** Blocked (aria-disabled): the laptop face greys to bg-fg-3. Absent: live. */
+  blocked?: { fill: string } | null | undefined;
+  /** The face's IconPlus svg. */
+  glyph: Box | null;
+}
 
 /** The top bar as measured: search, the sort slot, the primary ("+") slot, the avatar. */
 export interface TopbarGeom {
@@ -617,33 +648,97 @@ export interface TopbarGeom {
   primary: Box | null;
   /** The Account menu (avatar) button. */
   avatar: Box | null;
+  /** The viewport width (below md the phone key rules apply). Absent: md rules only. */
+  viewportWidth?: number | undefined;
+  /** The avatar's visible photo inside the Account menu button. */
+  avatarFace?: Box | null | undefined;
+  /** The "+" face, when the primary slot holds the TopbarPlus. */
+  plus?: TopbarPlusGeom | null | undefined;
 }
 
+const right = (b: Box): number => b.x + b.width;
+const centreX = (b: Box): number => b.x + b.width / 2;
+const centreY = (b: Box): number => b.y + b.height / 2;
+
 /**
- * Decision A: the top bar reads search | sort | "+" | avatar, left to right,
- * the sort and "+" slots each a fixed 44x44 box (empty slots keep it), the "+"
- * last before the avatar and the sort right before the "+". A bar with no
- * slots (no workspace yet) is not checked. Pure.
+ * Below md (10 Nov 2026): Search, sort, "+" and the avatar are 36 x 44 strips,
+ * touching (gap 0), centres 36 apart; the avatar photo's right edge stays 22
+ * in from the viewport edge. The "+" face is the outlined 22 square, centred
+ * in its slot. Pure.
  */
-export function topbarViolations(g: TopbarGeom): string[] {
-  if (g.sort === null && g.primary === null) return [];
+function topbarPhoneViolations(g: TopbarGeom, vw: number): string[] {
   const out: string[] = [];
-  const slots: Array<[string, Box | null]> = [
-    ['sort', g.sort],
-    ['primary', g.primary],
+  const keys: Array<[string, Box | null]> = [
+    ['Search', g.search],
+    ['sort slot', g.sort],
+    ['"+" slot', g.primary],
+    ['avatar', g.avatar],
   ];
-  for (const [name, box] of slots) {
-    if (box === null) {
-      out.push(`no ${name} slot ([data-topbar-slot="${name}"])`);
-      continue;
-    }
-    if (!near(box.width, TOPBAR_SLOT_PX) || !near(box.height, TOPBAR_SLOT_PX)) {
-      out.push(`${name} slot is ${box.width}x${box.height}, not 44x44 (a fixed slot)`);
+  for (const [name, box] of keys) {
+    if (box === null) continue;
+    if (!near(box.width, TOPBAR_KEY_PX) || !near(box.height, TOPBAR_SLOT_PX)) {
+      out.push(`phone: the ${name} is ${box.width}x${box.height}, not a 36x44 key strip`);
     }
   }
-  if (g.search === null) out.push('no visible Search in the top bar');
-  if (g.avatar === null) out.push('no Account menu (avatar) in the top bar');
-  const right = (b: Box): number => b.x + b.width;
+  for (let i = 1; i < keys.length; i += 1) {
+    const [prevName, prev] = keys[i - 1] ?? ['', null];
+    const [name, box] = keys[i] ?? ['', null];
+    if (prev === null || box === null) continue;
+    const gap = box.x - right(prev);
+    if (!near(gap, 0))
+      out.push(`phone: the ${prevName} and the ${name} are ${gap}px apart, not touching`);
+    const step = centreX(box) - centreX(prev);
+    if (Math.abs(step - TOPBAR_KEY_PX) > TOPBAR_ALIGN_PX) {
+      out.push(`phone: the ${prevName} and the ${name} centres are ${step}px apart, not 36`);
+    }
+  }
+  if (g.avatarFace !== null && g.avatarFace !== undefined) {
+    const want = vw - TOPBAR_AVATAR_RIGHT_INSET_PX;
+    if (Math.abs(right(g.avatarFace) - want) > TOPBAR_ALIGN_PX) {
+      out.push(`phone: the avatar photo ends at ${right(g.avatarFace)}, not ${want} (main's edge)`);
+    }
+  }
+  const plus = g.plus;
+  if (plus !== null && plus !== undefined) {
+    const want = TOPBAR_PLUS_PHONE;
+    if (plus.face !== 'phone') out.push('phone: the "+" shows its laptop face');
+    if (!near(plus.box.width, want.face) || !near(plus.box.height, want.face)) {
+      out.push(`phone: the "+" face is ${plus.box.width}x${plus.box.height}, not 22x22`);
+    }
+    if (Math.abs(plus.borderWidth - want.line) > 0.1) {
+      out.push(`phone: the "+" line is ${plus.borderWidth}, not 1.75`);
+    }
+    if (!near(plus.radius, want.radius)) out.push(`phone: the "+" radius is ${plus.radius}, not 7`);
+    if (!/^(transparent|rgba\(0, 0, 0, 0\))$/.test(plus.background)) {
+      out.push(`phone: the "+" face is filled (${plus.background}), not transparent`);
+    }
+    if (plus.glyph === null || !near(plus.glyph.width, want.glyph)) {
+      out.push(`phone: the "+" glyph is ${plus.glyph?.width ?? 'missing'}, not 14`);
+    }
+    if (g.primary !== null) {
+      const dx = centreX(plus.box) - centreX(g.primary);
+      const dy = centreY(plus.box) - centreY(g.primary);
+      if (Math.abs(dx) > TOPBAR_ALIGN_PX || Math.abs(dy) > TOPBAR_ALIGN_PX) {
+        out.push(`phone: the "+" face centre is ${dx},${dy} off its slot's centre`);
+      }
+    }
+  }
+  return out;
+}
+
+/** md and up: sort 44 x 44, the primary 112 x 44, the "+" the 112 x 32 accent Main. Pure. */
+function topbarLaptopViolations(g: TopbarGeom): string[] {
+  const out: string[] = [];
+  const slots: Array<[string, Box | null, number]> = [
+    ['sort', g.sort, TOPBAR_SLOT_PX],
+    ['primary', g.primary, TOPBAR_PRIMARY_MD_PX],
+  ];
+  for (const [name, box, width] of slots) {
+    if (box === null) continue;
+    if (!near(box.width, width) || !near(box.height, TOPBAR_SLOT_PX)) {
+      out.push(`${name} slot is ${box.width}x${box.height}, not ${width}x44 (a fixed slot)`);
+    }
+  }
   const { search, sort, primary, avatar } = g;
   if (search !== null && sort !== null && right(search) > sort.x + LIST_CARD_PX_TOLERANCE) {
     out.push(`Search ends at ${right(search)}, after the sort slot starts at ${sort.x}`);
@@ -660,7 +755,47 @@ export function topbarViolations(g: TopbarGeom): string[] {
       out.push(`the "+" slot and the avatar are ${gap}px apart ("+" last before the avatar)`);
     }
   }
+  const plus = g.plus;
+  if (plus !== null && plus !== undefined) {
+    const want = TOPBAR_PLUS_LAPTOP;
+    if (plus.face !== 'laptop') out.push('laptop: the "+" shows its phone face');
+    if (!near(plus.box.width, want.width) || !near(plus.box.height, want.height)) {
+      out.push(`laptop: the "+" face is ${plus.box.width}x${plus.box.height}, not 112x32`);
+    }
+    if (!near(plus.radius, want.radius))
+      out.push(`laptop: the "+" radius is ${plus.radius}, not 8`);
+    const fill = plus.blocked?.fill ?? plus.accent;
+    if (plus.background !== fill) {
+      const what = plus.blocked ? 'the blocked fg-3' : 'the accent';
+      out.push(`laptop: the "+" fill is ${plus.background}, not ${what} ${fill}`);
+    }
+    if (avatar !== null) {
+      const dy = centreY(plus.box) - centreY(avatar);
+      if (Math.abs(dy) > TOPBAR_ALIGN_PX) {
+        out.push(`laptop: the "+" face's centre is ${dy}px off the avatar's`);
+      }
+    }
+  }
   return out;
+}
+
+/**
+ * Decision A: the top bar reads search | sort | "+" | avatar, left to right,
+ * the "+" last before the avatar and the sort right before the "+" (empty
+ * slots keep their box). Below md (10 Nov 2026) the keys are 36 x 44 strips
+ * 36 apart; from md the sort is 44 x 44 and the "+" slot 112 x 44, gap-1. A
+ * bar with no slots (no workspace yet, Activity's pair) is not checked. Pure.
+ */
+export function topbarViolations(g: TopbarGeom): string[] {
+  if (g.sort === null && g.primary === null) return [];
+  const out: string[] = [];
+  if (g.sort === null) out.push('no sort slot ([data-topbar-slot="sort"])');
+  if (g.primary === null) out.push('no primary slot ([data-topbar-slot="primary"])');
+  if (g.search === null) out.push('no visible Search in the top bar');
+  if (g.avatar === null) out.push('no Account menu (avatar) in the top bar');
+  const vw = g.viewportWidth;
+  if (vw !== undefined && vw < TOPBAR_MD_PX) return [...out, ...topbarPhoneViolations(g, vw)];
+  return [...out, ...topbarLaptopViolations(g)];
 }
 
 /** One screen's slot positions, for the across-screens check. */

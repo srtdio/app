@@ -5336,6 +5336,36 @@ function seedFoldedThread(network: HarnessNetwork): void {
   );
 }
 
+/**
+ * Comments never page (10 Nov 2026): 8 checkpoints on POST, 3 replies each
+ * (32 rows, more than one screen), on top of the creator seed.
+ */
+function seedAllComments(network: HarnessNetwork): void {
+  const start = NOW - 6 * 3_600_000;
+  const rows: Row[] = [];
+  for (let n = 1; n <= 8; n += 1) {
+    const root = `0190f310-0000-7000-8000-0000000c${n}000`;
+    rows.push(
+      threadComment(root, PEER, `Checkpoint ${n}: tighten this part.`, start + n * 60_000, {
+        ledger_seq: n,
+        ledger_batch_id: CHECKPOINT_BATCH,
+      }),
+    );
+    for (let r = 1; r <= 3; r += 1) {
+      rows.push(
+        threadComment(
+          `0190f310-0000-7000-8000-0000000c${n}${r}00`,
+          r % 2 === 1 ? ME : PEER,
+          `Reply ${r} on checkpoint ${n}.`,
+          start + 3_600_000 + n * 60_000 + r * 1_000,
+          { parent_comment_id: root },
+        ),
+      );
+    }
+  }
+  (network.world.tables.comments ??= []).push(...rows);
+}
+
 const COMMENT_PDF_NAME = 'Launch deck.pdf';
 const COMMENT_PDF_ASSET = '0190e600-0000-7000-8000-0000000000a9';
 const COMMENT_PDF_VERSION = '0190e600-0000-7000-8000-0000000000b9';
@@ -5441,6 +5471,27 @@ SCREENS.push(
     after: async (page) => {
       await assertProgressRowUnderBar(page, 'post-thread-folded');
       await assertPinnedBarOnScroll(page, 'post-thread-folded');
+    },
+  },
+  {
+    // Comments never page (10 Nov 2026): all 8 checkpoints load at once, each
+    // folded to its latest reply behind "View 2 earlier replies"; no Load more.
+    // The shot is the bottom of the comment scroll.
+    name: 'post-comments-all',
+    seed: creator,
+    extra: seedAllComments,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      for (let n = 1; n <= 8; n += 1) {
+        await expect(
+          page.getByText(`Checkpoint ${n}: tighten this part.`, { exact: true }),
+        ).toHaveCount(1);
+      }
+      await expect(page.locator('[data-comments-load-more]')).toHaveCount(0);
+      const more = page.locator('[data-replies-more]', { hasText: 'View 2 earlier replies' });
+      expect(await more.count()).toBeGreaterThanOrEqual(8);
+      await page.locator('[data-comments-composer]').first().scrollIntoViewIfNeeded();
     },
   },
   {
@@ -5566,6 +5617,40 @@ async function refuseUploads(page: Page): Promise<void> {
   );
 }
 
+/** Every seeded brief closed, then 30 newer closed ones and one older open one. */
+function seedOneOpenBrief(network: HarnessNetwork): void {
+  const briefs = (network.world.tables.briefs ??= []);
+  const template = briefs[0];
+  if (template === undefined) throw new Error('briefs-one-open: no seeded brief to copy');
+  const closedAt = new Date(NOW - 3_600_000).toISOString();
+  const closed = { status: 'closed', closed_at: closedAt, closed_by: ME };
+  for (const brief of briefs) Object.assign(brief, closed);
+  const at = (ms: number) => ({
+    created_at: new Date(ms).toISOString(),
+    updated_at: new Date(ms).toISOString(),
+  });
+  for (let i = 1; i <= 30; i += 1) {
+    briefs.push({
+      ...template,
+      ...closed,
+      ...at(NOW - i * 3_600_000),
+      id: `0190da10-0000-7000-8a00-0000000001${String(i).padStart(2, '0')}`,
+      number: 400 + i,
+      title: `Closed brief ${i}`,
+    });
+  }
+  briefs.push({
+    ...template,
+    ...at(NOW - 40 * 24 * 3_600_000),
+    status: 'open',
+    closed_at: null,
+    closed_by: null,
+    id: '0190da10-0000-7000-8a00-000000000200',
+    number: 399,
+    title: 'Spring lookbook',
+  });
+}
+
 SCREENS.push(
   // Briefs for the creator (no sort; the blocked "+": aria-disabled, the
   // disabled look). briefs-approver is the approver's (the live "+", no sort).
@@ -5585,6 +5670,20 @@ SCREENS.push(
       );
       await blocked.click({ force: true });
       await waitFor([page.getByText('Briefs come from approvers.', { exact: true })], 'toast');
+    },
+  },
+  // Load more only when there is more (10 Nov 2026): the one open brief sits
+  // behind 30 newer closed ones; the Open chip reads on silently and shows it,
+  // with no Load more under the short list.
+  {
+    name: 'briefs-one-open',
+    seed: creator,
+    extra: seedOneOpenBrief,
+    url: '/briefs?status=open',
+    steps: async (page) => {
+      await waitFor([page.getByText('Spring lookbook')], 'the one open brief');
+      await expect(page.locator('[data-briefs-load-more]')).toHaveCount(0);
+      await expect(page.getByText('Open briefs show up here.')).toHaveCount(0);
     },
   },
   {

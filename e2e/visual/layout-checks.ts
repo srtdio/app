@@ -525,6 +525,39 @@ async function readPage(page: Page): Promise<RawPage> {
             avatar: firstShown(
               Array.from(header.querySelectorAll('button[aria-label="Account menu"]')),
             ),
+            viewportWidth: vw,
+            // The avatar's visible photo: the first child box inside the button.
+            avatarFace: firstShown(
+              Array.from(
+                header.querySelectorAll('button[aria-label="Account menu"] > *:first-child'),
+              ),
+            ),
+            plus: (() => {
+              const face = Array.from(
+                header.querySelectorAll('[data-topbar-slot="primary"] [data-topbar-plus-face]'),
+              ).find((el) => shown(el));
+              if (face === undefined) return null;
+              const style = getComputedStyle(face);
+              // The page's accent fill, read off a throwaway bg-accent box.
+              const probe = document.createElement('span');
+              probe.className = 'bg-accent';
+              document.body.appendChild(probe);
+              const accent = getComputedStyle(probe).backgroundColor;
+              probe.className = 'bg-fg-3';
+              const blockedFill = getComputedStyle(probe).backgroundColor;
+              probe.remove();
+              const blocked = face.closest('[data-topbar-plus-blocked]') !== null;
+              return {
+                face: face.getAttribute('data-topbar-plus-face') === 'phone' ? 'phone' : 'laptop',
+                box: toBox(face.getBoundingClientRect()),
+                borderWidth: parseFloat(style.borderTopWidth) || 0,
+                radius: parseFloat(style.borderTopLeftRadius) || 0,
+                background: style.backgroundColor,
+                accent,
+                blocked: blocked ? { fill: blockedFill } : null,
+                glyph: boxOf(face.querySelector('svg')),
+              } as const;
+            })(),
           };
 
     // 9 Chip rows with the pinned Select.

@@ -651,20 +651,80 @@ describe('chips (ui/Chip): visible by density (32 / 36 / 40), tap box 44', () =>
 describe('top bar, chip-row Select and upload checks', () => {
   const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
 
-  it('topbarViolations: search | sort | + | avatar with fixed 44 slots passes', async () => {
+  it('topbarViolations (md+): search | sort 44 | + 112 | avatar, gap-1, passes', async () => {
     const { topbarViolations } = await import('../../e2e/visual/layout-checks-core');
     const ok = {
-      search: box(200, 6, 44, 44),
-      sort: box(248, 6, 44, 44),
-      primary: box(292, 6, 44, 44),
-      avatar: box(336, 6, 44, 44),
+      viewportWidth: 1280,
+      search: box(900, 6, 240, 44),
+      sort: box(1144, 6, 44, 44),
+      primary: box(1192, 6, 112, 44),
+      avatar: box(1308, 6, 44, 44),
     };
     expect(topbarViolations(ok)).toEqual([]);
-    expect(topbarViolations({ ...ok, sort: box(248, 6, 60, 44) })).not.toEqual([]);
+    expect(topbarViolations({ ...ok, sort: box(1144, 6, 60, 44) })).not.toEqual([]);
+    // main's 44 "+" slot fails from md.
+    expect(topbarViolations({ ...ok, primary: box(1192, 6, 44, 44) })).not.toEqual([]);
     expect(topbarViolations({ ...ok, primary: null })).not.toEqual([]);
     expect(
       topbarViolations({ search: null, sort: null, primary: null, avatar: box(0, 0, 44, 44) }),
     ).toEqual([]);
+    const plus = {
+      face: 'laptop' as const,
+      box: box(1192, 12, 112, 32),
+      borderWidth: 0,
+      radius: 8,
+      background: 'rgb(1, 2, 3)',
+      accent: 'rgb(1, 2, 3)',
+      glyph: box(0, 0, 16, 16),
+    };
+    expect(topbarViolations({ ...ok, avatar: box(1308, 6, 44, 44), plus })).toEqual([]);
+    expect(
+      topbarViolations({ ...ok, plus: { ...plus, background: 'rgba(0, 0, 0, 0)' } }),
+    ).not.toEqual([]);
+    expect(topbarViolations({ ...ok, plus: { ...plus, box: box(1192, 6, 44, 44) } })).not.toEqual(
+      [],
+    );
+  });
+
+  it('topbarViolations (phone): 36x44 strips touching, 36 apart, the outlined 22 "+"', async () => {
+    const { topbarViolations } = await import('../../e2e/visual/layout-checks-core');
+    // 390 wide: the avatar strip ends 20 in, its 32 photo 22 in (main's edge).
+    const ok = {
+      viewportWidth: 390,
+      search: box(226, 6, 36, 44),
+      sort: box(262, 6, 36, 44),
+      primary: box(298, 6, 36, 44),
+      avatar: box(334, 6, 36, 44),
+      avatarFace: box(336, 12, 32, 32),
+      plus: {
+        face: 'phone' as const,
+        box: box(305, 17, 22, 22),
+        borderWidth: 1.75,
+        radius: 7,
+        background: 'rgba(0, 0, 0, 0)',
+        accent: 'rgb(1, 2, 3)',
+        glyph: box(309, 21, 14, 14),
+      },
+    };
+    expect(topbarViolations(ok)).toEqual([]);
+    // main: 44 slots gap-1 (48 apart) fails.
+    const main = {
+      viewportWidth: 390,
+      search: box(186, 6, 44, 44),
+      sort: box(234, 6, 44, 44),
+      primary: box(282, 6, 44, 44),
+      avatar: box(330, 6, 44, 44),
+      avatarFace: box(336, 12, 32, 32),
+    };
+    expect(topbarViolations(main).length).toBeGreaterThan(0);
+    expect(topbarViolations({ ...ok, avatarFace: box(340, 12, 32, 32) })).not.toEqual([]);
+    expect(
+      topbarViolations({ ...ok, plus: { ...ok.plus, background: 'rgb(1, 2, 3)' } }),
+    ).not.toEqual([]);
+    expect(topbarViolations({ ...ok, plus: { ...ok.plus, box: box(298, 6, 36, 44) } })).not.toEqual(
+      [],
+    );
+    expect(topbarViolations({ ...ok, plus: { ...ok.plus, borderWidth: 1 } })).not.toEqual([]);
   });
 
   it('topbarDriftViolations: slots hold one x across screens', async () => {
