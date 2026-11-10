@@ -129,7 +129,10 @@ export default function EmojiSheet(props: {
 
   return (
     <Sheet open={open} onClose={onClose} title={props.title ?? EMOJI_SHEET_TITLE} fixedHeight>
-      <div data-emoji-sheet="" className="flex flex-col gap-4">
+      {/* Phone: the sheet sizes to its content (capped at 90dvh), so the root
+          keeps that open height while searching: results stay at the top
+          under the field and never collapse behind the keyboard. */}
+      <div data-emoji-sheet="" className="flex min-h-[90dvh] flex-col gap-4 sm:min-h-0">
         <Input
           type="text"
           inputMode="search"

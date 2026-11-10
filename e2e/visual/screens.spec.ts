@@ -104,6 +104,8 @@ import {
   CU_PLAN_ENTRY,
   CU_REST_ENTRY,
   CU_TEXT_ENTRY,
+  CU_THREAD_REPLY_ENTRY,
+  CU_THREAD_REPLY_ID,
   CU_VIDEO_ENTRY,
   seedCatchUpBankIdea,
   seedCatchUpBlankLines,
@@ -120,6 +122,7 @@ import {
   seedCatchUpPlanItem,
   seedCatchUpRest,
   seedCatchUpTextOnly,
+  seedCatchUpThreadReply,
   seedCatchUpVideo,
 } from '../fixtures/catch-up-data';
 import { seedTasks, TASK_CHANNEL } from '../fixtures/tasks-data';
@@ -2131,6 +2134,90 @@ const SCREENS: Screen[] = [
         'replies',
       );
       await waitFor([page.locator('[data-catch-up-thread-title]')], 'Thread title');
+    },
+  },
+  {
+    // A reply inside a thread on a post card (10 Nov 2026): name, time, the
+    // grey "Replied in thread: <root>" line, the reply; the tip above the box;
+    // the box hint "Reply in thread".
+    name: 'catch-up-thread-reply-card',
+    seed: creator,
+    extra: (network) => seedCatchUpThreadReply(network, NOW),
+    url: `/activity?catchup=${CU_THREAD_REPLY_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up-in-thread]')], 'in-thread line');
+      await waitFor([page.locator('[data-catch-up-tip]')], 'thread tip');
+    },
+  },
+  {
+    // The reply's text tapped: the thread sheet over the card (scrim, "<",
+    // Thread over the title, the root, 4 replies, the box, Keep unread | Mark as read).
+    name: 'catch-up-thread-sheet',
+    seed: creator,
+    extra: (network) => seedCatchUpThreadReply(network, NOW),
+    url: `/activity?catchup=${CU_THREAD_REPLY_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap(
+        [
+          page.locator(
+            `[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`,
+          ),
+        ],
+        'reply text',
+      );
+      await waitFor([page.locator('[data-catch-up-thread-sheet]')], 'thread sheet');
+      await waitFor(
+        [page.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
+        'replies',
+      );
+    },
+  },
+  {
+    // Typed in the card box, then a message tapped: the draft moves into the sheet's box.
+    name: 'catch-up-thread-sheet-draft',
+    seed: creator,
+    extra: (network) => seedCatchUpThreadReply(network, NOW),
+    hold: true,
+    url: `/activity?catchup=${CU_THREAD_REPLY_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-reply-input]')], 'reply box');
+      await page.keyboard.type('Looks good');
+      await tap(
+        [
+          page.locator(
+            `[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`,
+          ),
+        ],
+        'reply text',
+      );
+      await waitFor(
+        [page.locator('[data-catch-up-thread-sheet] [data-catch-up-reply-input]')],
+        'sheet box',
+      );
+      await expect(
+        page.locator('[data-catch-up-thread-sheet] [data-catch-up-reply-input]'),
+      ).toHaveValue('Looks good');
+    },
+  },
+  {
+    // The emoji sheet from a catch-up card, searching "thumb": it keeps its
+    // open height, results at the top under the field.
+    name: 'catch-up-emoji-search',
+    seed: creator,
+    extra: (network) => seedCatchUpRest(network, NOW),
+    hold: true,
+    url: `/activity?catchup=${CU_REST_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-reply-input]')], 'reply box');
+      await tap([boxKey(catchUpReply(page), 'Emoji')], 'Emoji');
+      const sheet = page.locator('[data-emoji-sheet]');
+      await waitFor([sheet], 'emoji sheet');
+      await sheet.getByPlaceholder('Search emoji').fill('thumb');
+      await waitFor([sheet.locator('[data-emoji-results]')], 'results');
     },
   },
   {

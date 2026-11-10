@@ -209,6 +209,7 @@ function RepliesLink(props: { count: number; onOpen: () => void }): ReactElement
       inline
       type="button"
       data-catch-up-replies=""
+      onPointerDown={(event) => event.preventDefault()}
       onClick={props.onOpen}
       className={textRole(
         'label',
@@ -258,10 +259,18 @@ export function MessageRow(props: {
           </Text>
         </div>
       ) : null}
+      {row.threadRoot !== undefined ? (
+        <Text role="secondary" as="p" data-catch-up-in-thread="" className="truncate">
+          Replied in thread: {row.threadRoot.text}
+        </Text>
+      ) : null}
       {props.onOpenThread !== null ? (
         <PressableRow
           type="button"
           data-catch-up-open-thread=""
+          // Keep focus (and the keyboard) in the reply box until the press
+          // lands: a blur here reflows the card and the click would miss.
+          onPointerDown={(event) => event.preventDefault()}
           onClick={props.onOpenThread}
           className="text-left focus-visible:lit-focus"
         >

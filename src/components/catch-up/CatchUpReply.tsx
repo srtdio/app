@@ -89,7 +89,12 @@ import { useSession } from '@/lib/session-context';
 import { clockLength } from '@/lib/catch-up/text';
 import { errorText } from '@/lib/error-copy';
 import { logger } from '@/lib/logger';
-import type { CatchUpReplyTarget, CatchUpSend } from '@/lib/catch-up/types';
+import {
+  EMPTY_DRAFT,
+  type CatchUpDraft,
+  type CatchUpReplyTarget,
+  type CatchUpSend,
+} from '@/lib/catch-up/types';
 
 export interface CatchUpReplyProps {
   /** Placeholder: 'Reply in thread' | 'Message <chat>' | 'Reply'. */
@@ -109,6 +114,9 @@ export interface CatchUpReplyProps {
    * workspace's members.
    */
   mentionMembers?: readonly MentionMember[] | undefined;
+  /** A screen-owned draft (text + @ picks: files and a kept note stay here). Absent: own. */
+  draft?: CatchUpDraft | undefined;
+  onDraftChange?: ((draft: CatchUpDraft) => void) | undefined;
 }
 
 /** The catch-up + tray: the comment composers' tiles on every card. */
@@ -202,9 +210,14 @@ export function catchUpSendOf(input: {
 
 export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
   const chat = props.mode === 'chat';
-  const [text, setText] = useState('');
+  const [own, setOwn] = useState<CatchUpDraft>(EMPTY_DRAFT);
+  const draft = props.draft ?? own;
+  const { text, picks } = draft;
+  const setDraft = (next: CatchUpDraft): void => {
+    if (props.draft !== undefined) props.onDraftChange?.(next);
+    else setOwn(next);
+  };
   const [caret, setCaret] = useState(0);
-  const [picks, setPicks] = useState<MentionPick[]>([]);
   const [mentionDismissed, setMentionDismissed] = useState(false);
   const [mentionActive, setMentionActive] = useState(0);
   // The workspace's people are read once the box is first focused (a tap,
@@ -291,9 +304,8 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
 
   function send(): void {
     if (pending === null || recorder.recording) return;
-    setText('');
+    setDraft(EMPTY_DRAFT);
     setCaret(0);
-    setPicks([]);
     setMentionActive(0);
     uploads.clear();
     setVoice(null);
@@ -313,8 +325,7 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
     const handle = mentionHandle(member);
     const next = insertMention(text, caret, handle);
     rememberMentionNames(props.workspaceId, [member]);
-    setPicks((prev) => addPick(prev, { userId: member.userId, name: handle }));
-    setText(next.text);
+    setDraft({ text: next.text, picks: addPick(picks, { userId: member.userId, name: handle }) });
     setCaret(next.caret);
     setMentionActive(0);
     const el = ref.current;
@@ -593,7 +604,7 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
             aria-label={props.hint}
             {...mentionComboboxProps(listId, mentionRows.length, activeRow)}
             onChange={(event) => {
-              setText(event.target.value);
+              setDraft({ text: event.target.value, picks });
               setMentionActive(0);
               trackCaret(event);
             }}

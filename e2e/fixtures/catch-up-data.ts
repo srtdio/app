@@ -86,6 +86,11 @@ export const CU_CHAT_MAIN_ENTRY = cid(ENTRY, 14);
 /** Thread crew's main chat: a mention on a top-level message; the root above has 4 replies. */
 export const CU_GROUP_MAIN_ENTRY = cid(ENTRY, 15);
 
+/** A post whose comment has 4 replies; the newest reply (another member's) is the only unread entry. */
+export const CU_THREAD_REPLY_POST = cid(POST, 0x30);
+export const CU_THREAD_REPLY_ENTRY = cid(ENTRY, 16);
+export const CU_THREAD_REPLY_ID = cid(COMMENT, 0x314);
+
 /** The 25-character display name. */
 export const CU_LONG_NAME = 'Bartholomew Fitzgerald Jr';
 /** The 90-character post title. */
@@ -749,5 +754,56 @@ export function seedCatchUpGroupMain(network: HarnessNetwork, now: number): void
       tier: 'urgent',
       payload: { message_id: target },
     }),
+  );
+}
+
+/**
+ * A thread reply on a card: a post with one top-level comment (read, no
+ * entry) and 4 replies under it; the newest reply, by another member, is the
+ * only unread entry. The card draws it as a message row ("Replied in thread:
+ * <root>") and its box posts into that thread.
+ */
+export function seedCatchUpThreadReply(network: HarnessNetwork, now: number): void {
+  const t = network.world.tables;
+  const postId = CU_THREAD_REPLY_POST;
+  (t.posts ??= []).push(
+    postRow(postId, 48, now, { title: 'Winter coat reel', caption: CAPTION, format: 'text' }),
+  );
+  const rootId = cid(COMMENT, 0x310);
+  (t.comments ??= []).push(
+    commentRow(
+      rootId,
+      'post',
+      postId,
+      PEER,
+      'Can we open on the coat, not the scarf?',
+      now - 3 * HOUR,
+    ),
+  );
+  const replies = [
+    { id: cid(COMMENT, 0x311), author: ME, body: 'Yes, swapping the first two shots.', mins: 150 },
+    { id: cid(COMMENT, 0x312), author: COLLEAGUE_B, body: 'Coat first reads better.', mins: 120 },
+    {
+      id: cid(COMMENT, 0x313),
+      author: PEER,
+      body: 'Agreed. Keep the scarf as shot three.',
+      mins: 60,
+    },
+    {
+      id: CU_THREAD_REPLY_ID,
+      author: COLLEAGUE_A,
+      body: 'New cut is in Assets, coat first.',
+      mins: 5,
+    },
+  ];
+  for (const r of replies) {
+    (t.comments ??= []).push(
+      commentRow(r.id, 'post', postId, r.author, r.body, now - r.mins * MINUTE, {
+        parent_comment_id: rootId,
+      }),
+    );
+  }
+  (t.inbox_entries ??= []).push(
+    commentEntry(CU_THREAD_REPLY_ENTRY, postId, CU_THREAD_REPLY_ID, COLLEAGUE_A, now, 5),
   );
 }

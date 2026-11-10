@@ -73,6 +73,8 @@ export interface CatchUpCardProps {
   menu: { title: string; items: readonly ActionMenuItem[] };
   /** The reply box (null for a card with none). */
   reply?: ReactNode;
+  /** The thread tip above the reply box (null: none). */
+  tip?: { text: string; onDismiss: () => void } | null;
   onRetrySend: (id: string) => void;
   onRetryLoad: () => void;
   /** Open a message's or comment's thread full screen (null rows open none). */
@@ -91,6 +93,16 @@ export interface CatchUpCardProps {
     HTMLAttributes<HTMLDivElement>,
     'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onClickCapture'
   >;
+}
+
+/** The fill rule's scrollTop moved up to the top of the row it lands inside (tops ascending). Pure. */
+export function snapToRowTop(scrollTop: number, rowTops: readonly number[]): number {
+  let at = scrollTop;
+  for (const top of rowTops) {
+    if (top > scrollTop) break;
+    at = top;
+  }
+  return Math.max(0, at);
 }
 
 function setRef<T>(ref: Ref<T> | undefined, value: T | null): void {
@@ -143,11 +155,18 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
     if (el === null || ready === null || placedRef.current) return;
     placedRef.current = true;
     const line = el.querySelector<HTMLElement>('[data-new-line]');
-    el.scrollTop = fillScrollTop({
+    const top = fillScrollTop({
       newTop: line !== null ? line.offsetTop : null,
       contentHeight: el.scrollHeight,
       bodyHeight: el.clientHeight,
     });
+    // No half-cut row at the top: start the first visible row whole.
+    const rowEls = el.querySelectorAll<HTMLElement>('[data-catch-up-rows] > li');
+    const base = rowEls[0]?.offsetParent === el ? 0 : el.offsetTop;
+    el.scrollTop = snapToRowTop(
+      top,
+      Array.from(rowEls, (r) => r.offsetTop - base),
+    );
   }, [ready]);
 
   // Older rows above: keep the reading position (add what grew above).
@@ -198,7 +217,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           row={row}
           selfName={props.selfName}
           timeZone={props.timeZone}
-          onOpenThread={ready?.threads === true ? () => props.onOpenThread(row) : null}
+          onOpenThread={
+            ready?.threads === true ? () => props.onOpenThread(row.threadRoot ?? row) : null
+          }
           reactions={
             <CatchUpRowReactions id={row.id} api={reactions} workspaceId={item.workspaceId} />
           }
@@ -328,6 +349,25 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           </>
         )}
       </div>
+      {props.tip != null && props.reply != null && props.typing === null ? (
+        <div
+          data-catch-up-tip=""
+          className="mx-3 mb-2 flex shrink-0 items-center justify-between gap-2 rounded-xl border pl-3"
+        >
+          <Text role="secondary" className="min-w-0">
+            {props.tip.text}
+          </Text>
+          <Button
+            type="button"
+            variant="link"
+            data-catch-up-tip-dismiss=""
+            className="min-h-11 shrink-0 px-3"
+            onClick={props.tip.onDismiss}
+          >
+            Got it
+          </Button>
+        </div>
+      ) : null}
       {props.reply != null ? (
         // Mid-swipe the card is on its way out: its reply box takes no taps.
         <div
