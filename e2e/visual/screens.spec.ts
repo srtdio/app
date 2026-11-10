@@ -8,6 +8,7 @@ import {
 import {
   assertActivityTopbarPair,
   assertActivityTopbarNarrow,
+  assertActivityLoadMoreBand,
   assertCommentBars,
   assertCommentTray,
   assertThreadHeader,
@@ -896,6 +897,48 @@ function seedActivitySections(network: HarnessNetwork, saleCount = 8): void {
   t.inbox_entries = entries;
 }
 
+/**
+ * 70 Activity rows, one post each (no two group), newest first over the last
+ * days: more rows than 1.45 screens hold in any density, phone or laptop.
+ */
+function seedManyActivityRows(network: HarnessNetwork): void {
+  seedEightComments(network);
+  const t = network.world.tables;
+  const entries = t.inbox_entries ?? [];
+  const sale = entries[entries.length - 1];
+  const salePost = (t.posts ?? []).find((p) => p.id === sale?.entity_id);
+  if (sale === undefined || salePost === undefined) throw new Error('no Weekend sale entry');
+  const comment = (t.comments ?? []).find((c) => c.entity_id === salePost.id) ?? {};
+  for (let n = 1; n <= 70; n += 1) {
+    const tail = String(n).padStart(3, '0');
+    const postId = `0190d8f2-0000-7000-8000-000000000${tail}`;
+    const commentId = `0190d8f3-0000-7000-8000-000000000${tail}`;
+    const createdAt = new Date(NOW - n * 3_600_000).toISOString();
+    (t.posts ??= []).push({
+      ...salePost,
+      id: postId,
+      number: 500 + n,
+      title: `Campaign post ${n}`,
+    });
+    (t.comments ??= []).push({
+      ...comment,
+      id: commentId,
+      entity_id: postId,
+      body: `Note ${n}: tighten the caption.`,
+      created_at: createdAt,
+    });
+    entries.push({
+      ...sale,
+      id: `0190d8f4-0000-7000-8000-000000000${tail}`,
+      entity_id: postId,
+      payload: { comment_id: commentId },
+      created_at: createdAt,
+      read_at: null,
+    });
+  }
+  t.inbox_entries = entries;
+}
+
 /** The rows screens' feed: every section on page one in every density. */
 const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 5);
 
@@ -1708,6 +1751,53 @@ const SCREENS: Screen[] = [
         'Catch up',
       );
     },
+    // Cozy: the pair's face, text, pill and hit; phone name and spacing; laptop Sidebar.
+    after: async (page) => assertActivityTopbarPair(page, 'notifications'),
+  },
+  // Activity's top bar in Compact and Calm (Cozy is notifications): the pair
+  // sized by density, the phone short name, the laptop Sidebar item.
+  ...(['compact', 'calm'] as const).map((density) => ({
+    name: `activity-topbar-${density}`,
+    seed: creator,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+      await expectDensity(page, density);
+      await waitFor(
+        [page.locator('header [data-topbar-pair] [data-topbar-catch-up]:not([data-count="0"])')],
+        'Catch up',
+      );
+    },
+    after: async (page: Page) => assertActivityTopbarPair(page, `activity-topbar-${density}`),
+  })),
+  // Activity's Load more (10 Nov 2026): depth in item rows, never entries; the
+  // button sits half a screen below the fold in every density. Measured at
+  // the page top, then scrolled to show the button for the shot.
+  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
+    name: `activity-load-more-${density}`,
+    seed: creator,
+    extra: seedManyActivityRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.locator('[data-activity-load-more]')], 'Load more');
+      await expectDensity(page, density);
+      await assertActivityLoadMoreBand(page, `activity-load-more-${density}`);
+      await page.locator('[data-activity-load-more]').scrollIntoViewIfNeeded();
+    },
+  })),
+  {
+    // The laptop Sidebar's last item, Activity after Chat, filled on /notifications.
+    name: 'sidebar-activity-active',
+    seed: creator,
+    only: 'laptop',
+    url: '/activity',
+    steps: async (page) => {
+      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+      await waitFor([page.locator('[data-sidebar-activity][data-selected="true"]')], 'Activity');
+    },
+    after: async (page) => assertActivityTopbarPair(page, 'sidebar-activity-active'),
   },
   {
     // The idea bank's Activity rows (team viewer): added, shown, hidden, moved, planned.

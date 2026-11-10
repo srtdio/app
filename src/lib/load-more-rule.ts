@@ -96,3 +96,76 @@ export function useLoadMoreFill(input: {
     },
   };
 }
+
+/** Activity's list as laid out: item rows per section, in order, and its geometry. */
+export interface RowsLayout {
+  /** Item rows (after grouping) per section, in order. */
+  sections: readonly number[];
+  /** Laptop list columns (fillColumns); 1 on a phone. */
+  columns: number;
+  /** One row's height in the active density (60 / 72 / 80). */
+  rowPx: number;
+  /** A section heading with its step to the rows. */
+  headingPx: number;
+  /** Between sections. */
+  gapPx: number;
+}
+
+/**
+ * How many item rows, in order, fit in `heightPx` of list, and whether the
+ * loaded rows reach it at all (when they do not, the list is shorter than its
+ * depth). Rows sit `columns` to a line. Pure.
+ */
+export function rowsInHeight(
+  layout: RowsLayout,
+  heightPx: number,
+): { rows: number; reached: boolean } {
+  const columns = Math.max(1, Math.floor(layout.columns));
+  let y = 0;
+  let rows = 0;
+  for (let i = 0; i < layout.sections.length; i += 1) {
+    const n = layout.sections[i] ?? 0;
+    if (n <= 0) continue;
+    if (rows > 0) y += layout.gapPx;
+    y += layout.headingPx;
+    for (let left = n; left > 0; left -= columns) {
+      if (y + layout.rowPx > heightPx) return { rows, reached: true };
+      y += layout.rowPx;
+      rows += Math.min(columns, left);
+    }
+  }
+  return { rows, reached: false };
+}
+
+/** Activity's first depth: rows filling this many viewports from the list's top. */
+export const ACTIVITY_FIRST_SCREENS = 1.45;
+
+/**
+ * Activity's Load more (10 Nov 2026): the depth is counted in ITEM ROWS after
+ * grouping, never in inbox entries. The first depth is the rows that fill
+ * 1.45 viewports from the list's top (headings, gaps, the density row,
+ * laptop columns); each Load more adds one viewport. Pure.
+ */
+export function activityLoadMore(input: {
+  layout: RowsLayout;
+  /** The list's top in the page (px). */
+  listTop: number;
+  viewportH: number;
+  /** Load more taps so far under this chip. */
+  taps: number;
+  serverMore: boolean;
+}): LoadMoreDecision {
+  const target =
+    (ACTIVITY_FIRST_SCREENS + Math.max(0, input.taps)) * input.viewportH - input.listTop;
+  const loaded = input.layout.sections.reduce((sum, n) => sum + Math.max(0, n), 0);
+  const fit = rowsInHeight(input.layout, target);
+  // Short of the depth: ask for one more row than is loaded (fill or stop).
+  const depth = fit.reached ? fit.rows : loaded + 1;
+  return loadMoreRule({ matching: loaded, depth, serverMore: input.serverMore });
+}
+
+/** The viewport as Activity's depth reads it (sync; 0 x 0 outside a browser). */
+export function readViewport(): { width: number; height: number } {
+  if (typeof window === 'undefined') return { width: 0, height: 0 };
+  return { width: window.innerWidth, height: window.innerHeight };
+}

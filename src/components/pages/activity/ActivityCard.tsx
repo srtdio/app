@@ -426,10 +426,11 @@ export function unreadEntries(group: readonly ActivityItem[]): ActivityItem[] {
  * white text in light, white with ink text in dark), no border, rounded-full,
  * medium. Density by <html data-density>: Compact 16 / Cozy 18 / Calm 20 high
  * (Cozy: the 16 box plus 1 above and below, box-content), text 11 / 11 / 12.
- * Sides 8 (the 4px spacing grid has no 6 or 7). Not a button; never truncates.
+ * Sides 6 / 7 / 8 (named padding). Flat (10 Nov 2026): no lit-badge, so no
+ * shine and no shadow. Not a button; never truncates.
  */
 export const ACTIVITY_NEW_CHIP =
-  'lit-badge box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-2 py-px text-xs font-medium text-accent-fg compact:box-border calm:box-border calm:h-5 calm:text-sm';
+  'box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-new-chip-cozy py-px text-xs font-medium text-accent-fg compact:box-border compact:px-new-chip-compact calm:box-border calm:h-5 calm:px-2 calm:text-sm';
 
 /** Line 1 of an item row: the name (truncates first), then "N new" 8 after it. */
 function itemTitleNode(name: string, unread: number): ReactNode {

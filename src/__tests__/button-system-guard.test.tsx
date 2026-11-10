@@ -158,7 +158,7 @@ describe('4. Load more lists page by the fill count', () => {
       'src/components/chat/PostPicker.tsx',
       'src/components/chat/AssetPicker.tsx',
     ]) {
-      expect(read(rel), rel).toMatch(/loadMoreRule\(|useLoadMoreFill\(/);
+      expect(read(rel), rel).toMatch(/loadMoreRule\(|useLoadMoreFill\(|activityLoadMore\(/);
     }
   });
 

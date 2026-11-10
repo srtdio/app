@@ -159,9 +159,11 @@ describe('one identical box', () => {
     for (const el of [threads(), catchUp()]) {
       const cls = (el?.className ?? '').split(/\s+/);
       for (const c of box) expect(cls).toContain(c);
-      // One width: never min-w-0, never a second w-* class.
-      expect(cls.filter((c) => /^w-/.test(c))).toEqual(['w-28']);
-      expect(cls).toContain('h-11');
+      // One width (96, every density), never a second w-* class.
+      expect(cls.filter((c) => /^w-/.test(c))).toEqual(['w-topbar-pair']);
+      // The face by density (24 / 28 / 32); the 44 hit rides ::before.
+      expect(cls).toEqual(expect.arrayContaining(['h-7', 'compact:h-6', 'calm:h-8']));
+      expect(cls).toEqual(expect.arrayContaining(['before:h-11', 'before:inset-x-0']));
       expect(cls).toContain('rounded-lg');
     }
     const pill = document.querySelectorAll('[data-topbar-count]');
@@ -201,7 +203,7 @@ describe('taps and the long-press', () => {
     const open = vi.fn();
     await mount(<CatchUpButton count={0} armed onOpen={open} onMarkAllRead={() => undefined} />);
     expect(catchUp()?.getAttribute('aria-disabled')).toBe('true');
-    expect(catchUp()?.className).toContain('w-28');
+    expect(catchUp()?.className).toContain('w-topbar-pair');
     act(() => catchUp()?.click());
     expect(open).not.toHaveBeenCalled();
     expect(document.querySelector('[role="status"]')).toBeNull();
@@ -219,10 +221,20 @@ describe('taps and the long-press', () => {
     expect(pill?.className).toContain('text-accent');
   });
 
-  it('phones: label hides, icon shows (icon + count, 56 wide)', async () => {
+  it('the words at every width: no icon form, the label always shows', async () => {
     await mount(<ThreadsButton count={4} armed onOpen={() => undefined} />);
-    expect(threads()?.className).toContain('max-sm:w-14');
-    expect(threads()?.querySelector('svg')?.getAttribute('class') ?? '').toContain('max-sm:block');
+    expect(threads()?.className).not.toContain('max-sm:');
+    expect(threads()?.querySelector('svg')).toBeNull();
+    expect(threads()?.textContent).toContain('Threads');
+  });
+
+  it('Threads fills with its count when unread threads > 0; outline at 0', async () => {
+    await mount(<ThreadsButton count={0} armed onOpen={() => undefined} />);
+    expect(threads()?.className).not.toContain('bg-accent');
+    expect(threads()?.querySelector('[data-topbar-count]')).toBeNull();
+    await mount(<ThreadsButton count={2} armed onOpen={() => undefined} />);
+    expect(threads()?.className).toContain('bg-accent');
+    expect(threads()?.querySelector('[data-topbar-count]')?.textContent).toBe('2');
   });
 
   it('long-press Catch up: one row, Mark all as read, which marks all (no open)', async () => {

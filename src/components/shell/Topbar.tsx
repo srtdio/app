@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
-import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { settingsPrefetchProps } from '@/lib/route-prefetch';
 import { Button } from '@/components/ui/Button';
@@ -71,8 +70,13 @@ export function TopbarSlots() {
   if (actions.pair !== undefined && actions.pair !== null) {
     return (
       // Below md the cluster gap is 0 and Search and the avatar are 36 strips:
-      // mx-2 keeps the pair's visible distance to both glyphs as before.
-      <span data-topbar-pair="" className="inline-flex shrink-0 items-center gap-2 max-md:mx-2">
+      // Threads starts on Search's strip edge (8 from its glyph), and 6 before
+      // the avatar strip puts Catch up's face 8 from the avatar's face (the
+      // photo is inset 2 in its strip).
+      <span
+        data-topbar-pair=""
+        className="inline-flex shrink-0 items-center gap-2 max-md:mr-pair-avatar"
+      >
         {actions.pair}
       </span>
     );
@@ -86,12 +90,35 @@ export function TopbarSlots() {
 }
 
 /**
+ * Activity's phone short name (10 Nov 2026): with 2+ words, the first letter
+ * or digit of each word that holds one, uppercase ("GBL - LinkedIn" -> "GL",
+ * "College Vidya - LinkedIn" -> "CVL"; the "-" is skipped); one word, its first
+ * 5 characters. A name with no letter or digit (empty, emoji only) stays whole.
+ * Pure.
+ */
+export function shortWorkspaceName(name: string): string {
+  const words = name
+    .split(/\s+/)
+    .map((word) => Array.from(word).find((ch) => /[\p{L}\p{N}]/u.test(ch)))
+    .filter((first): first is string => first !== undefined);
+  if (words.length === 0) return name;
+  if (words.length === 1) {
+    const only =
+      name
+        .trim()
+        .split(/\s+/)
+        .find((word) => /[\p{L}\p{N}]/u.test(word)) ?? name;
+    return Array.from(only).slice(0, 5).join('');
+  }
+  return words.join('').toUpperCase();
+}
+
+/**
  * The phone's workspace name text. "<Brand> - <Platform>" can outgrow one
  * line: it wraps to two short lines at word breaks. Beside Activity's Threads
- * | Catch up pair (10 Nov 2026) it is one line instead, cut with an ellipsis
- * but never under its first 8 characters (min-w-20; layout check 15 measures
- * it at 390 and 375). Every other tab is unchanged. Its own component so
- * Topbar itself stays hookless.
+ * | Catch up pair (10 Nov 2026) the phone shows the short name instead
+ * (shortWorkspaceName), on one line from the 16 gutter, never clipped. Every
+ * other tab is unchanged. Its own component so Topbar itself stays hookless.
  */
 export function WorkspaceNameText({ name }: { name: string }) {
   const pair = useTopbarActionsValue().pair;
@@ -99,12 +126,13 @@ export function WorkspaceNameText({ name }: { name: string }) {
   return (
     <span
       data-topbar-workspace-name=""
+      {...(withPair ? { 'data-topbar-workspace-short': '' } : {})}
       className={textRole(
         'title',
-        withPair ? 'min-w-20 truncate' : 'min-w-0 line-clamp-2 break-words',
+        withPair ? 'shrink-0 whitespace-nowrap' : 'min-w-0 line-clamp-2 break-words',
       )}
     >
-      {name}
+      {withPair ? shortWorkspaceName(name) : name}
     </span>
   );
 }
@@ -173,7 +201,7 @@ export function Topbar({
           onClick={() => dispatchSorted('sorted:switch-workspace')}
           // L6: the tap area keeps the button's 16 inset; the name itself
           // starts on the 16 edge (the box is pulled out by its own inset).
-          className="md:hidden -ml-4 min-w-0 max-w-48 text-left"
+          className="md:hidden -ml-4 min-w-0 max-w-48 text-left has-[[data-topbar-workspace-short]]:pr-0"
         >
           <WorkspaceNameText name={workspaceName} />
           <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
@@ -207,14 +235,8 @@ export function Topbar({
           </IconButton>
         )}
         {cockpitSlot}
-        {/* Activity on every main laptop screen, with the unread count. Phone shows
-            it in the floating tab bar instead: CSS hides it below md (no JS width
-            check, no flash), so Search sits beside the avatar there. */}
-        {workspaceName !== null && onCreateWorkspace === undefined ? (
-          <span data-topbar-activity="" className="hidden md:inline-flex">
-            <NotificationsButton />
-          </span>
-        ) : null}
+        {/* Activity lives in the laptop Sidebar after Chat (10 Nov 2026) and in
+            the phone's floating tab bar; the top bar has no Activity button. */}
 
         {/* Decision A: search | sort | filled "+" (always last) | avatar. The
             workspace-less state has no sort and no "+". */}

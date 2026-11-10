@@ -320,6 +320,17 @@ export default {
         'plus-box': '22px',
         // A phone top bar key's hit strip: 36 wide, 44 tall, 36 apart (shell/Topbar).
         'topbar-key': '36px',
+        // Activity's Threads | Catch up boxes: 96 wide in every density (shell/topbar-actions).
+        'topbar-pair': '96px',
+      },
+      minWidth: {
+        // The Threads | Catch up count pill, Compact (14) and Calm (18) (shell/topbar-actions).
+        'pair-pill-compact': '14px',
+        'pair-pill-calm': '18px',
+      },
+      gap: {
+        // Inside a Threads | Catch up box: the label to its count pill (shell/topbar-actions).
+        pair: '6px',
       },
       height: {
         // Catch up's centred window on laptop: at most 85vh (9 Nov 2026).
@@ -332,16 +343,24 @@ export default {
         'rail-glyph': '13px',
         // The phone top bar "+" outlined square's face (shell/topbar-actions TopbarPlus).
         'plus-box': '22px',
+        // The Threads | Catch up count pill, Compact (14) and Calm (18) (shell/topbar-actions).
+        'pair-pill-compact': '14px',
+        'pair-pill-calm': '18px',
       },
       margin: {
         // Room for the plan panel beside the page (PlanBesideLayout, ChatConnected).
         'plan-panel': '440px',
+        // Phone: Catch up's face to the avatar's face is 8 (6 + the photo's 2 inset in its strip) (shell/Topbar).
+        'pair-avatar': '6px',
       },
       padding: {
         // Text field vertical inset (10px): a one-line Textarea / MentionInput is 44 with its edge.
         'field-y': '0.625rem',
         // Compact list row inset (10px): 10 + 40 picture + 10 = the 60 Compact row (ui/ListCard).
         'row-inset': '0.625rem',
+        // Activity's "N new" chip padding-x, Compact (6) and Cozy (7) (activity/ActivityCard).
+        'new-chip-compact': '6px',
+        'new-chip-cozy': '7px',
       },
       // Auto-fill grids that fill the laptop width (ui/Tile TILE_GRID, ui/Card CARD_GRID).
       gridTemplateColumns: {

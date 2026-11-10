@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadMoreRule } from '@/lib/load-more-rule';
+import { activityLoadMore, loadMoreRule, rowsInHeight } from '@/lib/load-more-rule';
 
 describe('loadMoreRule', () => {
   it('short list, server done: every row shows, no button, no fill', () => {
@@ -55,5 +55,66 @@ describe('loadMoreRule', () => {
     expect(loadMoreRule({ matching: 40, depth: 40, serverMore: true }).button).toBe(true);
     expect(loadMoreRule({ matching: 40, depth: 40, serverMore: false }).button).toBe(false);
     expect(loadMoreRule({ matching: 0, depth: 0, serverMore: false }).button).toBe(false);
+  });
+});
+
+describe('activityLoadMore: Activity counts item rows, never entries', () => {
+  const layout = (sections: number[]) => ({
+    sections,
+    columns: 1,
+    rowPx: 72,
+    headingPx: 32,
+    gapPx: 24,
+  });
+
+  it('20 entries collapsed into 5 rows: short of the depth, fills silently, no button', () => {
+    const d = activityLoadMore({
+      layout: layout([3, 2]),
+      listTop: 120,
+      viewportH: 664,
+      taps: 0,
+      serverMore: true,
+    });
+    expect(d).toMatchObject({ shown: 5, button: false, fill: true });
+  });
+
+  it('rows past 1.45 viewports are held back behind Load more', () => {
+    const d = activityLoadMore({
+      layout: layout([30]),
+      listTop: 120,
+      viewportH: 664,
+      taps: 0,
+      serverMore: false,
+    });
+    // (1.45 * 664 - 120 - 32) / 72 = 11.26 -> 11 rows.
+    expect(d).toMatchObject({ shown: 11, hidden: 19, button: true, fill: false });
+    const more = activityLoadMore({
+      layout: layout([30]),
+      listTop: 120,
+      viewportH: 664,
+      taps: 1,
+      serverMore: false,
+    });
+    expect(more.shown).toBe(20);
+  });
+
+  it('short list, server done: every row, no button', () => {
+    expect(
+      activityLoadMore({
+        layout: layout([2]),
+        listTop: 120,
+        viewportH: 664,
+        taps: 0,
+        serverMore: false,
+      }),
+    ).toMatchObject({ shown: 2, button: false, fill: false });
+  });
+
+  it('rowsInHeight: headings, gaps and laptop columns count', () => {
+    const l = { sections: [4, 4], columns: 2, rowPx: 72, headingPx: 32, gapPx: 24 };
+    // 32 + 72 + 72 = 176: 4 rows; then 24 + 32 + 72 = 304: 6 rows.
+    expect(rowsInHeight(l, 176)).toEqual({ rows: 4, reached: true });
+    expect(rowsInHeight(l, 304)).toEqual({ rows: 6, reached: true });
+    expect(rowsInHeight(l, 10_000)).toEqual({ rows: 8, reached: false });
   });
 });
