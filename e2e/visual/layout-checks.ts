@@ -2017,11 +2017,11 @@ type Density = 'compact' | 'cozy' | 'calm';
 /** Face height, text size and pill height per density. */
 export const ACTIVITY_PAIR_BY_DENSITY: Record<
   Density,
-  { face: number; text: number; pill: number }
+  { face: number; text: number; pill: number; pillText: number }
 > = {
-  compact: { face: 24, text: 11, pill: 14 },
-  cozy: { face: 28, text: 12, pill: 16 },
-  calm: { face: 32, text: 13, pill: 18 },
+  compact: { face: 24, text: 11, pill: 14, pillText: 9 },
+  cozy: { face: 28, text: 12, pill: 16, pillText: 10 },
+  calm: { face: 32, text: 13, pill: 18, pillText: 11 },
 };
 
 export async function assertActivityTopbarPair(page: Page, screenName: string): Promise<void> {
@@ -2049,6 +2049,15 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
         icon: el.querySelector('svg') !== null,
         count: el.getAttribute('data-count'),
         pill: pill === null ? null : pill.getBoundingClientRect().height,
+        pillFont: pill === null ? null : parseFloat(getComputedStyle(pill).fontSize),
+        pillOff: (() => {
+          if (pill === null) return null;
+          const box = pill.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(pill);
+          const text = range.getBoundingClientRect();
+          return text.height > 0 ? text.top + text.height / 2 - (box.top + box.height / 2) : 0;
+        })(),
       };
     };
     const probe = document.createElement('span');
@@ -2135,6 +2144,12 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
         out.push(`${name}'s pill is ${b.pill ?? 'missing'} tall, not ${want.pill} (${density})`);
       }
       if (!on && b.pill !== null) out.push(`${name} shows a pill at 0`);
+      if (on && b.pillFont !== null && Math.abs(b.pillFont - want.pillText) > 0.1) {
+        out.push(`${name}'s pill text is ${b.pillFont}, not ${want.pillText} (${density})`);
+      }
+      if (on && b.pillOff !== null && Math.abs(b.pillOff) > 1) {
+        out.push(`${name}'s pill text is ${b.pillOff}px off its centre`);
+      }
       if (b.x + b.width > got.viewport + 0.5) out.push(`${name} ends past the viewport`);
     }
     for (const key of ['radius', 'padding', 'border', 'fontSize', 'weight'] as const) {
@@ -2416,23 +2431,27 @@ export async function assertActivityCounts(page: Page, screenName: string): Prom
     const chip = Array.from(document.querySelectorAll('button')).find((b) =>
       /^Unread\s*\d/.test((b.textContent ?? '').trim()),
     );
-    const badge = Array.from(
-      document.querySelectorAll(
-        '[data-activity-tab] [data-count-badge], [data-sidebar-activity] [data-count-badge]',
-      ),
-    ).find((el) => el.getBoundingClientRect().width > 0);
+    const shownBadge = (sel: string) =>
+      Array.from(document.querySelectorAll(sel)).find((el) => el.getBoundingClientRect().width > 0);
+    const badge = shownBadge('[data-activity-tab] [data-count-badge]');
+    const side = shownBadge('[data-sidebar-activity] [data-count-badge]');
     return {
       chip: num(chip?.textContent),
       catchUp: num(
         document.querySelector('header [data-topbar-catch-up]')?.getAttribute('data-count'),
       ),
-      badge: num(badge?.textContent),
+      badge: num((badge ?? side)?.textContent),
+      side: side === undefined ? null : num(side.textContent),
     };
   });
   const out: string[] = [];
   if (got.chip === null || got.catchUp === null || got.badge === null) {
     out.push(`a count is missing (chip ${got.chip}, Catch up ${got.catchUp}, badge ${got.badge})`);
-  } else if (got.chip !== got.catchUp || got.catchUp !== got.badge) {
+  } else if (
+    got.chip !== got.catchUp ||
+    got.catchUp !== got.badge ||
+    (got.side !== null && got.side !== got.badge)
+  ) {
     out.push(
       `the counts differ: Unread chip ${got.chip}, Catch up ${got.catchUp}, tab badge ${got.badge}`,
     );

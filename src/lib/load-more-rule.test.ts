@@ -128,3 +128,20 @@ describe('activityLoadMore: Activity counts item rows, never entries', () => {
     expect(rowsInHeight(l, 10_000)).toEqual({ rows: 8, reached: false });
   });
 });
+
+describe('loadMoreRule: Bank and the Plan flat list (10 Nov 2026)', () => {
+  it('Bank: fewer ideas than one screen, server done: no button', () => {
+    expect(loadMoreRule({ matching: 5, depth: 13, serverMore: false }).button).toBe(false);
+  });
+
+  it('Bank: 44 ideas, one screen shown, more on the server: the button', () => {
+    expect(loadMoreRule({ matching: 13, depth: 13, serverMore: true }).button).toBe(true);
+  });
+
+  it('Plan flat list: a short chip with more on the server reads on silently', () => {
+    expect(loadMoreRule({ matching: 3, depth: 12, serverMore: true })).toMatchObject({
+      button: false,
+      fill: true,
+    });
+  });
+});

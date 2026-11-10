@@ -200,6 +200,13 @@ const TOPBAR_PLUS_LAPTOP_FACE =
 export const ACTIVITY_TOPBAR_BOX =
   'relative h-7 min-h-0 w-topbar-pair min-w-0 shrink-0 gap-pair border px-2 text-sm compact:h-6 compact:text-xs calm:h-8 calm:text-md before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2';
 
+/**
+ * The pill's text, 9 / 10 / 11 by density (named sizes, the pill only): set on
+ * the wrapper over CountBadge's own size, so CountBadge itself is unchanged.
+ */
+export const ACTIVITY_TOPBAR_PILL_TEXT =
+  'inline-flex shrink-0 [&_[data-count-badge]]:text-pair-pill-cozy compact:[&_[data-count-badge]]:text-pair-pill-compact calm:[&_[data-count-badge]]:text-xs';
+
 /** The count pill on a filled box: 14 / 16 / 18 tall by density (CountBadge on-fill). */
 export const ACTIVITY_TOPBAR_PILL =
   'h-4 min-w-4 px-1 text-xs compact:h-pair-pill-compact compact:min-w-pair-pill-compact calm:h-pair-pill-calm calm:min-w-pair-pill-calm';
@@ -341,7 +348,7 @@ function PairButton({
       />
       <span className="shrink-0 whitespace-nowrap">{label}</span>
       {on ? (
-        <span aria-hidden="true" data-topbar-count="" className="inline-flex shrink-0">
+        <span aria-hidden="true" data-topbar-count="" className={ACTIVITY_TOPBAR_PILL_TEXT}>
           <CountBadge tone="on-fill" count={count} className={ACTIVITY_TOPBAR_PILL} />
         </span>
       ) : null}

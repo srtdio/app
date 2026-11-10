@@ -46,6 +46,7 @@ const REQUIRED: readonly string[] = [
   'assets-tab-docs',
   'assets-tab-links',
   'assets-tab-media',
+  'bank-short',
   'boxes-activity',
   'boxes-members',
   'boxes-plan-tab',

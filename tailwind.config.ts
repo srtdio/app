@@ -34,6 +34,9 @@ export default {
       '3xl': ['28px', '34px'],
       // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
       input: ['16px', '22px'],
+      // Threads/Catch up count pill only (Compact 9 / Cozy 10; Calm uses xs 11).
+      'pair-pill-compact': ['9px', '14px'],
+      'pair-pill-cozy': ['10px', '16px'],
     },
     // Spacing: the 4px grid (step N = 4N px) as used in src, plus px (hairline),
     // 0.5 (2px, inside badges and pills) and 1.5 (6px). 2.5 and 3.5 are gone.

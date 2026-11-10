@@ -2712,6 +2712,19 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // Load more only when there is more (10 Nov 2026): a Bank shorter than
+    // one screen ends with no Load more (plan-tab-bank-load-more, 44 ideas,
+    // still shows it).
+    name: 'bank-short',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await expect(page.locator('[data-plan-tab-load-more]')).toHaveCount(0);
+    },
+  },
+  {
     name: 'plan-tab-bank-filter',
     seed: creator,
     extra: seedBank,

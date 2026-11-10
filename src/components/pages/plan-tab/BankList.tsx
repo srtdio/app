@@ -93,6 +93,7 @@ import {
 } from './use-bank-data';
 import type { BankSelection } from './use-bank-select';
 import { getFillCount } from '@/lib/use-fill-count';
+import { useLoadMoreFill } from '@/lib/load-more-rule';
 
 // ---------------------------------------------------------------------------
 // Small parts
@@ -432,6 +433,18 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   // A chip change (or a filter change) leaves select mode.
   const filterKey = `${filter.sort}:${filter.bucketId ?? ''}:${String(filter.archived)}:${String(filter.review)}`;
   useEffect(() => leaveSelect(), [props.epoch, filterKey, leaveSelect]);
+  // Load more only when there is more (src/lib/load-more-rule, 10 Nov 2026):
+  // the server filters the Bank, so every loaded idea shows; a Bank shorter
+  // than one screen reads on silently and never ends with the button.
+  const more = useLoadMoreFill({
+    filterKey,
+    matching: ideas?.length ?? 0,
+    loaded: ideas?.length ?? 0,
+    page: getFillCount(),
+    serverMore: data.more !== null,
+    busy: data.more?.busy ?? false,
+    onMore: data.more?.onMore,
+  });
 
   const replaceIdea = useCallback(
     (next: BankIdea) => data.patch((list) => list.map((i) => (i.id === next.id ? next : i))),
@@ -624,7 +637,9 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     <div data-bank="list" className="flex flex-col gap-2 pb-8 pt-2">
       <div className={cn('flex flex-col gap-3', GUTTER)}>
         {body}
-        {data.more !== null ? <PlanTabLoadMore more={data.more} /> : null}
+        {more !== null && ideas !== null && ideas.length > 0 ? (
+          <PlanTabLoadMore more={more} />
+        ) : null}
         {archiveAll}
       </div>
       {selectBar}

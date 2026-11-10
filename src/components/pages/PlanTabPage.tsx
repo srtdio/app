@@ -45,6 +45,8 @@ import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { useLoadMoreFill } from '@/lib/load-more-rule';
+import { PLAN_BUNDLE_PAGE } from '@/lib/chat/plan-bundle';
 import type { ComposeRange, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { keptViewKey, useKeptScroll, useKeptState } from '@/lib/kept-view';
 import { safeTimeZone } from '@/lib/time';
@@ -123,7 +125,22 @@ function PlanTabFlatList(props: {
   now: Date;
   onOpen: (planId: string) => void;
   more: PlanTabMore | null;
+  /** Every plan read so far (the chip narrows them to `bundles`). */
+  loaded: number;
+  /** The chip and sort: Load more's depth starts over when it changes. */
+  filterKey: string;
 }): ReactElement {
+  // Load more only when there is more (src/lib/load-more-rule, 10 Nov 2026):
+  // one plan page per tap; a short chip reads on silently, no button.
+  const more = useLoadMoreFill({
+    filterKey: props.filterKey,
+    matching: props.bundles.length,
+    loaded: props.loaded,
+    page: PLAN_BUNDLE_PAGE,
+    serverMore: props.more !== null,
+    busy: props.more?.busy ?? false,
+    onMore: props.more?.onMore,
+  });
   return (
     <div data-plan-tab-list="" className={cn('flex flex-col gap-3 pb-8 pt-4', GUTTER)}>
       {props.bundles.length === 0 ? (
@@ -144,7 +161,7 @@ function PlanTabFlatList(props: {
           ))}
         </div>
       )}
-      {props.more !== null ? <PlanTabLoadMore more={props.more} /> : null}
+      {more !== null ? <PlanTabLoadMore more={more} /> : null}
     </div>
   );
 }
@@ -395,6 +412,8 @@ export function PlanTabPage(): ReactElement {
         now={now}
         onOpen={(planId) => navigate(`/plan/${planId}`)}
         more={more}
+        loaded={bundles.length}
+        filterKey={`${chip}:${sort}`}
       />
     );
   }
