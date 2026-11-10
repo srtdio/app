@@ -303,25 +303,13 @@ interface PairButtonProps {
   armed: boolean;
   onClick: () => void;
   data: 'threads' | 'catch-up';
-  /** At 0: greyed (aria-disabled), no action; the 44 target stays. */
-  dimAtZero?: boolean | undefined;
   gesture?: ReturnType<typeof useMenuGesture> | undefined;
 }
 
 /** One of the pair: the box, the label, the count pill (> 0) and the pulse ring. */
-function PairButton({
-  label,
-  ariaLabel,
-  count,
-  armed,
-  onClick,
-  data,
-  dimAtZero,
-  gesture,
-}: PairButtonProps) {
+function PairButton({ label, ariaLabel, count, armed, onClick, data, gesture }: PairButtonProps) {
   const ring = usePulseOnRise(count, armed);
   const on = count > 0;
-  const dim = !on && dimAtZero === true;
   return (
     <Button
       type="button"
@@ -329,7 +317,6 @@ function PairButton({
       aria-label={ariaLabel}
       {...(data === 'threads' ? { 'data-topbar-threads': '' } : { 'data-topbar-catch-up': '' })}
       data-count={count}
-      {...(dim ? { 'aria-disabled': 'true' as const } : {})}
       {...(gesture !== undefined ? gesture.handlers : {})}
       onClick={() => {
         if (gesture?.consumeClickSuppression() === true) return;
@@ -337,7 +324,7 @@ function PairButton({
       }}
       className={cn(
         ACTIVITY_TOPBAR_BOX,
-        on ? 'border-transparent' : dim ? 'border-border-strong' : 'border-border-strong text-fg',
+        on ? 'border-transparent' : 'border-border-strong text-fg',
       )}
     >
       <span
@@ -377,7 +364,8 @@ export function ThreadsButton(props: {
 }
 
 /**
- * Catch up: the unread count. A tap opens catch up (nothing at 0); a
+ * Catch up: the unread count. A tap opens catch up (nothing at 0, never
+ * greyed: the same outline as Threads at 0, 10 Nov 2026); a
  * long-press (touch) or right-click (laptop) opens the menu with one row,
  * Mark all as read: the whole inbox read at once, no toast, no Undo.
  */
@@ -405,7 +393,6 @@ export function CatchUpButton(props: {
         count={props.count}
         armed={props.armed}
         data="catch-up"
-        dimAtZero
         gesture={gesture}
         onClick={() => {
           if (props.count > 0) props.onOpen();
