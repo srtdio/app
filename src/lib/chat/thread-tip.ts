@@ -1,6 +1,6 @@
-// The thread's one-time tip (H6): "Tip: press and hold a message to reply,
-// copy or delete." shown above the composer until the user taps Got it, once
-// per user. The flag lives in localStorage; every read and write is in a
+// The thread's tip (H6, 10 Nov 2026): "Tap a message to reply in thread."
+// above the composer. It goes for good on Got it, on the first thread the user
+// opens, or after it has shown in 3 chat opens (counted once per open). The flag lives in localStorage; every read and write is in a
 // try/catch. When storage throws (private mode, quota, blocked), the tip is
 // shown once per page load instead: the first chat that shows it marks it
 // shown in memory, so later chats in the same load stay quiet.
@@ -11,14 +11,21 @@ export interface TipStorage {
   setItem: (key: string, value: string) => void;
 }
 
-export const HOLD_TIP_TEXT = 'Tip: press and hold a message to reply, copy or delete.';
-/** The laptop wording: a mouse right-clicks instead of holding. */
-export const HOLD_TIP_TEXT_LAPTOP = 'Tip: right-click a message to reply, copy or delete.';
+export const HOLD_TIP_TEXT = 'Tap a message to reply in thread.';
+/** The laptop wording: a mouse clicks. */
+export const HOLD_TIP_TEXT_LAPTOP = 'Click a message to reply in thread.';
+/** Chat opens the tip shows in before it goes for good. */
+export const HOLD_TIP_MAX_SHOWS = 3;
 export const HOLD_TIP_DISMISS = 'Got it';
 
 /** The per-user storage key. Pure. */
 export function holdTipKey(userId: string): string {
   return `srtd:chat:holdTip:${userId}`;
+}
+
+/** The per-user shows counter key. Pure. */
+export function holdTipShowsKey(userId: string): string {
+  return `srtd:chat:holdTipShows:${userId}`;
 }
 
 // Users whose tip was dismissed this load, and users it was shown to while
@@ -55,15 +62,28 @@ export function shouldShowHoldTip(
   return !seen;
 }
 
-/** The tip painted: under a failing storage it will not show again this load. */
+/**
+ * The tip painted in one chat open (call once per open): the third show
+ * retires it. Under a failing storage it will not show again this load.
+ */
 export function noteHoldTipShown(
   userId: string,
   storage: TipStorage | null = defaultStorage(),
 ): void {
-  if (readSeen(userId, storage) === null) shownWithoutStorage.add(userId);
+  if (readSeen(userId, storage) === null || storage === null) {
+    shownWithoutStorage.add(userId);
+    return;
+  }
+  try {
+    const shows = (Number(storage.getItem(holdTipShowsKey(userId))) || 0) + 1;
+    storage.setItem(holdTipShowsKey(userId), String(shows));
+    if (shows >= HOLD_TIP_MAX_SHOWS) storage.setItem(holdTipKey(userId), '1');
+  } catch {
+    shownWithoutStorage.add(userId);
+  }
 }
 
-/** Got it: never again for this user (best effort on storage; always for this load). */
+/** Got it, or the first thread opened: never again for this user (best effort on storage; always for this load). */
 export function dismissHoldTip(
   userId: string,
   storage: TipStorage | null = defaultStorage(),

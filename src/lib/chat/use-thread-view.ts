@@ -1,8 +1,10 @@
 // The thread view's data: one card's thread (its root and every reply whose
 // thread_root_message_id is that card), paged newest first with the history
 // page size over the (channel_id, thread_root_message_id, created_at) index,
-// Load older at the top. The view opens only once the root and the first page
-// (and that page's reactions) are in, so its first paint is final. Rows the
+// Load older at the top. When the root is already loaded the view opens in the
+// same frame (loading, placeholder rows) and the first page fills it; only an
+// unknown root waits for its root read. A failed page read shows in the view
+// (failed + retry). Rows the
 // open chat already has loaded win over the view's own copies, so live
 // arrivals, own sends, reactions, edits and deletes show in both. The view
 // never reads or writes read cursors.
@@ -48,6 +50,10 @@ interface ThreadViewState {
   /** Replies read by the view (oldest first), before the loaded rows are laid over. */
   fetched: ThreadMessage[];
   hasMore: boolean;
+  /** The first page is still being read (placeholder rows show). */
+  loading?: boolean;
+  /** The first page read failed ("Couldn't load this thread." + Retry). */
+  failed?: boolean;
 }
 
 /**
@@ -86,11 +92,14 @@ interface UseThreadView {
   view: ThreadViewState | null;
   loadingOlder: boolean;
   /**
-   * Read the root (unless loaded) and the first page, then open. Resolves
-   * false (the view stays shut) when a read fails or another open or a close
-   * came first.
+   * Open at once when the root is loaded (loading), else after its root read;
+   * the first page then fills it, or marks it failed. Resolves false only
+   * when the root cannot be found (the caller toasts); an open superseded by
+   * a newer open or a close resolves true (nothing to report).
    */
   open: (rootId: string, loaded: readonly ThreadMessage[]) => Promise<boolean>;
+  /** Re-read the first page of the open thread after a failure. */
+  retry: () => void;
   close: () => void;
   loadOlder: () => void;
   /** Apply an own action (reaction, edit, delete) to the view's own copies. */
@@ -124,39 +133,71 @@ export function useThreadView(params: {
   viewRef.current = view;
   const olderRef = useRef(false);
 
-  const open = useCallback(
-    async (rootId: string, loaded: readonly ThreadMessage[]): Promise<boolean> => {
-      if (channelId === undefined) return false;
-      attemptRef.current += 1;
-      const attempt = attemptRef.current;
-      const known = loaded.find((m) => m.id === rootId);
-      const [rootRead, pageRead] = await Promise.all([
-        known !== undefined
-          ? Promise.resolve<Result<ChatMessageRow[]> | null>(null)
-          : reads.loadRoot(rootId),
-        reads.loadPage(channelId, rootId),
-      ]);
-      if (attempt !== attemptRef.current) return false;
-      const rootRow = rootRead !== null && rootRead.ok ? rootRead.data[0] : undefined;
-      const root =
-        known ?? (rootRow !== undefined ? rowToThreadMessage(rootRow, currentUserId) : undefined);
-      if (root === undefined || !pageRead.ok) {
-        logger.warn('chat: thread open failed', {
-          root_id: rootId,
-          error: !pageRead.ok ? pageRead.error.message : 'root not found',
-        });
-        return false;
+  const fillFirstPage = useCallback(
+    async (attempt: number, rootId: string): Promise<void> => {
+      if (channelId === undefined) return;
+      const pageRead = await reads.loadPage(channelId, rootId);
+      if (attempt !== attemptRef.current) return;
+      if (!pageRead.ok) {
+        logger.warn('chat: thread page failed', { root_id: rootId, error: pageRead.error.message });
+        setView((prev) =>
+          prev !== null && prev.rootId === rootId
+            ? { ...prev, loading: false, failed: true }
+            : prev,
+        );
+        return;
       }
       const fetched = await withReactions(
         reads,
         pageRead.data.rows.map((row) => rowToThreadMessage(row, currentUserId)),
       );
-      if (attempt !== attemptRef.current) return false;
-      setView({ rootId, root, fetched, hasMore: pageRead.data.hasMore });
-      return true;
+      if (attempt !== attemptRef.current) return;
+      setView((prev) =>
+        prev !== null && prev.rootId === rootId
+          ? { ...prev, fetched, hasMore: pageRead.data.hasMore, loading: false, failed: false }
+          : prev,
+      );
     },
     [channelId, currentUserId, reads],
   );
+
+  const open = useCallback(
+    async (rootId: string, loaded: readonly ThreadMessage[]): Promise<boolean> => {
+      if (channelId === undefined) return false;
+      attemptRef.current += 1;
+      const attempt = attemptRef.current;
+      let root = loaded.find((m) => m.id === rootId);
+      if (root === undefined) {
+        const rootRead = await reads.loadRoot(rootId);
+        if (attempt !== attemptRef.current) return true;
+        const row = rootRead.ok ? rootRead.data[0] : undefined;
+        if (row === undefined) {
+          logger.warn('chat: thread open failed', { root_id: rootId, error: 'root not found' });
+          return false;
+        }
+        root = rowToThreadMessage(row, currentUserId);
+      }
+      olderRef.current = false;
+      setLoadingOlder(false);
+      setView({ rootId, root, fetched: [], hasMore: false, loading: true, failed: false });
+      void fillFirstPage(attempt, rootId);
+      return true;
+    },
+    [channelId, currentUserId, reads, fillFirstPage],
+  );
+
+  const retry = useCallback((): void => {
+    const current = viewRef.current;
+    if (current === null) return;
+    attemptRef.current += 1;
+    const attempt = attemptRef.current;
+    setView((prev) =>
+      prev !== null && prev.rootId === current.rootId
+        ? { ...prev, loading: true, failed: false }
+        : prev,
+    );
+    void fillFirstPage(attempt, current.rootId);
+  }, [fillFirstPage]);
 
   const close = useCallback((): void => {
     attemptRef.current += 1;
@@ -203,5 +244,5 @@ export function useThreadView(params: {
     setView((prev) => (prev !== null ? { ...prev, fetched: fn(prev.fetched) } : prev));
   }, []);
 
-  return { view, loadingOlder, open, close, loadOlder, update };
+  return { view, loadingOlder, open, retry, close, loadOlder, update };
 }

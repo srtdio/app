@@ -164,6 +164,17 @@ describe('L3: every reply is a thread; the main chat holds top-level messages on
   it('first lines strip format and skip blank lines', () => {
     expect(firstLineOf('\n*Bold* start\nsecond')).toBe('Bold start');
   });
+
+  it('first lines read @Name for mentions, never a code; unknown reads @someone', () => {
+    const ana = '11111111-1111-4111-8111-111111111111';
+    const ghost = '22222222-2222-4222-8222-222222222222';
+    const names = (id: string): string | undefined => (id === ana ? 'Ana' : undefined);
+    expect(firstLineOf(`Ask @[${ana}] about it`, names)).toBe('Ask @Ana about it');
+    expect(firstLineOf(`Ping @[${ghost}]`, names)).toBe('Ping @someone');
+    expect(firstLineOf(`Ping @[${ghost}]`)).toBe('Ping @someone');
+    expect(threadPreviewLine('Leo', `cc @[${ana}]`, names)).toBe('Leo in thread: cc @Ana');
+    expect(threadPreviewLine('Leo', `cc @[${ana}]`, names)).not.toContain('@[');
+  });
 });
 
 describe('L5 signals', () => {

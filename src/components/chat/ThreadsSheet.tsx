@@ -65,7 +65,7 @@ export function threadsRows(input: {
         ? 'Message'
         : root.deleted === true
           ? 'This message was deleted'
-          : firstLineOf(root.body) ||
+          : firstLineOf(root.body, (id) => input.nameOf(id)) ||
             (rootCardOf(root) !== null ? input.cardTitleOf?.(root) : null) ||
             replyPreview(root);
     return {

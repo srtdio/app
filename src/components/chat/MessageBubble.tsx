@@ -1287,6 +1287,25 @@ function withRailPhoto(
  * MessageRow wrapper and passed in via `press`, so the unit test can call this
  * directly. All colours are design tokens, so light and dark stay at parity.
  */
+/** What inside a bubble keeps its own tap: controls, media, links, mentions, cards, chips. */
+export const BUBBLE_TAP_KEEP =
+  'button, a, input, textarea, select, label, [role="button"], [role="link"], [role="menuitem"], audio, video, img, [data-msg-link], [data-mention], [data-post-card], [data-plan-card], [data-brief-card], [data-idea-card], [data-card], [data-voice-note], [data-voice-control], [data-chip], [contenteditable="true"]';
+
+/** A bubble click opens its thread: not consumed, not selecting, not on a kept child or selected text. */
+export function bubbleTapOpens(input: {
+  event: { defaultPrevented: boolean; target: EventTarget | null; currentTarget: EventTarget };
+  selecting: boolean;
+  onTapOpen: (() => void) | undefined;
+}): boolean {
+  const { event } = input;
+  if (event.defaultPrevented || input.selecting || input.onTapOpen === undefined) return false;
+  const target = event.target as Element | null;
+  const keep = typeof target?.closest === 'function' ? target.closest(BUBBLE_TAP_KEEP) : null;
+  if (keep !== null && keep !== event.currentTarget) return false;
+  const picked = typeof window !== 'undefined' ? window.getSelection?.()?.toString() : '';
+  return picked === undefined || picked === '';
+}
+
 export function MessageBubble(props: {
   message: ThreadMessage;
   /** Notes only: a saved copy's "Saved from" line replaces "Forwarded". */
@@ -1360,6 +1379,8 @@ export function MessageBubble(props: {
   bubbleRef?: Ref<HTMLDivElement>;
   /** The row; in selection mode its taps and holds are the selection gesture's. */
   rowRef?: Ref<HTMLLIElement>;
+  /** A tap on the body opens the thread; absent when reply is blocked or selecting. */
+  onTapOpen?: (() => void) | undefined;
   /** Swipe right to reply, left to delete (touch and pen); off while selecting. */
   swipe?: BubbleSwipe;
   /**
@@ -1740,6 +1761,17 @@ export function MessageBubble(props: {
                 e.preventDefault();
                 e.stopPropagation();
               }
+            }}
+            onClick={(e) => {
+              if (
+                !bubbleTapOpens({
+                  event: e,
+                  selecting: selecting || textSelect,
+                  onTapOpen: props.onTapOpen,
+                })
+              )
+                return;
+              props.onTapOpen?.();
             }}
             className={cn(
               bubbleClass({ ...shape, failed, voiceOnly, album, card: cardOnly }),

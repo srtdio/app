@@ -14,6 +14,7 @@ import {
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { useUndoableAction, type UndoableAction } from '@/lib/use-undoable-action';
 import {
@@ -131,7 +132,8 @@ import {
   type LightboxDetails,
   type LightboxImage,
 } from '@/components/ui/ImageLightbox';
-import { ThreadViewFrame } from '@/components/chat/ThreadView';
+import { ThreadViewFill, ThreadViewFrame } from '@/components/chat/ThreadView';
+import { dismissHoldTip } from '@/lib/chat/thread-tip';
 import { ThreadsSheet } from '@/components/chat/ThreadsSheet';
 import {
   RepliesRow,
@@ -405,6 +407,7 @@ function ThreadViewTitled(props: {
   subtitle: string;
   selecting: boolean;
   onClosed: () => void;
+  behindRef: RefObject<HTMLElement | null>;
   children: ReactNode;
 }): ReactElement {
   const plans = usePlanCards();
@@ -422,6 +425,7 @@ function ThreadViewTitled(props: {
       subtitle={props.subtitle}
       selecting={props.selecting}
       onClosed={props.onClosed}
+      behindRef={props.behindRef}
     >
       {props.children}
     </ThreadViewFrame>
@@ -1037,6 +1041,8 @@ export const ABOUT_UNAVAILABLE_TOAST = 'That post is not available here';
 export const SHARE_UNAVAILABLE_TOAST = errorText('share', null);
 
 /** Toast when a thread's root or first page cannot be read; the chat stays as it is. */
+let tipOpens = 0;
+const nextTipOpenSeq = (): number => ++tipOpens;
 const THREAD_OPEN_FAILED_TOAST = errorText('open this thread', null);
 
 /** The thread view composer's placeholder. */
@@ -1718,6 +1724,13 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       quoted={props.quoted}
       bubbleRef={bubbleRef}
       rowRef={rowRef}
+      // Tap to open the thread (GOAL 1): as swipe right, never in the thread
+      // view, while selecting or on a deleted row.
+      onTapOpen={
+        selecting || props.replyBlocked === true || props.message.deleted === true
+          ? undefined
+          : () => latest.current.onSwipeReply(latest.current.message)
+      }
       swipe={rowSwipe}
       press={{
         handlers: pointer,
@@ -4633,9 +4646,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const viewComposerInputRef = useRef<HTMLTextAreaElement | null>(null);
   // L3/L14: Reply (sheet tile, swipe right, laptop right-click) opens that
   // message's thread with its composer focused; no quote-reply in the main chat.
-  const openThreadRef = useRef<(rootId: string, focus?: boolean) => void>(() => undefined);
+  const openThreadRef = useRef<(rootId: string, focus?: boolean, gesture?: boolean) => void>(
+    () => undefined,
+  );
   const handleReply = (message: ThreadMessage): void => {
-    openThreadRef.current(threadRootOf(message), true);
+    openThreadRef.current(threadRootOf(message), true, true);
   };
   // The quoted message became a tombstone: the reply chip loses its text and
   // reads the deleted label (the draft map is stripped by the store too).
@@ -5140,28 +5155,29 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     });
   };
   /**
-   * Open a card's thread ("N replies", a chip): full screen once the
-   * root and the first page are in; a failed read toasts and nothing moves.
-   * Opens at 0 replies too (the root and the composer).
+   * Open a card's thread (tap, swipe, Reply, "N replies", a chip): a loaded
+   * root paints the view at once (placeholders until the first page); only
+   * an unknown root waits for its read, and a root not found toasts. A newer
+   * open supersedes an older one (no gate). From a gesture the view mounts in
+   * that event (flushSync) so the composer's focus raises the iPhone keyboard.
    */
-  const openingRef = useRef(false);
-  const openThread = (rootId: string, focus = false): void => {
-    if (openingRef.current) return;
-    openingRef.current = true;
-    setViewFocus(focus);
-    void threadView
-      .open(rootId, props.messages)
+  const openThread = (rootId: string, focus = false, gesture = false): void => {
+    let opening: Promise<boolean> = Promise.resolve(false);
+    const start = (): void => {
+      setViewFocus(focus);
+      setEditing(null);
+      setViewReply(null);
+      opening = threadView.open(rootId, props.messages);
+    };
+    if (gesture) flushSync(start);
+    else start();
+    if (gesture && focus) viewComposerInputRef.current?.focus({ preventScroll: true });
+    void opening
       .catch(() => false)
       .then((opened) => {
-        if (!opened) {
-          toast.show({ title: THREAD_OPEN_FAILED_TOAST });
-          return;
-        }
-        setEditing(null);
-        setViewReply(null);
-      })
-      .finally(() => {
-        openingRef.current = false;
+        // false only when the root is not found: today's toast, nothing moves.
+        if (opened) dismissHoldTip(props.currentUserId ?? '');
+        else toast.show({ title: THREAD_OPEN_FAILED_TOAST });
       });
   };
   const closeThread = (): void => {
@@ -5173,9 +5189,13 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // Each layer is one history step (lib/chat/use-history-step): back closes
   // only that layer through its own close (the thread view through its Close,
   // so the fade runs) and stays in the chat; its own close pops the step.
+  // rootRef: the chat pane (the push's "behind"); the thread view is its sibling.
   const rootRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  // One chat open = one tip show (GOAL 6): a key per mount and chat.
+  const [tipOpenSeq] = useState(nextTipOpenSeq);
   useHistoryStep(view !== null, HISTORY_STEP_KEYS.threadView, () => {
-    const close = rootRef.current?.querySelector<HTMLButtonElement>('[data-thread-view-close]');
+    const close = shellRef.current?.querySelector<HTMLButtonElement>('[data-thread-view-close]');
     if (close !== null && close !== undefined) close.click();
     else closeThread();
   });
@@ -5220,7 +5240,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       // The same loaded rows as the count: it moves with every reply, no read.
       time: info.last !== null ? rowWhen(info.last.time) : '',
       unread: info.unread,
-      onOpen: () => openThread(message.id),
+      onOpen: () => openThread(message.id, true, true),
     };
   };
   // L4/L7: the thread screen's "New" line, decided once as the thread opens
@@ -5700,7 +5720,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       : {}),
     ...(props.onNavigate !== undefined ? { onOpenPrivateReplyHref: props.onNavigate } : {}),
   };
-  return (
+  const pane = (
     <div ref={rootRef} className="relative flex h-full flex-col bg-bg">
       <ThreadTopStrip layout={layout} />
       <div
@@ -5862,6 +5882,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           userId={props.currentUserId ?? ''}
           layout={layout}
           empty={props.messages.length === 0}
+          openKey={`${channelId ?? ''}:${tipOpenSeq}`}
         />
       ) : null}
       {view === null && selectionBar !== null ? (
@@ -6023,10 +6044,16 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           }
           onOpenThread={(rootId) => {
             setThreadsOpen(false);
-            openThread(rootId);
+            openThread(rootId, true, true);
           }}
         />
       ) : null}
+      <PaintLogOverlay />
+    </div>
+  );
+  return (
+    <div ref={shellRef} className="relative h-full">
+      {pane}
       {view !== null && viewParts !== null && viewThreads !== undefined ? (
         <ThreadViewTitled
           key={`thread:${view.rootId}`}
@@ -6035,6 +6062,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           subtitle={viewSubtitle}
           selecting={selecting}
           onClosed={closeThread}
+          behindRef={rootRef}
         >
           <ReactorLoadContext.Provider value={reactorLoad}>
             <ThreadBody
@@ -6057,6 +6085,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               loadOlderRow
             />
           </ReactorLoadContext.Provider>
+          <ThreadViewFill
+            loading={view.loading === true}
+            failed={view.failed === true}
+            onRetry={threadView.retry}
+          />
           {selectionBar ?? (
             <Composer
               key={`thread:${view.rootId}`}
@@ -6072,7 +6105,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           )}
         </ThreadViewTitled>
       ) : null}
-      <PaintLogOverlay />
     </div>
   );
 }

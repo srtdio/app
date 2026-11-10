@@ -367,7 +367,7 @@ describe('L13: Copy link', () => {
 describe('L11 / L14 wiring', () => {
   it('Reply (sheet, swipe right, right-click) opens the thread with its composer focused', () => {
     const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
-    expect(src).toContain('openThreadRef.current(threadRootOf(message), true);');
+    expect(src).toContain('openThreadRef.current(threadRootOf(message), true, true);');
     expect(src).toContain('const onSwipeReply = useStableCallback(props.onReply);');
   });
 
