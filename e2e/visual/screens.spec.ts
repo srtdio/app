@@ -34,6 +34,7 @@ import {
   readListTwin,
 } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
+import { fileOfRequest, writeFragment } from '../../scripts/ci/visual-map';
 import type { Row } from '../fixtures/postgrest';
 import {
   assetId,
@@ -7040,7 +7041,25 @@ async function settle(page: Page): Promise<void> {
   );
 }
 
+/**
+ * The screen-to-files map (scripts/ci/visual-map.ts): every src/ and
+ * packages/ module the dev server serves while this screen renders. A
+ * listener only (no wait, nothing routed); write() is one small sync file.
+ */
+function recordScreenFiles(page: Page): { write: (screen: string) => void } {
+  const files = new Set<string>();
+  page.on('request', (r) => {
+    const f = fileOfRequest(r.url());
+    if (f !== null) files.add(f);
+  });
+  return {
+    write: (screen) =>
+      writeFragment({ screen, project: test.info().project.name, files: [...files] }),
+  };
+}
+
 async function capture(screen: Screen, page: Page): Promise<void> {
+  const map = recordScreenFiles(page);
   if (screen.only !== undefined) {
     test.skip((screen.only === 'laptop') !== isLaptop(page), `${screen.only} only`);
   }
@@ -7106,6 +7125,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
     ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
   });
   await screen.after?.(page);
+  map.write(screen.name);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
 

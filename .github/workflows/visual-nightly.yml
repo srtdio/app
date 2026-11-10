@@ -1,0 +1,262 @@
+name: Visual nightly
+
+# The whole visual set on main, once a night (21:00 UTC = 02:30 IST) or on demand (Run workflow).
+# render: 4 shards (weights 26:26:26:22, as visual-ci.yml ran ALL) render every screen in every project and compare each with its baseline
+#   (0.2% threshold, playwright.visual.config.ts). capture() records each screen's src/ and packages/ files (scripts/ci/visual-map.ts) as
+#   fragments; they upload as visual-map-<N>. A shard whose compare failed re-renders the baselines that differ (--update-snapshots=changed, new ones too),
+#   compares again on the same tree (must pass: a layout failure or a flaky screen fails the night, no PR), and uploads the new images.
+# publish: merges every shard's fragments into e2e/visual/screen-files.json (the per-screen map visual-select.ts reads) and lays the new
+#   images over main. Nothing changed: ends green. Otherwise it force-pushes branch bot/visual-baselines (main + those files only:
+#   e2e/visual/__screenshots__/ and e2e/visual/screen-files.json) with the Sorted CI GitHub App token and opens, or updates, ONE pull request
+#   "Visual baselines refresh" (body: changed images per project folder, whether the map changed). Never pushes to main, never merges.
+#   Without SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY it fails with a notice naming them.
+on:
+  schedule:
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: visual-nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: render (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # Compare, re-render and compare again, plus a slow apt mirror (see visual-ci.yml).
+    timeout-minutes: 75
+    env:
+      SHARD: ${{ matrix.shard }}/4
+      # Shard 4 takes the tail (laptop-dark and ipad projects), so a smaller share.
+      PWTEST_SHARD_WEIGHTS: '26:26:26:22'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright WebKit
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install webkit
+
+      - name: Cache WebKit system packages
+        id: deb-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/webkit-debs
+          key: webkit-debs-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright WebKit system dependencies
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs
+          mkdir -p ~/webkit-debs
+          if compgen -G "$HOME/webkit-debs/*.deb" > /dev/null; then
+            sudo cp ~/webkit-debs/*.deb /var/cache/apt/archives/
+          fi
+          pnpm exec playwright install-deps webkit
+          if [ "${{ steps.deb-cache.outputs.cache-hit }}" != 'true' ]; then
+            cp /var/cache/apt/archives/*.deb ~/webkit-debs/ 2>/dev/null || true
+          fi
+
+      - name: Compare every screen with the baselines
+        id: compare
+        continue-on-error: true
+        timeout-minutes: 15
+        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard="$SHARD"
+
+      - name: Upload the map fragments
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-map-${{ matrix.shard }}
+          path: e2e/results/visual-map
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload diffs
+        if: steps.compare.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs-${{ matrix.shard }}
+          path: |
+            e2e/results/visual
+            e2e/results/visual-report
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Re-render the baselines that differ
+        if: steps.compare.outcome == 'failure'
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard="$SHARD" \
+            --update-snapshots=changed || true
+
+      - name: Compare again on the same tree
+        if: steps.compare.outcome == 'failure'
+        timeout-minutes: 15
+        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard="$SHARD" --update-snapshots=none
+
+      # Every baseline that differs from main's (changed or new), by git.
+      - name: Collect the new baselines
+        if: steps.compare.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rendered"
+          cd e2e/visual/__screenshots__
+          git ls-files -m -o --exclude-standard -- . | grep '\.png$' | while IFS= read -r f; do
+            cp --parents "$f" "$RUNNER_TEMP/rendered/"
+          done || true
+          echo "re-rendered: $(find "$RUNNER_TEMP/rendered" -type f | wc -l) files"
+
+      - name: Upload the new baselines
+        if: steps.compare.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-${{ matrix.shard }}
+          path: ${{ runner.temp }}/rendered
+          if-no-files-found: warn
+          retention-days: 7
+
+  publish:
+    needs: render
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAS_APP: ${{ secrets.SORTED_CI_APP_ID != '' && secrets.SORTED_CI_APP_PRIVATE_KEY != '' }}
+    steps:
+      # No stored credentials: the push uses the App token only.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: visual-map-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/visual-map
+
+      - name: Merge the screen-to-files map
+        run: node --experimental-strip-types --no-warnings scripts/ci/visual-map.ts merge "$RUNNER_TEMP/visual-map" --out e2e/visual/screen-files.json
+
+      # No baseline artifact when every shard matched.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: visual-baselines-*
+          merge-multiple: true
+          path: e2e/visual/__screenshots__
+
+      - name: What changed
+        id: diff
+        run: |
+          set -euo pipefail
+          git add -A e2e/visual/__screenshots__ e2e/visual/screen-files.json
+          other=$(git status --porcelain | grep -v -e ' e2e/visual/__screenshots__/' -e ' e2e/visual/screen-files.json$' || true)
+          if [ -n "$other" ]; then
+            echo "::error::the refresh touched more than the baselines and the map:"
+            echo "$other"
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no image differs and the map is unchanged: nothing to publish"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          body="$RUNNER_TEMP/body.md"
+          {
+            echo "Nightly visual run on main ($(git rev-parse --short HEAD)): the whole set rendered and compared on the CI WebKit image."
+            echo
+            echo "Changed images per project folder:"
+            echo
+            counts=$(git diff --cached --name-only -- e2e/visual/__screenshots__ | awk -F/ '{print $4}' | sort | uniq -c || true)
+            if [ -z "$counts" ]; then echo "- none"; else echo "$counts" | awk '{print "- " $2 ": " $1}'; fi
+            echo
+            if git diff --cached --quiet -- e2e/visual/screen-files.json; then
+              echo "Screen-to-files map (e2e/visual/screen-files.json): unchanged."
+            else
+              echo "Screen-to-files map (e2e/visual/screen-files.json): changed."
+            fi
+            echo
+            echo "Only e2e/visual/__screenshots__/ and e2e/visual/screen-files.json. Opened by .github/workflows/visual-nightly.yml; never merged by CI."
+          } > "$body"
+          cat "$body"
+
+      - name: Missing App secrets
+        if: steps.diff.outputs.changed == 'true' && env.HAS_APP != 'true'
+        run: |
+          echo "::error::SORTED_CI_APP_ID and SORTED_CI_APP_PRIVATE_KEY are not both set: the nightly cannot push bot/visual-baselines or open its PR."
+          exit 1
+
+      # actions/create-github-app-token v3.3.0, pinned by commit.
+      - name: App token (this repository, contents and pull requests write)
+        id: app
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+        with:
+          app-id: ${{ secrets.SORTED_CI_APP_ID }}
+          private-key: ${{ secrets.SORTED_CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # The commit message never carries [update-visual-baselines]. The branch
+      # is rebuilt from main each night (force push), so the PR shows one diff.
+      - name: Push bot/visual-baselines and open or update the PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          uid=$(gh api "users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          git checkout -B bot/visual-baselines
+          git commit -m "Visual baselines refresh (nightly on main)"
+          git push --force origin bot/visual-baselines
+          number=$(gh pr list --repo "$REPO" --head bot/visual-baselines --state open --json number --jq '.[0].number // ""')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --repo "$REPO" --title "Visual baselines refresh" --body-file "$RUNNER_TEMP/body.md"
+            echo "updated PR #$number"
+          else
+            gh pr create --repo "$REPO" --base main --head bot/visual-baselines \
+              --title "Visual baselines refresh" --body-file "$RUNNER_TEMP/body.md"
+          fi
