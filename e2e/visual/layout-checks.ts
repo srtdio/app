@@ -528,6 +528,7 @@ async function readPage(page: Page): Promise<RawPage> {
               Array.from(header.querySelectorAll('button[aria-label="Account menu"]')),
             ),
             viewportWidth: vw,
+            cockpit: boxOf(header.querySelector('[data-cockpit-dot]')),
             // The avatar's visible photo: the first child box inside the button.
             avatarFace: firstShown(
               Array.from(

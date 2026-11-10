@@ -725,6 +725,14 @@ describe('top bar, chip-row Select and upload checks', () => {
       [],
     );
     expect(topbarViolations({ ...ok, plus: { ...ok.plus, borderWidth: 1 } })).not.toEqual([]);
+    // The operator's Cockpit dot is one more 36 key between Search and sort.
+    const cockpit = {
+      ...ok,
+      search: box(190, 6, 36, 44),
+      cockpit: box(226, 6, 36, 44),
+    };
+    expect(topbarViolations(cockpit)).toEqual([]);
+    expect(topbarViolations({ ...cockpit, cockpit: box(226, 6, 44, 44) })).not.toEqual([]);
   });
 
   it('topbarDriftViolations: slots hold one x across screens', async () => {

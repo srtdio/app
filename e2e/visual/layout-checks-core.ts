@@ -675,6 +675,8 @@ export interface TopbarGeom {
   viewportWidth?: number | undefined;
   /** The avatar's visible photo inside the Account menu button. */
   avatarFace?: Box | null | undefined;
+  /** The operator's Cockpit dot, when shown (a key between Search and sort). */
+  cockpit?: Box | null | undefined;
   /** The "+" face, when the primary slot holds the TopbarPlus. */
   plus?: TopbarPlusGeom | null | undefined;
 }
@@ -693,6 +695,9 @@ function topbarPhoneViolations(g: TopbarGeom, vw: number): string[] {
   const out: string[] = [];
   const keys: Array<[string, Box | null]> = [
     ['Search', g.search],
+    ...(g.cockpit !== null && g.cockpit !== undefined
+      ? [['Cockpit dot', g.cockpit] as [string, Box | null]]
+      : []),
     ['sort slot', g.sort],
     ['"+" slot', g.primary],
     ['avatar', g.avatar],

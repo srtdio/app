@@ -1830,8 +1830,21 @@ const SCREENS: Screen[] = [
       await waitFor([page.locator('[data-activity-load-more]')], 'Load more');
       await expectDensity(page, density);
       // Previews cut after their first paint (2-line rows are 20 taller) and
-      // the depth re-reads the rows' real heights: let that settle first.
-      await page.waitForTimeout(400);
+      // the depth re-reads the rows' real heights: wait until the rows hold
+      // still across two animation frames (no fixed sleep).
+      await page.waitForFunction(
+        () =>
+          new Promise<boolean>((resolve) => {
+            const read = (): string =>
+              Array.from(
+                document.querySelectorAll<HTMLElement>('[data-activity-list] [data-list-card]'),
+              )
+                .map((row) => row.offsetHeight)
+                .join(',');
+            const before = read();
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve(read() === before)));
+          }),
+      );
       await assertActivityLoadMoreBand(page, `activity-load-more-${density}`);
       // One unread count on a feed larger than the first page (Part 6 D).
       await assertActivityCounts(page, `activity-load-more-${density}`);

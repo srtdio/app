@@ -234,7 +234,15 @@ export function Topbar({
             <IconSearch size={ICON_SIZE.control} />
           </IconButton>
         )}
-        {cockpitSlot}
+        {/* The operator's Cockpit dot is one more phone key: a 36 strip in the run. */}
+        {cockpitSlot !== undefined && cockpitSlot !== null ? (
+          <span
+            data-topbar-cockpit=""
+            className="inline-flex shrink-0 max-md:[&_button]:w-topbar-key max-md:[&_button]:min-w-0"
+          >
+            {cockpitSlot}
+          </span>
+        ) : null}
         {/* Activity lives in the laptop Sidebar after Chat (10 Nov 2026) and in
             the phone's floating tab bar; the top bar has no Activity button. */}
 
