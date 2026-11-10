@@ -23,6 +23,42 @@ if (window.location.pathname === '/') {
       <div className="min-h-screen bg-panel p-4 font-sans text-fg">harness ok</div>
     </StrictMode>,
   );
+} else if (window.location.pathname.startsWith('/gallery/')) {
+  // /gallery/<Part>: one ui part in every state from fixtures (e2e/gallery).
+  // No providers, no network, no Supabase; theme from the emulated
+  // prefers-color-scheme like the smoke page; motion off.
+  document.documentElement.classList.toggle(
+    'dark',
+    window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+  try {
+    sessionStorage.setItem('sorted.motion', '0');
+  } catch {
+    // Storage blocked: the gallery still renders, at rest.
+  }
+  const part = decodeURIComponent(window.location.pathname.slice('/gallery/'.length));
+  void Promise.all([
+    import('../gallery/pages'),
+    import('../gallery/frame'),
+    import('@/lib/motion'),
+  ]).then(([{ PAGES }, { GalleryPage }, motion]) => {
+    motion.installMotionPreference();
+    const load = PAGES[part];
+    if (load === undefined) {
+      root.render(<div data-gallery-missing={part}>no gallery page: {part}</div>);
+      return;
+    }
+    void load().then((page) => {
+      const { MotionRoot } = motion;
+      root.render(
+        <StrictMode>
+          <MotionRoot>
+            <GalleryPage part={page.part} cells={page.cells} />
+          </MotionRoot>
+        </StrictMode>,
+      );
+    });
+  });
 } else if (isHomeBundlePath(window.location.pathname)) {
   // /demo: the home bundle's own root, as src/main.tsx boots it.
   void import('@/components/home/HomeEntry').then(({ HomeEntry }) => {
