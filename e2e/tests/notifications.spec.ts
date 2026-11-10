@@ -121,10 +121,12 @@ test(
     for (const name of ['Briefs', 'Plans']) {
       await expect(chipRow.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
-    // Mark all read is the top bar's primary (2 unread on All).
-    await expect(
-      page.locator('[data-topbar-slot="primary"] [data-activity-mark-all]'),
-    ).toBeVisible();
+    // The top bar: Threads | Catch up (10 Nov); Catch up filled with the unread count.
+    await expect(page.locator('header [data-topbar-pair] [data-topbar-catch-up]')).toHaveAttribute(
+      'aria-label',
+      /^Catch up, \d+ unread$/,
+    );
+    await expect(page.locator('[data-activity-mark-all]')).toHaveCount(0);
     // Snooze is gone: no Snoozed chip.
     await expect(page.getByRole('button', { name: /^Snoozed/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Upcoming', exact: true })).toHaveCount(0);
@@ -136,10 +138,10 @@ test(
 
     // All: the plan alert, in the bell's words.
     await page.getByRole('button', { name: 'All', exact: true }).click();
-    // 9 Nov 2026: the plan's card names the plan; the alert is its own line.
-    await expect(
-      page.locator('[data-activity-card-cell]', { has: card(page, 'plan_opened') }),
-    ).toContainText(new RegExp(`${PEER_NAME}\\s*Opened ${PLAN_ALERT_TITLE} for approvers`));
+    // The plan's row names the plan; the alert is its preview line.
+    await expect(card(page, 'plan_opened').locator('[data-activity-preview]')).toContainText(
+      new RegExp(`${PEER_NAME}\\s*Opened ${PLAN_ALERT_TITLE} for approvers`, 'i'),
+    );
     const scheme = testInfo.project.use.colorScheme ?? 'dark';
     await page.screenshot({ path: testInfo.outputPath(`notifications-${scheme}.png`) });
     expectClean(network);

@@ -307,7 +307,7 @@ describe('checkpoint Resolve on the bar', () => {
     const bar = rowEl('p-1')?.querySelector('[data-comment-row="root"] [data-comment-bar]');
     expect(
       Array.from(bar?.querySelectorAll('button') ?? []).map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Reply', 'Edit', 'Delete']);
+    ).toEqual(['Add reaction', 'Reply', 'Edit', 'Delete']);
   });
 });
 
@@ -518,9 +518,9 @@ describe('one row template for checkpoints and comments', () => {
     expect(rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.textContent).toBe('2');
     expect(rowEl('p-1')?.textContent ?? '').not.toContain('#2');
 
-    // Agency viewer, someone else's rows: Reply, Resolve, To-do.
-    expect(barWords('p-1')).toEqual(['Reply', 'Resolve checkpoint 2', 'To-do']);
-    expect(barWords('c-1')).toEqual(['Reply', 'Resolve', 'To-do']);
+    // Agency viewer, someone else's rows: the smiley first, then Reply, Resolve, To-do.
+    expect(barWords('p-1')).toEqual(['Add reaction', 'Reply', 'Resolve checkpoint 2', 'To-do']);
+    expect(barWords('c-1')).toEqual(['Add reaction', 'Reply', 'Resolve', 'To-do']);
     // No card per thread.
     expect(rowEl('c-1')?.className).not.toContain('lit-card-muted');
   });
@@ -528,7 +528,14 @@ describe('one row template for checkpoints and comments', () => {
   it("the viewer's own rows add Edit, the hairline and Delete, in that order", async () => {
     pageRows.current = [row('c-1', 'mine')];
     await mount(false);
-    expect(barWords('c-1')).toEqual(['Reply', 'Resolve', 'To-do', 'Edit', 'Delete']);
+    expect(barWords('c-1')).toEqual([
+      'Add reaction',
+      'Reply',
+      'Resolve',
+      'To-do',
+      'Edit',
+      'Delete',
+    ]);
     const bar = rowEl('c-1')?.querySelector('[data-comment-bar]');
     const divider = bar?.querySelector('[data-bar-divider]');
     expect(divider).toBeTruthy();

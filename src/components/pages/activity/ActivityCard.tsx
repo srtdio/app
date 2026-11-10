@@ -1,25 +1,9 @@
 import { stripFormat } from '@srtdio/comments';
-import { itemIn, itemOut, rememberCard, useMoveOnMount, usePresence } from '@/lib/motion';
+import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
-import {
-  useId,
-  useLayoutEffect,
-  useState,
-  type ComponentType,
-  type MouseEvent,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
-import {
-  ListCard,
-  LIST_CARD_SUB_INSET,
-  LIST_CARD_UNREAD_DOT,
-  type ListCardPicture,
-} from '@/components/ui/ListCard';
-import { PressableRow } from '@/components/ui/PressableRow';
-import { cn } from '@/lib/cn';
-import { TEXT_ROLE, textRole } from '@/components/ui/Text';
+import { ListCard, LIST_CARD_UNREAD_DOT, type ListCardPicture } from '@/components/ui/ListCard';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail } from '@/components/media';
@@ -46,8 +30,8 @@ import {
   cardBodyLine,
   deletedFilesBody,
   cardTitle,
+  entryActionLine,
   entryLine,
-  groupOpenEntry,
   isChatMention,
   isChatRow,
   isThreadStarted,
@@ -55,7 +39,6 @@ import {
   isWelcome,
   opensNothing,
   segmentSelfMentions,
-  updatesLabel,
   welcomeTitle,
   type ActivityItem,
   type AlertInfo,
@@ -76,24 +59,16 @@ interface ActivityCardProps {
   cache: PresignCache;
   /** False when presigning is unconfigured: the picture shows the fallback. */
   presignEnabled: boolean;
-  /** Open the thread: mark it read and navigate from `entry` (groupOpenEntry:
-   *  the newest entry that links to a comment, else the lead). */
+  /** The row's tap: mark the item's unread entries read and open `entry`
+   *  (the item's newest entry) at its exact place. */
   onOpenGroup: (group: ActivityItem[], entry: ActivityItem) => void;
-  /** Open one entry of a grouped card (its unfolded row): navigate to its own
-   *  place at its comment and mark it read. */
-  onOpenEntry: (entry: ActivityItem) => void;
   /** The signed-in user's resolved display name, used to accent their own @name
    *  inside a mention preview; null when it has not resolved yet. */
   selfName: string | null;
   /** The viewer's side: a plan_opened alert reads "shared with you" for a client. */
   side?: ViewerSide;
-  /** A card a live refresh just added: it slides up into place (never sideways). */
+  /** A row a live refresh just added: it slides up into place (never sideways). */
   entering?: boolean;
-  /**
-   * The day's last card: its lines end on their last text box (no 12 under
-   * them), so the next day label sits 24 below (NotificationsPage).
-   */
-  lastInDay?: boolean;
 }
 
 /**
@@ -146,12 +121,12 @@ export function groupHasUnread(group: readonly ActivityItem[]): boolean {
 export const UNREAD_DOT_CLASS = LIST_CARD_UNREAD_DOT;
 
 /** The kind an Activity card names in its one tag. */
-export type ActivityKind = 'Mention' | 'Thread' | 'Post' | 'Brief' | 'Plan' | 'Reminder';
+export type ActivityKind = 'Mention' | 'Thread' | 'Post' | 'Brief' | 'Plan' | 'Idea' | 'Reminder';
 
 /**
  * What one entry is, in one word: a reminder (a task's missed due time), a
- * mention (a comment's or a chat's), a plan (plan alerts, plan items, plan
- * events), a brief, a post. A chat message, an invite, a file or the welcome
+ * mention (a comment's or a chat's), an idea (an idea bank alert), a plan
+ * (plan alerts, plan items, plan events), a brief, a post. A chat message, an invite, a file or the welcome
  * row names none. Pure.
  */
 export function activityKind(item: ActivityItem): ActivityKind | undefined {
@@ -161,9 +136,9 @@ export function activityKind(item: ActivityItem): ActivityKind | undefined {
   if (item.eventType === MENTION_EVENT_TYPE || isChatMention(item)) return 'Mention';
   // A thread start wears the chat mention's tag, in its own word.
   if (isThreadStarted(item)) return 'Thread';
+  if (alert?.kind === 'bank') return 'Idea';
   if (
     alert?.kind === 'plan' ||
-    alert?.kind === 'bank' ||
     item.entityType === PLAN_ITEM_ENTITY ||
     item.entityType === 'plan' ||
     (item.planId !== null && item.planId !== undefined)
@@ -176,15 +151,13 @@ export function activityKind(item: ActivityItem): ActivityKind | undefined {
 }
 
 /**
- * The card's ONE grey tag on line 2: a digest group of several entries counts
- * them ("3 updates"); else what the entry is (activityKind: Mention, Post,
- * Brief, Plan, Reminder). None for the welcome row or a kindless entry. Pure.
+ * The row's ONE grey tag on line 2: what the item is (activityKind: Mention,
+ * Thread, Post, Brief, Plan, Idea, Reminder). None for the welcome row or a
+ * kindless entry. Pure.
  */
 export function activityCardTag(group: readonly ActivityItem[]): string | undefined {
   const lead = group[0];
-  if (lead === undefined) return undefined;
-  if (group.length > 1) return updatesLabel(group.length);
-  return activityKind(lead);
+  return lead !== undefined ? activityKind(lead) : undefined;
 }
 
 /**
@@ -220,26 +193,24 @@ export function activityCardTitle(
 const PLAN_ITEM_PHRASE = 'a plan item';
 
 /**
- * The card's preview text (line 2) when it is plain text: the comment, the
- * alert's second line, the files a delete also took, the welcome's line; else
- * how many more updates the group holds ("+2 more"), else ''. A mention's
- * preview is drawn (its @name accented) by the card. Pure.
+ * A one-entry row's preview text (line 2) when it is plain text: the comment,
+ * the alert's second line, the files a delete also took, the welcome's line;
+ * else ''. A mention's preview is drawn (its @name accented) by the row. Pure.
  */
 export function activityPreviewText(group: readonly ActivityItem[]): string {
   const lead = group[0];
   if (lead === undefined) return '';
   const alert = lead.alert ?? null;
-  const more = group.length > 1 ? `+${group.length - 1} more` : '';
-  if (alert !== null) return alertBody(alert) ?? more;
+  if (alert !== null) return alertBody(alert) ?? '';
   if (isWelcome(lead)) return WELCOME_BODY;
   if (lead.eventType === 'assets_deleted') {
     // The first file by name, then the others ("deck.pdf · Also hero.png and teaser.mov").
     const first = lead.filenames?.[0];
     const others = deletedFilesBody(lead);
-    if (first === undefined) return others ?? more;
+    if (first === undefined) return others ?? '';
     return others !== null ? `${first} · ${others}` : first;
   }
-  return entryBodyText(lead) ?? more;
+  return entryBodyText(lead) ?? '';
 }
 
 /**
@@ -247,7 +218,7 @@ export function activityPreviewText(group: readonly ActivityItem[]): string {
  * has always shown): a comment, mention, plan comment, the first point of a
  * checkpoint batch, a thread start's reply. Mentions are already names (the
  * read resolves them), formatting is stripped. Null for an entry without a
- * body. Pure; the one helper behind the card preview and every line.
+ * body. Pure; the one helper behind every row preview.
  */
 export function entryBodyText(entry: ActivityItem): string | null {
   if (entry.body === null || entry.body.trim() === '') return null;
@@ -265,10 +236,10 @@ export function entryBodyText(entry: ActivityItem): string | null {
 export const COMMENT_DELETED = 'Comment deleted';
 
 /**
- * One line's text (locked 9 Nov 2026): a body-carrying entry reads its comment
- * text, folded to one line with links shortened (host/…/last part); a deleted
- * comment reads "Comment deleted" (muted); every other entry keeps its
- * entryLine wording. Pure.
+ * One entry's words: a body-carrying entry reads its comment text, folded to
+ * one line with links shortened (host/…/last part); a deleted comment reads
+ * "Comment deleted" (muted); every other entry keeps its entryLine wording.
+ * Pure.
  */
 export function entryLineText(
   entry: ActivityItem,
@@ -284,6 +255,17 @@ export function entryLineText(
     .replace(/\s+/g, ' ')
     .trim();
   return { actor, text: oneLine !== '' ? oneLine : text, muted: false };
+}
+
+/**
+ * An item row's preview (line 2): its newest entry, "<actor>: <text>" when it
+ * carries a comment or message (or the comment was deleted), else its whole
+ * action line ("Maya approved Watch launch"). Pure.
+ */
+export function itemPreviewText(entry: ActivityItem, side: ViewerSide = 'unknown'): string {
+  const { actor, text, muted } = entryLineText(entry, side);
+  if (muted || entryBodyText(entry) !== null) return `${actor}: ${text}`;
+  return entryActionLine(entry, side);
 }
 
 /** An alert's glyph: what kind of alert at a glance. */
@@ -410,18 +392,13 @@ export function hasItem(lead: ActivityItem): boolean {
   return lead.entityType !== null && ITEM_ENTITIES.has(lead.entityType);
 }
 
-/** Lines an item card shows before "+N more" (Android InboxStyle: 5). */
-export const ACTIVITY_LINES_SHOWN = 5;
-
-/** "N new" on an item card's head (only when something is unread). Pure. */
+/** "N new" after an item's name (only while 2+ of its entries are unread). Pure. */
 export function newLabel(n: number): string {
   return `${n} new`;
 }
 
-/** "+N more" / its accessible name. Pure. */
-export function moreLabel(n: number): string {
-  return `+${n} more`;
-}
+/** The fewest unread entries that show "N new" (one unread is the dot alone). */
+export const NEW_CHIP_MIN = 2;
 
 /**
  * The item a non-chat card is about, by name: the post, brief, plan item or
@@ -436,268 +413,50 @@ export function itemCardTitle(lead: ActivityItem, side: ViewerSide = 'unknown'):
 }
 
 /**
- * The lines of an item card, newest first: one per notification the group
- * holds (the chip already filtered them), own actions left out. Pure.
+ * The unread entries of an item that count toward "N new": own actions left
+ * out. Pure.
  */
-export function itemCardLines(group: readonly ActivityItem[]): ActivityItem[] {
-  return [...group]
-    .filter((entry) => entry.own !== true)
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-}
-
-/** Line to line (and to "+N more"), text box to text box: 8 / 12 / 16 by density. */
-const LINES_GAP = 'flex min-w-0 flex-col gap-3 compact:gap-2 calm:gap-4';
-
-/**
- * A line's (and "+N more"'s) hit box past its text, splitting the line gap
- * with its neighbours: above + below = one gap (Compact 4 + 4, Cozy 4 + 8,
- * Calm 8 + 8), so hits meet edge to edge and never overlap (layout check
- * tap-overlap), and the reach above never passes the head gap. A row's tap
- * height is its text + one gap.
- */
-const LINE_HIT_Y = '-top-1 -bottom-2 compact:-bottom-1 calm:-top-2';
-
-/**
- * The 44 tap (CLAUDE.md Alignment: a hit area, pseudo-element or overlay):
- * a ::before grown past the row's own box (LINE_HIT_Y) to 44 for a one-line
- * row: Compact 28 + 8 + 8, Cozy 32 + 4 + 8, Calm 36 + 4 + 4. The row boxes
- * themselves meet edge to edge (layout check tap-overlap reads the boxes).
- */
-const LINE_HIT_44 =
-  "before:absolute before:inset-x-0 before:-top-1 before:-bottom-2 before:content-[''] compact:before:-inset-y-2 calm:before:-inset-y-1";
-
-/** "+N more": its 20 text box, a ::before grown 12 above and below to 44. */
-const MORE_HIT_44 = "before:absolute before:inset-x-0 before:-inset-y-3 before:content-['']";
-
-/** A no-break space: "… more" and the time never split across lines. */
-const NBSP = '\u00a0';
-
-/** The secondary role without its one-line truncate: the line wraps to 3 lines. */
-// min-h-5 at the call site: a one-line paragraph (18) is as tall as the 20 photo,
-// so every row is set by its text box and the gap between rows never varies (rule 5).
-const LINE_BODY_ROLE = TEXT_ROLE.secondary.replace(/\btruncate\b/, '').trim();
-
-/** Lines a notification's text shows before "… more" (9 Nov 2026). */
-export const LINE_MAX_LINES = 3;
-
-/** "… more" hides fewer than this many words: the line shows in full instead. */
-const MIN_HIDDEN_WORDS = 3;
-
-/** Trailing punctuation a cut drops before "…". */
-const CUT_TRAIL = /[\s.,;:!?…–([{'"-]+$/u;
-
-/**
- * Where a line's text is cut (9 Nov 2026): null when the whole text fits, else
- * the longest run of WHOLE words that fits with "… more" and the time,
- * trailing punctuation stripped. Hiding only 1-2 words shows the text in full.
- * `fits` answers for a candidate (null: the whole text, no marker). Pure.
- */
-export function cutLine(text: string, fits: (candidate: string | null) => boolean): string | null {
-  if (fits(null)) return null;
-  const words = text.split(/\s+/).filter((w) => w !== '');
-  const at = (k: number): string => words.slice(0, k).join(' ').replace(CUT_TRAIL, '');
-  let lo = 0;
-  let hi = words.length - 1;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (fits(at(mid))) lo = mid;
-    else hi = mid - 1;
-  }
-  if (words.length - lo < MIN_HIDDEN_WORDS) return null;
-  return lo > 0 ? at(lo) : (words[0] ?? '');
-}
-
-/** The "more" / "less" key after the marker: muted, inline, its hit from its own child box (LINE_HIT_Y). */
-const LINE_MARKER =
-  'relative inline min-h-0 w-auto rounded-sm align-baseline text-fg-3 focus-visible:lit-focus';
-
-/**
- * Measure a line on an off-screen clone at the paragraph's width (React's
- * nodes are never touched): does the actor + candidate (+ "… more") + time fit
- * in LINE_MAX_LINES lines?
- */
-function measureFits(p: HTMLElement, text: string): (candidate: string | null) => boolean {
-  const lineHeight = Number.parseFloat(getComputedStyle(p).lineHeight);
-  const max = (Number.isFinite(lineHeight) ? lineHeight : 20) * LINE_MAX_LINES + 1;
-  const clone = p.cloneNode(true) as HTMLElement;
-  clone.removeAttribute('id');
-  clone.setAttribute('aria-hidden', 'true');
-  Object.assign(clone.style, {
-    position: 'absolute',
-    visibility: 'hidden',
-    pointerEvents: 'none',
-    left: '-10000px',
-    top: '0',
-    width: `${p.getBoundingClientRect().width}px`,
-  });
-  clone.querySelector('[data-activity-line-more]')?.remove();
-  const body = clone.querySelector<HTMLElement>('[data-activity-line-text]');
-  const marker = clone.querySelector<HTMLElement>('[data-activity-line-marker]');
-  return (candidate) => {
-    if (body === null) return true;
-    body.textContent = candidate ?? text;
-    if (marker !== null) marker.textContent = candidate === null ? '' : `…${NBSP}more`;
-    document.body.appendChild(clone);
-    const h = clone.getBoundingClientRect().height;
-    clone.remove();
-    return h <= max;
-  };
-}
-
-/** The cut for a paragraph, re-measured when its width changes. */
-function useLineCut(text: string): {
-  ref: (el: HTMLParagraphElement | null) => void;
-  cut: string | null;
-} {
-  const [el, setEl] = useState<HTMLParagraphElement | null>(null);
-  const [cut, setCut] = useState<string | null>(null);
-  useLayoutEffect(() => {
-    if (el === null) return undefined;
-    let width = -1;
-    const run = (): void => {
-      const w = el.getBoundingClientRect().width;
-      if (w === width) return;
-      width = w;
-      if (w <= 0) {
-        setCut(null);
-        return;
-      }
-      setCut(cutLine(text, measureFits(el, text)));
-    };
-    run();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(run);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [el, text]);
-  return { ref: setEl, cut };
+export function unreadEntries(group: readonly ActivityItem[]): ActivityItem[] {
+  return group.filter((entry) => entry.own !== true && entry.readAt === null);
 }
 
 /**
- * One notification's line (9 Nov 2026) under its item head: a 20 photo hung
- * in the picture column (its right edge on the head picture's right edge,
- * 12 to the text), then one paragraph on the head's title column: the actor
- * (medium, ink; muted when read), the text, the time (meta, kept whole by no-break spaces) inline at
- * the end. At most 3 lines: past that the text is cut at the last whole word
- * with "… more" before the time; "… more" unfolds this line in place
- * ("less" folds it). An 8px dot slot on the head's dot edge, kept when read
- * so the text never shifts. The tap comes from a hit overlay (half the line
- * gap above and below the text, LINE_HIT_Y) whose ::before reaches 44 (LINE_HIT_44),
- * never from padding. A tap opens its own
- * spot and marks only it read. No reactions.
+ * The "N new" chip (Activity twins Plan, 10 Nov 2026): ink, the primary
+ * Button's own fill and text tokens (bg-accent / text-accent-fg: ink with
+ * white text in light, white with ink text in dark), no border, rounded-full,
+ * medium. Density by <html data-density>: Compact 16 / Cozy 18 / Calm 20 high
+ * (Cozy: the 16 box plus 1 above and below, box-content), text 11 / 11 / 12.
+ * Sides 8 (the 4px spacing grid has no 6 or 7). Not a button; never truncates.
  */
-function EntryLine(props: {
-  entry: ActivityItem;
-  nowMs: number;
-  timeZone: string | null | undefined;
-  side: ViewerSide;
-  onOpen: (entry: ActivityItem) => void;
-}): ReactElement {
-  const { entry } = props;
-  const { actor, text, muted } = entryLineText(entry, props.side);
-  const unread = entry.readAt === null;
-  const time = entryAgo(entry, props.nowMs, props.timeZone);
-  const [open, setOpen] = useState(false);
-  const { ref, cut } = useLineCut(text);
-  const shown = open || cut === null ? text : cut;
-  const toggle = (event: MouseEvent<HTMLElement>): void => {
-    event.stopPropagation();
-    setOpen((was) => !was);
-  };
+export const ACTIVITY_NEW_CHIP =
+  'lit-badge box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-2 py-px text-xs font-medium text-accent-fg compact:box-border calm:box-border calm:h-5 calm:text-sm';
+
+/** Line 1 of an item row: the name (truncates first), then "N new" 8 after it. */
+function itemTitleNode(name: string, unread: number): ReactNode {
+  if (unread < NEW_CHIP_MIN) return name;
   return (
-    <div
-      data-activity-line={entry.id}
-      {...(unread ? { 'data-activity-line-unread': '' } : {})}
-      {...(cut !== null ? { 'data-activity-line-cut': open ? 'open' : 'folded' } : {})}
-      onClick={() => props.onOpen(entry)}
-      className="relative flex min-w-0 items-start"
-    >
-      <PressableRow
-        insetFocus
-        data-activity-line-open=""
-        aria-label={`${actor} ${text} ${time}${unread ? ', unread' : ''}`}
-        className={cn('absolute -left-8 right-0 min-h-0 w-auto', LINE_HIT_Y, LINE_HIT_44)}
-      />
-      <span aria-hidden="true" data-activity-line-photo="" className="-ml-8 flex w-8 shrink-0">
-        <Avatar
-          name={actor}
-          {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
-          role="inline"
-          decorative
-        />
+    <span data-activity-title="" className="flex min-w-0 items-center gap-2">
+      <span data-activity-name="" className="min-w-0 truncate">
+        {name}
       </span>
-      <p
-        ref={ref}
-        data-activity-line-body=""
-        className={cn(LINE_BODY_ROLE, 'min-h-5 min-w-0 flex-1 break-words text-fg-2')}
-      >
-        <span
-          aria-hidden="true"
-          data-activity-line-actor=""
-          className={cn('font-medium', unread ? 'text-fg' : 'text-fg-3')}
-        >
-          {actor}
-        </span>{' '}
-        <span
-          aria-hidden="true"
-          data-activity-line-text=""
-          {...(muted ? { 'data-activity-line-gone': '' } : {})}
-          className={cn((!unread || muted) && 'text-fg-3')}
-        >
-          {shown}
-        </span>
-        {/* No-break spaces keep "… more" and the time whole (never a nowrap box). */}
-        <span aria-hidden="true" data-activity-line-marker="" className="text-fg-3">
-          {cut === null ? '' : open ? NBSP : `…${NBSP}`}
-        </span>
-        {cut !== null ? (
-          <PressableRow
-            inline
-            data-activity-line-more={open ? 'less' : 'more'}
-            aria-expanded={open}
-            aria-label={open ? 'Show less of this update' : 'Show all of this update'}
-            onClick={toggle}
-            className={LINE_MARKER}
-          >
-            {open ? 'less' : 'more'}
-            <span aria-hidden="true" className={cn('absolute -inset-x-2', LINE_HIT_Y)} />
-          </PressableRow>
-        ) : null}
-        {/* A no-break space ties the time to the last word (or "more" / "less"):
-            the time never drops onto a line of its own. */}
-        {NBSP}
-        <span aria-hidden="true" data-activity-line-time="" className={textRole('meta')}>
-          {time.replace(/ /g, NBSP)}
-        </span>
-      </p>
-      <span data-activity-line-dot-slot="" className="ml-2 flex h-5 w-2 shrink-0 items-center">
-        {unread ? (
-          <span
-            data-activity-line-dot=""
-            role="img"
-            aria-label="Unread"
-            className={LIST_CARD_UNREAD_DOT}
-          />
-        ) : null}
+      <span data-activity-new-chip="" className={ACTIVITY_NEW_CHIP}>
+        {newLabel(unread)}
       </span>
-    </div>
+    </span>
   );
 }
 
 /**
- * One digest group as one card (9 Nov 2026: every notification gets its own
- * line, grouped by item; Android InboxStyle, Notion, Asana).
+ * One item as one ui/ListCard row, exactly as Plan and Chat use it (Activity
+ * twins Plan, 10 Nov 2026): the density row (Compact 60 / Cozy 72 / Calm 80).
  * - A chat row (isChatRow, or a chat task alert), and a row with no item
- *   (deleted files, an invite, the welcome row), keeps its one ui/ListCard: the who-did-what title,
- *   the preview, the tag, the unread dot; a tap opens it.
- * - Every other item (post, brief, plan, plan item, idea, anything else): a
- *   head ListCard (the picture, the item title, the kind tag, "N new" while
- *   anything is unread; a tap opens the item, unchanged), then one line per
- *   notification, newest first, on the head's title column. The first 5 show;
- *   more fold behind "+N more" (a 20 text box, aria-expanded), which unfolds the
- *   rest in place (itemIn, Y) and becomes "Show less" (itemOut on fold). The
- *   fold is per card, in memory. A line opens its own spot and marks only
- *   that entry read.
+ *   (deleted files, an invite, the welcome row): the who-did-what title
+ *   ("Priya mentioned you"), its preview, its tag; no "N new".
+ * - Every other item (post, brief, plan, plan item, idea): its name, then
+ *   "N new" while 2+ of its entries are unread; line 2 the newest entry's
+ *   line and the kind tag (Post / Brief / Plan / Idea).
+ * Time: the newest entry. The unread dot while anything is unread. A tap opens
+ * the newest entry at its exact place and marks the item's entries read.
  */
 export function ActivityCard({
   group,
@@ -706,151 +465,66 @@ export function ActivityCard({
   cache,
   presignEnabled,
   onOpenGroup,
-  onOpenEntry,
   selfName,
   side = 'unknown',
   entering = false,
-  lastInDay = false,
 }: ActivityCardProps) {
-  const [open, setOpen] = useState(false);
-  const lines = itemCardLines(group);
-  const hidden = Math.max(0, lines.length - ACTIVITY_LINES_SHOWN);
-  // The rest unfold in place: itemIn (Y only) as they land, itemOut (clip)
-  // before they unmount; never a fade; instant under Reduce Motion.
-  const rest = usePresence<HTMLDivElement>(open && hidden > 0, {
-    enter: (el) => itemIn(el),
-    exit: (el) => itemOut(el),
-  });
-  const restId = useId();
-  // itemIn (docs/motion.md): a live-added card renders in place and rises
+  // itemIn (docs/motion.md): a live-added row renders in place and rises
   // 8 px over its final state on its first frame. Y only, never a fade.
-  // growFromCard: a tap remembers this card so the page grows out of it, and
+  // growFromCard: a tap remembers this row so the page grows out of it, and
   // Back grows the page back into it.
   const growKey = group[0]?.entityId ?? '';
   const cardRef = useGrowBackIntoCard<HTMLElement>(growKey);
   useMoveOnMount(cardRef, (el) => itemIn(el), entering);
-  const rememberThisCard = (): void => {
-    if (growKey !== '') rememberCard(growKey, cardRef.current);
-  };
   const lead = group[0];
   if (lead === undefined) return null;
-  // Chat rows keep their one card: chat mentions, thread starts and chat task
-  // alerts. So do rows with no item to group under (deleted files, invites, the
-  // welcome row): they read as one who-did-what card with their own preview.
   const chat = isChatRow(lead) || lead.alert?.kind === 'task' || !hasItem(lead);
-  // The head opens the newest entry that links to a comment, else the lead.
-  const openEntry = groupOpenEntry(group) ?? lead;
+  const newest = newestEntry(group) ?? lead;
   const alert = lead.alert ?? null;
-  const actor = newestEntry(group) ?? lead;
-  const title = chat ? activityCardTitle(group, side) : itemCardTitle(lead, side);
-  const unreadLines = lines.filter((entry) => entry.readAt === null).length;
+  const unread = unreadEntries(group).length;
+  const name = chat ? activityCardTitle(group, side) : itemCardTitle(lead, side);
   const preview: ReactNode = chat
     ? lead.eventType === MENTION_EVENT_TYPE && lead.body !== null
       ? mentionPreview(lead.body, selfName, isChatMention(lead))
       : activityPreviewText(group)
-    : unreadLines > 0
-      ? newLabel(unreadLines)
-      : undefined;
-  const tappable = !opensNothing(lead, side);
-  const tag = chat ? activityCardTag(group) : activityKind(lead);
-  // Line 1 trailing: how long ago, on the list's one clock ("just now", "3h", "Mon").
-  const time = entryAgo(chat ? lead : actor, nowMs, timeZone);
-  const bad = lead.eventType === 'task_due';
+    : itemPreviewText(newest, side);
+  const tappable = !opensNothing(newest, side);
 
-  const card = (
+  return (
     <ListCard
       rootRef={cardRef}
       surface={{
         'data-activity-event': lead.eventType,
         'data-activity-id': lead.id,
-        ...(chat ? {} : { 'data-activity-item-head': '' }),
+        'data-activity-row': chat ? 'chat' : 'item',
         ...(entering ? { 'data-activity-entering': '' } : {}),
       }}
-      picture={activityPicture(lead, actor, cache, presignEnabled, title)}
+      picture={activityPicture(lead, newest, cache, presignEnabled, name)}
       {...(alert !== null
         ? { pictureHooks: { 'data-activity-alert-icon': alert.kind } }
         : lead.entityType === PLAN_ITEM_ENTITY
           ? { pictureHooks: { 'data-activity-plan-icon': '' } }
           : {})}
-      title={title}
-      unread={chat ? groupHasUnread(group) : unreadLines > 0}
-      // The item head's tag ends on the time's edge: its lines carry the dots.
-      unreadDotHidden={!chat}
+      title={chat ? name : itemTitleNode(name, unread)}
+      unread={groupHasUnread(group)}
       preview={preview}
-      previewHooks={chat ? { 'data-activity-preview': '' } : { 'data-activity-new': '' }}
-      time={time}
+      previewHooks={{ 'data-activity-preview': '' }}
+      time={entryAgo(newest, nowMs, timeZone)}
       timeHooks={{ 'data-activity-time': '' }}
       // A missed due time reads in bad.
-      timeBad={bad}
-      tag={tag}
+      timeBad={lead.eventType === 'task_due'}
+      tag={activityCardTag(group)}
       tagHooks={{ 'data-activity-scope-tag': '' }}
       {...(tappable
         ? {
             onPress: () => {
-              rememberThisCard();
-              onOpenGroup(group, openEntry);
+              if (growKey !== '') rememberCard(growKey, cardRef.current);
+              onOpenGroup(group, newest);
             },
-            // Named by the card's own title, unread dot and preview (ListCard).
+            // Named by the row's own title (with "N new"), unread dot and preview (ListCard).
             press: { 'data-activity-lead': '' },
           }
         : {})}
     />
-  );
-  if (chat) return card;
-  const line = (entry: ActivityItem): ReactElement => (
-    <EntryLine
-      key={entry.id}
-      entry={entry}
-      nowMs={nowMs}
-      timeZone={timeZone}
-      side={side}
-      onOpen={onOpenEntry}
-    />
-  );
-  // The grid cell: the head, then its lines on the head's title column.
-  return (
-    <div data-activity-card-cell="" className="flex min-w-0 flex-col">
-      {card}
-      {lines.length > 0 ? (
-        <div
-          data-activity-lines=""
-          // Density (9 Nov 2026, text box to text box): head card to line 1
-          // 4 / 8 / 12, line to line (and to "+N more") 8 / 12 / 16, Compact /
-          // Cozy / Calm; 12 under the last line to the next card (none on the
-          // day's last card). Row boxes meet in the gaps (LINE_HIT_Y); each row's
-          // ::before reaches 44 (LINE_HIT_44).
-          className={cn(
-            LINES_GAP,
-            'pt-2 compact:pt-1 calm:pt-3',
-            !lastInDay && 'pb-3',
-            LIST_CARD_SUB_INSET,
-          )}
-        >
-          {lines.slice(0, ACTIVITY_LINES_SHOWN).map(line)}
-          {rest.rendered ? (
-            <div ref={rest.ref} id={restId} data-activity-lines-rest="" className={LINES_GAP}>
-              {lines.slice(ACTIVITY_LINES_SHOWN).map(line)}
-            </div>
-          ) : null}
-          {hidden > 0 ? (
-            <PressableRow
-              data-activity-more=""
-              aria-expanded={open}
-              aria-controls={restId}
-              aria-label={open ? 'Show less' : `Show ${hidden} more updates`}
-              onClick={() => setOpen((was) => !was)}
-              // Its text box only (the label's 20 line; its gap is measured like a line's); the 44
-              // tap comes from its ::before (MORE_HIT_44), never from padding.
-              className={textRole(
-                'label',
-                cn('relative flex min-h-0 items-center text-fg-2', MORE_HIT_44),
-              )}
-            >
-              {open ? 'Show less' : moreLabel(hidden)}
-            </PressableRow>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
   );
 }

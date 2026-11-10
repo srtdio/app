@@ -475,12 +475,10 @@ export {
   metaPlacement,
   lastCardKind,
   isCardOnly,
-  REACTION_ROW_SPACE,
   FAILED_RETRY_CLASS,
   type RowRail,
   railRowClass,
   MessageBubble,
-  reactionBadgeLabel,
   ForwardedLabel,
   type ThreadRow,
   threadRows,
@@ -1319,6 +1317,13 @@ const PersonSourceContext = createContext<
   ((message: ThreadMessage) => PrivateReplyDraft | null) | null
 >(null);
 
+/**
+ * Who reacted to a message (the thread's one reader: names it already holds,
+ * the rest in one batched read): a chip's laptop hover popover asks it. Stable
+ * for the thread's life. Null: no hover names.
+ */
+const ReactorLoadContext = createContext<WhoReactedLoad | null>(null);
+
 /** The info glyph (a circled "i") for the group info button. */
 export function InfoGlyph(props: { size?: number }): ReactElement {
   return (
@@ -1497,8 +1502,10 @@ interface MessageRowProps {
   /** Tap-to-transcribe on a received voice note; absent hides the link. */
   onTranscribe?: ((message: ThreadMessage) => void) | undefined;
   quoted?: ThreadMessage | undefined;
-  /** A reaction badge tap opens who reacted; absent opens the menu (as before). */
+  /** A chip's long-press (phone) opens who reacted (the thread's sheet). */
   onOpenReactions?: (message: ThreadMessage) => void;
+  /** A chip tap or a drawer pick: the chat's reaction add / remove. */
+  onToggleReaction?: (messageId: string, emoji: string, currentlyMine: boolean) => void;
   /** The menu's Select is active on this row's body (no hold, menu or swipe). */
   selectingText?: boolean;
 }
@@ -1647,7 +1654,44 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   // Small touches (docs/motion.md, pop from .9, ease-pop): a reaction that
   // lands on a row already on screen. A row's first paint never pops.
   const reactionCount = props.message.reactions.reduce((sum, r) => sum + r.count, 0);
-  usePopOnRise(props.message.id, '[data-reaction-emoji]', reactionCount);
+  usePopOnRise(props.message.id, '[data-reaction-chips]', reactionCount);
+  // The chips' taps (9 Nov 2026: chips, not the badge): toggle mine, the
+  // drawer's pick (adds), who reacted (phone sheet / laptop hover names).
+  const reactorLoad = useContext(ReactorLoadContext);
+  const { onToggleReaction, onOpenReactions, viewerUserId } = props;
+  const messageForChips = props.message;
+  const reactionChips = useMemo(():
+    | Parameters<typeof MessageBubble>[0]['reactionChips']
+    | undefined => {
+    if (onToggleReaction === undefined) return undefined;
+    const id = messageForChips.id;
+    const mineOf = (emoji: string): boolean =>
+      messageForChips.reactions.some((r) => r.emoji === emoji && r.mine);
+    return {
+      onToggle: (emoji) => onToggleReaction(id, emoji, mineOf(emoji)),
+      onPick: (emoji) => {
+        if (!mineOf(emoji)) onToggleReaction(id, emoji, false);
+      },
+      ...(onOpenReactions !== undefined ? { onWho: () => onOpenReactions(messageForChips) } : {}),
+      ...(reactorLoad !== null
+        ? {
+            who: {
+              targetId: id,
+              viewerId: viewerUserId ?? null,
+              load: async () => {
+                const result = await reactorLoad(id);
+                return result.ok
+                  ? {
+                      ok: true as const,
+                      data: { ...result.data, former: new Set(result.data.former ?? []) },
+                    }
+                  : result;
+              },
+            },
+          }
+        : {}),
+    };
+  }, [onToggleReaction, onOpenReactions, reactorLoad, viewerUserId, messageForChips]);
   return (
     <MessageBubble
       searchWords={searchWords}
@@ -1708,11 +1752,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       threadMember={props.threadMember}
       threadPlace={props.threadPlace}
       rail={props.rail}
-      onBadgeClick={() => {
-        const onOpenReactions = props.onOpenReactions;
-        if (onOpenReactions !== undefined) onOpenReactions(props.message);
-        else props.onOpen(props.message, bubbleRect(), bubbleRef.current);
-      }}
+      reactionChips={reactionChips}
     />
   );
 });
@@ -2836,6 +2876,7 @@ function ThreadBody(
   const onDiscardRow = useOptionalCallback(props.onDiscard);
   const onCancelUploadRow = useOptionalCallback(props.onCancelUpload);
   const onOpenReactionsRow = useOptionalCallback(props.onOpenReactions);
+  const onToggleReactionRow = useOptionalCallback(props.onToggleReaction);
   const onTalkAboutRow = useOptionalCallback(props.onTalkAbout);
   const onTalkAboutFocusRow = useOptionalCallback(props.onTalkAboutFocus);
   const onOpenMention = useOptionalCallback(props.mentions?.onOpen);
@@ -3241,6 +3282,9 @@ function ThreadBody(
                         : {})}
                       {...(onOpenReactionsRow !== undefined && props.selection === undefined
                         ? { onOpenReactions: onOpenReactionsRow }
+                        : {})}
+                      {...(onToggleReactionRow !== undefined && props.selection === undefined
+                        ? { onToggleReaction: onToggleReactionRow }
                         : {})}
                       selectingText={selectingTextId === row.message.id}
                     />
@@ -5749,45 +5793,50 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         />
       ) : null}
       <SearchWordsContext.Provider value={headerWords}>
-        <ThreadBody
-          {...bodyActions}
-          jumpRequest={mainJump}
-          {...(props.onEnsureLoaded !== undefined ? { onEnsureLoaded: props.onEnsureLoaded } : {})}
-          messages={shownMessages}
-          repliesFor={repliesFor}
-          chipFor={chipFor}
-          onTalkAbout={talkAbout}
-          onTalkAboutFocus={() => focusComposerInput(composerInputRef.current)}
-          threads={mainThreads}
-          loading={bodyLoading}
-          {...(channelId !== undefined ? { olderKey: channelOlderKey(channelId) } : {})}
-          {...(props.loadFailed !== undefined ? { loadFailed: props.loadFailed } : {})}
-          {...(props.onRetryLoad !== undefined ? { onRetryLoad: props.onRetryLoad } : {})}
-          onReply={handleReply}
-          // An older page held for its task lines is still loading: the page
-          // anchor holds until its rows and lines paint together.
-          {...(props.loadingOlder !== undefined || olderPageHeld
-            ? { loadingOlder: props.loadingOlder === true || olderPageHeld }
-            : {})}
-          {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
-          {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
-          {...(props.onNewestVisible !== undefined && !markedHere
-            ? { onNewestVisible: props.onNewestVisible }
-            : {})}
-          {...(props.onToggleReaction !== undefined
-            ? { onToggleReaction: props.onToggleReaction }
-            : {})}
-          reading={{
-            unread,
-            seen,
-            readBy: readBy !== null ? { messageId: readBy.message.id, label: readBy.label } : null,
-          }}
-          onJumpFirstUnread={jumpFirstUnread}
-          onOpenReadInfo={() => setReadInfoOpen(true)}
-          {...(taskChannel !== null
-            ? { taskLines: { events: windowEvents, ctx: taskLineCtx } }
-            : {})}
-        />
+        <ReactorLoadContext.Provider value={reactorLoad}>
+          <ThreadBody
+            {...bodyActions}
+            jumpRequest={mainJump}
+            {...(props.onEnsureLoaded !== undefined
+              ? { onEnsureLoaded: props.onEnsureLoaded }
+              : {})}
+            messages={shownMessages}
+            repliesFor={repliesFor}
+            chipFor={chipFor}
+            onTalkAbout={talkAbout}
+            onTalkAboutFocus={() => focusComposerInput(composerInputRef.current)}
+            threads={mainThreads}
+            loading={bodyLoading}
+            {...(channelId !== undefined ? { olderKey: channelOlderKey(channelId) } : {})}
+            {...(props.loadFailed !== undefined ? { loadFailed: props.loadFailed } : {})}
+            {...(props.onRetryLoad !== undefined ? { onRetryLoad: props.onRetryLoad } : {})}
+            onReply={handleReply}
+            // An older page held for its task lines is still loading: the page
+            // anchor holds until its rows and lines paint together.
+            {...(props.loadingOlder !== undefined || olderPageHeld
+              ? { loadingOlder: props.loadingOlder === true || olderPageHeld }
+              : {})}
+            {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
+            {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
+            {...(props.onNewestVisible !== undefined && !markedHere
+              ? { onNewestVisible: props.onNewestVisible }
+              : {})}
+            {...(props.onToggleReaction !== undefined
+              ? { onToggleReaction: props.onToggleReaction }
+              : {})}
+            reading={{
+              unread,
+              seen,
+              readBy:
+                readBy !== null ? { messageId: readBy.message.id, label: readBy.label } : null,
+            }}
+            onJumpFirstUnread={jumpFirstUnread}
+            onOpenReadInfo={() => setReadInfoOpen(true)}
+            {...(taskChannel !== null
+              ? { taskLines: { events: windowEvents, ctx: taskLineCtx } }
+              : {})}
+          />
+        </ReactorLoadContext.Provider>
       </SearchWordsContext.Provider>
       <WhoReactedSheet
         messageId={reactionsFor}
@@ -5987,23 +6036,27 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           selecting={selecting}
           onClosed={closeThread}
         >
-          <ThreadBody
-            {...bodyActions}
-            {...(viewToggleReaction !== undefined ? { onToggleReaction: viewToggleReaction } : {})}
-            jumpRequest={viewJump !== null && viewJump.id !== view.rootId ? viewJump : null}
-            messages={viewMessages}
-            chipFor={chipFor}
-            threads={viewThreads}
-            loading={false}
-            onReply={viewHandleReply}
-            reading={{ unread: viewUnread, seen: null, readBy: null }}
-            hideQuotes
-            loadingOlder={threadView.loadingOlder}
-            hasMore={view.hasMore}
-            onLoadOlder={threadView.loadOlder}
-            olderKey={threadOlderKey(view.rootId)}
-            loadOlderRow
-          />
+          <ReactorLoadContext.Provider value={reactorLoad}>
+            <ThreadBody
+              {...bodyActions}
+              {...(viewToggleReaction !== undefined
+                ? { onToggleReaction: viewToggleReaction }
+                : {})}
+              jumpRequest={viewJump !== null && viewJump.id !== view.rootId ? viewJump : null}
+              messages={viewMessages}
+              chipFor={chipFor}
+              threads={viewThreads}
+              loading={false}
+              onReply={viewHandleReply}
+              reading={{ unread: viewUnread, seen: null, readBy: null }}
+              hideQuotes
+              loadingOlder={threadView.loadingOlder}
+              hasMore={view.hasMore}
+              onLoadOlder={threadView.loadOlder}
+              olderKey={threadOlderKey(view.rootId)}
+              loadOlderRow
+            />
+          </ReactorLoadContext.Provider>
           {selectionBar ?? (
             <Composer
               key={`thread:${view.rootId}`}

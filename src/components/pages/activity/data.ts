@@ -1009,18 +1009,25 @@ export function entryLine(
   side: ViewerSide = 'unknown',
 ): { actor: string; text: string } {
   const actor = item.actorName !== null && item.actorName !== '' ? item.actorName : UNKNOWN_ACTOR;
+  return { actor, text: lineWithoutName(entryActionLine(item, side), actor) || 'Updated this' };
+}
+
+/**
+ * One entry's whole who-did-what line: an alert in the bell's words
+ * (side-aware), every other row its Activity line; a plan item row names its
+ * item in place of "a plan item". Never throws. Pure.
+ */
+export function entryActionLine(item: ActivityItem, side: ViewerSide = 'unknown'): string {
   let line: string;
   try {
-    // An alert reads in the bell's words (side-aware); every other row its Activity line.
     line = item.alert != null ? alertTitle(item, item.alert, side) : activityLine(item);
   } catch {
     line = 'Updated this';
   }
-  // A plan item row names its item (as the card title does) in place of "a plan item".
   if (item.entityType === PLAN_ITEM_ENTITY && item.title !== null && item.title !== '') {
     line = line.replace('a plan item', item.title);
   }
-  return { actor, text: lineWithoutName(line, actor) || 'Updated this' };
+  return line;
 }
 
 /**
@@ -1318,31 +1325,6 @@ export function entityHref(
   return null;
 }
 
-/** Whether a row's link lands on a comment (?comment= / &comment=). Pure. */
-export function hasCommentTarget(item: ActivityItem): boolean {
-  return /[?&]comment=/.test(entityHref(item) ?? '');
-}
-
-/**
- * The entry a grouped card's head opens: the newest entry that links to a
- * comment (so a stage change on top never swallows the comment under it), else
- * the lead entry as before. Sub-row taps open their own entry. Pure.
- */
-export function groupOpenEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
-  let target: ActivityItem | undefined;
-  let targetMs = Number.NEGATIVE_INFINITY;
-  for (const entry of group) {
-    if (!hasCommentTarget(entry)) continue;
-    const ms = Date.parse(entry.createdAt);
-    const at = Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms;
-    if (target === undefined || at > targetMs) {
-      target = entry;
-      targetMs = at;
-    }
-  }
-  return target ?? group[0];
-}
-
 /** A row is snoozed when its snoozed_until is in the future. */
 export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
   if (item.snoozedUntil === null) return false;
@@ -1385,11 +1367,6 @@ export const REFRESH_FAILED = errorText('refresh', null);
 
 /** The loading line under the chips. */
 export const LOADING_NOTIFICATIONS = 'Loading activity';
-
-/** A bucket header's count: "1 update" / "N updates". Pure. */
-export function updatesLabel(n: number): string {
-  return `${n} ${n === 1 ? 'update' : 'updates'}`;
-}
 
 /** The one positive line each chip's empty state shows (All keeps its own). */
 export const EMPTY_LINES = {
@@ -1471,10 +1448,13 @@ export function unreadCount(items: readonly ActivityItem[], nowMs: number): numb
   );
 }
 
+/** A section of the list: Today, Yesterday or Earlier (the workspace's calendar). */
+export type ActivitySectionKey = 'today' | 'yesterday' | 'earlier';
+
 interface DigestBucket {
-  key: 'today' | 'yesterday' | 'earlier';
+  key: ActivitySectionKey;
   label: string;
-  /** Threaded groups: a 1-entry group renders solo, a multi-entry group threads. */
+  /** One group per item (its entries, every day), newest entry first; one row each. */
   groups: ActivityItem[][];
 }
 
@@ -1532,37 +1512,45 @@ export function entityKey(item: ActivityItem): string {
 const newestFirst = (a: ActivityItem, b: ActivityItem): number =>
   Date.parse(b.createdAt) - Date.parse(a.createdAt);
 
+/** An entry's instant; an unreadable one sorts last. */
+function entryMs(item: ActivityItem): number {
+  const ms = Date.parse(item.createdAt);
+  return Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms;
+}
+
 /**
- * Thread one bucket's entries into per-entity groups, ordering both the entries
- * within each group and the groups themselves by `direction` (groups keyed on the
- * lead entry's timestamp). 'newest' leads with the newest entry/group.
+ * Group the list into one group per item (entityKey), entries newest first
+ * ('oldest' reverses), across every day: an item is never split by midnight.
  */
-function threadGroups(bucket: ActivityItem[], direction: ActivityDirection): ActivityItem[][] {
+function itemGroups(
+  items: readonly ActivityItem[],
+  direction: ActivityDirection,
+): ActivityItem[][] {
   const byKey = new Map<string, ActivityItem[]>();
-  for (const item of bucket) {
+  for (const item of items) {
     const key = entityKey(item);
     const existing = byKey.get(key);
     if (existing) existing.push(item);
     else byKey.set(key, [item]);
   }
-  const groups = [...byKey.values()].map((entries) => {
+  return [...byKey.values()].map((entries) => {
     const sorted = [...entries].sort(newestFirst);
     return direction === 'oldest' ? sorted.reverse() : sorted;
   });
-  const leadMs = (group: ActivityItem[]): number => {
-    const lead = group[0];
-    return lead !== undefined ? Date.parse(lead.createdAt) : 0;
-  };
-  groups.sort((a, b) => leadMs(b) - leadMs(a));
-  return direction === 'oldest' ? groups.reverse() : groups;
+}
+
+/** The newest instant a group holds (whatever its entry order). */
+function groupNewestMs(group: readonly ActivityItem[]): number {
+  return group.reduce((max, entry) => Math.max(max, entryMs(entry)), Number.NEGATIVE_INFINITY);
 }
 
 /**
- * Bucket items into Today / Yesterday / Earlier by the calendar day in the
- * workspace timezone (clock.tz) as of clock.nowMs, then thread each bucket into
- * per-entity groups. Buckets, groups and entries all follow `direction`.
- * 'newest' = Today -> Yesterday -> Earlier, newest first; 'oldest' reverses.
- * Empty dropped. Pure: it never reads the device clock.
+ * The list's sections (Activity twins Plan's list): one group per item, each
+ * placed ONCE in Today / Yesterday / Earlier by the calendar day (workspace
+ * timezone, clock.tz, as of clock.nowMs) of its NEWEST entry, its older
+ * entries riding along whatever their day. 'newest' = Today -> Yesterday ->
+ * Earlier with the newest item first; 'oldest' reverses sections, items and
+ * entries. Empty sections dropped. Pure: it never reads the device clock.
  */
 export function groupDigest(
   items: readonly ActivityItem[],
@@ -1572,21 +1560,25 @@ export function groupDigest(
   const todayKey = zonedDayKey(clock.nowMs, clock.tz);
   const yesterdayKey = previousDayKey(todayKey);
 
-  const today: ActivityItem[] = [];
-  const yesterday: ActivityItem[] = [];
-  const earlier: ActivityItem[] = [];
-  for (const item of items) {
-    const t = Date.parse(item.createdAt);
-    const key = Number.isNaN(t) ? null : zonedDayKey(t, clock.tz);
-    if (key !== null && key >= todayKey) today.push(item);
-    else if (key === yesterdayKey) yesterday.push(item);
-    else earlier.push(item);
+  const sections: Record<ActivitySectionKey, ActivityItem[][]> = {
+    today: [],
+    yesterday: [],
+    earlier: [],
+  };
+  const groups = itemGroups(items, direction).sort((a, b) => groupNewestMs(b) - groupNewestMs(a));
+  if (direction === 'oldest') groups.reverse();
+  for (const group of groups) {
+    const t = groupNewestMs(group);
+    const key = Number.isFinite(t) ? zonedDayKey(t, clock.tz) : null;
+    if (key !== null && key >= todayKey) sections.today.push(group);
+    else if (key === yesterdayKey) sections.yesterday.push(group);
+    else sections.earlier.push(group);
   }
 
   const buckets: DigestBucket[] = [
-    { key: 'today', label: 'Today', groups: threadGroups(today, direction) },
-    { key: 'yesterday', label: 'Yesterday', groups: threadGroups(yesterday, direction) },
-    { key: 'earlier', label: 'Earlier', groups: threadGroups(earlier, direction) },
+    { key: 'today', label: 'Today', groups: sections.today },
+    { key: 'yesterday', label: 'Yesterday', groups: sections.yesterday },
+    { key: 'earlier', label: 'Earlier', groups: sections.earlier },
   ];
   const ordered = direction === 'oldest' ? buckets.reverse() : buckets;
   return ordered.filter((bucket) => bucket.groups.length > 0);

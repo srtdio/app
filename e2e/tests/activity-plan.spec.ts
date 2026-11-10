@@ -49,12 +49,9 @@ function viewAsClient(network: HarnessNetwork): void {
 
 const planPage = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]`);
 
-/**
- * The Activity item card that names `title` (9 Nov 2026: the head names the
- * item, each notification is its own line under it).
- */
+/** The Activity row that names `title` (one row per item, its newest entry as line 2). */
 function card(page: Page, title: string) {
-  return page.locator('[data-activity-card-cell]').filter({ hasText: title }).first();
+  return page.locator('[data-activity-id]').filter({ hasText: title }).first();
 }
 
 test('agency: a plan_comment row is a Notifications card (All); a tap opens the item at the comment', async ({
@@ -71,7 +68,7 @@ test('agency: a plan_comment row is a Notifications card (All); a tap opens the 
   await page.goto('/notifications');
   const row = card(page, PLAN_CONCEPT_TITLE);
   await expect(row).toBeVisible({ timeout: 15_000 });
-  // The line reads the actor, then the comment text (locked 9 Nov 2026).
+  // Line 2 reads the newest entry: the actor, then the comment text.
   await expect(row).toContainText(PEER_NAME);
   await expect(row).toContainText(ACTIVITY_PLAN_COMMENT_BODY);
   await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(1);
@@ -121,7 +118,7 @@ test('client: a plan_review row is a Notifications card; a tap opens the post it
 
   await page.goto('/notifications');
   const row = card(page, POST_TITLE);
-  await expect(row).toContainText(new RegExp(`Maya Chen\\s*Approved ${POST_TITLE}`), {
+  await expect(row).toContainText(new RegExp(`Maya Chen\\s*Approved ${POST_TITLE}`, 'i'), {
     timeout: 15_000,
   });
 

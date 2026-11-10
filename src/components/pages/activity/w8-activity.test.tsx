@@ -72,7 +72,6 @@ function renderCard(group: ActivityItem[]): string {
       cache={cache}
       presignEnabled={false}
       onOpenGroup={() => {}}
-      onOpenEntry={() => {}}
       selfName={null}
     />,
   );

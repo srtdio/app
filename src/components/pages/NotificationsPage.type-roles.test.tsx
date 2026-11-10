@@ -75,11 +75,12 @@ import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell
 
 /** Stands in for Topbar: renders what the page published into its two slots. */
 function TopbarProbe() {
-  const { sort, primary } = useTopbarActionsValue();
+  const { sort, primary, pair } = useTopbarActionsValue();
   return (
     <div data-test-topbar="">
       <span data-test-topbar-sort="">{sort}</span>
       <span data-test-topbar-primary="">{primary}</span>
+      <span data-test-topbar-pair="">{pair}</span>
     </div>
   );
 }
@@ -200,38 +201,42 @@ describe('Notifications type roles', () => {
     expect(title?.className).not.toMatch(/leading-\[/);
   });
 
-  it('the card time and bucket count are sm fg-3 meta', async () => {
+  it('the card time is sm fg-3 meta; a section heading carries no count', async () => {
     await mount();
     const time = document.querySelector('[data-activity-time]');
     expect(time).not.toBeNull();
     expectRole(time as HTMLElement, ['text-sm', 'text-fg-3']);
-    const count = document.querySelector('[data-bucket-count]');
-    expect(count?.textContent).toBe('1 update');
-    expectRole(count as HTMLElement, ['text-sm', 'text-fg-3']);
+    expect(document.querySelector('[data-bucket-count]')).toBeNull();
+    const heading = document.querySelector('[data-activity-section] > h2');
+    expect(heading?.textContent).toMatch(/^(Today|Yesterday|Earlier)$/);
   });
 });
 
 describe('Activity header, order and the Unread zero state', () => {
-  it('no search field and no sort (decided 7 Nov): Mark all read lives in the top bar', async () => {
+  it('no search field and no sort (decided 7 Nov): Threads | Catch up live in the top bar', async () => {
     await mount();
     expect(document.querySelector('input[aria-label="Search activity"]')).toBeNull();
     expect(document.querySelector('[data-search-group]')).toBeNull();
     const bar = document.querySelector('[data-test-topbar]');
     expect(document.querySelector('[aria-label="Sort activity"]')).toBeNull();
     expect(document.querySelector('[data-test-topbar-sort]')?.childElementCount).toBe(0);
-    const markAll = document.querySelectorAll('[data-activity-mark-all]');
-    expect(markAll).toHaveLength(1);
-    expect(bar?.contains(markAll[0] as Element)).toBe(true);
-    expect(markAll[0]?.getAttribute('aria-label')).toBe('Mark all read');
+    const threads = document.querySelector('[data-test-topbar-pair] [data-topbar-threads]');
+    const catchUp = document.querySelector('[data-topbar-catch-up]');
+    expect(threads).not.toBeNull();
+    expect(bar?.contains(catchUp)).toBe(true);
+    expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
   });
 
-  it('Mark all read leaves the top bar empty when nothing is unread', async () => {
+  it('nothing unread: Catch up stays (outlined), no double tick', async () => {
     h.fetchActivityEntries.mockReset().mockResolvedValue({
       ok: true,
       data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
     });
     await mount();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
+    expect(document.querySelector('[data-topbar-catch-up]')?.getAttribute('aria-label')).toBe(
+      'Catch up',
+    );
   });
 
   it('reads newest first even when an old Oldest first is stored on the device', async () => {

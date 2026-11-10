@@ -12,6 +12,9 @@ export const CATCH_UP_PARAM = 'catchup';
 /** The value that opens catch up from the newest unread (the Catch up bar). */
 export const CATCH_UP_NEWEST = 'newest';
 
+/** The value that opens the Threads button's queue (unread threads only) on the same screen. */
+export const CATCH_UP_THREADS = 'threads';
+
 /** Activity's path. */
 export const ACTIVITY_PATH = '/activity';
 

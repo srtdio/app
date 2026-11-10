@@ -331,7 +331,6 @@ const FIELD_ALLOWLIST = [
   'comments/SlotComposer.tsx',
   'pages/create/AttachmentsField.tsx',
   'pages/assets/AssetUploadSheet.tsx',
-  'chat/EmojiPicker.tsx',
   'chat/PaintLog.tsx',
   'chat/PlanItemScreen.tsx',
 ];

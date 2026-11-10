@@ -78,6 +78,41 @@ export function loadThreadsForMe(
   });
 }
 
+type ThreadForMeAllRow = Functions['chat_threads_for_me_all']['Returns'][number];
+
+/** One thread I am in, anywhere in the workspace (chat_threads_for_me_all): its chat too. */
+export interface ThreadForMeAll extends ThreadForMe {
+  channelId: string;
+}
+
+/**
+ * Every thread I am in across the workspace's chats (Activity's Threads
+ * button): one call, unread first, newest reply first, max 50, pre-launch
+ * threads read (readBeforeLaunch). Started after the first paint, never
+ * awaited before it. 5s timeout.
+ */
+export function loadThreadsForMeAll(
+  client: Client,
+  workspaceId: string,
+  traceId: string,
+): Promise<Result<ThreadForMeAll[]>> {
+  return withReadTimeout(async (signal) => {
+    const args: Functions['chat_threads_for_me_all']['Args'] = {
+      p_workspace_id: workspaceId,
+      p_trace_id: traceId,
+    };
+    const { data, error } = await abortable(client.rpc('chat_threads_for_me_all', args), signal);
+    if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
+    return {
+      ok: true,
+      data: ((data ?? []) as ThreadForMeAllRow[]).map((row) => ({
+        ...readBeforeLaunch(toThreadForMe(row)),
+        channelId: row.channel_id,
+      })),
+    };
+  });
+}
+
 /** A void proc outcome; the message is the raw error for logging. */
 export type ThreadWriteResult = { ok: true } | { ok: false; message: string };
 

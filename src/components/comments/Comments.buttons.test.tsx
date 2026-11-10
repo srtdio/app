@@ -57,7 +57,8 @@ describe('Comments row actions', () => {
 
   it('every bar control is a 44 IconButton (no raw buttons, no hover reveal)', () => {
     expect(BAR).not.toMatch(/<button\b/);
-    expect(BAR.match(/<IconButton\b/g)?.length).toBe(5);
+    // Add reaction, Reply, Resolve, To-do, Edit, Delete.
+    expect(BAR.match(/<IconButton\b/g)?.length).toBe(6);
     expect(BAR).not.toMatch(/group-hover|hover:opacity|opacity-0/);
   });
 

@@ -6,6 +6,8 @@ import {
   type HarnessNetwork,
 } from '../fixtures/harness-routes';
 import {
+  assertActivityTopbarPair,
+  assertActivityTopbarNarrow,
   assertCommentBars,
   assertCommentTray,
   assertThreadHeader,
@@ -18,10 +20,15 @@ import {
   assertWritingBox,
   assertAlignment,
   assertCatchUpLayout,
+  assertReactionChips,
+  assertNoReactionsHere,
   checkCatchUpComposer,
   checkLayout,
   type AlignScope,
   readTopbarSlots,
+  assertActivityTwinsPlan,
+  readActivityBoxes,
+  readListTwin,
 } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
@@ -840,6 +847,73 @@ function seedEightComments(network: HarnessNetwork): void {
   if (third !== undefined) third.body = MID_COMMENT;
 }
 
+/** A long post title for the "3 new" row: the name truncates, the chip never does. */
+const LONG_ACTIVITY_TITLE =
+  'Autumn knitwear carousel for the weekend sale with the warmer hero photo and new price line';
+
+/**
+ * Activity's three sections (10 Nov 2026), and nothing else in the feed:
+ * Weekend sale with `saleCount` unread comments today ("8 new" by default), a
+ * long-titled post with 3 unread comments yesterday ("3 new"), and a read
+ * post three days back (Earlier, no chip). A phone's first page holds 10
+ * (Calm) to 11 (Cozy) entries, so the rows screens take 5 on Weekend sale and
+ * every section lands on page one in every density.
+ */
+function seedActivitySections(network: HarnessNetwork, saleCount = 8): void {
+  seedEightComments(network);
+  const t = network.world.tables;
+  const entries = (t.inbox_entries ?? []).slice(-saleCount);
+  const sale = entries[entries.length - 1];
+  const postOf = (id: unknown): Row | undefined => (t.posts ?? []).find((p) => p.id === id);
+  const salePost = postOf(sale?.entity_id);
+  if (sale === undefined || salePost === undefined) throw new Error('no Weekend sale entry');
+  const day = 86_400_000;
+  const clone = (n: number, title: string, at: number, count: number, read: boolean): void => {
+    const postId = `0190d8f0-0000-7000-8000-0000000000${n}0`;
+    (t.posts ??= []).push({ ...salePost, id: postId, number: 90 + n, title });
+    for (let k = 0; k < count; k += 1) {
+      const commentId = `0190d8f0-0000-7000-8000-0000000000${n}${k + 1}`;
+      const createdAt = new Date(at - k * 60_000).toISOString();
+      (t.comments ??= []).push({
+        ...((t.comments ?? []).find((c) => c.entity_id === salePost.id) ?? {}),
+        id: commentId,
+        entity_id: postId,
+        body: `Round ${k + 1}: tighten the caption and swap the hero.`,
+        created_at: createdAt,
+      });
+      entries.push({
+        ...sale,
+        id: `0190d8f1-0000-7000-8000-0000000000${n}${k + 1}`,
+        entity_id: postId,
+        payload: { comment_id: commentId },
+        created_at: createdAt,
+        read_at: read ? new Date(NOW - day).toISOString() : null,
+      });
+    }
+  };
+  clone(1, LONG_ACTIVITY_TITLE, NOW - day, 3, false);
+  clone(2, 'Spring lookbook', NOW - 3 * day, 1, true);
+  t.inbox_entries = entries;
+}
+
+/** The rows screens' feed: every section on page one in every density. */
+const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 5);
+
+/**
+ * Activity's sections painted (below the fold on a phone): Today and
+ * Yesterday with their rows, Earlier too when `earlier` (the 8-new feed holds
+ * 12 entries, past a phone's first page).
+ */
+async function activitySectionsReady(page: Page, earlier = true): Promise<void> {
+  await waitFor([page.locator('[data-activity-new-chip]').first()], 'N new');
+  for (const key of earlier ? ['today', 'yesterday', 'earlier'] : ['today', 'yesterday']) {
+    await expect(
+      page.locator(`[data-activity-section="${key}"] [data-list-card]`).first(),
+      `${key} section`,
+    ).toBeAttached();
+  }
+}
+
 /**
  * Catch up open on one card with its body painted: the read rows
  * ([data-catch-up-rows]), never the Bone rows that hold the footprint while
@@ -1628,10 +1702,10 @@ const SCREENS: Screen[] = [
     url: '/activity',
     steps: async (page) => {
       await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
-      // Unread rows on All: Mark all read fills the top bar's primary slot.
+      // Unread rows on All: Catch up (filled, with its count) beside Threads.
       await waitFor(
-        [page.locator('[data-topbar-slot="primary"] [data-activity-mark-all]')],
-        'Mark all read',
+        [page.locator('header [data-topbar-pair] [data-topbar-catch-up]:not([data-count="0"])')],
+        'Catch up',
       );
     },
   },
@@ -1645,51 +1719,16 @@ const SCREENS: Screen[] = [
       waitFor([page.locator('[data-activity-event="bank_idea_planned"]')], 'bank activity'),
   },
   {
-    // Activity's Catch up bar under the chips: "<N> unread" and Catch up.
-    name: 'activity-catch-up-bar',
+    // Activity twins Plan (10 Nov 2026): Today / Yesterday / Earlier, one
+    // ui/ListCard row per item; "8 new" on Weekend sale, a long title with
+    // "3 new" (the name truncates, the chip never does), a read item Earlier.
+    name: 'activity-sections',
     seed: creator,
-    extra: seedCatchUp,
-    url: '/activity',
-    steps: async (page) => waitFor([page.locator('[data-activity-catch-up-bar]')], 'catch up bar'),
-  },
-  {
-    // 9 Nov 2026: one card per item, one line per notification. A post with 8
-    // unread comments: the head ("8 new"), 5 lines and "+3 more".
-    name: 'activity-grouped-folded',
-    seed: creator,
-    extra: (network) => seedEightComments(network),
+    extra: seedActivitySections,
     url: '/activity',
     steps: async (page) => {
-      await waitFor([page.locator('[data-activity-lines] [data-activity-line]')], 'lines');
-      await waitFor([page.locator('[data-activity-more][aria-expanded="false"]')], '+3 more');
-    },
-  },
-  {
-    // The same card unfolded: all 8 lines and "Show less".
-    name: 'activity-grouped-unfolded',
-    seed: creator,
-    extra: (network) => seedEightComments(network),
-    url: '/activity',
-    steps: async (page) => {
-      await tap([page.locator('[data-activity-more]')], '+3 more');
-      await waitFor([page.locator('[data-activity-more][aria-expanded="true"]')], 'Show less');
-      await waitFor([page.locator('[data-activity-lines-rest] [data-activity-line]')], 'rest');
-    },
-  },
-  {
-    // 9 Nov 2026: a long comment's line unfolded in place ("… more" tapped,
-    // " less" shows; nothing navigates).
-    name: 'activity-line-more-open',
-    seed: creator,
-    extra: (network) => seedEightComments(network),
-    url: '/activity',
-    steps: async (page) => {
-      await waitFor([page.locator('[data-activity-line-more="more"]').first()], '… more');
-      // "… more" unfolds in place: the URL (the Activity route) never changes.
-      const before = page.url();
-      await tap([page.locator('[data-activity-line-more="more"]').first()], '… more');
-      await waitFor([page.locator('[data-activity-line-more="less"]')], 'less');
-      expect(page.url()).toBe(before);
+      await waitFor([page.locator('[data-activity-new-chip]', { hasText: '8 new' })], '8 new');
+      await activitySectionsReady(page, isLaptop(page));
     },
   },
   {
@@ -3001,34 +3040,31 @@ for (const density of ['compact', 'calm'] as const) {
   });
 }
 
-// Activity's grouped card in each density (9 Nov 2026; check 14 measures the
-// density's exact gaps): the Cozy screens boot in Cozy explicitly, Compact and
-// Calm are their twins.
-const ACTIVITY_DENSITY_SCREENS = [
-  'activity-grouped-folded',
-  'activity-grouped-unfolded',
-  'activity-line-more-open',
-] as const;
-for (const base of ACTIVITY_DENSITY_SCREENS) {
-  const screen = SCREENS.find((s) => s.name === base);
-  if (screen === undefined) throw new Error(`no ${base} screen`);
-  const steps = screen.steps;
-  screen.prepare = withDensity('cozy');
-  screen.steps = async (page) => {
-    await steps(page);
-    await expectDensity(page, 'cozy');
+// Activity's rows in each density (10 Nov 2026, Activity twins Plan): the
+// Cozy screen boots in Cozy explicitly, Compact and Calm are its twins.
+const activityRowsSteps =
+  (density: VisualDensity) =>
+  async (page: Page): Promise<void> => {
+    await activitySectionsReady(page);
+    await expectDensity(page, density);
   };
-  for (const density of ['compact', 'calm'] as const) {
-    SCREENS.push({
-      ...screen,
-      name: `${base}-${density}`,
-      prepare: withDensity(density),
-      steps: async (page) => {
-        await steps(page);
-        await expectDensity(page, density);
-      },
-    });
-  }
+SCREENS.push({
+  name: 'activity-rows',
+  seed: creator,
+  extra: seedActivityRows,
+  prepare: withDensity('cozy'),
+  url: '/activity',
+  steps: activityRowsSteps('cozy'),
+});
+for (const density of ['compact', 'calm'] as const) {
+  SCREENS.push({
+    name: `activity-rows-${density}`,
+    seed: creator,
+    extra: seedActivityRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: activityRowsSteps(density),
+  });
 }
 
 // The New chat sheet with New group blocked by the groups-per-workspace rule
@@ -5606,16 +5642,20 @@ SCREENS.push(
     },
   },
   {
-    // Nothing unread: no Mark all read, the primary slot empty at its 44 width.
+    // Nothing unread (10 Nov): Threads and Catch up both outlined, one size.
     name: 'activity-all-read',
     seed: creator,
-    extra: seedActivityAllRead,
+    extra: (network) => {
+      seedActivityAllRead(network);
+      seedThreadsRead(network);
+    },
     url: '/activity',
     steps: async (page) => {
       await activityReady(page);
-      await waitFor([topbarSlot(page, 'primary')], 'primary slot');
+      await activityPairAt(page, { threads: 0, catchUp: 0 });
       await expect(page.locator('[data-activity-mark-all]')).toHaveCount(0);
     },
+    after: async (page) => assertActivityTopbarPair(page, 'activity-all-read'),
   },
   {
     // Forward's search: the palette in pick mode over the picker ("Chats
@@ -6210,6 +6250,297 @@ const WRITING_BOX_SCREENS = new Set([
   'catch-up-tray-chat',
 ]);
 
+// Emoji reactions (9 Nov 2026): chips under the text everywhere text lives
+// (comments, plan comments, chat main, thread root and replies, catch-up
+// cards and their thread view); check 16 (assertReactionChips) measures each.
+
+/** One reaction row per [user, emoji] on a target, a minute apart. */
+function reactionRows(
+  key: 'comment_id' | 'message_id',
+  id: string,
+  list: ReadonlyArray<readonly [string, string]>,
+  extra: Row = {},
+): Row[] {
+  return list.map(([userId, emoji], i) => ({
+    [key]: id,
+    user_id: userId,
+    emoji,
+    workspace_id: WORKSPACE_ID,
+    created_at: new Date(NOW - 3_000_000 + i * 60_000).toISOString(),
+    ...extra,
+  }));
+}
+
+/** A channel's newest "4 replies" thread root, and its first reply. */
+function threadOf(network: HarnessNetwork, channel: string): { root: string; reply: string } {
+  const rows = (network.world.tables.chat_messages ?? []).filter((m) => m.channel_id === channel);
+  const counts = new Map<string, number>();
+  for (const m of rows) {
+    const root = m.thread_root_message_id;
+    if (typeof root === 'string') counts.set(root, (counts.get(root) ?? 0) + 1);
+  }
+  // The newest "4 replies" thread (the first such replies row on screen).
+  const at = (id: string): string => String(rows.find((m) => m.id === id)?.created_at ?? '');
+  const four = [...counts].filter(([, n]) => n === 4).map(([id]) => id);
+  const root = four.sort((a, b) => at(b).localeCompare(at(a)))[0] ?? '';
+  const replies = rows
+    .filter((m) => m.thread_root_message_id === root)
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  return { root, reply: String(replies[0]?.id ?? '') };
+}
+
+/** The DM's newest top-level text message from Priya (on screen when the DM opens). */
+let reactedDmId = '';
+function seedDmReactions(network: HarnessNetwork): void {
+  const dm = (network.world.tables.chat_messages ?? [])
+    .filter(
+      (m) =>
+        m.channel_id === DM_CHANNEL &&
+        m.sender_user_id === PEER &&
+        m.thread_root_message_id == null &&
+        typeof m.body === 'string' &&
+        m.body !== '',
+    )
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  reactedDmId = String(dm[dm.length - 1]?.id ?? '');
+  (network.world.tables.chat_reactions ??= []).push(
+    ...reactionRows(
+      'message_id',
+      reactedDmId,
+      [
+        [PEER, '👍'],
+        [ME, '👍'],
+        [PEER, '😂'],
+      ],
+      { channel_id: DM_CHANNEL },
+    ),
+  );
+}
+
+async function dmReactionsReady(page: Page): Promise<Locator> {
+  const message = await openDmOn(page, reactedDmId);
+  await waitFor([message.locator('[data-reaction-chips]')], 'chat chips');
+  await message.scrollIntoViewIfNeeded();
+  return message;
+}
+
+const checkReactions =
+  (name: string, minRows = 1) =>
+  async (page: Page): Promise<void> =>
+    assertReactionChips(page, name, { minRows });
+
+SCREENS.push(
+  {
+    // A post's comments with reactions: the chips under the text on the
+    // comment column, mine in the darker ink, the smiley pill last.
+    name: 'comment-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedOwnEditedComment(network);
+      seedPeerComment(network);
+      (network.world.tables.comment_reactions ??= []).push(
+        ...reactionRows('comment_id', PEER_COMMENT_ID, [
+          [ME, '👍'],
+          [COLLEAGUE_A, '👍'],
+          [PEER, '❤️'],
+        ]),
+        ...reactionRows('comment_id', ME_COMMENT_ID, [[PEER, '🙏']]),
+      );
+    },
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
+      await waitFor([comment.locator('[data-reaction-chips]')], 'comment chips');
+      await comment.scrollIntoViewIfNeeded();
+    },
+    after: checkReactions('comment-reactions', 2),
+  },
+  {
+    // No reactions: no chip row; the bar's smiley is its first key.
+    name: 'comment-no-reactions',
+    seed: creator,
+    extra: seedPeerComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
+      await waitFor([comment.locator('[data-bar-action="react"]')], 'bar smiley');
+      await comment.scrollIntoViewIfNeeded();
+      const first = comment.locator('[data-comment-bar] button').first();
+      await expect(first).toHaveAttribute('data-bar-action', 'react');
+    },
+    after: checkReactions('comment-no-reactions', 0),
+  },
+  {
+    // Plan comments draw with chat's parts: chips under the text.
+    name: 'plan-comment-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedChatPlanThread(network, true);
+      (network.world.tables.plan_item_comment_reactions ??= []).push(
+        ...reactionRows('comment_id', '0190d300-0000-7000-8000-00000000d401', [
+          [ME, '👍'],
+          [COLLEAGUE_A, '✅'],
+        ]),
+        ...reactionRows('comment_id', '0190d300-0000-7000-8000-00000000d403', [
+          [COLLEAGUE_A, '❤️'],
+        ]),
+      );
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openPlanItemThread(page);
+      await waitFor(
+        [page.locator('[data-plan-thread] [data-reaction-chips]').first()],
+        'plan comment chips',
+      );
+    },
+    after: checkReactions('plan-comment-reactions', 2),
+  },
+  {
+    // Chat: the badge is gone; chips under the message on its text column.
+    name: 'chat-reactions-chips',
+    seed: creator,
+    extra: seedDmReactions,
+    url: '/chat',
+    steps: async (page) => {
+      await dmReactionsReady(page);
+    },
+    after: checkReactions('chat-reactions-chips'),
+  },
+  {
+    // The thread view: root chips at x16 above the strip (12 to it), reply
+    // chips on the x60 column.
+    name: 'chat-thread-reactions',
+    seed: creator,
+    extra: (network) => {
+      const { root, reply } = threadOf(network, THREAD_DM);
+      (network.world.tables.chat_reactions ??= []).push(
+        ...reactionRows('message_id', root, [[ME, '👍']], { channel_id: THREAD_DM }),
+        ...reactionRows(
+          'message_id',
+          reply,
+          [
+            [ME, '✅'],
+            [PEER, '❤️'],
+          ],
+          { channel_id: THREAD_DM },
+        ),
+      );
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap(
+        [page.locator('[data-replies-row]', { hasText: '4 replies' }).first().locator('button')],
+        'replies row',
+      );
+      await waitFor([page.locator('[data-thread-view] [data-reaction-chips]').first()], 'chips');
+      await expect(page.locator('[data-thread-view] [data-reaction-chips]')).toHaveCount(2);
+    },
+    after: checkReactions('chat-thread-reactions', 2),
+  },
+  {
+    // A catch-up card: the comment's chips under its text; reacting never
+    // marks the card read.
+    name: 'catch-up-card-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedCatchUp(network);
+      (network.world.tables.comment_reactions ??= []).push(
+        ...reactionRows('comment_id', CATCH_UP_COMMENT_ID, [
+          [ME, '👍'],
+          [PEER, '👍'],
+          [COLLEAGUE_A, '🙏'],
+        ]),
+      );
+    },
+    url: `/activity?catchup=${CATCH_UP_COMMENT}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor(
+        [page.locator(`[data-catch-up-message="${CATCH_UP_COMMENT_ID}"] [data-reaction-chips]`)],
+        'catch-up chips',
+      );
+    },
+    after: checkReactions('catch-up-card-reactions'),
+  },
+  {
+    // Catch up's thread view: root chips at x16 over the strip, a reply's at x60.
+    name: 'catch-up-thread-reactions',
+    seed: creator,
+    extra: (network) => {
+      seedCatchUpGroupMain(network, NOW);
+      const { root, reply } = threadOf(network, THREAD_GROUP);
+      (network.world.tables.chat_reactions ??= []).push(
+        ...reactionRows('message_id', root, [[ME, '👍']], { channel_id: THREAD_GROUP }),
+        ...reactionRows('message_id', reply, [[COLLEAGUE_A, '✅']], {
+          channel_id: THREAD_GROUP,
+        }),
+      );
+    },
+    url: `/activity?catchup=${CU_GROUP_MAIN_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await tap([page.locator('[data-catch-up-replies]', { hasText: '4 replies' })], '4 replies');
+      await waitFor(
+        [page.locator('[data-catch-up-thread] [data-reaction-chips]').first()],
+        'thread chips',
+      );
+      await expect(page.locator('[data-catch-up-thread] [data-reaction-chips]')).toHaveCount(2);
+    },
+    after: checkReactions('catch-up-thread-reactions', 2),
+  },
+  {
+    // The one emoji drawer (ui/EmojiSheet) opened from a comment's smiley:
+    // titled "Add reaction"; the composer's keeps "Emoji".
+    name: 'emoji-sheet-add-reaction',
+    seed: creator,
+    extra: seedPeerComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
+      await comment.scrollIntoViewIfNeeded();
+      await tap([comment.locator('[data-bar-action="react"]')], 'Add reaction');
+      await waitFor([page.locator('[data-emoji-sheet]')], 'emoji sheet');
+      await expect(page.getByRole('dialog', { name: 'Add reaction' })).toBeVisible();
+    },
+  },
+  {
+    // Long-press a chip (phone): who reacted, chat's sheet.
+    name: 'who-reacted-sheet',
+    seed: creator,
+    only: 'phone',
+    extra: seedDmReactions,
+    url: '/chat',
+    steps: async (page) => {
+      const message = await dmReactionsReady(page);
+      await openMenuGesture(page, message.locator('[data-reaction-chip]').first());
+      await waitFor([page.locator('[data-who-reacted]')], 'who reacted');
+    },
+  },
+);
+
+// Check 16: Activity never shows reactions (no chip row, no badge, no smiley).
+test('reactions-activity-none', async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(page);
+  Object.assign(network.world, buildWorld(NOW));
+  seedAudit(network, creator, NOW);
+  seedCatchUp(network);
+  await installDeletedRoutes(page, network);
+  await page.goto('/activity');
+  await activityReady(page);
+  await assertNoReactionsHere(page, 'reactions-activity-none');
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -6337,15 +6668,6 @@ async function capture(screen: Screen, page: Page): Promise<void> {
 
 // Check 14 (alignment rules 1, 2, 3, 5): the screens and the family each measures.
 const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
-  'activity-grouped-folded': 'activity',
-  'activity-grouped-unfolded': 'activity',
-  'activity-line-more-open': 'activity',
-  'activity-grouped-folded-compact': 'activity',
-  'activity-grouped-unfolded-compact': 'activity',
-  'activity-line-more-open-compact': 'activity',
-  'activity-grouped-folded-calm': 'activity',
-  'activity-grouped-unfolded-calm': 'activity',
-  'activity-line-more-open-calm': 'activity',
   'chat-thread-screen': 'chat-thread',
   'chat-thread-view-divider': 'chat-thread',
   'chat-thread-replies': 'chat-thread',
@@ -6376,12 +6698,10 @@ const LIST_CARD_SCREENS = new Set([
   'chat-list-select',
   'notifications',
   'activity-bank',
-  'activity-grouped-folded',
-  'activity-grouped-unfolded',
-  'activity-grouped-folded-compact',
-  'activity-grouped-unfolded-compact',
-  'activity-grouped-folded-calm',
-  'activity-grouped-unfolded-calm',
+  'activity-sections',
+  'activity-rows',
+  'activity-rows-compact',
+  'activity-rows-calm',
   'plan-tab',
   'plan-tab-live',
   'plan-tab-ended',
@@ -6490,7 +6810,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'activity-chip-mentions',
   'plan-tab-chip-past',
   // Catch up and the thread view redo: phone and laptop, light and dark.
-  'activity-catch-up-bar',
   'catch-up-thread-mention',
   'catch-up-thread-started',
   'catch-up-comment',
@@ -6499,8 +6818,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'catch-up-typing',
   'catch-up-end',
   // Catch up rebuild (9 Nov 2026: one card per item): phone and laptop, light and dark.
-  'activity-grouped-folded',
-  'activity-grouped-unfolded',
   'catch-up-rest',
   'catch-up-carousel',
   'catch-up-lightbox',
@@ -6528,15 +6845,13 @@ const LAPTOP_DARK_SCREENS = new Set([
   'catch-up-not-sent',
   'catch-up-error',
   'chat-thread-view-divider',
-  // Alignment, one thread strip, Activity lines (9 Nov 2026): phone and laptop, light and dark.
-  'activity-line-more-open',
-  // Activity in each density (9 Nov 2026): phone and laptop, light and dark.
-  'activity-grouped-folded-compact',
-  'activity-grouped-unfolded-compact',
-  'activity-line-more-open-compact',
-  'activity-grouped-folded-calm',
-  'activity-grouped-unfolded-calm',
-  'activity-line-more-open-calm',
+  // Alignment and one thread strip (9 Nov 2026): phone and laptop, light and dark.
+  // Activity twins Plan in each density (10 Nov 2026): phone and laptop, light and dark.
+  'activity-sections',
+  'activity-rows',
+  'activity-rows-compact',
+  'activity-rows-calm',
+  'boxes-activity',
   'chat-thread-replies',
   'catch-up-thread-empty',
   'catch-up-thread-replies',
@@ -6576,8 +6891,133 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-box-format-row',
   'chat-bubble-blocks',
   'post-comment-box',
+  // Activity's Threads | Catch up (10 Nov 2026): phone and laptop, light and dark.
+  'activity-threads-new',
+  'activity-catch-up-menu',
+  'threads-stack-card',
 ]);
 
+// --- Activity's top bar: Threads | Catch up (10 Nov 2026) ------------------
+// Phone and laptop, light and dark. Check 15's top bar part
+// (assertActivityTopbarPair) measures the pair on each: one box, both states.
+
+/** Every thread of the fixture world read for me, except `unread` (read rows, as the proc reads them). */
+function seedThreadsRead(network: HarnessNetwork, unread: readonly string[] = []): void {
+  const t = network.world.tables;
+  const roots = new Set(
+    (t.chat_messages ?? []).flatMap((m) =>
+      m.thread_root_message_id != null ? [String(m.thread_root_message_id)] : [],
+    ),
+  );
+  const reads = (t.chat_thread_reads ??= []);
+  for (const root of roots) {
+    const at = unread.includes(root) ? new Date(0) : new Date(NOW + 60_000);
+    const row = reads.find((r) => r.root_message_id === root && r.user_id === ME);
+    if (row !== undefined) row.last_read_at = at.toISOString();
+    else reads.push({ root_message_id: root, user_id: ME, last_read_at: at.toISOString() });
+  }
+}
+
+/** Threads launched 8 Nov 2026 (thread-signals THREADS_SINCE_MS); the fixture clock is 21 Oct. */
+const AFTER_THREADS_LAUNCH = '2026-11-08T09:00:00.000Z';
+
+/**
+ * The catch-up thread unread, every other thread read. Its newest reply moves
+ * past the threads launch: a thread whose newest reply predates it reads as
+ * read (readBeforeLaunch), as every fixture thread at the 21 Oct clock does.
+ */
+function seedOneThreadNew(network: HarnessNetwork): void {
+  seedCatchUp(network);
+  const root = THREAD_IDS.gr ?? '';
+  const replies = (network.world.tables.chat_messages ?? [])
+    .filter((m) => m.thread_root_message_id === root)
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  const last = replies[replies.length - 1];
+  if (last !== undefined) last.created_at = AFTER_THREADS_LAUNCH;
+  seedThreadsRead(network, [root]);
+}
+
+/** The pair in the given states ('on' = filled with a count, 'off' = outlined at 0). */
+async function activityPairAt(
+  page: Page,
+  want: { threads: 0 | 'on'; catchUp: 0 | 'on' },
+): Promise<void> {
+  const state = (n: 0 | 'on'): string => (n === 0 ? '[data-count="0"]' : ':not([data-count="0"])');
+  await waitFor(
+    [page.locator(`header [data-topbar-pair] [data-topbar-threads]${state(want.threads)}`)],
+    `Threads ${want.threads}`,
+  );
+  await waitFor(
+    [page.locator(`header [data-topbar-pair] [data-topbar-catch-up]${state(want.catchUp)}`)],
+    `Catch up ${want.catchUp}`,
+  );
+}
+
+SCREENS.push(
+  {
+    // Threads filled (1 new), Catch up outlined (nothing unread): one size.
+    name: 'activity-threads-new',
+    seed: creator,
+    extra: (network) => {
+      seedOneThreadNew(network);
+      seedActivityAllRead(network);
+    },
+    url: '/activity',
+    steps: async (page) => {
+      await activityReady(page);
+      await activityPairAt(page, { threads: 'on', catchUp: 0 });
+    },
+    after: async (page) => {
+      await assertActivityTopbarPair(page, 'activity-threads-new');
+      // Narrow phones (390, 375): the name keeps 8 characters, the pair goes icon + count.
+      if ((page.viewportSize()?.width ?? 0) < 768) {
+        await assertActivityTopbarNarrow(page, 'activity-threads-new');
+      }
+    },
+  },
+  {
+    // Catch up's long-press (phone) / right-click (laptop): one row, Mark all
+    // as read. Both buttons filled here, still one size.
+    name: 'activity-catch-up-menu',
+    seed: creator,
+    extra: seedOneThreadNew,
+    url: '/activity',
+    hold: true,
+    steps: async (page) => {
+      await activityReady(page);
+      await activityPairAt(page, { threads: 'on', catchUp: 'on' });
+      await assertActivityTopbarPair(page, 'activity-catch-up-menu');
+      await page.locator('header [data-topbar-catch-up]').click({ button: 'right' });
+      await waitFor(
+        [
+          page.getByRole('menuitem', { name: 'Mark all as read' }),
+          page.getByText('Mark all as read'),
+        ],
+        'Mark all as read',
+      );
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Threads tapped: the same catch up, threads only (one card per unread
+    // thread), its first card.
+    name: 'threads-stack-card',
+    seed: creator,
+    extra: (network) => {
+      seedOneThreadNew(network);
+      seedActivityAllRead(network);
+    },
+    url: '/activity',
+    steps: async (page) => {
+      await activityReady(page);
+      await activityPairAt(page, { threads: 'on', catchUp: 0 });
+      await tap([page.locator('header [data-topbar-threads]')], 'Threads');
+      await catchUpReady(page);
+      await expect(page.locator('[data-catch-up-left]')).toHaveText('1 left');
+    },
+    after: async (page) => assertCatchUpLayout(page, 'threads-stack-card'),
+  },
+);
 for (const screen of SCREENS) {
   const tag = LAPTOP_DARK_SCREENS.has(screen.name) ? ' @laptop-dark' : '';
   test(`${screen.name}${tag}`, async ({ page }) => capture(screen, page));
@@ -6592,7 +7032,8 @@ const TOPBAR_LIST_SCREENS: ReadonlyArray<{ url: string; ready: (page: Page) => P
   { url: '/briefs', ready: briefsReady },
   { url: '/assets', ready: assetsReady },
   { url: '/plan', ready: planTabReady },
-  { url: '/activity', ready: activityReady },
+  // Activity (10 Nov): no sort and no "+"; Threads | Catch up stand in place of
+  // the slots (check 15 measures them), so it is not in the slot walk.
   { url: '/chat', ready: chatListReady },
 ];
 
@@ -6630,4 +7071,43 @@ const TABLET_SCREENS = new Set([
 ]);
 for (const screen of SCREENS.filter((s) => TABLET_SCREENS.has(s.name))) {
   test(`${screen.name} @tablet`, async ({ page }) => capture(screen, page));
+}
+
+// Check 15 (10 Nov 2026, Activity twins Plan): in each density, Activity's
+// rows, sections and headings are measured against the Plan tab's on the same
+// page (row height, picture x, title x, time right edge, chips to the first
+// heading, heading to rows, a section's last row to the next heading, the
+// heading's computed style); the "N new" chip (height by density, 8 after
+// the name, the primary Button's ink); none of the retired hooks; and the
+// loading boxes' first heading and first row land on the same pixel (0 delta).
+// No screenshot (the shots are activity-rows*).
+for (const density of ['compact', 'cozy', 'calm'] as const) {
+  test(`activity twins plan (${density})`, async ({ page }) => {
+    await page.clock.setFixedTime(NOW);
+    await page.routeWebSocket(
+      (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+      () => undefined,
+    );
+    const network = await installHarnessNetwork(page);
+    Object.assign(network.world, buildWorld(NOW));
+    seedAudit(network, creator, NOW);
+    seedTab(network);
+    seedActivityRows(network);
+    await withDensity(density)(network, page);
+    await installDeletedRoutes(page, network);
+    // Activity's read is held from the start, so no prefetch lands before its boxes paint.
+    const hold = network.holdTable('inbox_entries');
+    await page.goto('/plan');
+    await planTabReady(page);
+    await expectDensity(page, density);
+    const plan = await readListTwin(page, 'plan');
+    await page.goto('/activity');
+    await waitFor([page.locator('[data-activity-boxes]')], 'activity boxes');
+    const boxes = await readActivityBoxes(page);
+    hold.release();
+    await activitySectionsReady(page);
+    const activity = await readListTwin(page, 'activity');
+    assertActivityTwinsPlan(`activity twins plan (${density})`, plan, activity, boxes);
+    expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+  });
 }

@@ -22,7 +22,6 @@ const DEFAULT_PROJECTS: readonly Project[] = ['iphone-light', 'iphone-dark', 'la
 const REQUIRED: readonly string[] = [
   'account-menu-density',
   'activity-bank',
-  'activity-catch-up-bar',
   'activity-chip-mentions',
   'activity-chip-unread',
   'approve-confirm-approver',
@@ -44,6 +43,8 @@ const REQUIRED: readonly string[] = [
   'brief-picker',
   'briefs-approver',
   'briefs-empty',
+  'catch-up-card-reactions',
+  'catch-up-thread-reactions',
   'chat-composer-keyboard',
   'chat-composer-recording',
   'chat-delete-sheet-everyone',
@@ -81,6 +82,7 @@ const REQUIRED: readonly string[] = [
   'chat-post-sheet',
   'chat-post-sheet-approver',
   'chat-post-sheet-scrolled',
+  'chat-reactions-chips',
   'chat-select-mode',
   'chat-status-drawer',
   'chat-status-drawer-plan',
@@ -94,6 +96,7 @@ const REQUIRED: readonly string[] = [
   'chat-thread-files-removed',
   'chat-thread-group',
   'chat-thread-own-voice',
+  'chat-thread-reactions',
   'chat-tombstone',
   'chat-tombstone-menu',
   'chat-upload-progress',
@@ -113,6 +116,10 @@ const REQUIRED: readonly string[] = [
   'chat-send-failed-file',
   'chat-link-youtube',
   'chat-link-no-picture',
+  'comment-no-reactions',
+  'comment-reactions',
+  'emoji-sheet-add-reaction',
+  'plan-comment-reactions',
   'plan-dates-sheet',
   'sheet-header-back',
   'chat-viewer-delete-sheet',
@@ -316,9 +323,7 @@ const REQUIRED: readonly string[] = [
   'chat-thread-view-divider',
   // Catch up rebuild (9 Nov 2026, one card per item): rest, strip, lightbox,
   // menu, + trays, recording, voice chip, thread full screen, every card type
-  // and the long-content, failure and end states; Activity's grouped card.
-  'activity-grouped-folded',
-  'activity-grouped-unfolded',
+  // and the long-content, failure and end states.
   'catch-up-bank-idea',
   'catch-up-blank-lines',
   'catch-up-brief-no-due',
@@ -350,21 +355,23 @@ const REQUIRED: readonly string[] = [
   'plan-day-picker',
   'post-comment-edited',
   'post-comment-editing',
-  // Alignment, one thread strip, Activity lines (9 Nov 2026).
-  'activity-line-more-open',
-  // Activity in Compact and Calm (9 Nov 2026).
-  'activity-grouped-folded-calm',
-  'activity-grouped-folded-compact',
-  'activity-grouped-unfolded-calm',
-  'activity-grouped-unfolded-compact',
-  'activity-line-more-open-calm',
-  'activity-line-more-open-compact',
+  // Alignment and one thread strip (9 Nov 2026).
   'catch-up-thread-empty',
   'catch-up-thread-replies',
   'chat-thread-replies',
   // Thread times and the replies row (9 Nov 2026).
   'chat-replies-row-today',
   'chat-replies-row-older',
+  'who-reacted-sheet',
+  // Activity twins Plan (10 Nov 2026): sections and rows in each density.
+  'activity-sections',
+  'activity-rows',
+  'activity-rows-calm',
+  'activity-rows-compact',
+  // Activity's Threads | Catch up (10 Nov 2026); activity-all-read re-shot above.
+  'activity-threads-new',
+  'activity-catch-up-menu',
+  'threads-stack-card',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
@@ -406,12 +413,10 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   ),
   'name: `pipeline-${density}`': ['compact', 'calm'].map((density) => `pipeline-${density}`),
   'name: `chat-list-${density}`': ['compact', 'calm'].map((density) => `chat-list-${density}`),
-  // Activity's grouped card in Compact and Calm (9 Nov 2026).
-  'name: `${base}-${density}`': [
-    'activity-grouped-folded',
-    'activity-grouped-unfolded',
-    'activity-line-more-open',
-  ].flatMap((base) => ['compact', 'calm'].map((density) => `${base}-${density}`)),
+  // Activity's rows in Compact and Calm (10 Nov 2026).
+  'name: `activity-rows-${density}`': ['compact', 'calm'].map(
+    (density) => `activity-rows-${density}`,
+  ),
   // The platform preview, one per platform (post screen redo, 7 Nov 2026).
   'name: `post-preview-${p.slug}`': [
     'instagram',
@@ -439,6 +444,8 @@ const PHONE_ONLY_NAMES = [
   'chat-composer-keyboard',
   'chat-box-idle',
   'chat-box-expanded',
+  // Long-press a reaction chip: who reacted (phone; laptop shows names on hover).
+  'who-reacted-sheet',
 ];
 
 /**

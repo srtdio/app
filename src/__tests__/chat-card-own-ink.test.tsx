@@ -342,7 +342,6 @@ describe('the thread hands each card its side', () => {
             tail: true,
             timeZone: 'UTC',
             layout: 'touch',
-            onBadgeClick: () => {},
           });
           const { under, outside, values } = cardsUnderOwn(tree);
           expect(under).toBeGreaterThan(0);

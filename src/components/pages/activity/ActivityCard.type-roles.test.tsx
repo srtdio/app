@@ -61,7 +61,6 @@ function mount(group: ActivityItem[]): void {
       cache={cache}
       presignEnabled={false}
       onOpenGroup={() => {}}
-      onOpenEntry={() => {}}
       selfName={null}
     />,
   );
@@ -96,16 +95,27 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
     expect(title?.className).not.toMatch(/leading-\[/);
   });
 
-  it('the head preview ("N new") is one truncated line; each line is a secondary paragraph that wraps', () => {
+  it('the preview is the newest entry, one truncated secondary line', () => {
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
-    const preview = byText('1 new');
+    const preview = byText('Asha Rao: Looks good to me');
     expectRole(preview, ['text-md', 'text-fg-2', 'truncate']);
-    // A comment line reads the comment text (locked 9 Nov 2026), in one
-    // paragraph of up to 3 lines (cut by "… more", never by CSS).
-    const line = document.querySelector('[data-activity-line-body]');
-    expect(line?.textContent).toContain('Looks good to me');
-    expectRole(line as HTMLElement, ['text-md']);
-    expect(line?.className).not.toMatch(/truncate|line-clamp|text-ellipsis/);
+    expect(document.querySelector('[data-activity-line-body]')).toBeNull();
+  });
+
+  it('"N new" rides line 1: the name truncates first, the chip never does', () => {
+    mount([
+      item({ id: 'a', title: 'Q3 Launch' }),
+      item({ id: 'b', title: 'Q3 Launch', createdAt: '2026-06-13T00:00:00.000Z' }),
+    ]);
+    expectRole(byText('Q3 Launch'), ['min-w-0', 'truncate']);
+    const chip = byText('2 new');
+    expectRole(chip, ['shrink-0', 'rounded-full', 'font-medium', 'bg-accent', 'text-accent-fg']);
+    // Density by <html data-density>: 16 / 18 / 20 high, text 11 / 11 / 12.
+    expectRole(chip, ['h-4', 'box-content', 'py-px', 'text-xs', 'compact:box-border']);
+    expectRole(chip, ['calm:box-border', 'calm:h-5', 'calm:text-sm']);
+    const classes = chip.className.split(/\s+/);
+    expect(classes).not.toContain('truncate');
+    expect(classes).not.toContain('border');
   });
 
   it('the time is the meta role: mono, tabular, fg-3', () => {

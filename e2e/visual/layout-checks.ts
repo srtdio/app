@@ -1,6 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-  ACTIVITY_GAPS_BY_DENSITY,
   alignmentViolations,
   boxText,
   clipBox,
@@ -1328,21 +1327,12 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
 }
 
 /** Which family the alignment check measures on a screen. */
-export type AlignScope = 'activity' | 'chat-thread' | 'catch-up-thread' | 'chat-replies-row';
+export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row';
 
 /**
  * Check 14 (9 Nov 2026, CLAUDE.md "Alignment"): measures rules 1, 2, 3 and 5
  * on the screen as shot and fails on a breach (a screenshot alone is not
  * proof).
- * - activity: each item card: the head title, its preview and every line's
- *   paragraph start on one x (rule 1); each line's 20 photo ends on the head
- *   picture's right edge, 12 to the text (rule 2); the head time, the head's
- *   kind tag and every line's dot slot end on one x (rule 3); the gaps are the
- *   density's EXACT values (ACTIVITY_GAPS_BY_DENSITY, <html data-density>):
- *   head card to its first line, line to line, the last line to "+N more";
- *   no line ends with the time alone on its last line. The page: each day
- *   label to its first card, and a day's last card (its last text box) to the
- *   next day label.
  * - chat-thread / catch-up-thread (9 Nov 2026, EXACT +-1): the root's 40
  *   photo and its text at x16 (the written rule 1 exception: root text and
  *   strip label on the 16 gutter), its last line 12 over the strip's top
@@ -1360,7 +1350,7 @@ export async function assertAlignment(
   scope: AlignScope,
 ): Promise<void> {
   const families: AlignFamily[] = await page.evaluate(
-    ({ which, gapsByDensity }): AlignFamily[] => {
+    ({ which }): AlignFamily[] => {
       const shown = (el: Element | null): el is Element => {
         if (el === null) return false;
         const r = el.getBoundingClientRect();
@@ -1387,135 +1377,6 @@ export async function assertAlignment(
         return Number.isFinite(left) ? { left, top, bottom } : null;
       };
       const out: AlignFamily[] = [];
-      if (which === 'activity') {
-        const density = document.documentElement.dataset.density;
-        const want =
-          density === 'compact' || density === 'calm' ? gapsByDensity[density] : gapsByDensity.cozy;
-        const box = (el: Element): DOMRect => el.getBoundingClientRect();
-        const cells = Array.from(document.querySelectorAll('[data-activity-card-cell]'));
-        cells.forEach((cell, c) => {
-          const head = cell.querySelector('[data-activity-item-head]');
-          const title = head?.querySelector('[data-list-card-title]') ?? null;
-          if (head === null || !shown(title)) return;
-          const f: AlignFamily = {
-            label: `activity card ${c + 1} (${density ?? 'cozy'})`,
-            textLefts: [{ label: 'head title', x: title.getBoundingClientRect().left }],
-            rightEdges: [],
-            hung: [],
-            gaps: [],
-            loneTimes: [],
-          };
-          const preview = head.querySelector('[data-list-card-preview]');
-          if (shown(preview)) {
-            f.textLefts.push({ label: 'head line 2', x: preview.getBoundingClientRect().left });
-          }
-          const time = head.querySelector('[data-list-card-time]');
-          if (shown(time)) f.rightEdges.push({ label: 'head time', x: box(time).right });
-          const tag = head.querySelector('[data-list-card-tag]');
-          if (shown(tag)) f.rightEdges.push({ label: 'head tag', x: box(tag).right });
-          const picture = head.querySelector('[data-list-card-picture]');
-          const pictureRight = shown(picture) ? box(picture).right : null;
-          let prevBottom: number | null = null;
-          const lines = Array.from(cell.querySelectorAll('[data-activity-line]')).filter(shown);
-          lines.forEach((line, i) => {
-            const body = line.querySelector('[data-activity-line-body]');
-            if (!shown(body)) return;
-            const b = box(body);
-            f.textLefts.push({ label: `line ${i + 1}`, x: b.left });
-            const slot = line.querySelector('[data-activity-line-dot-slot]');
-            if (shown(slot)) f.rightEdges.push({ label: `line ${i + 1} dot`, x: box(slot).right });
-            const photo = line.querySelector('[data-activity-line-photo] > *');
-            if (shown(photo) && pictureRight !== null) {
-              f.hung?.push({
-                label: `line ${i + 1}`,
-                photoRight: box(photo).right,
-                pictureRight,
-                textLeft: b.left,
-              });
-            }
-            if (prevBottom === null) {
-              f.gaps.push({
-                label: 'head card to line 1',
-                gap: b.top - box(head).bottom,
-                equals: want.headToLine,
-              });
-            } else {
-              f.gaps.push({
-                label: `line ${i} to line ${i + 1}`,
-                gap: b.top - prevBottom,
-                equals: want.lineToLine,
-              });
-            }
-            prevBottom = b.bottom;
-            // A lone time: the time's first box starts a visual line of the paragraph.
-            const t = line.querySelector('[data-activity-line-time]');
-            const first = t !== null ? Array.from(t.getClientRects())[0] : undefined;
-            if (
-              first !== undefined &&
-              Math.abs(first.left - b.left) <= 1 &&
-              b.height > first.height + 1
-            ) {
-              f.loneTimes?.push(`line ${i + 1}`);
-            }
-          });
-          const more = cell.querySelector('[data-activity-more]');
-          if (shown(more) && prevBottom !== null) {
-            f.gaps.push({
-              label: 'last line to "+N more"',
-              gap: box(more).top - prevBottom,
-              equals: want.lineToLine,
-            });
-          }
-          if (lines.length > 0) out.push(f);
-        });
-        // The page: day label to its first card; a day's last text to the next label.
-        const days: AlignFamily = {
-          label: `activity days (${density ?? 'cozy'})`,
-          textLefts: [],
-          rightEdges: [],
-          gaps: [],
-        };
-        const heads = Array.from(document.querySelectorAll('[data-activity-bucket-head]')).filter(
-          shown,
-        );
-        /** The lowest text box of a day: a line, "+N more", else the card itself. */
-        const dayBottom = (list: Element): number => {
-          let bottom = -Infinity;
-          for (const child of Array.from(list.children).filter(shown)) {
-            const texts = Array.from(
-              child.querySelectorAll('[data-activity-line-body], [data-activity-more]'),
-            ).filter(shown);
-            const cards =
-              texts.length > 0 ? texts : [child.querySelector('[data-list-card]') ?? child];
-            for (const t of cards) bottom = Math.max(bottom, box(t).bottom);
-          }
-          return bottom;
-        };
-        heads.forEach((h, d) => {
-          const label = h.querySelector('h2');
-          const list = h.parentElement?.querySelector('[data-activity-list]') ?? null;
-          if (!shown(label) || list === null) return;
-          const first = Array.from(list.children).find(shown);
-          const name = (label.textContent ?? '').trim();
-          if (first !== undefined) {
-            days.gaps.push({
-              label: `${name} label to its first card`,
-              gap: box(first).top - box(label).bottom,
-              equals: want.labelToCard,
-            });
-          }
-          const next = heads[d + 1]?.querySelector('h2');
-          if (shown(next ?? null) && next !== undefined && next !== null) {
-            days.gaps.push({
-              label: `${name} last card to the ${(next.textContent ?? '').trim()} label`,
-              gap: box(next).top - dayBottom(list),
-              equals: want.dayToLabel,
-            });
-          }
-        });
-        if (days.gaps.length > 0) out.push(days);
-        return out;
-      }
       if (which === 'chat-replies-row') {
         // The main chat's replies rows: photos, count, time, dot; no reply text.
         const rowsHere = Array.from(document.querySelectorAll('[data-replies-row]')).filter(shown);
@@ -1687,10 +1548,600 @@ export async function assertAlignment(
       out.push(f);
       return out;
     },
-    { which: scope, gapsByDensity: ACTIVITY_GAPS_BY_DENSITY },
+    { which: scope },
   );
   settleFindings(
     screenName,
     alignmentViolations(families).map((message) => ({ check: 'alignment' as const, message })),
+  );
+}
+
+/**
+ * Check 16 (9 Nov 2026, emoji reactions): on the screen as shot, every
+ * reaction chip row ([data-reaction-chips]) is measured (EXACT +-1):
+ * - each pill ([data-reaction-chip], the smiley [data-reaction-add]) is 32
+ *   tall and its tap box (the pill grown by its ::before) at least 44 tall;
+ * - the row's left edge is its row's text column: a comment's head
+ *   ([data-comment-header]); a chat, plan comment or thread reply message's
+ *   body text ([data-msg-body]); a catch-up row's text (its last paragraph);
+ * - in a thread view the root's row sits at x16 and replies' at x60 from the
+ *   strip's left, the root's chip row ends 12 over the strip's top hairline,
+ *   and the first reply's name sits 8 under the strip;
+ * - no [data-reaction-badge] anywhere, and at least `minRows` rows show.
+ */
+export async function assertReactionChips(
+  page: Page,
+  screenName: string,
+  opts: { minRows?: number } = {},
+): Promise<void> {
+  const messages = await page.evaluate((minRows: number): string[] => {
+    const out: string[] = [];
+    const shown = (el: Element | null): el is Element => {
+      if (el === null) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const textLeft = (el: Element): number | null => {
+      let left = Infinity;
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+        if ((n.textContent ?? '').trim() === '') continue;
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        for (const rect of Array.from(range.getClientRects())) {
+          if (rect.width > 0 && rect.height > 0) left = Math.min(left, rect.left);
+        }
+      }
+      return Number.isFinite(left) ? left : null;
+    };
+    const px = (v: string): number | null => (v.endsWith('px') ? parseFloat(v) : null);
+    const r1 = (n: number): number => Math.round(n * 10) / 10;
+    const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+    if (document.querySelector('[data-reaction-badge]') !== null) {
+      out.push('a [data-reaction-badge] shows (chips only, 9 Nov 2026)');
+    }
+    const rows = Array.from(document.querySelectorAll('[data-reaction-chips]')).filter(shown);
+    if (rows.length < minRows) out.push(`${rows.length} reaction chip rows, want ${minRows}+`);
+    rows.forEach((row, i) => {
+      const at = `chip row ${i + 1}`;
+      const box = row.getBoundingClientRect();
+      for (const pill of Array.from(
+        row.querySelectorAll('[data-reaction-chip], [data-reaction-add]'),
+      ).filter(shown)) {
+        const r = pill.getBoundingClientRect();
+        const name = pill.getAttribute('aria-label') ?? 'pill';
+        if (!near(r.height, 32)) out.push(`${at}: ${name} is ${r1(r.height)} tall, want 32`);
+        const before = getComputedStyle(pill, '::before');
+        const grow =
+          before.position === 'absolute'
+            ? Math.max(0, -(px(before.top) ?? 0)) + Math.max(0, -(px(before.bottom) ?? 0))
+            : 0;
+        if (r.height + grow < 43.5) {
+          out.push(`${at}: ${name} tap box ${r1(r.height + grow)} tall, want 44+`);
+        }
+      }
+      const comment = row.closest('[data-comment-row]');
+      const catchUp = row.closest('[data-catch-up-message]');
+      const message = row.closest('li[data-msg-id]');
+      const view = row.closest('[data-thread-view], [data-catch-up-thread]');
+      const strip = view?.querySelector('[data-thread-strip]') ?? null;
+      if (comment !== null) {
+        const head = comment.querySelector('[data-comment-header]');
+        if (shown(head) && !near(box.left, head.getBoundingClientRect().left)) {
+          out.push(
+            `${at}: left ${r1(box.left)}, comment column ${r1(head.getBoundingClientRect().left)}`,
+          );
+        }
+        return;
+      }
+      if (shown(strip)) {
+        const s = strip.getBoundingClientRect();
+        const isRoot = box.bottom <= s.top + 0.5;
+        const want = isRoot ? 16 : 60;
+        if (!near(box.left - s.left, want)) {
+          out.push(`${at}: x ${r1(box.left - s.left)} in the thread, want ${want}`);
+        }
+        if (isRoot) {
+          if (!near(s.top - box.bottom, 12)) {
+            out.push(`${at}: root chips to strip ${r1(s.top - box.bottom)}, want 12`);
+          }
+          const reply = Array.from(
+            view?.querySelectorAll('[data-catch-up-message], li[data-msg-id]') ?? [],
+          )
+            .filter(shown)
+            .find((el) => el.getBoundingClientRect().top >= s.bottom - 0.5);
+          const name = reply?.querySelector('[data-catch-up-name], [data-sender-line]') ?? null;
+          if (shown(name) && !near(name.getBoundingClientRect().top - s.bottom, 8)) {
+            out.push(
+              `${at}: strip to first reply name ${r1(name.getBoundingClientRect().top - s.bottom)}, want 8`,
+            );
+          }
+        }
+        return;
+      }
+      const text = catchUp
+        ? (Array.from(catchUp.querySelectorAll('p')).filter(shown).pop() ?? null)
+        : (message?.querySelector('[data-msg-body]') ?? null);
+      const left = text !== null && shown(text) ? textLeft(text) : null;
+      if (left === null) out.push(`${at}: no text to align to`);
+      else if (!near(box.left, left)) {
+        out.push(`${at}: left ${r1(box.left)}, text column ${r1(left)}`);
+      }
+    });
+    return out;
+  }, opts.minRows ?? 1);
+  settleFindings(
+    screenName,
+    messages.map((message) => ({ check: 'alignment' as const, message: `reactions: ${message}` })),
+  );
+}
+
+/** Check 16: Activity never shows reactions (no chip row, no badge). */
+export async function assertNoReactionsHere(page: Page, screenName: string): Promise<void> {
+  const count = await page
+    .locator('[data-reaction-chips], [data-reaction-badge], [data-reaction-add]')
+    .count();
+  settleFindings(
+    screenName,
+    count > 0
+      ? [{ check: 'alignment' as const, message: `reactions: ${count} reaction parts on Activity` }]
+      : [],
+  );
+}
+
+// Check 15 (10 Nov 2026, Activity twins Plan): Activity's list measured
+// against the Plan tab's, both read on the page as painted.
+
+/** A list as painted: its chips, sections, headings, first row and chips. */
+export interface ListTwinGeom {
+  density: string;
+  /** The first filter chip's bottom edge. */
+  chipBottom: number | null;
+  /** The list's own gap between sections (computed row-gap). */
+  listGap: number;
+  headings: Array<{ text: string; top: number; bottom: number; style: string }>;
+  sections: Array<{ headingBottom: number; firstRowTop: number; lastRowBottom: number }>;
+  row: {
+    height: number;
+    pictureLeft: number;
+    pictureRight: number;
+    titleLeft: number;
+    timeRight: number;
+  } | null;
+  rowHeights: number[];
+  /** Activity's "N new" chips: box, the name's right edge, colours and the row. */
+  chips: Array<{
+    text: string;
+    height: number;
+    left: number;
+    nameRight: number;
+    rowHeight: number;
+    bg: string;
+    fg: string;
+    border: string;
+  }>;
+  /** The primary Button's fill and text (bg-accent / text-accent-fg) as computed here. */
+  ink: { bg: string; fg: string };
+  /** Retired Activity hooks still in the DOM (lines, bucket heads, the catch-up bar). */
+  oldHooks: number;
+}
+
+/** Read the Plan tab's or Activity's list geometry (check 15). */
+export async function readListTwin(page: Page, kind: 'plan' | 'activity'): Promise<ListTwinGeom> {
+  return page.evaluate((which): ListTwinGeom => {
+    const sel =
+      which === 'plan'
+        ? {
+            list: '[data-plan-tab-list]',
+            section: '[data-plan-tab-section]',
+            chip: '[data-plan-tab-when]',
+          }
+        : {
+            list: '[data-activity-list]',
+            section: '[data-activity-section]',
+            chip: '[data-activity-chips] > :first-child',
+          };
+    const shown = (el: Element | null): el is Element => {
+      if (el === null) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const rect = (el: Element): DOMRect => el.getBoundingClientRect();
+    const list = document.querySelector(sel.list);
+    const chip = document.querySelector(sel.chip);
+    const sections = Array.from(document.querySelectorAll(sel.section)).filter(shown);
+    const headings: ListTwinGeom['headings'] = [];
+    const parts: ListTwinGeom['sections'] = [];
+    for (const section of sections) {
+      const h = section.querySelector(':scope > h2');
+      const rows = Array.from(section.querySelectorAll('[data-list-card]')).filter(shown);
+      if (!shown(h) || rows.length === 0) continue;
+      const cs = getComputedStyle(h);
+      headings.push({
+        text: (h.textContent ?? '').trim(),
+        top: rect(h).top,
+        bottom: rect(h).bottom,
+        style: [
+          cs.fontSize,
+          cs.fontWeight,
+          cs.textTransform,
+          cs.letterSpacing,
+          cs.lineHeight,
+          cs.color,
+        ].join(' '),
+      });
+      parts.push({
+        headingBottom: rect(h).bottom,
+        firstRowTop: Math.min(...rows.map((r) => rect(r).top)),
+        lastRowBottom: Math.max(...rows.map((r) => rect(r).bottom)),
+      });
+    }
+    const rowsAll = Array.from(document.querySelectorAll(`${sel.list} [data-list-card]`)).filter(
+      shown,
+    );
+    const first = rowsAll[0];
+    const part = (q: string): Element | null => first?.querySelector(q) ?? null;
+    const picture = part('[data-list-card-picture]');
+    const title = part('[data-list-card-title]');
+    const time = part('[data-list-card-time]');
+    const probe = document.createElement('span');
+    probe.className = 'bg-accent text-accent-fg';
+    document.body.appendChild(probe);
+    const ink = { bg: getComputedStyle(probe).backgroundColor, fg: getComputedStyle(probe).color };
+    probe.remove();
+    const chips = Array.from(document.querySelectorAll('[data-activity-new-chip]'))
+      .filter(shown)
+      .map((c) => {
+        const cs = getComputedStyle(c);
+        const name = c.parentElement?.querySelector('[data-activity-name]') ?? null;
+        const row = c.closest('[data-list-card]');
+        return {
+          text: (c.textContent ?? '').trim(),
+          height: rect(c).height,
+          left: rect(c).left,
+          nameRight: name !== null ? rect(name).right : Number.NaN,
+          rowHeight: row !== null ? rect(row).height : Number.NaN,
+          bg: cs.backgroundColor,
+          fg: cs.color,
+          border: cs.borderTopStyle === 'none' ? '0' : cs.borderTopWidth,
+        };
+      });
+    return {
+      density: document.documentElement.dataset.density ?? 'cozy',
+      chipBottom: shown(chip) ? rect(chip).bottom : null,
+      listGap: list !== null ? Number.parseFloat(getComputedStyle(list).rowGap) || 0 : 0,
+      headings,
+      sections: parts,
+      row:
+        first !== undefined && shown(picture) && shown(title) && shown(time)
+          ? {
+              height: rect(first).height,
+              pictureLeft: rect(picture).left,
+              pictureRight: rect(picture).right,
+              titleLeft: rect(title).left,
+              timeRight: rect(time).right,
+            }
+          : null,
+      rowHeights: rowsAll.map((r) => rect(r).height),
+      chips,
+      ink,
+      oldHooks: document.querySelectorAll(
+        '[data-activity-line], [data-activity-bucket-head], [data-activity-catch-up-bar]',
+      ).length,
+    };
+  }, kind);
+}
+
+/** Activity's loading boxes as painted: the heading bone's line and the first box. */
+export async function readActivityBoxes(
+  page: Page,
+): Promise<{ headingTop: number; firstRowTop: number } | null> {
+  return page.evaluate(() => {
+    const heading = document.querySelector('[data-activity-boxes] [data-activity-heading-box]');
+    const row = document.querySelector('[data-activity-boxes] [data-activity-box]');
+    if (heading === null || row === null) return null;
+    return {
+      headingTop: heading.getBoundingClientRect().top,
+      firstRowTop: row.getBoundingClientRect().top,
+    };
+  });
+}
+
+/** The "N new" chip's height per density (Compact 16 / Cozy 18 / Calm 20). */
+const NEW_CHIP_HEIGHT_PX: Readonly<Record<string, number>> = { compact: 16, cozy: 18, calm: 20 };
+
+/** Check 15's rules over the two lists (and Activity's boxes). Pure. */
+export function activityTwinViolations(
+  plan: ListTwinGeom,
+  activity: ListTwinGeom,
+  boxes: { headingTop: number; firstRowTop: number } | null,
+): string[] {
+  const out: string[] = [];
+  const same = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+  const r1 = (n: number): number => Math.round(n * 10) / 10;
+  const eq = (label: string, a: number, b: number): void => {
+    if (!same(a, b)) out.push(`${label}: Activity ${r1(a)} vs Plan ${r1(b)}`);
+  };
+  if (plan.row === null) out.push('Plan shows no row to measure');
+  if (activity.row === null) out.push('Activity shows no row to measure');
+  if (plan.row !== null && activity.row !== null) {
+    eq('row height', activity.row.height, plan.row.height);
+    eq('picture left', activity.row.pictureLeft, plan.row.pictureLeft);
+    eq('picture right', activity.row.pictureRight, plan.row.pictureRight);
+    eq('title x', activity.row.titleLeft, plan.row.titleLeft);
+    eq('time right edge', activity.row.timeRight, plan.row.timeRight);
+  }
+  for (const h of activity.rowHeights) {
+    if (activity.row !== null && !same(h, activity.row.height)) {
+      out.push(`an Activity row is ${r1(h)} tall, not ${r1(activity.row.height)}`);
+    }
+  }
+  const pHead = plan.headings[0];
+  const aHead = activity.headings[0];
+  if (pHead === undefined) out.push('Plan shows no section heading');
+  if (aHead === undefined) out.push('Activity shows no section heading');
+  if (pHead !== undefined && aHead !== undefined) {
+    if (aHead.style !== pHead.style) {
+      out.push(`heading style: Activity "${aHead.style}" vs Plan "${pHead.style}"`);
+    }
+    if (plan.chipBottom !== null && activity.chipBottom !== null) {
+      eq(
+        'chips to the first heading',
+        aHead.top - activity.chipBottom,
+        pHead.top - plan.chipBottom,
+      );
+    }
+  }
+  const pSec = plan.sections[0];
+  const aSec = activity.sections[0];
+  if (pSec !== undefined && aSec !== undefined) {
+    eq(
+      'heading to its first row',
+      aSec.firstRowTop - aSec.headingBottom,
+      pSec.firstRowTop - pSec.headingBottom,
+    );
+  }
+  // A section's last row to the next heading: Plan's measured gap, else its list gap.
+  const planNext = plan.headings[1];
+  const planGap =
+    pSec !== undefined && planNext !== undefined ? planNext.top - pSec.lastRowBottom : plan.listGap;
+  activity.sections.forEach((sec, i) => {
+    const next = activity.headings[i + 1];
+    if (next !== undefined)
+      eq(`section ${i + 1} last row to the next heading`, next.top - sec.lastRowBottom, planGap);
+  });
+  if (activity.headings.length < 2) out.push('Activity shows fewer than 2 sections to space');
+  const want = NEW_CHIP_HEIGHT_PX[activity.density] ?? NEW_CHIP_HEIGHT_PX.cozy ?? 18;
+  if (activity.chips.length === 0) out.push('Activity shows no "N new" chip');
+  for (const c of activity.chips) {
+    if (!same(c.height, want))
+      out.push(`"${c.text}" is ${r1(c.height)} tall, not ${want} (${activity.density})`);
+    if (!same(c.left - c.nameRight, 8))
+      out.push(`"${c.text}" sits ${r1(c.left - c.nameRight)} after the name, not 8`);
+    if (activity.row !== null && !same(c.rowHeight, activity.row.height)) {
+      out.push(
+        `the row with "${c.text}" is ${r1(c.rowHeight)} tall, not ${r1(activity.row.height)}`,
+      );
+    }
+    if (c.bg !== activity.ink.bg || c.fg !== activity.ink.fg) {
+      out.push(
+        `"${c.text}" is ${c.bg} / ${c.fg}, not the primary Button's ${activity.ink.bg} / ${activity.ink.fg}`,
+      );
+    }
+    if (c.border !== '0' && c.border !== '0px') out.push(`"${c.text}" has a ${c.border} border`);
+  }
+  if (activity.oldHooks > 0) out.push(`${activity.oldHooks} retired Activity hooks still render`);
+  if (boxes === null) out.push('Activity painted no loading boxes');
+  if (boxes !== null && aHead !== undefined && aSec !== undefined) {
+    const headDelta = aHead.top - boxes.headingTop;
+    const rowDelta = aSec.firstRowTop - boxes.firstRowTop;
+    if (!same(headDelta, 0))
+      out.push(`loading to landed: the first heading moves ${r1(headDelta)}px`);
+    if (!same(rowDelta, 0)) out.push(`loading to landed: the first row moves ${r1(rowDelta)}px`);
+  }
+  return out;
+}
+
+/** Check 15: settle Activity's twin findings (strict fails, report annotates). */
+export function assertActivityTwinsPlan(
+  label: string,
+  plan: ListTwinGeom,
+  activity: ListTwinGeom,
+  boxes: { headingTop: number; firstRowTop: number } | null,
+): void {
+  settleFindings(
+    label,
+    activityTwinViolations(plan, activity, boxes).map((message) => ({
+      check: 'alignment' as const,
+      message,
+    })),
+  );
+}
+
+// Check 15, the top bar part (Activity, 10 Nov 2026): Threads and Catch up are
+// ONE box. Same width and height (exactly), radius, padding, border and type,
+// in the 0 (outline) and > 0 (filled) states alike; the fixed 112 x 44 box;
+// Threads first, 8 to Catch up; no 44 slots beside them; nothing past the
+// viewport (the workspace name truncates first).
+export const ACTIVITY_PAIR_W_PX = 112;
+export const ACTIVITY_PAIR_H_PX = 44;
+/** Below sm the pair goes icon + count: one fixed 56 x 44 box each (10 Nov 2026). */
+export const ACTIVITY_PAIR_COMPACT_W_PX = 56;
+export const ACTIVITY_PAIR_COMPACT_BELOW_PX = 640;
+/** The workspace name beside the pair keeps at least this many characters. */
+export const ACTIVITY_NAME_MIN_CHARS = 8;
+export const ACTIVITY_PAIR_GAP_PX = 8;
+
+interface PairBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: string;
+  padding: string;
+  border: string;
+  type: string;
+  count: string | null;
+}
+
+export async function assertActivityTopbarPair(page: Page, screenName: string): Promise<void> {
+  const got = await page.evaluate(() => {
+    const read = (sel: string): PairBoxRaw | null => {
+      const el = document.querySelector(`header [data-topbar-pair] ${sel}`);
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+        radius: s.borderTopLeftRadius,
+        padding: `${s.paddingLeft} ${s.paddingRight}`,
+        border: s.borderTopWidth,
+        type: `${s.fontSize} ${s.fontWeight}`,
+        count: el.getAttribute('data-count'),
+      };
+    };
+    type PairBoxRaw = {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      radius: string;
+      padding: string;
+      border: string;
+      type: string;
+      count: string | null;
+    };
+    return {
+      threads: read('[data-topbar-threads]'),
+      catchUp: read('[data-topbar-catch-up]'),
+      slots: document.querySelectorAll('header [data-topbar-slot]').length,
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    };
+  });
+  const out: string[] = [];
+  const { threads, catchUp } = got as { threads: PairBox | null; catchUp: PairBox | null };
+  if (threads === null || catchUp === null) {
+    out.push('no Threads | Catch up pair in the top bar ([data-topbar-pair])');
+  } else {
+    const label = `Threads (${threads.count}) / Catch up (${catchUp.count})`;
+    if (threads.width !== catchUp.width || threads.height !== catchUp.height) {
+      out.push(
+        `${label}: boxes ${threads.width}x${threads.height} vs ${catchUp.width}x${catchUp.height}, not one size`,
+      );
+    }
+    for (const [name, b] of [
+      ['Threads', threads],
+      ['Catch up', catchUp],
+    ] as const) {
+      const wantW =
+        got.viewport < ACTIVITY_PAIR_COMPACT_BELOW_PX
+          ? ACTIVITY_PAIR_COMPACT_W_PX
+          : ACTIVITY_PAIR_W_PX;
+      if (Math.abs(b.width - wantW) > 0.01 || Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01) {
+        out.push(`${name} is ${b.width}x${b.height}, not the fixed ${wantW}x${ACTIVITY_PAIR_H_PX}`);
+      }
+      if (b.radius !== '8px') out.push(`${name} radius ${b.radius}, not 8px`);
+      if (b.x + b.width > got.viewport + 0.5) out.push(`${name} ends past the viewport`);
+    }
+    for (const key of ['radius', 'padding', 'border', 'type'] as const) {
+      if (threads[key] !== catchUp[key]) {
+        out.push(`${label}: ${key} ${threads[key]} vs ${catchUp[key]}, not the same box`);
+      }
+    }
+    const gap = catchUp.x - (threads.x + threads.width);
+    if (Math.abs(gap - ACTIVITY_PAIR_GAP_PX) > 0.5) {
+      out.push(`Threads to Catch up is ${gap}px, not ${ACTIVITY_PAIR_GAP_PX} (Threads first)`);
+    }
+    if (threads.y !== catchUp.y) out.push(`${label}: tops ${threads.y} vs ${catchUp.y}`);
+  }
+  if (got.slots !== 0)
+    out.push(`${got.slots} sort / "+" slots beside the pair (Activity has none)`);
+  if (got.scrollWidth > got.viewport) {
+    out.push(`the page scrolls sideways (${got.scrollWidth} > ${got.viewport})`);
+  }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/**
+ * Check 15, narrow phones (10 Nov 2026): at 390 and 375 wide, Activity's top
+ * bar fits. The workspace name shows at least its first 8 characters (then
+ * the ellipsis), Threads and Catch up are the icon + count boxes (56 x 44,
+ * one size), nothing overlaps and nothing scrolls sideways. Restores the
+ * viewport it found.
+ */
+export async function assertActivityTopbarNarrow(page: Page, screenName: string): Promise<void> {
+  const before = page.viewportSize();
+  const out: string[] = [];
+  for (const width of [390, 375]) {
+    await page.setViewportSize({ width, height: before?.height ?? 844 });
+    await page.waitForTimeout(100);
+    const got = await page.evaluate((minChars) => {
+      const name = document.querySelector('header [data-topbar-workspace-name]');
+      const boxes = ['[data-topbar-threads]', '[data-topbar-catch-up]'].map((sel) => {
+        const el = document.querySelector(`header ${sel}`);
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, width: r.width, height: r.height };
+      });
+      let shownChars = 0;
+      let nameRight = 0;
+      if (name !== null && name.firstChild !== null) {
+        const box = name.getBoundingClientRect();
+        nameRight = box.right;
+        const text = name.firstChild;
+        const total = (text.textContent ?? '').length;
+        const range = document.createRange();
+        for (let i = 1; i <= total; i += 1) {
+          range.setStart(text, 0);
+          range.setEnd(text, i);
+          if (range.getBoundingClientRect().right <= box.right + 0.5) shownChars = i;
+          else break;
+        }
+        if (total < minChars) shownChars = Math.max(shownChars, minChars);
+      }
+      return {
+        hasName: name !== null,
+        shownChars,
+        nameRight,
+        boxes,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewport: window.innerWidth,
+      };
+    }, ACTIVITY_NAME_MIN_CHARS);
+    const at = `${width} wide`;
+    if (!got.hasName) out.push(`${at}: no workspace name ([data-topbar-workspace-name])`);
+    else if (got.shownChars < ACTIVITY_NAME_MIN_CHARS) {
+      out.push(
+        `${at}: the workspace name shows ${got.shownChars} characters, under ${ACTIVITY_NAME_MIN_CHARS}`,
+      );
+    }
+    const [threads, catchUp] = got.boxes;
+    if (threads == null || catchUp == null) out.push(`${at}: no Threads | Catch up pair`);
+    else {
+      for (const b of [threads, catchUp]) {
+        if (
+          Math.abs(b.width - ACTIVITY_PAIR_COMPACT_W_PX) > 0.01 ||
+          Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01
+        ) {
+          out.push(
+            `${at}: a pair box is ${b.width}x${b.height}, not ${ACTIVITY_PAIR_COMPACT_W_PX}x${ACTIVITY_PAIR_H_PX}`,
+          );
+        }
+      }
+      if (got.nameRight > threads.left + 0.5) out.push(`${at}: the name runs under Threads`);
+    }
+    if (got.scrollWidth > got.viewport) out.push(`${at}: the page scrolls sideways`);
+  }
+  if (before !== null) await page.setViewportSize(before);
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'topbar' as const, message })),
   );
 }

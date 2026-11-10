@@ -68,7 +68,6 @@ function renderCard(group: ActivityItem[], extra: { entering?: boolean } = {}): 
       cache={cache}
       presignEnabled={false}
       onOpenGroup={() => {}}
-      onOpenEntry={() => {}}
       selfName={null}
       {...extra}
     />,
@@ -92,26 +91,80 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(html).not.toContain('w-1 shrink-0');
     expect(html).not.toContain('data-activity-thread');
     expect(html).not.toContain('aria-expanded="false">+');
-    // 9 Nov 2026: the head names the item; each notification is its own line
-    // (actor, then the Activity line without the name); no KEY-N.
-    expect(html).toMatch(/data-list-card-title=""[^>]*>Q3 Launch</);
-    expect(html).toContain('Sent Q3 Launch for review');
-    expect(count(html, 'data-activity-line=')).toBe(2);
+    // One row per item (Activity twins Plan): the name, "N new", no lines; no KEY-N.
+    expect(html).toMatch(/data-activity-name=""[^>]*>Q3 Launch</);
+    expect(html).not.toContain('data-activity-line');
+    expect(html).not.toContain('data-activity-lines');
+    expect(html).not.toContain('data-activity-more');
     expect(html).not.toMatch(/GBL-\d/);
   });
 
-  it('a threaded group is one card with one line per notification and "N new" on the head', () => {
+  it('a group is one row: "N new" after the name at 2+ unread, the newest entry as line 2', () => {
     const group = [
-      item({ id: 'a', title: 'Q3', eventType: 'stage_change', toStage: 'approved' }),
-      item({ id: 'b', title: 'Q3', eventType: 'mention' }),
-      item({ id: 'c', title: 'Q3', eventType: 'comment' }),
+      item({
+        id: 'a',
+        title: 'Q3',
+        eventType: 'stage_change',
+        toStage: 'approved',
+        actorName: 'Maya',
+        createdAt: '2026-06-14T00:50:00.000Z',
+      }),
+      item({ id: 'b', title: 'Q3', eventType: 'mention', createdAt: '2026-06-14T00:20:00.000Z' }),
+      item({ id: 'c', title: 'Q3', eventType: 'comment', createdAt: '2026-06-14T00:10:00.000Z' }),
     ];
-    expect(activityPreviewText(group)).toBe('+2 more');
+    expect(activityPreviewText(group)).toBe('');
     const html = renderCard(group);
     expect(count(html, 'data-list-card=""')).toBe(1);
-    expect(count(html, 'data-activity-line=')).toBe(3);
-    expect(html).toMatch(/data-activity-new=""[^>]*>3 new</);
-    expect(html).not.toContain('data-activity-more');
+    expect(html).toMatch(/data-activity-new-chip=""[^>]*>3 new</);
+    expect(html).toMatch(/data-activity-preview=""[^>]*>Maya approved Q3</);
+    expect(html).toMatch(/data-activity-time=""[^>]*>10m</);
+    // The chip is ink on the primary Button's tokens, inside the one title line.
+    expect(html).toMatch(
+      /data-list-card-title=""[^]*data-activity-new-chip=""[^]*data-list-card-time/,
+    );
+    expect(html).toMatch(
+      /data-activity-new-chip="" class="[^"]*\bbg-accent\b[^"]*\btext-accent-fg\b/,
+    );
+  });
+
+  it('"N new" shows only at 2+ unread entries: never at 1, never on a read item', () => {
+    const one = renderCard([
+      item({ id: 'a', title: 'Q3' }),
+      item({ id: 'b', title: 'Q3', readAt: '2026-06-14T00:30:00.000Z' }),
+    ]);
+    expect(one).not.toContain('data-activity-new-chip');
+    expect(one).toContain('data-list-card-unread');
+    const read = renderCard([
+      item({ id: 'a', title: 'Q3', readAt: '2026-06-14T00:30:00.000Z' }),
+      item({ id: 'b', title: 'Q3', readAt: '2026-06-14T00:30:00.000Z' }),
+    ]);
+    expect(read).not.toContain('data-activity-new-chip');
+    expect(read).not.toContain('data-list-card-unread');
+    // Own actions never count toward "N new".
+    const own = renderCard([
+      item({ id: 'a', title: 'Q3' }),
+      item({ id: 'b', title: 'Q3', own: true }),
+    ]);
+    expect(own).not.toContain('data-activity-new-chip');
+  });
+
+  it('a chat mention row keeps "<actor> mentioned you" and never a chip', () => {
+    const mention = (id: string) =>
+      item({
+        id,
+        eventType: 'mention',
+        entityType: 'chat_channel',
+        entityId: 'chan-1',
+        scope: 'groups',
+        channelType: 'group',
+        title: 'Launch crew',
+        actorName: 'Bob',
+        body: 'ping',
+      });
+    const html = renderCard([mention('m1'), mention('m2')]);
+    expect(html).toMatch(/data-list-card-title=""[^>]*>Bob mentioned you/);
+    expect(html).not.toContain('data-activity-new-chip');
+    expect(html).toContain('data-activity-row="chat"');
   });
 
   it('the unread dot shows only when something in the group is unread', () => {
@@ -147,7 +200,6 @@ describe('ActivityCard on ui/ListCard', () => {
             cache={cache}
             presignEnabled={false}
             onOpenGroup={() => {}}
-            onOpenEntry={() => {}}
             selfName={null}
           />,
         ),
@@ -223,7 +275,7 @@ describe('ActivityCard on ui/ListCard', () => {
       item({ id: 'b', title: 'Q3', eventType: 'mention' }),
       item({ id: 'c', title: 'Q3', eventType: 'comment' }),
     ];
-    expect(activityCardTag(group)).toBe('3 updates');
+    expect(activityCardTag(group)).toBe('Post');
     expect(activityCardTag(group.slice(0, 1))).toBe('Post');
     const html = renderCard(group);
     expect(html).toMatch(/data-activity-scope-tag=""[^>]*>[^]*?">Post</);
@@ -240,12 +292,9 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(html).toMatch(
       /data-list-card-line="1"[^]*data-list-card-title=""[^]*>Q3<[^]*data-activity-time=""[^]*data-list-card-line="2"/,
     );
+    // Line 2: the newest entry's "<actor>: <text>", the kind tag, the unread dot.
     expect(html).toMatch(
-      /data-list-card-line="2"[^]*data-activity-new=""[^]*1 new[^]*data-activity-scope-tag=""[^]*data-list-card-unread=""/,
-    );
-    // Its one line: the actor, the comment text (locked 9 Nov 2026), the dot.
-    expect(html).toMatch(
-      /data-activity-line="e1"[^]*>Dev<[^]*>Looks good<[^]*data-activity-line-dot=""/,
+      /data-list-card-line="2"[^]*data-activity-preview=""[^>]*>Dev: Looks good<[^]*data-activity-scope-tag=""[^]*data-list-card-unread=""/,
     );
   });
 
@@ -396,9 +445,9 @@ describe('ActivityCard titles and previews', () => {
     ];
     expect(activityCardTitle(group)).toBe('Maya approved Watch launch');
     const html = renderCard(group);
-    // The head names the item; the line reads "Maya · Approved Watch launch".
+    // The row names the item; line 2 reads the whole action line.
     expect(html).toMatch(/data-list-card-title=""[^>]*>Watch launch</);
-    expect(html).toMatch(/>Maya<[^]*Approved Watch launch/);
+    expect(html).toMatch(/data-activity-preview=""[^>]*>Maya approved Watch launch</);
   });
 
   it('the title names the newest entry actor, never an older row actor', () => {
@@ -439,7 +488,7 @@ describe('ActivityCard titles and previews', () => {
       }),
     ]);
     expect(html).toMatch(/data-list-card-title=""[^>]*>Diwali reel</);
-    expect(count(html, 'data-activity-line=')).toBe(1);
+    expect(html).toMatch(/data-activity-preview=""[^>]*>Ana: /);
     expect(html).not.toContain('_today_');
     expect(html).not.toContain('*ship*');
   });

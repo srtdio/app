@@ -138,6 +138,8 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Thread view: no reply gesture or Reply action inside a thread. Swipe right does nothing, the sheet has no Reply, swipe left Delete stays; content starts at the top; the "N replies" divider carries Add to Tasks, Forward, More for the root. Guard: `src/__tests__/thread-view-no-reply.test.ts`.
 - Catch up: one card per item; card swipe = X axis + rotate only. Max 6deg, the stack below never moves. Item = post, brief, plan item, bank idea, chat main, chat thread; Mark as read / Undo cover every entry of the item in one call; own actions never make a card; gone or hidden items skip silently. The queue is fixed on open. Guard: `src/__tests__/catch-up-guards.test.ts`.
 - Catch-up cards live only in Catch up (its button in Activity, /activity?catchup=); notifications open the real place at the comment or message (9 Nov 2026).
+- Activity rows are ui/ListCard rows in PlanTabList's section frame; no Activity-only spacing; the 'N new' chip is ink (primary Button tokens), 16/18/20 by density.
+- Reactions: ui/ReactionChips everywhere text lives, never in Activity; drawer = EmojiSheet titled 'Add reaction'; reactions never notify.
 - Card name row + ⌄ menu (Open <kind>, Copy link); no Mute, no Star. Read-only cards: no edit, no resolve.
 - Long text >6 lines: a quiet "more" opens a bordered window that scrolls itself. Links shortened (host/…/last part). Names ≤25 (users_display_name_max25; inputs count from 20).
 - Behaviour: hide what a person can't do; Delete = UndoStrip; ⋯ menus = ActionMenu (Open, Copy link, others, Delete last); decisions only via PostDecisionBar; phone vs laptop via useIsLaptop; svh/dvh only.

@@ -7,15 +7,19 @@
 // rubber-bands: plan comments have no delete), chat's long-press / right-click
 // MessageActionMenu, a clock while pending and "Not sent" + Retry on a failed
 // own send, chat's @mention names. Creators-only notes carry a lock line.
+// Emoji reactions as chat's (9 Nov 2026): the menu's quick row and "+", the
+// laptop hover smiley, the chips under the text; one batched
+// plan_item_comment_reactions read per thread, after paint, again whenever
+// the comments refresh.
 // Also the @ helpers the comment box uses: who can be tagged (never me;
 // agency side only on a creators-only note or a plan not shared with the
 // client), and which tagged people a creators-only note blocks.
 //
-// Pure helpers carry the logic; the components only draw. No reads: author
+// Pure helpers carry the logic; the components only draw. No reads on paint: author
 // names and photos come from the members this session already holds
 // (peekWorkspaceMembers), never a request on paint. Tokens only.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { ICON_SIZE, IconLock } from '@/components/ui/icons';
@@ -64,6 +68,9 @@ import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-pri
 import { supabase } from '@/lib/supabase';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
+import { useReactions, type ReactionsApi } from '@/lib/reactions/use-reactions';
+import { whoReactedFromRows } from '@/lib/reactions/reads';
+import type { ReactionSummary } from '@/lib/reactions/model';
 
 /** A comment shown in the thread: a recorded row, or a pending own one. */
 export interface ShownComment {
@@ -167,7 +174,11 @@ export function planThreadRows(
 ): PlanThreadRow[] {
   const byId = new Map(comments.map((c) => [c.id, c]));
   const rows: PlanThreadRow[] = [];
-  for (const row of threadRows(comments.map(planCommentMessage), nowMs, timeZone)) {
+  for (const row of threadRows(
+    comments.map((c) => planCommentMessage(c)),
+    nowMs,
+    timeZone,
+  )) {
     if (row.kind === 'day') rows.push(row);
     if (row.kind !== 'message') continue;
     const comment = byId.get(row.message.id);
@@ -313,16 +324,20 @@ export function usePlanMentionMembers(
 }
 
 /** Chat's empty reactions, one array for every comment (rows never re-allocate it). */
-const NO_REACTIONS: ThreadMessage['reactions'] = [];
+const NO_REACTIONS: readonly ReactionSummary[] = [];
 const NO_IDS: string[] = [];
 
 /**
  * A plan comment as a chat ThreadMessage, so chat's own bubble draws it: a
  * recorded row is 'sent', a pending own one 'sending' (the clock), a failed
  * own one 'failed' ("Not sent" + Retry, or its refusal with Delete only).
- * Plan comments carry no files, cards, quotes or reactions. Pure.
+ * Plan comments carry no files, cards or quotes; reactions come from the
+ * thread's batched read (none on a pending one). Pure.
  */
-export function planCommentMessage(c: ShownComment): ThreadMessage {
+export function planCommentMessage(
+  c: ShownComment,
+  reactions: readonly ReactionSummary[] = NO_REACTIONS,
+): ThreadMessage {
   const time = Date.parse(c.createdAt);
   return {
     id: c.id,
@@ -338,7 +353,7 @@ export function planCommentMessage(c: ShownComment): ThreadMessage {
     reply: null,
     state: c.failed === true ? 'failed' : c.pending ? 'sending' : 'sent',
     status: 'sent',
-    reactions: NO_REACTIONS,
+    reactions: reactions as ThreadMessage['reactions'],
     ...(c.failed === true && c.refusal !== undefined ? { refusal: c.refusal } : {}),
   };
 }
@@ -410,10 +425,11 @@ export interface PlanCommentLinkTarget {
   itemId: string;
 }
 
-/** One open long-press menu: the comment and the bubble's rect. */
+/** One open long-press menu: the comment and the bubble's rect (the laptop smiley: its reactions row alone). */
 interface OpenMenu {
   comment: ShownComment;
   anchor: DOMRect | null;
+  reactionsOnly?: boolean;
 }
 
 /**
@@ -439,10 +455,11 @@ function PlanCommentRow(props: {
   reducedMotion: boolean;
   personSource: (message: ThreadMessage) => PrivateReplyDraft | null;
   mentions: BubbleMentions;
-  onOpenMenu: (comment: ShownComment, anchor: DOMRect | null) => void;
+  onOpenMenu: (comment: ShownComment, anchor: DOMRect | null, reactionsOnly?: boolean) => void;
   onReply: (() => void) | undefined;
   onRetry: ((id: string) => void) | undefined;
   onDiscard: ((id: string) => void) | undefined;
+  reactions: ReactionsApi;
 }): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLSpanElement>(null);
@@ -574,20 +591,41 @@ function PlanCommentRow(props: {
         },
         coarse: props.coarsePointer,
         onKeyOpen: () => open(bubbleRect()),
-        ...(props.hoverMenu ? { onMore: () => open(bubbleRect()) } : {}),
+        ...(props.hoverMenu
+          ? {
+              onMore: () => open(bubbleRect()),
+              onReact: () => {
+                clearClickSuppression();
+                latest.current.onOpenMenu(latest.current.comment, bubbleRect(), true);
+              },
+            }
+          : {}),
       }}
       {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
       {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
-      onBadgeClick={() => open(bubbleRect())}
+      reactionChips={{
+        onToggle: (emoji) => props.reactions.toggle(c.id, emoji),
+        onPick: (emoji) => props.reactions.pick(c.id, emoji),
+        who: {
+          targetId: c.id,
+          viewerId: props.me,
+          load: () =>
+            whoReactedFromRows(supabase, {
+              rows: props.reactions.rowsOf(c.id),
+              workspaceId: props.workspaceId,
+              known: (id) => props.profiles.get(id),
+            }),
+        },
+      }}
     />
   );
 }
 
 /**
  * The open comment's long-press menu: chat's MessageActionMenu with the rows
- * a plan comment has (Reply, Copy link, Copy text, Reply privately, and a
- * failed own send's Delete). No reactions, Forward, Tasks, Mark unread, Edit
- * or Delete: plan comments store none of those. Mounted only while open, so
+ * a plan comment has (the quick reactions and "+", Reply, Copy link, Copy
+ * text, Reply privately, and a failed own send's Delete). No Forward, Tasks,
+ * Mark unread, Edit or Delete: plan comments store none of those. Mounted only while open, so
  * its hooks never run on paint.
  */
 function PlanCommentMenu(props: {
@@ -601,6 +639,7 @@ function PlanCommentMenu(props: {
   onReply: (() => void) | undefined;
   onDiscard: ((id: string) => void) | undefined;
   onClose: () => void;
+  reactions: ReactionsApi;
 }): ReactElement {
   const toast = useToast();
   const openDm = useOpenPersonDm();
@@ -633,15 +672,18 @@ function PlanCommentMenu(props: {
       onClose={props.onClose}
       anchor={props.menu.anchor}
       mine={c.mine}
-      currentReaction={null}
-      canReact={false}
+      currentReaction={props.reactions.of(c.id).find((r) => r.mine)?.emoji ?? null}
+      canReact={!c.pending && c.failed !== true}
+      reactionsOnly={props.menu.reactionsOnly === true}
       canCopy={offer.copy}
       onCopy={() => {
         void copyText(resolveMentionText(c.body, nameOf)).then((ok) =>
           toast.show({ title: ok ? 'Message copied' : COPY_FAILED }),
         );
       }}
-      onReact={() => undefined}
+      onReact={(emoji) => {
+        if (!c.pending && c.failed !== true) props.reactions.toggle(c.id, emoji);
+      }}
       onReply={() => {
         if (offer.reply) props.onReply?.();
       }}
@@ -702,6 +744,18 @@ export function PlanItemThread(props: {
       ? peekWorkspaceMembers(props.me, props.workspaceId)
       : null;
   const profiles = planCommentProfiles(props.comments, held, props.workspaceId);
+  // The recorded comments' reactions: one batched read after paint, again
+  // whenever the comments refresh (the screen's own read; no new channel).
+  const reactionIds = useMemo(
+    () => props.comments.filter((c) => !c.pending && c.failed !== true).map((c) => c.id),
+    [props.comments],
+  );
+  const reactions = useReactions({
+    kind: 'plan-comment',
+    ids: reactionIds,
+    epoch: props.comments,
+    me: props.me,
+  });
   const rows = planThreadRows(props.comments, Date.now());
   const latest = useRef({ props, held });
   latest.current = { props, held };
@@ -728,9 +782,11 @@ export function PlanItemThread(props: {
     peerUserId: null,
     onOpen: (hint, el) => openPersonCardFrom(el, hint),
   }).current;
-  const openMenu = useRef((comment: ShownComment, anchor: DOMRect | null): void => {
-    setMenu({ comment, anchor });
-  }).current;
+  const openMenu = useRef(
+    (comment: ShownComment, anchor: DOMRect | null, reactionsOnly?: boolean): void => {
+      setMenu({ comment, anchor, reactionsOnly: reactionsOnly === true });
+    },
+  ).current;
   // Reply focuses the box inside the tap; the menu closes after (runMenuItem).
   const onReply = props.onReply;
   let afterLabel = false;
@@ -749,7 +805,7 @@ export function PlanItemThread(props: {
             <PlanCommentRow
               key={comment.id}
               comment={comment}
-              message={planCommentMessage(comment)}
+              message={planCommentMessage(comment, reactions.of(comment.id))}
               head={row.head}
               tail={row.tail}
               afterLabel={under}
@@ -767,6 +823,7 @@ export function PlanItemThread(props: {
               onReply={onReply}
               onRetry={props.onRetry}
               onDiscard={props.onDiscard}
+              reactions={reactions}
             />
           );
         })}
@@ -783,6 +840,7 @@ export function PlanItemThread(props: {
           onReply={onReply}
           onDiscard={props.onDiscard}
           onClose={() => setMenu(null)}
+          reactions={reactions}
         />
       ) : null}
     </>

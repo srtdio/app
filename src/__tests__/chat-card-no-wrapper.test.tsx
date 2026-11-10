@@ -79,7 +79,6 @@ function bubble(m: ThreadMessage): ReactElement {
     tail: true,
     timeZone: 'UTC',
     layout: 'touch',
-    onBadgeClick: () => {},
   });
 }
 

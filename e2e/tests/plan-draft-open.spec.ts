@@ -318,22 +318,22 @@ test('Notifications: plan alerts under All; a tap opens the plan at the item', a
       240_000,
     ),
   );
-  // All lists the plan alerts (the Plans chip is gone). 9 Nov 2026: each is an
-  // item card (the head names the plan) with the alert as its own line.
+  // All lists the plan alerts (the Plans chip is gone). Each is one row (the
+  // name), its alert as the row's preview line.
   await page.goto('/notifications');
   const head = (event: string) => page.locator(`[data-activity-event="${event}"]`);
-  const line = (event: string) => page.locator('[data-activity-card-cell]', { has: head(event) });
+  const line = (event: string) => head(event).locator('[data-activity-preview]');
   await expect(line('plan_opened')).toContainText(
-    new RegExp(`${PEER_NAME}\\s*Opened ${DATED_PLAN_TITLE} for approvers`),
+    new RegExp(`${PEER_NAME}\\s*Opened ${DATED_PLAN_TITLE} for approvers`, 'i'),
     { timeout: 15_000 },
   );
   await expect(page.locator('[data-activity-alert-icon="plan"]')).toHaveCount(4);
   await expect(line('plan_deleted')).toContainText(
-    new RegExp(`${PEER_NAME}\\s*Deleted ${DATED_PLAN_TITLE}`),
+    new RegExp(`${PEER_NAME}\\s*Deleted ${DATED_PLAN_TITLE}`, 'i'),
   );
   await expect(line('plan_date_changed')).toContainText('Lamp lighting reel moved to Fri 16 Oct');
   await expect(line('plan_updated')).toContainText(
-    new RegExp(`${PEER_NAME}\\s*Renamed Old name to ${DATED_PLAN_TITLE}`),
+    new RegExp(`${PEER_NAME}\\s*Renamed Old name to ${DATED_PLAN_TITLE}`, 'i'),
   );
   for (const lead of await page.locator('[data-activity-lead]').all()) {
     expectMinTouchTarget(await lead.boundingBox());

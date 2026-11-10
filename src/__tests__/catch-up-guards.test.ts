@@ -96,7 +96,7 @@ describe('catch-up guards', () => {
   it('cards live only in Catch up: an Activity row tap opens the real place', () => {
     const page = readFileSync(join(SRC, 'components/pages/NotificationsPage.tsx'), 'utf8');
     expect(page).not.toMatch(/\(entry: ActivityItem\) => openCatchUp\(entry\)/);
-    expect(page).toContain('onClick={() => openCatchUp(null)}');
+    expect(page).toContain('onCatchUp: () => openCatchUp(null),');
   });
 
   it('read-only cards: no edit, resolve or delete write in catch up', () => {

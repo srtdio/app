@@ -4,18 +4,15 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadMore } from '@/components/ui/LoadMore';
-import { IconButton } from '@/components/ui/IconButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { useTopbarActions } from '@/components/shell/topbar-actions';
-import { ICON_SIZE, IconActivity, IconAt, IconTickDouble } from '@/components/ui/icons';
+import { useActivityTopbar } from '@/components/shell/topbar-actions';
+import { ICON_SIZE, IconActivity, IconAt } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ActivityFilterBar, activityChip } from '@/components/pages/activity/ActivityFilterBar';
-import { cn } from '@/lib/cn';
-import { Text, textRole } from '@/components/ui/Text';
-import { GUTTER } from '@/components/ui/layout';
+import { Text } from '@/components/ui/Text';
 import { mentionHandle } from '@/lib/chat/mentions';
 import { errorText } from '@/lib/error-copy';
 import { useViewerSide } from '@/lib/chat/viewer-role';
@@ -44,16 +41,12 @@ import {
   MARKED_READ_LABEL,
   markAllTargets,
   markAllEntriesRead,
-  markChipRead,
   markEntryRead,
-  marksChipOnServer,
-  marksWholeInbox,
   mergeFresh,
   msUntilZonedMidnight,
   openAction,
   fetchActivityEntry,
   unreadCount,
-  updatesLabel,
   type ActivityDirection,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -72,15 +65,19 @@ import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { useOptionalToast } from '@/components/ui/toast';
 import { undoFailureTitle } from '@/lib/use-undoable-action';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
-import { ActivityBoxes } from '@/components/pages/activity/ActivityBoxes';
+import {
+  ACTIVITY_LIST,
+  ACTIVITY_SECTION,
+  ActivityBoxes,
+} from '@/components/pages/activity/ActivityBoxes';
 import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
-import { CATCH_UP, unreadHeading } from '@/lib/catch-up/copy';
 import { buildCatchUpQueue, heldEntries, type CatchUpItem } from '@/lib/catch-up/queue';
+import { peekThreadsQueue } from '@/lib/catch-up/threads';
 import {
   CATCH_UP_NEWEST,
   CATCH_UP_PARAM,
+  CATCH_UP_THREADS,
   catchUpReturnOf,
-  seedCatchUpEntry,
   takeCatchUpSeed,
 } from '@/lib/catch-up/route';
 
@@ -89,9 +86,6 @@ const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
 
 /** The page title: the surface is Activity. */
 export const ACTIVITY_TITLE = 'Activity';
-
-/** Mark all read's label (the top bar's primary IconButton). */
-export const MARK_ALL_READ_LABEL = 'Mark all read';
 
 /**
  * How a feed load lands: 'reset' clears the list first (a chip or workspace
@@ -542,32 +536,8 @@ export function NotificationsPage() {
     [workspaceId, newTrace, editItems, revertRead, toast, loadMentionCount],
   );
 
-  // Catch up opens only from the Catch up button (cards live only in Catch
-  // up, 9 Nov 2026). One history step (push): Back closes catch up.
-  const openCatchUp = useCallback(
-    (entry: ActivityItem | null, follow: readonly ActivityItem[] = []) => {
-      if (entry !== null) seedCatchUpEntry(entry, follow);
-      const next = new URLSearchParams(searchParams);
-      next.set(CATCH_UP_PARAM, entry?.id ?? CATCH_UP_NEWEST);
-      setSearchParams(next);
-    },
-    [searchParams, setSearchParams],
-  );
-  // A row tap opens the real place at the exact comment or message
-  // (openAction): mark it read (optimistic, reverted with a toast), toast a
-  // deleted plan, then navigate.
-  const handleOpenEntry = useCallback(
-    (entry: ActivityItem) => {
-      if (workspaceId === null) return;
-      const open = openAction(entry, workspaceKey, side);
-      if (open.markRead && entry.readAt === null) markEntriesRead([entry]);
-      if (open.toast !== null) toast?.show({ title: open.toast });
-      if (open.href !== null) navigate(open.href);
-    },
-    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
-  );
-  // A grouped card's head: every unread entry of the group read in one batch,
-  // then the group's newest comment opens (groupOpenEntry, chosen by the card).
+  // A row tap: every unread entry of the item read in one batch, then its
+  // newest entry opens at its exact place (the row hands it over).
   const handleOpenGroup = useCallback(
     (group: ActivityItem[], entry: ActivityItem) => {
       if (workspaceId === null) return;
@@ -582,43 +552,13 @@ export function NotificationsPage() {
     [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
-  // The active chip only: mark its unread rows (no snooze, or one that has run
-  // out) read at once and write immediately; no Undo and no confirmation toast.
-  // All and Unread are ONE call to inbox_mark_all_read (every unread row of
-  // every type, run-out snoozes included). Mentions marks every matching row
-  // on the server, loaded or not, 500 ids per inbox_mark_read_ids call
-  // (markChipRead); a failure part way reloads the list, so only the rows that
-  // did not save show unread again. Then the Mentions count and the nav badge
-  // refetch.
+  // Catch up's long-press "Mark all as read" (the top bar): every unread row
+  // of the workspace read at once by ONE inbox_mark_all_read, whatever chip is
+  // on; no Undo and no toast. A failure puts the rows back with the fixed
+  // toast. Then the Mentions count and the nav badge refetch.
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
-    const targets = markAllTargets(items, state, nowMs);
-    if (targets.length === 0) return;
-    if (marksChipOnServer(state)) {
-      const ids = new Set(targets.map((item) => item.id));
-      const stamp = new Date().toISOString();
-      editItems((prev) =>
-        prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)),
-      );
-      const traceId = newTrace();
-      void markChipRead(supabase, { workspaceId, state, traceId }).then((result) => {
-        if (!result.ok) {
-          logger.warn('notifications: chip mark read failed', {
-            trace_id: traceId,
-            error: result.error.message,
-          });
-          toast?.show({ title: MARK_READ_FAILED });
-          void loadActivity();
-        }
-        void loadMentionCount();
-        window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-      });
-      return;
-    }
-    if (!marksWholeInbox(state)) {
-      markEntriesRead(targets);
-      return;
-    }
+    const targets = markAllTargets(items, 'all', nowMs);
     const ids = new Set(targets.map((item) => item.id));
     const stamp = new Date().toISOString();
     editItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
@@ -636,47 +576,33 @@ export function NotificationsPage() {
       void loadMentionCount();
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
     });
-  }, [
-    workspaceId,
-    items,
-    state,
-    nowMs,
-    newTrace,
-    toast,
-    loadMentionCount,
-    loadActivity,
-    markEntriesRead,
-    editItems,
-    revertRead,
-  ]);
-
-  // The top bar: Mark all read as the primary (IconTickDouble), for the
-  // active chip; at 0 unread the slot is empty (it keeps its width). No sort
-  // (decided 7 Nov). The latest handler rides a ref so the published node
-  // changes only when the unread state does.
-  const chipUnread = useMemo(
-    () => markAllTargets(items, state, nowMs).length,
-    [items, state, nowMs],
-  );
-  const markAllRef = useRef(handleMarkAll);
-  markAllRef.current = handleMarkAll;
-  const hasUnread = chipUnread > 0;
-  const markAllNode = useMemo(
-    () =>
-      hasUnread ? (
-        <IconButton
-          label={MARK_ALL_READ_LABEL}
-          data-activity-mark-all=""
-          onClick={() => markAllRef.current()}
-        >
-          <IconTickDouble size={ICON_SIZE.control} />
-        </IconButton>
-      ) : undefined,
-    [hasUnread],
-  );
-  useTopbarActions({ primary: markAllNode });
+  }, [workspaceId, items, nowMs, newTrace, toast, loadMentionCount, editItems, revertRead]);
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  // The top bar (no sort): Threads | Catch up (topbar-actions). Threads opens
+  // the same catch up on unread threads only (?catchup=threads).
+  // Catch up from the top bar opens on the newest unread (?catchup=newest);
+  // an entry id opens the queue at that entry (a cold link does the same).
+  const openCatchUp = useCallback(
+    (entryId: string | null) => {
+      const next = new URLSearchParams(searchParams);
+      next.set(CATCH_UP_PARAM, entryId ?? CATCH_UP_NEWEST);
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams],
+  );
+  useActivityTopbar({
+    workspaceId,
+    totalUnread,
+    ready: !listLoading,
+    onCatchUp: () => openCatchUp(null),
+    onThreads: () => {
+      const next = new URLSearchParams(searchParams);
+      next.set(CATCH_UP_PARAM, CATCH_UP_THREADS);
+      setSearchParams(next);
+    },
+    onMarkAllRead: handleMarkAll,
+  });
   // Catch up (/activity?catchup=<entryId>): the queue is fixed when it opens
   // (Slack): the tapped entry (the row or toast handed it over, else the
   // list's copy, else one read by id for a cold link), then the unread
@@ -708,6 +634,11 @@ export function NotificationsPage() {
         }),
       });
     };
+    if (catchUpParam === CATCH_UP_THREADS) {
+      mark('catch-up:queue');
+      setCatchUp({ param: catchUpParam, queue: peekThreadsQueue(workspaceId, userId) });
+      return;
+    }
     if (catchUpParam === CATCH_UP_NEWEST) {
       if (listLoading) return;
       fix(null);
@@ -825,21 +756,6 @@ export function NotificationsPage() {
         mentionCount={mentionCount}
       />
 
-      {/* The Catch up bar: under the chips while anything is unread; gone at 0. */}
-      {totalUnread > 0 ? (
-        <div
-          data-activity-catch-up-bar=""
-          className={cn('flex min-h-11 items-center justify-between gap-3 pt-2', GUTTER)}
-        >
-          <Text as="h2" role="heading" className="min-w-0 truncate">
-            {unreadHeading(totalUnread)}
-          </Text>
-          <Button variant="primary" data-activity-catch-up="" onClick={() => openCatchUp(null)}>
-            {CATCH_UP}
-          </Button>
-        </div>
-      ) : null}
-
       {catchUp !== null && catchUp.queue.length > 0 && workspaceId !== null && userId !== null ? (
         <CatchUpScreen
           key={catchUp.param}
@@ -874,72 +790,54 @@ export function NotificationsPage() {
           />
         )
       ) : (
-        <div ref={listRef} className="pb-6">
-          {buckets.map((bucket, bucketIndex) => {
-            const entries = bucket.groups.flat();
-            return (
-              <section key={bucket.key} className="mt-2">
-                {/* One 44 line on the page edge: "YESTERDAY · 1 update" (Mark all read
-                    lives in the top bar). Text box to text box (9 Nov 2026): 24 from
-                    the day above's last text (8 + 16), 12 to the first card. */}
-                <div
-                  data-activity-bucket-head=""
-                  className={cn('flex min-w-0 items-center gap-2 pb-3 pt-4', GUTTER)}
-                >
-                  <Text as="h2" role="section" className="shrink-0">
-                    {bucket.label}
-                  </Text>
-                  <span aria-hidden="true" className={textRole('meta', 'shrink-0')}>
-                    ·
-                  </span>
-                  <span data-bucket-count="" className={textRole('meta', 'min-w-0 truncate')}>
-                    {updatesLabel(entries.length)}
-                  </span>
-                </div>
-                <div data-activity-list="" className={cn(LIST_CARD_GRID, GUTTER)}>
-                  {bucket.groups.map((group, groupIndex) => {
-                    const card = (
-                      <ActivityCard
-                        key={group[0]?.id ?? bucket.key}
-                        group={group}
-                        nowMs={nowMs}
-                        timeZone={tz}
-                        cache={cache}
-                        presignEnabled={presignEnabled}
-                        onOpenGroup={handleOpenGroup}
-                        onOpenEntry={handleOpenEntry}
-                        selfName={selfName}
-                        side={side}
-                        entering={entering.has(group[0]?.id ?? '')}
-                        lastInDay={groupIndex === bucket.groups.length - 1}
-                      />
-                    );
-                    // The newest card is what the induction points at (its own corners, not the padded list).
-                    return bucketIndex === 0 && groupIndex === 0 ? (
-                      <div
-                        key={group[0]?.id ?? bucket.key}
-                        data-induction={INDUCTION_KEYS.activityList}
-                        className="rounded-xl"
-                      >
-                        {card}
-                      </div>
-                    ) : (
-                      card
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+        // Plan's list frame (PlanTabList): 16 under the chips, 24 between
+        // sections, 16 heading to rows; one heading per section, no count.
+        <div ref={listRef} data-activity-list="" className={ACTIVITY_LIST}>
+          {buckets.map((bucket, bucketIndex) => (
+            <section
+              key={bucket.key}
+              data-activity-section={bucket.key}
+              className={ACTIVITY_SECTION}
+            >
+              <Text as="h2" role="section" data-activity-heading="">
+                {bucket.label}
+              </Text>
+              <div className={LIST_CARD_GRID}>
+                {bucket.groups.map((group, groupIndex) => {
+                  const id = group[0]?.id ?? bucket.key;
+                  const card = (
+                    <ActivityCard
+                      key={id}
+                      group={group}
+                      nowMs={nowMs}
+                      timeZone={tz}
+                      cache={cache}
+                      presignEnabled={presignEnabled}
+                      onOpenGroup={handleOpenGroup}
+                      selfName={selfName}
+                      side={side}
+                      entering={entering.has(id)}
+                    />
+                  );
+                  // The newest row is what the induction points at (its own box, not the list).
+                  return bucketIndex === 0 && groupIndex === 0 ? (
+                    <div key={id} data-induction={INDUCTION_KEYS.activityList} className="min-w-0">
+                      {card}
+                    </div>
+                  ) : (
+                    card
+                  );
+                })}
+              </div>
+            </section>
+          ))}
 
           {hasMore ? (
-            <div className="mt-4 flex flex-col px-4 md:px-6">
-              <LoadMore
-                data-activity-load-more=""
-                busy={loadingMore}
-                onMore={() => void loadMore()}
-              />
-            </div>
+            <LoadMore
+              data-activity-load-more=""
+              busy={loadingMore}
+              onMore={() => void loadMore()}
+            />
           ) : null}
         </div>
       )}

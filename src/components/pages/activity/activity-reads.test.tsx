@@ -83,7 +83,7 @@ window.matchMedia ??= ((query: string) => ({
   dispatchEvent: () => false,
 })) as unknown as typeof window.matchMedia;
 
-import { NotificationsPage, MARK_ALL_READ_LABEL } from '@/components/pages/NotificationsPage';
+import { NotificationsPage } from '@/components/pages/NotificationsPage';
 import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
 import {
   EMPTY_LINES,
@@ -135,13 +135,14 @@ function item(over: Partial<ActivityItem>): ActivityItem {
 
 let root: Root | null = null;
 
-/** The app top bar's two slots, as Topbar reads them. */
+/** The app top bar's two slots and Activity's pair, as Topbar reads them. */
 function TopbarProbe(): ReactElement {
-  const { sort, primary } = useTopbarActionsValue();
+  const { sort, primary, pair } = useTopbarActionsValue();
   return (
     <div data-probe-topbar="">
       <div data-probe-sort="">{sort}</div>
       <div data-probe-primary="">{primary}</div>
+      <div data-probe-pair="">{pair}</div>
     </div>
   );
 }
@@ -450,21 +451,29 @@ describe('Activity: the bell press prefetch', () => {
 });
 
 describe('Activity: the top bar', () => {
-  const markAll = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>(
-      `[data-probe-primary] button[aria-label="${MARK_ALL_READ_LABEL}"]`,
-    );
+  const catchUp = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('[data-probe-pair] [data-topbar-catch-up]');
+  const threads = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('[data-probe-pair] [data-topbar-threads]');
 
-  it('Mark all read is the primary while something on the chip is unread', async () => {
+  it('Threads then Catch up in place of the slots; no sort, no Mark all read double tick', async () => {
     render();
     await settle();
-    expect(markAll()).not.toBeNull();
-    expect(markAll()?.hasAttribute('data-activity-mark-all')).toBe(true);
-    // Moved up from the day line: nothing on the bucket head.
+    expect(threads()).not.toBeNull();
+    expect(catchUp()).not.toBeNull();
+    expect(catchUp()?.getAttribute('aria-label')).toMatch(/^Catch up, \d+ unread$/);
+    // Threads first, then Catch up; nothing in the sort and "+" slots.
+    const order = [...document.querySelectorAll('[data-probe-pair] button')].map((b) =>
+      b.hasAttribute('data-topbar-threads') ? 'threads' : 'catch-up',
+    );
+    expect(order).toEqual(['threads', 'catch-up']);
+    expect(document.querySelector('[data-probe-sort]')?.childElementCount).toBe(0);
+    expect(document.querySelector('[data-probe-primary]')?.childElementCount).toBe(0);
+    expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
     expect(document.querySelector('[data-activity-bucket-head] button')).toBeNull();
   });
 
-  it('the primary slot is empty at 0 unread', async () => {
+  it('at 0 unread Catch up stays, outlined, named "Catch up"', async () => {
     h.fetchActivityEntries.mockResolvedValue({
       ok: true,
       data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
@@ -472,14 +481,18 @@ describe('Activity: the top bar', () => {
     render();
     await settle();
     expect(document.body.textContent).toContain('Q3 Launch');
-    expect(markAll()).toBeNull();
-    expect(document.querySelector('[data-probe-primary]')?.childElementCount).toBe(0);
+    expect(catchUp()?.getAttribute('aria-label')).toBe('Catch up');
+    expect(catchUp()?.className).toContain('border-border-strong');
+    expect(threads()?.getAttribute('aria-label')).toBe('Threads');
   });
 
-  it('publishes no sort control into the top bar (decided 7 Nov)', async () => {
+  it('reads the workspace threads once, after the first paint', async () => {
+    h.rpc.mockClear();
     render();
     await settle();
-    expect(document.querySelector('[data-probe-sort] button')).toBeNull();
+    const calls = h.rpc.mock.calls.filter((c) => c[0] === 'chat_threads_for_me_all');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[1]).toMatchObject({ p_workspace_id: 'w1' });
   });
 
   it('reads newest first, also when an old Oldest first is stored', async () => {

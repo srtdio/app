@@ -257,7 +257,6 @@ describe('lighting rules', () => {
       'cockpit/Cockpit.tsx',
       'ui/viewers/SheetViewer.tsx',
       'chat/ReadingLayer.tsx',
-      'chat/EmojiPicker.tsx',
     ]) {
       const code = src(rel);
       expect(code, rel).not.toContain('selectionSlideRef');

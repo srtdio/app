@@ -14,7 +14,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { REACTION_BADGE_CLASS, ReactionBadge } from '@/components/ui/ReactionBadge';
+import { ReactionChips } from '@/components/ui/ReactionChips';
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import {
   bodyText,
@@ -26,7 +26,6 @@ import {
   MetaSpacer,
   FAILED_RETRY_CLASS,
   FailedLine,
-  REACTION_ROW_SPACE,
   bubbleStatus,
   bubbleTimeLabel,
   DayPill,
@@ -229,7 +228,6 @@ function renderBubble(
     timeZone: opts?.timeZone ?? 'UTC',
     layout: opts?.layout ?? 'touch',
     ...(opts?.viewerUserId !== undefined ? { viewerUserId: opts.viewerUserId } : {}),
-    onBadgeClick: () => {},
     ...(opts?.onRetry !== undefined ? { onRetry: opts.onRetry } : {}),
     ...(opts?.onCancelUpload !== undefined ? { onCancelUpload: opts.onCancelUpload } : {}),
     ...(opts?.onTranscribe !== undefined ? { onTranscribe: opts.onTranscribe } : {}),
@@ -757,7 +755,6 @@ describe('MessageBubble reply quote', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: () => {},
       onJumpToMessage,
     });
 
@@ -845,7 +842,6 @@ describe('MessageBubble keyboard and hover actions', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: noop,
       press,
     });
   }
@@ -1240,8 +1236,11 @@ describe('own-bubble inner content', () => {
     expect(cls).toBe('contents');
   });
 
-  it('F5: the badge hangs under the bubble, over its bottom edge by 3px, clear of the meta and the next row', () => {
-    const reactions = [{ emoji: '👍', count: 1, mine: false }];
+  it('9 Nov 2026: reactions are ui/ReactionChips under the message (no badge, no row padding)', () => {
+    const reactions = [
+      { emoji: '👍', count: 2, mine: true },
+      { emoji: '🎉', count: 1, mine: false },
+    ];
     for (const message of [
       makeMessage({ body: 'ok', reactions }),
       makeMessage({ body: 'a much longer message body', mine: true, reactions }),
@@ -1252,36 +1251,24 @@ describe('own-bubble inner content', () => {
       }),
     ]) {
       const root = renderBubble(message);
-      let badge = '';
-      let meta = '';
+      let chips: ReactElement<{ reactions: unknown; className?: string }> | null = null;
       walk(root, (el) => {
-        if (el.type === ReactionBadge) badge = REACTION_BADGE_CLASS;
+        if (el.type === ReactionChips) chips = el as typeof chips;
       });
-      const view = metaOf(root);
-      const html = view !== null ? renderStrip(BubbleMetaView(view)) : '';
-      meta = /class="([^"]*)"/.exec(html)?.[1] ?? '';
-      expect(badge).toBe(REACTION_BADGE_CLASS);
-      // Top edge 3px above the bubble's bottom; nothing anchors it to the bottom.
-      expect(badge.split(' ')).toContain('top-[calc(100%-3px)]');
-      expect(badge).not.toMatch(/(^| )-?bottom-/);
-      // L1: a head row draws no body meta (its time is on the name line).
-      expect(meta).toBe('');
-      expect(rootClass(root).split(' ')).toContain(REACTION_ROW_SPACE);
+      expect(chips).not.toBeNull();
+      expect((chips as unknown as { props: { reactions: unknown } }).props.reactions).toEqual(
+        reactions,
+      );
+      // 8 under the message (the column's gap-1 plus mt-1), 8 over the next row.
+      expect((chips as unknown as { props: { className?: string } }).props.className).toBe(
+        'mb-2 mt-1',
+      );
+      const cls = rootClass(root).split(' ');
+      for (const gone of ['mb-6', 'pb-6']) expect(cls).not.toContain(gone);
     }
-    // 20px of room below: the ~17px overhang never touches the next bubble.
-    expect(REACTION_ROW_SPACE).toBe('mb-6');
-  });
-
-  it('the reaction count on an own bubble reads on its panel badge', () => {
-    const reactions = [
-      { emoji: '👍', count: 2, mine: false },
-      { emoji: '🎉', count: 1, mine: false },
-    ];
-    const own = findByChildren(
-      renderBubble(makeMessage({ mine: true, senderUserId: 'me', reactions })),
-      3 as never,
+    expect(renderStrip(renderBubble(makeMessage({ body: 'ok' })))).not.toContain(
+      'data-reaction-chips',
     );
-    expect((own?.props as { className?: string }).className).toContain('text-fg-3');
   });
 });
 
@@ -1378,7 +1365,6 @@ describe('image album and viewer', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: () => {},
       onOpenImage,
     });
     const props = attachmentsEl(root)?.props as {
@@ -1454,7 +1440,6 @@ describe('swipe to reply', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: noop,
       press,
       swipe: {},
       ...(selecting ? { selection: { role: 'selectable', checked: false, onToggle: noop } } : {}),
@@ -1765,7 +1750,6 @@ describe('post references', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: () => {},
       postRefs: { chip },
     });
   }
@@ -1832,7 +1816,6 @@ describe('post references', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: () => {},
       postRefs: { onTalkAbout },
     });
     let props: { messageId?: string; onTalkAbout?: unknown } | undefined;
@@ -1998,7 +1981,6 @@ describe('post references after audit', () => {
             tail: true,
             timeZone: 'UTC',
             layout: 'touch',
-            onBadgeClick: () => {},
             postRefs: { chip },
           }),
         );
@@ -2316,7 +2298,6 @@ describe('tombstones, edited label and the neutral selection', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: noop,
       press,
       swipe: {},
       ...over,
@@ -2536,7 +2517,6 @@ describe('D7: long-press never selects text or shows the iOS callout', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: noop,
       press: press(coarse),
       swipe: {},
     }) as ReactElement<Record<string, unknown>>;
@@ -2624,7 +2604,6 @@ describe('D8: WhatsApp multi-select', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: noop,
       press: {
         handlers: {
           onPointerDown: noop,
@@ -2840,7 +2819,6 @@ describe('D8: WhatsApp multi-select', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: noop,
       selection: selectable(onToggle),
       postRefs: refs,
     });
@@ -3346,7 +3324,6 @@ describe('@mentions in bubbles', () => {
       layout: 'touch',
       viewerUserId: ME,
       mentions: { peerUserId: null, onOpen: () => {} },
-      onBadgeClick: () => {},
     });
     const texts: string[] = [];
     const labels: string[] = [];
@@ -3606,7 +3583,6 @@ describe('J7 only a real "@[all]" token draws bold', () => {
         cache={cache}
         presignEnabled={false}
         onOpenGroup={() => {}}
-        onOpenEntry={() => {}}
         selfName={null}
       />,
     );
@@ -4060,7 +4036,6 @@ describe('reply quote hides formatting markers', () => {
       tail: true,
       timeZone: 'UTC',
       layout: 'touch',
-      onBadgeClick: () => {},
     });
     let found: string | undefined;
     walk(root, (el) => {

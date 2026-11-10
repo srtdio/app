@@ -219,32 +219,30 @@ describe('Mark all read', () => {
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    expect(page).toMatch(
-      /if \(!marksWholeInbox\(state\)\) \{\s*markEntriesRead\(targets\);\s*return;\s*\}/,
-    );
+    // Catch up's long-press is always the whole inbox (10 Nov), whatever chip is on.
+    expect(page).not.toMatch(/marksWholeInbox|markChipRead/);
     expect(count(page, 'markAllEntriesRead(supabase, workspaceId, traceId)')).toBe(1);
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
-  it("Mark all read is the top bar's primary (IconTickDouble), hidden at 0 unread", () => {
+  it('the double-tick Mark all read is gone: Catch up long-press marks all (10 Nov)', () => {
     const page = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // The top bar's primary slot: an IconButton, gone (undefined) with nothing unread
-    // (the slot keeps its width); no sort beside it.
-    expect(page).toContain("export const MARK_ALL_READ_LABEL = 'Mark all read';");
-    expect(page).toMatch(
-      /hasUnread \? \(\s*<IconButton\s+label=\{MARK_ALL_READ_LABEL\}[\s\S]{0,160}?<IconTickDouble size=\{ICON_SIZE\.control\} \/>[\s\S]{0,80}?\) : undefined/,
-    );
-    expect(page).toContain('const hasUnread = chipUnread > 0;');
-    expect(page).toContain('useTopbarActions({ primary: markAllNode });');
+    // The top bar is Threads | Catch up (useActivityTopbar); Catch up's
+    // long-press "Mark all as read" is the whole-inbox write.
+    expect(page).not.toContain('MARK_ALL_READ_LABEL');
+    expect(page).not.toContain('IconTickDouble');
+    expect(page).not.toContain('data-activity-mark-all');
+    expect(page).toContain('onMarkAllRead: handleMarkAll,');
+    expect(page).toContain("const targets = markAllTargets(items, 'all', nowMs);");
     // Moved up from the day line: no link there any more, no count text.
     expect(page).not.toContain('<Button variant="link" onClick={handleMarkAll}>');
     expect(page).not.toContain('bucketIndex === 0 && chipUnread > 0');
     expect(page).not.toContain('{chipUnread} unread');
     expect(page).not.toContain('ActionMenu');
-    expect(count(page, 'markAllRef.current()')).toBe(1);
+    expect(page).not.toContain('markAllRef');
   });
 });
 
@@ -351,7 +349,6 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
         cache={cache}
         presignEnabled={false}
         onOpenGroup={() => {}}
-        onOpenEntry={() => {}}
         selfName={null}
         {...extra}
       />,
@@ -395,9 +392,13 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
 
   it('a plan alert reads the side-aware line', () => {
     const p = { ...plan('plan_opened'), actorName: 'Priya' };
-    // 9 Nov 2026: the head names the plan; the alert is a line (actor, then its words).
-    expect(card([p], { side: 'client' })).toMatch(/>Priya<[^]*Shared Week of 12 Oct with you/);
-    expect(card([p])).toMatch(/>Priya<[^]*Opened Week of 12 Oct for approvers/);
+    // The row's preview is the newest entry's whole action line, side-aware.
+    expect(card([p], { side: 'client' })).toMatch(
+      /data-activity-preview=""[^>]*>Priya shared Week of 12 Oct with you</,
+    );
+    expect(card([p])).toMatch(
+      /data-activity-preview=""[^>]*>Priya opened Week of 12 Oct for approvers</,
+    );
   });
 
   it('a merged plan edit reads "{name} updated {plan}" with the plan icon, light and dark', () => {
@@ -422,13 +423,12 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
               cache={cache}
               presignEnabled={false}
               onOpenGroup={() => {}}
-              onOpenEntry={() => {}}
               selfName={null}
               side={side}
             />
           </div>,
         );
-        expect(html).toMatch(/>Priya<[^]*Updated Week of 12 Oct/);
+        expect(html).toMatch(/data-activity-preview=""[^>]*>Priya updated Week of 12 Oct</);
         expect(html).toContain('data-activity-event="plan_updated"');
         expect(html).toContain('data-activity-alert-icon="plan"');
         // Token classes only: the theme swaps the tokens, never the markup.
@@ -600,11 +600,11 @@ describe('notifications fixes: page and provider wiring', () => {
   it('fix 9 (9 Nov 2026): a row tap opens the real place; catch up opens only from its button', () => {
     expect(page).toContain('const open = openAction(entry, workspaceKey, side);');
     expect(page).toContain('if (open.href !== null) navigate(open.href);');
-    // A group head marks every unread entry of the group read, then opens its newest comment.
+    // A row marks every unread entry of its item read, then opens its newest entry.
     expect(page).toContain('if (unread.length > 0) markEntriesRead(unread);');
     expect(page).not.toContain('groupHeadEntry');
-    // The Catch up button is the one way in.
-    expect(page).toContain('onClick={() => openCatchUp(null)}');
+    // No Catch up bar in the list (the top bar carries Catch up).
+    expect(page).not.toContain('data-activity-catch-up-bar');
   });
 
   it('fix 11: relative times age on the shared minute clock, never a page timer of its own', () => {
@@ -622,7 +622,7 @@ describe('notifications fixes: page and provider wiring', () => {
     // Loading is the card-shaped boxes (ActivityBoxes), labelled "Loading activity".
     expect(page).toContain('<ActivityBoxes />');
     expect(page).not.toContain('Upcoming');
-    expect(page).toContain('{updatesLabel(entries.length)}');
+    expect(page).not.toContain('updatesLabel');
   });
 
   it('fix 13: each chip empty state is its one positive line', () => {

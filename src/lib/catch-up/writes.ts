@@ -152,6 +152,23 @@ export async function markAllCatchUpRead(
   return res.ok ? { ok: true } : { ok: false, message: res.error.message };
 }
 
+/**
+ * Long-press Mark as read in the Threads queue: every queued thread read to
+ * its newest reply (chat_thread_read_set each, in parallel). The inbox is not
+ * touched (threads make no notifications).
+ */
+export async function markThreadsCatchUpRead(
+  client: Client,
+  input: { items: readonly CatchUpItem[]; traceId: string },
+): Promise<CatchUpWrite> {
+  const results = await Promise.all(
+    input.items.map((item) =>
+      markCatchUpRead(client, { workspaceId: item.workspaceId, item, traceId: input.traceId }),
+    ),
+  );
+  return results.find((r) => !r.ok) ?? { ok: true };
+}
+
 /** Skip a card silently (deleted, access lost): its entries read, nothing else. */
 export async function markCatchUpSkipped(
   client: Client,

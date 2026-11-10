@@ -17,8 +17,7 @@ import { useTopbarActionsValue } from '@/components/shell/topbar-actions';
 
 /**
  * One fixed 44 slot: the page's control, or an empty box of the same width so
- * search and sort never move between tabs (the "+" hides where a person can't
- * create, and Mark all read hides at 0 unread, keeping the width).
+ * search and sort never move between tabs (an empty slot keeps the width).
  */
 function Slot({ name, children }: { name: 'sort' | 'primary'; children: ReactNode }) {
   return (
@@ -43,11 +42,44 @@ export const TOPBAR_SEARCH_FIELD = 'border border-b-border-strong bg-panel text-
  */
 export function TopbarSlots() {
   const actions = useTopbarActionsValue();
+  // Activity's Threads | Catch up (10 Nov 2026) stand in place of both slots,
+  // 8 apart. Only Activity publishes a pair, so no other screen's bar moves.
+  if (actions.pair !== undefined && actions.pair !== null) {
+    return (
+      <span data-topbar-pair="" className="inline-flex shrink-0 items-center gap-2">
+        {actions.pair}
+      </span>
+    );
+  }
   return (
     <>
       <Slot name="sort">{actions.sort}</Slot>
       <Slot name="primary">{actions.primary}</Slot>
     </>
+  );
+}
+
+/**
+ * The phone's workspace name text. "<Brand> - <Platform>" can outgrow one
+ * line: it wraps to two short lines at word breaks. Beside Activity's Threads
+ * | Catch up pair (10 Nov 2026) it is one line instead, cut with an ellipsis
+ * but never under its first 8 characters (min-w-20; layout check 15 measures
+ * it at 390 and 375). Every other tab is unchanged. Its own component so
+ * Topbar itself stays hookless.
+ */
+export function WorkspaceNameText({ name }: { name: string }) {
+  const pair = useTopbarActionsValue().pair;
+  const withPair = pair !== undefined && pair !== null;
+  return (
+    <span
+      data-topbar-workspace-name=""
+      className={textRole(
+        'title',
+        withPair ? 'min-w-20 truncate' : 'min-w-0 line-clamp-2 break-words',
+      )}
+    >
+      {name}
+    </span>
   );
 }
 
@@ -117,11 +149,7 @@ export function Topbar({
           // starts on the 16 edge (the box is pulled out by its own inset).
           className="md:hidden -ml-4 min-w-0 max-w-48 text-left"
         >
-          {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
-              short lines at word breaks instead of clipping the platform. */}
-          <span className={textRole('title', 'min-w-0 line-clamp-2 break-words')}>
-            {workspaceName}
-          </span>
+          <WorkspaceNameText name={workspaceName} />
           <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
         </Button>
       )}

@@ -20,11 +20,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import {
-  NOTES_EMPTY_LINE,
-  NOTES_EMPTY_TITLE,
-  reactionBadgeLabel,
-} from '@/components/chat/MessageThread';
+import { NOTES_EMPTY_LINE, NOTES_EMPTY_TITLE } from '@/components/chat/MessageThread';
+import { reactionChipLabel } from '@/lib/reactions/model';
 import {
   GROUP_INFO_ADMIN_ONLY,
   GROUP_PHOTO_UNAVAILABLE,
@@ -38,17 +35,13 @@ import { nextMenuIndex } from '@/lib/chat/menu-keys';
 const source = (path: string): string =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
 
-describe('X7 FT44: reaction badge name', () => {
-  it('names each emoji with its count and the total', () => {
-    expect(
-      reactionBadgeLabel([
-        { emoji: '👍', count: 2 },
-        { emoji: '❤️', count: 1 },
-      ]),
-    ).toBe('Reactions: 👍 2, ❤️ 1. 3 in total. Show who reacted');
-    expect(source('../MessageThread.tsx') + source('../MessageBubble.tsx')).toContain(
-      '<ReactionBadge label={reactionBadgeLabel(message.reactions)}',
-    );
+describe('X7 FT44: reaction names (9 Nov 2026: chips, not the badge)', () => {
+  it('each chip names its emoji, count and whether you reacted', () => {
+    expect(reactionChipLabel({ emoji: '👍', count: 2, mine: true })).toBe('👍 2, you reacted');
+    expect(reactionChipLabel({ emoji: '❤️', count: 1, mine: false })).toBe('❤️ 1');
+    const both = source('../MessageThread.tsx') + source('../MessageBubble.tsx');
+    expect(both).toContain('<ReactionChips');
+    expect(both).not.toContain('ReactionBadge');
   });
 });
 

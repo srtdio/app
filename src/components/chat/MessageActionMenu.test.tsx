@@ -22,15 +22,6 @@ import {
   scheduleWindowBoundary,
   scrollFromPicker,
   menuClosesOnViewport,
-  loadEmojiPicker,
-  loadedEmojiPicker,
-  resetEmojiPickerLoad,
-  pickerInitialFocus,
-  nextTrapFocus,
-  returnPickerFocus,
-  type EmojiPickerModule,
-  type Focusable,
-  type PickerRoot,
   type MessageMenuItem,
 } from '@/components/chat/MessageActionMenu';
 import { applyServerClock, initialState } from '@/lib/chat/chat-store';
@@ -542,76 +533,7 @@ describe('F4: the picker never closes itself', () => {
   });
 });
 
-describe('F3: the picker chunk loads once, on menu open', () => {
-  afterEach(() => resetEmojiPickerLoad());
-
-  it('one import however often it is asked for; the module is then ready synchronously', async () => {
-    const module = { EmojiPickerPanel: () => null } as unknown as EmojiPickerModule;
-    const importer = vi.fn(() => Promise.resolve(module));
-    expect(loadedEmojiPicker()).toBeNull();
-    await Promise.all([loadEmojiPicker(importer), loadEmojiPicker(importer)]);
-    expect(importer).toHaveBeenCalledOnce();
-    expect(loadedEmojiPicker()).toBe(module);
-  });
-
-  it('a failed load is forgotten, so the next open tries again', async () => {
-    const importer = vi.fn(() => Promise.reject(new Error('chunk')));
-    await expect(loadEmojiPicker(importer)).rejects.toThrow('chunk');
-    await expect(loadEmojiPicker(importer)).rejects.toThrow('chunk');
-    expect(importer).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('F5: picker focus', () => {
-  function root(): PickerRoot & { focused: string[] } {
-    const focused: string[] = [];
-    const search: Focusable = { focus: () => focused.push('search') };
-    return {
-      focused,
-      focus: () => focused.push('sheet'),
-      querySelector: (selector) => (selector === '[data-emoji-search]' ? search : null),
-    };
-  }
-
-  it('laptop: initial focus on the search field; touch: on the sheet, never the search field', () => {
-    const laptop = root();
-    pickerInitialFocus('laptop', laptop).focus();
-    expect(laptop.focused).toEqual(['search']);
-    const touch = root();
-    pickerInitialFocus('touch', touch).focus();
-    expect(touch.focused).toEqual(['sheet']);
-  });
-
-  it('laptop before the body arrives: the shell holds focus until the search field exists', () => {
-    const shell: PickerRoot & { focused: boolean } = {
-      focused: false,
-      focus: () => {
-        shell.focused = true;
-      },
-      querySelector: () => null,
-    };
-    pickerInitialFocus('laptop', shell).focus();
-    expect(shell.focused).toBe(true);
-  });
-
-  it('Tab is trapped inside: it wraps at both ends, and enters from the container', () => {
-    const items = ['close', 'search', 'tab1', 'glyph'];
-    expect(nextTrapFocus(items, 'glyph', false)).toBe('close');
-    expect(nextTrapFocus(items, 'close', true)).toBe('glyph');
-    expect(nextTrapFocus(items, 'search', false)).toBe('tab1');
-    expect(nextTrapFocus(items, null, false)).toBe('close');
-    expect(nextTrapFocus(items, 'outside', true)).toBe('glyph');
-    expect(nextTrapFocus([], null, false)).toBeNull();
-  });
-
-  it('on close, focus returns to "+" (skipped when "+" left with the menu)', () => {
-    const plus = { isConnected: true, focus: vi.fn() };
-    expect(returnPickerFocus(plus)).toBe(true);
-    expect(plus.focus).toHaveBeenCalledOnce();
-    expect(returnPickerFocus({ isConnected: false, focus: vi.fn() })).toBe(false);
-    expect(returnPickerFocus(null)).toBe(false);
-  });
-
+describe('F5: the "+" opens the one emoji drawer', () => {
   it('the "+" carries the ref the picker returns focus to', () => {
     const moreRef = { current: null };
     const row = ReactionsRow({
@@ -676,15 +598,11 @@ describe('the divider is the 1px border token', () => {
   });
 });
 
-describe('emoji picker dismiss (no-cross)', () => {
-  it('closes with the ghost "Clear" text Button, never an X; remove-file keeps the bin', () => {
+describe('9 Nov 2026: one emoji drawer app-wide', () => {
+  it('"+" opens ui/EmojiSheet titled "Add reaction" (no chat picker, no X)', () => {
     const src = readFileSync(new URL('./MessageActionMenu.tsx', import.meta.url), 'utf8');
-    const at = src.indexOf('aria-label="Close emoji picker"');
-    expect(at).toBeGreaterThan(-1);
-    const open = src.lastIndexOf('<Button', at);
-    const end = src.indexOf('</Button>', at);
-    expect(src.slice(open, end)).toContain('variant="ghost"');
-    expect(src.slice(open, end)).toContain('Clear');
+    expect(src).toContain('<AddReactionSheet');
+    expect(src).not.toContain('EmojiPicker');
     expect(src).not.toMatch(/\bIconX\b/);
   });
 });

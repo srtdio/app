@@ -103,11 +103,11 @@ test("a long-press opens chat's menu with the rows a plan comment has @theme", a
   await expect(m.locator('[data-menu-item="reply"]')).toBeVisible();
   await expect(m.locator('[data-menu-item="copy-link"]')).toBeVisible();
   await expect(m.locator('[data-menu-item="copy"]')).toBeVisible();
-  // No reactions, Forward, Tasks, Mark unread, Edit or Delete on a plan comment.
+  // No Forward, Tasks, Mark unread, Edit or Delete on a plan comment (9 Nov 2026: reactions yes).
   for (const key of ['forward', 'add-task', 'mark-unread', 'edit', 'delete']) {
     await expect(m.locator(`[data-menu-item="${key}"]`)).toHaveCount(0);
   }
-  await expect(m.getByRole('button', { name: 'More reactions' })).toHaveCount(0);
+  await expect(m.getByRole('button', { name: 'More reactions' })).toHaveCount(1);
   // Reply: the box takes focus and the menu closes.
   await m.locator('[data-menu-item="reply"]').click();
   await expect(m).toHaveCount(0);
