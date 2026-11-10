@@ -12,6 +12,10 @@ name: CI
 #   - Tests that read source as text (readFileSync/readdirSync) are invisible to
 #     `vitest related`, so a related run adds them unless the PR touches only
 #     src/server/, workers/ or .github/ (none of those tests read there).
+#   - A PR push that changes only e2e/visual/__screenshots__/ since the last
+#     push, when CI passed on that push (scripts/ci/screenshot-only.sh; e.g. the
+#     baseline commit after [update-visual-baselines]): code=false and the unit
+#     run is src/__tests__/visual-coverage.test.ts alone (it reads the baselines).
 # test-shard: the unit run in 4 parallel shards.
 # test: the required check; fails if change detection or any shard failed,
 #   passes on success or skip.
@@ -32,6 +36,10 @@ concurrency:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    # actions: read for the screenshot-only check (reads this workflow's runs).
+    permissions:
+      contents: read
+      actions: read
     outputs:
       code: ${{ steps.diff.outputs.code }}
       unit: ${{ steps.diff.outputs.unit }}
@@ -46,6 +54,11 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action }}
+          BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "push" ]; then
@@ -53,6 +66,13 @@ jobs:
             echo "unit=all" >> "$GITHUB_OUTPUT"
             echo "related=" >> "$GITHUB_OUTPUT"
             echo "push: everything, full unit suite"
+            exit 0
+          fi
+          if [ "$(scripts/ci/screenshot-only.sh ci.yml)" = true ]; then
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "unit=related" >> "$GITHUB_OUTPUT"
+            printf 'related<<__RELATED__\nsrc/__tests__/visual-coverage.test.ts\n__RELATED__\n' >> "$GITHUB_OUTPUT"
+            echo "screenshot-only push: visual-coverage test only"
             exit 0
           fi
           BASE_REF="${BASE_REF:-main}"
