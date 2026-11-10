@@ -1615,7 +1615,8 @@ const SCREENS: Screen[] = [
     prepare: (_network, page) => holdThreadPage(page, 'hang'),
     steps: async (page) => {
       await openChat(page, MAYA_NAME);
-      await tap([plainMessageText(page)], 'message text');
+      // Its leading edge: on laptop the hover More key covers the text's right end.
+      await plainMessageText(page).click({ position: { x: 4, y: 4 } });
       await waitFor([page.locator('[data-thread-view] [data-thread-fill]')], 'placeholders');
     },
   },
@@ -1627,7 +1628,8 @@ const SCREENS: Screen[] = [
     prepare: (_network, page) => holdThreadPage(page, 'fail'),
     steps: async (page) => {
       await openChat(page, MAYA_NAME);
-      await tap([plainMessageText(page)], 'message text');
+      // Its leading edge: on laptop the hover More key covers the text's right end.
+      await plainMessageText(page).click({ position: { x: 4, y: 4 } });
       await waitFor([page.locator('[data-thread-view] [data-thread-load-failed]')], 'failed');
     },
   },
