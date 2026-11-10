@@ -2363,6 +2363,18 @@ export async function assertActivityPreviews(
       }
       return {
         height: row.getBoundingClientRect().height,
+        // The row's own content height: its body plus its padding (what the
+        // height must settle on once an unfold is done).
+        natural: (() => {
+          const body = row.querySelector('[data-list-card-body]');
+          const cs = getComputedStyle(row);
+          return (
+            (body?.getBoundingClientRect().height ?? 0) +
+            (parseFloat(cs.paddingTop) || 0) +
+            (parseFloat(cs.paddingBottom) || 0)
+          );
+        })(),
+        animating: row.getAnimations().length > 0,
         lines: tops.length,
         text: (preview?.textContent ?? '').trim(),
         name: row.querySelector('[data-activity-lead]')?.getAttribute('aria-label') ?? '',
@@ -2398,15 +2410,21 @@ export async function assertActivityPreviews(
     await expect(toggle)
       .toHaveAttribute('data-activity-preview-toggle', 'less', { timeout: 5_000 })
       .catch(() => undefined);
+    await settleRows(page);
     const open = await read(marks.long);
     if (page.url() !== url) out.push('"more" navigated away');
     if (open?.toggle !== 'less') out.push('"more" did not turn into "less"');
     if (open !== null && open.height <= long.height) out.push('"more" did not unfold the row');
+    // Once the unfold settles the row is its full content height (+-1).
+    if (open !== null && (open.animating || Math.abs(open.height - open.natural) > 1)) {
+      out.push(`the unfolded row settled at ${open.height}, not its full height ${open.natural}`);
+    }
     if (open?.toggle === 'less') {
       await toggle.click();
       await expect(toggle)
         .toHaveAttribute('data-activity-preview-toggle', 'more', { timeout: 5_000 })
         .catch(() => undefined);
+      await settleRows(page);
     }
     const folded = await read(marks.long);
     if (folded?.toggle !== 'more' || Math.abs((folded?.height ?? 0) - long.height) > 1) {
@@ -2460,5 +2478,27 @@ export async function assertActivityCounts(page: Page, screenName: string): Prom
   settleFindings(
     screenName,
     out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/**
+ * Every Activity row has finished its unfold (no running animation on any
+ * row) and the rows hold still across two animation frames. No fixed sleep.
+ */
+async function settleRows(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-activity-list] [data-list-card]'),
+        );
+        const read = (): string => rows.map((row) => row.offsetHeight).join(',');
+        const before = read();
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() =>
+            resolve(rows.every((row) => row.getAnimations().length === 0) && read() === before),
+          ),
+        );
+      }),
   );
 }

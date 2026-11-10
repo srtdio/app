@@ -1,6 +1,5 @@
 import { stripFormat } from '@srtdio/comments';
-import { DUR_BASE_MS, EASE, itemIn, play, rememberCard, useMoveOnMount } from '@/lib/motion';
-import { TOUCH_ROLL } from '@/lib/motion/moves';
+import { itemIn, rememberCard, unfold, useMoveOnMount } from '@/lib/motion';
 import {
   cutPreview,
   PREVIEW_LESS,
@@ -580,23 +579,24 @@ function ActivityPreview({
   }, [text]);
   const lines: 1 | 2 = (open && cut?.cut === true) || cut?.lines === 2 ? 2 : 1;
   useLayoutEffect(() => onLines(lines), [lines, onLines]);
+  // more / less: the row's height eases to its new height (lib/motion unfold,
+  // never a fade; instant under Reduce Motion); the rows below move with it.
+  const unfoldFrom = useRef<{ row: HTMLElement; px: number } | null>(null);
+  useLayoutEffect(() => {
+    const from = unfoldFrom.current;
+    unfoldFrom.current = null;
+    if (from !== null) unfold(from.row, from.px);
+  }, [open, lines]);
   const toggle = (event: MouseEvent<HTMLButtonElement>): void => {
     event.preventDefault();
     event.stopPropagation();
     const next = !open;
     if (next) unfoldedRows.add(rowId);
     else unfoldedRows.delete(rowId);
+    // The row's height before the change: it eases to the new one (unfold).
+    const row = ref.current?.closest<HTMLElement>('[data-list-card]') ?? null;
+    unfoldFrom.current = row === null ? null : { row, px: row.getBoundingClientRect().height };
     setOpen(next);
-    // Y only, never a fade; instant under Reduce Motion (play).
-    play(
-      ref.current?.parentElement,
-      TOUCH_ROLL,
-      [{ transform: 'translateY(-4px)' }, { transform: 'none' }],
-      {
-        duration: DUR_BASE_MS,
-        easing: EASE.enter,
-      },
-    );
   };
   const marker = (label: string): ReactElement => (
     <Button
