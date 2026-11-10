@@ -7,17 +7,16 @@
 // list paints at once.
 import type { ReactElement } from 'react';
 import { Bone, BoxSkeleton } from '@/lib/motion';
-import { cn } from '@/lib/cn';
-import { GUTTER } from '@/components/ui/layout';
 import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
 import { LOADING_NOTIFICATIONS } from '@/components/pages/activity/data';
 import { getFillCount } from '@/lib/use-fill-count';
 
 /**
- * The list's frame, Plan's own values (PlanTabList): 16 under the chip row,
- * 24 between sections, 32 under the last; the page gutter.
+ * The list's frame, Plan's own values (PlanTabList's PLAN_TAB_FRAME): 24
+ * between sections, 32 under the last. The 16 under the chip row and the side
+ * gutter are shell/ListScreen's.
  */
-export const ACTIVITY_LIST = cn('flex flex-col gap-6 pb-8 pt-4', GUTTER);
+export const ACTIVITY_LIST = 'flex flex-col gap-6 pb-8';
 
 /** One section: its heading, 16, then its rows (PlanTabList's section). */
 export const ACTIVITY_SECTION = 'flex flex-col gap-4';

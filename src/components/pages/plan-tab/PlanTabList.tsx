@@ -20,8 +20,6 @@ import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostC
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { LIST_CARD_GRID, ListCard, ListCardBox } from '@/components/ui/ListCard';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
-import { cn } from '@/lib/cn';
-import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import {
@@ -46,6 +44,13 @@ import { LoadMore, LOAD_MORE_LABEL } from '@/components/ui/LoadMore';
 export function loadMoreLabel(): string {
   return LOAD_MORE_LABEL;
 }
+
+/**
+ * The plan list's frame inside shell/ListScreen's content (the shell owns the
+ * 16 under the chips and the side gutter): 24 between sections, 32 under the
+ * last. Activity's list uses the same frame (ACTIVITY_LIST).
+ */
+export const PLAN_TAB_FRAME = 'flex flex-col gap-6 pb-8';
 
 /** What Load more needs: busy while a page is in flight, and the tap. Null: every plan is in. */
 export interface PlanTabMore {
@@ -126,7 +131,7 @@ export function PlanTabList(props: {
     onMore: props.more?.onMore,
   });
   return (
-    <div data-plan-tab-list="" className={cn('flex flex-col gap-6 pb-8 pt-4', GUTTER)}>
+    <div data-plan-tab-list="" className={PLAN_TAB_FRAME}>
       {sections.length === 0 ? (
         <div data-plan-tab-chip-zero="">
           <EmptyState icon={<IconPlan size={ICON_SIZE.tray} />} title={PLAN_WEEK_CHIP_ZERO} />
@@ -242,7 +247,7 @@ export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
       lit="flat"
       label="Loading plans"
       data-plan-tab-loading=""
-      className={cn('flex flex-col gap-6 pb-8 pt-4', GUTTER)}
+      className={PLAN_TAB_FRAME}
     >
       <section className="flex flex-col gap-4">
         {heading ? (

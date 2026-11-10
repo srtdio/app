@@ -12,7 +12,6 @@ import { join } from 'node:path';
 import { act, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  CHAT_HOME_EDGE,
   CHAT_HOME_STACK,
   ChannelCard,
   DEFAULT_LIST_INPUT,
@@ -124,14 +123,13 @@ describe('chat home: one list', () => {
     expect(markup).not.toContain('>People<');
     expect(markup).not.toContain('data-tile');
     expect((view([group, dm]).props as { className: string }).className).toBe(CHAT_HOME_STACK);
-    expect(CHAT_HOME_EDGE).toBe('px-4');
     tokenOnly(markup);
   });
 
-  it('a stacked list of rows, touching, on the 16 edge, no grid', () => {
+  it('a stacked list of rows, touching, no edge of its own (the body has the gutter), no grid', () => {
     expect(CHAT_ROW_LIST.split(' ')).toEqual(expect.arrayContaining(LIST_CARD_STACK.split(' ')));
     expect(CHAT_ROW_LIST.split(' ').filter((c) => c.startsWith('gap'))).toEqual([]);
-    expect(CHAT_ROW_LIST.split(' ')).toContain(CHAT_HOME_EDGE);
+    expect(CHAT_ROW_LIST.split(' ').some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
     const markup = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
     expect(markup).not.toContain('grid-cols');
     expect(CHAT_HOME_STACK).toBe('flex flex-col gap-2');

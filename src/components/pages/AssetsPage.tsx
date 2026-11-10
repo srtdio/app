@@ -7,8 +7,7 @@ import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { SortMenu } from '@/components/ui/SortMenu';
-import { PageHead } from '@/components/shell/PageHead';
-import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import { ListScreen, SectionSelect } from '@/components/shell/ListScreen';
 import { useTopbarActions } from '@/components/shell/topbar-actions';
 import { useSelectMode } from '@/components/pages/pipeline/use-select-mode';
 import { ICON_SIZE, IconAssets } from '@/components/ui/icons';
@@ -50,7 +49,6 @@ import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
 import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
 import { SelectBar, useListSelection, visibleSelectActions } from '@/components/ui/SelectBar';
-import { GUTTER } from '@/components/ui/layout';
 import { BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import {
   addAssetLink,
@@ -876,59 +874,57 @@ export function AssetsPage() {
 
   return (
     <>
-      <PageHead title="Assets" hidden />
-      {/* The type chips with Select pinned at the row's end. */}
-      <SectionHeader select={<SectionSelect active={selectMode.on} onToggle={selectMode.toggle} />}>
-        {assetsFailed ? null : (
-          <AssetTabs value={tab} counts={counts ?? NO_COUNTS} onChange={setTab} />
-        )}
-      </SectionHeader>
-
-      <div role="tabpanel" id={ASSET_TABPANEL_ID} aria-labelledby={assetTabId(tab)}>
-        {assetsFailed ? (
-          <div className={cn(GUTTER, 'mt-4')}>
+      {/* The type chips with Select pinned at the row's end; the tab panel is
+          the shell's content (16 under the chips, the side gutter). */}
+      <ListScreen
+        title="Assets"
+        select={<SectionSelect active={selectMode.on} onToggle={selectMode.toggle} />}
+        chips={
+          assetsFailed ? null : (
+            <AssetTabs value={tab} counts={counts ?? NO_COUNTS} onChange={setTab} />
+          )
+        }
+      >
+        <div role="tabpanel" id={ASSET_TABPANEL_ID} aria-labelledby={assetTabId(tab)}>
+          {assetsFailed ? (
             <LoadError title="your files" onRetry={() => void retryLoad()} retrying={retrying} />
-          </div>
-        ) : listLoading ? (
-          <BoxSkeleton
-            lit="flat"
-            label="Loading files"
-            className={cn(GUTTER, 'py-4', LIST_CARD_GRID)}
-          >
-            {skeletonKeys().map((key) => (
-              <ListCardBox key={key} data-skeleton-tile="" />
-            ))}
-          </BoxSkeleton>
-        ) : tab === 'all' && liveItems.length === 0 ? (
-          // One line; the top bar's "+" (New file) is the only create button.
-          <EmptyState icon={<IconAssets size={ICON_SIZE.status} />} title="Files show up here." />
-        ) : visible.length === 0 ? (
-          tab !== 'all' ? (
-            <div data-asset-tab-empty={tab} className={cn(GUTTER, 'py-10 text-base text-fg-2')}>
-              {TAB_EMPTY[tab]}
+          ) : listLoading ? (
+            <BoxSkeleton lit="flat" label="Loading files" className={cn('pb-4', LIST_CARD_GRID)}>
+              {skeletonKeys().map((key) => (
+                <ListCardBox key={key} data-skeleton-tile="" />
+              ))}
+            </BoxSkeleton>
+          ) : tab === 'all' && liveItems.length === 0 ? (
+            // One line; the top bar's "+" (New file) is the only create button.
+            <EmptyState icon={<IconAssets size={ICON_SIZE.status} />} title="Files show up here." />
+          ) : visible.length === 0 ? (
+            tab !== 'all' ? (
+              <div data-asset-tab-empty={tab} className="pb-10 text-base text-fg-2">
+                {TAB_EMPTY[tab]}
+              </div>
+            ) : null
+          ) : (
+            <div ref={gridRef} className="pb-4">
+              <AssetList
+                items={shownItems}
+                presignEnabled={presignEnabled}
+                cache={cache}
+                onOpen={(item) => openAsset(item)}
+                selectFor={(item) => selectMode.selectFor(item.id)}
+              />
             </div>
-          ) : null
-        ) : (
-          <div ref={gridRef} className={cn(GUTTER, 'py-4')}>
-            <AssetList
-              items={shownItems}
-              presignEnabled={presignEnabled}
-              cache={cache}
-              onOpen={(item) => openAsset(item)}
-              selectFor={(item) => selectMode.selectFor(item.id)}
-            />
-          </div>
-        )}
-        {/* Older files load a page at a time; tabs and sort work over what is
-            loaded. Shown only when there is more under this tab. */}
-        {!assetsFailed &&
-        !listLoading &&
-        (rule.button || (loadingMore && !silentFill) || (fillFailedAt === next && !next.done)) ? (
-          <div className={cn(GUTTER, 'pb-4 flex flex-col')}>
-            <LoadMore data-assets-load-more="" busy={loadingMore} onMore={onLoadMore} />
-          </div>
-        ) : null}
-      </div>
+          )}
+          {/* Older files load a page at a time; tabs and sort work over what is
+              loaded. Shown only when there is more under this tab. */}
+          {!assetsFailed &&
+          !listLoading &&
+          (rule.button || (loadingMore && !silentFill) || (fillFailedAt === next && !next.done)) ? (
+            <div className="pb-4 flex flex-col">
+              <LoadMore data-assets-load-more="" busy={loadingMore} onMore={onLoadMore} />
+            </div>
+          ) : null}
+        </div>
+      </ListScreen>
 
       {/* Deleted files wait 31 days in Recently deleted; the way there from Assets.
           The link variant pads its text by 8px (px-2), so the row's left gutter

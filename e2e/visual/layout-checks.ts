@@ -2582,9 +2582,12 @@ async function settleRows(page: Page): Promise<void> {
 /**
  * The list-screen axis (shell/ListScreen, 10 Nov 2026): the five positions a
  * list tab's shell owns, read on the page as it stands. (a) top bar bottom to
- * the chip row, (b) <main> left to the first chip, (c) chip row bottom to the
- * first content row, (d) <main> left to that row's text, (e) the first line's
- * right-most row content edge to <main> right. NaN where the tab has none.
+ * the chip row, (b) the chip row's left to the first chip, (c) chip row bottom
+ * to the first content (a row, or a section heading above the rows), (d) the
+ * chip row's left to the first row's text, (e) the first line's right-most row
+ * content edge to the chip row's right. The chip row spans its column (the
+ * page, or the chat list's pane beside a thread on laptop). NaN where the tab
+ * has none.
  */
 export async function readListScreenAxis(page: Page, screen: string): Promise<ListScreenAxis> {
   const at = await page.evaluate(() => {
@@ -2602,6 +2605,9 @@ export async function readListScreenAxis(page: Page, screen: string): Promise<Li
       document.querySelectorAll('main [data-chip-row], main [data-activity-chips]'),
     ).find(shown);
     const chips = row?.getBoundingClientRect();
+    // The column the shell lays out: the chip row spans it.
+    const colLeft = chips?.x ?? left;
+    const colRight = chips?.right ?? right;
     const chip =
       row === undefined
         ? undefined
@@ -2618,19 +2624,32 @@ export async function readListScreenAxis(page: Page, screen: string): Promise<Li
       .map((c) => c.querySelector('[data-list-card-body]')?.getBoundingClientRect().right)
       .filter((n): n is number => n !== undefined);
     const title = first?.querySelector('[data-list-card-title]')?.getBoundingClientRect();
+    // The first content: the top-most row or section heading in the shell's
+    // content (Plan and Activity open on a heading); else the first row.
+    const contentTops = Array.from(
+      document.querySelectorAll(
+        'main [data-shell="content"] [data-list-card], main [data-shell="content"] h2, main [data-shell="content"] h3',
+      ),
+    )
+      .filter(
+        (el) =>
+          shown(el) && (chips === undefined || el.getBoundingClientRect().y >= chips.bottom - 1),
+      )
+      .map((el) => el.getBoundingClientRect().y);
+    const contentY = contentTops.length > 0 ? Math.min(...contentTops) : firstTop;
     return {
       chipsTop: chips === undefined ? Number.NaN : chips.y - barBottom,
-      chipX: chip === undefined ? Number.NaN : chip.getBoundingClientRect().x - left,
+      chipX: chip === undefined ? Number.NaN : chip.getBoundingClientRect().x - colLeft,
       contentTop:
-        chips === undefined || firstTop === undefined ? Number.NaN : firstTop - chips.bottom,
-      textX: title === undefined ? Number.NaN : title.x - left,
-      rightInset: lineRights.length === 0 ? Number.NaN : right - Math.max(...lineRights),
+        chips === undefined || contentY === undefined ? Number.NaN : contentY - chips.bottom,
+      textX: title === undefined ? Number.NaN : title.x - colLeft,
+      rightInset: lineRights.length === 0 ? Number.NaN : colRight - Math.max(...lineRights),
     };
   });
   return { screen, ...at };
 }
 
-/** Pipeline (on the shell): the five positions equal the SCREEN_* constants, +-1. */
+/** A list tab on the shell: the five positions equal the SCREEN_* constants, +-1. */
 export function assertListScreenAxis(axis: ListScreenAxis, laptop: boolean): void {
   settleFindings(
     `list-screen axis ${axis.screen}`,
@@ -2642,9 +2661,9 @@ export function assertListScreenAxis(axis: ListScreenAxis, laptop: boolean): voi
 }
 
 /**
- * The other tabs, measure only (the next PR moves them onto the shell): log
- * each tab's five numbers and the delta from Pipeline under "list-screen axis"
- * in the Visual CI log, and annotate the test. Never fails.
+ * The report beside the asserts: log each tab's five numbers and the delta
+ * from Pipeline under "list-screen axis" in the Visual CI log, and annotate
+ * the test. Never fails (assertListScreenAxis does).
  */
 export function reportListScreenAxis(project: string, rows: readonly ListScreenAxis[]): void {
   const base = rows[0];

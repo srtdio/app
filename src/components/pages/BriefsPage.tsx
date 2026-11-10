@@ -10,8 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
-import { PageHead } from '@/components/shell/PageHead';
-import { SectionHeader } from '@/components/shell/SectionHeader';
+import { ListScreen, type ListScreenChips } from '@/components/shell/ListScreen';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
@@ -61,7 +60,6 @@ import {
 import { cn } from '@/lib/cn';
 import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
-import { GUTTER } from '@/components/ui/layout';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -90,28 +88,26 @@ interface BriefsHeaderProps {
 }
 
 /**
- * The Briefs chip row (decisions A, B): the shared SectionHeader with the All
- * / Open / Closed chips. New brief lives in the app top bar
+ * The Briefs chip row (decisions A, B): the All / Open / Closed chips, drawn by
+ * shell/ListScreen's chip row. New brief lives in the app top bar
  * ({@link briefsTopbarActions}); there is no Sort (fixed order, 9 Nov 2026);
  * search lives only in the top bar's command palette. Pure (no hooks) so the
  * wiring is unit-tested by walking the returned tree.
  */
-export function briefsHeader(props: BriefsHeaderProps): ReactElement {
-  return (
-    <SectionHeader>
-      {FILTERS.map((item) => (
-        <Chip
-          key={item.key}
-          label={item.label}
-          {...(props.counts?.[item.key] !== undefined ? { count: props.counts[item.key] } : {})}
-          selected={props.filter === item.key}
-          size="tap"
-          className="flex-none whitespace-nowrap"
-          onClick={() => props.onFilterChange(item.key)}
-        />
-      ))}
-    </SectionHeader>
-  );
+export function briefsHeader(props: BriefsHeaderProps): ListScreenChips {
+  return {
+    chips: FILTERS.map((item) => (
+      <Chip
+        key={item.key}
+        label={item.label}
+        {...(props.counts?.[item.key] !== undefined ? { count: props.counts[item.key] } : {})}
+        selected={props.filter === item.key}
+        size="tap"
+        className="flex-none whitespace-nowrap"
+        onClick={() => props.onFilterChange(item.key)}
+      />
+    )),
+  };
 }
 
 /** The blocked "+" toast on Briefs (no brief.create). */
@@ -227,10 +223,14 @@ export function deriveSortedBriefs(
   return orderBriefsFixed(narrowed);
 }
 
-const LIST_CLASS = cn(GUTTER, 'py-4 flex flex-col gap-6');
+// The list inside shell/ListScreen's content (the shell owns the 16 under the
+// chips and the side gutter): 24 between sections, 16 under the last.
+const LIST_CLASS = 'pb-4 flex flex-col gap-6';
 // ui/ListCard's page grid: one column on phone, auto-fill columns (at least 360)
-// on laptop, 12 between cards.
+// on laptop, 12 between cards. GRID_CLASS sits under a day heading (its 12);
+// the flat list's grid is the first content, on the shell's 16.
 const GRID_CLASS = cn('pt-3', LIST_CARD_GRID);
+const FLAT_GRID_CLASS = LIST_CARD_GRID;
 
 /** The longest the first paint waits for the chip counts once the rows are in. */
 export const BRIEF_COUNTS_PAINT_WAIT_MS = 5_000;
@@ -254,7 +254,7 @@ export function briefsLoadMore(
 ): ReactElement[] {
   if (show !== undefined ? !show : next.done && hidden <= 0) return [];
   return [
-    <div key="load-more" className={cn(GUTTER, 'pb-6 flex flex-col')}>
+    <div key="load-more" className="pb-6 flex flex-col">
       <LoadMore data-briefs-load-more="" busy={loadingMore} onMore={onLoadMore} />
     </div>,
   ];
@@ -349,7 +349,7 @@ interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
 // Sticky per-section header: pinned to the top of the scroll area (below the app
 // top bar) on a solid bg-bg, lit as a header (lit-header) so cards slide under
 // its shade. var(--bg) flips with the theme, so light/dark parity is automatic; z-sticky sits
-// above the card grid, matching SectionHeader's sticky choice. Positioning only:
+// above the card grid, matching the shell chip row's sticky choice. Positioning only:
 // no transforms, no transitions.
 // In page mode on a phone or a touch tablet the window scrolls, so it pins
 // below the sticky Topbar instead (SHELL_STICKY_TOP_CLASS; 0 in <main> and on laptop).
@@ -837,58 +837,61 @@ export function BriefsPage() {
 
   return (
     <>
-      <PageHead title="Briefs" hidden />
-      {briefsHeader({
-        filter,
-        onFilterChange: setFilter,
-        counts: chipCounts,
-      })}
-
-      {listFailed ? (
-        <div className={cn(GUTTER, 'mt-4')}>
+      <ListScreen
+        title="Briefs"
+        {...briefsHeader({
+          filter,
+          onFilterChange: setFilter,
+          counts: chipCounts,
+        })}
+        // Older briefs load a page at a time; chips narrow what is loaded,
+        // while the chip counts are server totals.
+        footer={
+          !listFailed && !listLoading
+            ? briefsLoadMore(
+                next,
+                loadingMore,
+                onLoadMore,
+                hiddenCount,
+                rule.button ||
+                  (loadingMore && !silentFill) ||
+                  (fillFailedAt === next && !next.done),
+              )
+            : null
+        }
+      >
+        {listFailed ? (
           <LoadError title="briefs" onRetry={() => void loadBriefs()} retrying={loading} />
-        </div>
-      ) : listLoading ? (
-        <BriefsListSkeleton />
-      ) : shownCount === 0 ? (
-        briefsEmptyView(briefsEmptyState(filter, workspaceBriefs.length, canCreateBrief))
-      ) : showFlat ? (
-        <div ref={listRef} className={LIST_CLASS}>
-          <div className={GRID_CLASS}>
-            {briefCardList({
-              briefs: shownSorted,
+        ) : listLoading ? (
+          <BriefsListSkeleton />
+        ) : shownCount === 0 ? (
+          briefsEmptyView(briefsEmptyState(filter, workspaceBriefs.length, canCreateBrief))
+        ) : showFlat ? (
+          <div ref={listRef} className={LIST_CLASS}>
+            <div className={FLAT_GRID_CLASS}>
+              {briefCardList({
+                briefs: shownSorted,
+                cache,
+                presignEnabled,
+                hrefFor,
+                timeZone,
+                now: new Date(nowMs),
+              })}
+            </div>
+          </div>
+        ) : (
+          <div ref={listRef} className={LIST_CLASS}>
+            {briefSections({
+              groups: shownGroups,
+              timeZone,
+              now: new Date(nowMs),
               cache,
               presignEnabled,
               hrefFor,
-              timeZone,
-              now: new Date(nowMs),
             })}
           </div>
-        </div>
-      ) : (
-        <div ref={listRef} className={LIST_CLASS}>
-          {briefSections({
-            groups: shownGroups,
-            timeZone,
-            now: new Date(nowMs),
-            cache,
-            presignEnabled,
-            hrefFor,
-          })}
-        </div>
-      )}
-
-      {/* Older briefs load a page at a time; chips narrow what is
-          loaded, while the chip counts are server totals. */}
-      {!listFailed && !listLoading
-        ? briefsLoadMore(
-            next,
-            loadingMore,
-            onLoadMore,
-            hiddenCount,
-            rule.button || (loadingMore && !silentFill) || (fillFailedAt === next && !next.done),
-          )
-        : null}
+        )}
+      </ListScreen>
 
       <CreateBriefSheet
         open={createOpen}

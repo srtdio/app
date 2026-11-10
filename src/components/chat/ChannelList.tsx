@@ -15,7 +15,12 @@ import {
   type ListCardSelect,
 } from '@/components/ui/ListCard';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import {
+  LIST_SCREEN_CONTENT_TOP,
+  LIST_SCREEN_GUTTER,
+  SectionSelect,
+  listScreenChipRow,
+} from '@/components/shell/ListScreen';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { selectCountLabel } from '@/components/ui/SelectBar';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
@@ -461,19 +466,17 @@ export function unreadPillText(unread: number): string | null {
 }
 
 /**
- * The home stack inside the one scroll container, 8px between blocks. The card
- * list sits on the 16 edge (CHAT_HOME_EDGE), like the chip row above.
+ * The home stack inside the one scroll container, 8px between blocks. The
+ * list body carries shell/ListScreen's gutter (LIST_SCREEN_GUTTER), so the
+ * card list sits on the chip row's edge with no edge of its own.
  */
 export const CHAT_HOME_STACK = 'flex flex-col gap-2';
-
-/** The home's 16 edge for the parts that do not draw their own. */
-export const CHAT_HOME_EDGE = 'px-4';
 
 /**
  * The one list: one ui/ListCard per chat, rows touching (LIST_CARD_STACK),
  * on the home's 16 edge. Personal notes, groups and people are one card style.
  */
-export const CHAT_ROW_LIST = cn(LIST_CARD_STACK, CHAT_HOME_EDGE);
+export const CHAT_ROW_LIST = LIST_CARD_STACK;
 
 /**
  * A person card's preview when the DM has no message yet: a no-break space,
@@ -762,7 +765,7 @@ export function notesCard(props: NotesCardProps): ReactElement {
  * final. Hook-free.
  */
 export function notesTile(props: NotesCardProps): ReactElement {
-  return <div className={cn('pb-2', CHAT_HOME_EDGE, NO_TOUCH_SELECT)}>{notesCard(props)}</div>;
+  return <div className={cn('pb-2', NO_TOUCH_SELECT)}>{notesCard(props)}</div>;
 }
 
 /**
@@ -1055,7 +1058,7 @@ function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
 }
 
 /**
- * The full channel list pane: the shared SectionHeader (the filter chips, the
+ * The full channel list pane: shell/ListScreen's chip row (the filter chips, the
  * Select pinned at the chip row's end) above the body; New chat and the sort
  * live in the app top bar (ChannelList publishes them). While loading the body
  * is skeleton rows and on error a Retry state; rows and the empty state appear
@@ -1091,12 +1094,21 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
     notesInList && props.notes !== undefined ? [...props.channels, props.notes] : props.channels;
   return (
     <div className={layout.column}>
-      <div className={cn('border-b border-border pb-3', layout.header)}>
-        <SectionHeader {...(sectionSelect !== undefined ? { select: sectionSelect } : {})}>
-          {onKindChange !== undefined ? searchChips({ kind, onChange: onKindChange }) : undefined}
-        </SectionHeader>
+      {/* The shell's chip row (no line under it); the body takes the shell's
+          16 under the chips and, on the list, its side gutter (a chip view
+          draws its own edges). */}
+      <div className={layout.header}>
+        {listScreenChipRow({
+          ...(onKindChange !== undefined
+            ? { chips: searchChips({ kind, onChange: onKindChange }) }
+            : {}),
+          ...(sectionSelect !== undefined ? { select: sectionSelect } : {}),
+        })}
       </div>
-      <div className={layout.body}>
+      <div
+        data-shell="content"
+        className={cn(layout.body, LIST_SCREEN_CONTENT_TOP, !chipView && LIST_SCREEN_GUTTER)}
+      >
         {props.lead !== undefined && !chipView ? props.lead : null}
         {props.notes !== undefined && !chipView && !notesInList
           ? notesTile({

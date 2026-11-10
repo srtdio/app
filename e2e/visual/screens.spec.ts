@@ -7471,12 +7471,13 @@ test('top bar: sort and "+" hold one x on the six list screens', async ({ page }
 });
 
 // The list-screen axis (shell/ListScreen, 10 Nov 2026): the five positions
-// the shell owns (top bar to chips, first chip x, chips to the first row, the
-// row's text x, the row's right edge), read on the plain page of the six list
-// tabs. Pipeline is on the shell and is asserted against the SCREEN_*
-// constants (+-1); the other five are measured only and printed with their
-// delta from Pipeline under "list-screen axis" in the Visual CI log (the next
-// PR moves them). iphone-light and laptop-light; no screenshot.
+// the shell owns (top bar to chips, first chip x, chips to the first content,
+// the row's text x, the row's right edge), read on the plain page of the six
+// list tabs. All six are on the shell and each is asserted against the
+// SCREEN_* constants (+-1); the numbers are also printed with their delta from
+// Pipeline under "list-screen axis" in the Visual CI log. iphone-light and
+// laptop-light run all six; iphone-dark (Briefs) and laptop-dark (Chat list)
+// run one tab each. No screenshot.
 const LIST_SCREEN_TABS: ReadonlyArray<{
   tab: string;
   url: string;
@@ -7490,11 +7491,18 @@ const LIST_SCREEN_TABS: ReadonlyArray<{
   { tab: 'activity', url: '/activity', ready: activityReady },
 ];
 
+/** The one tab each dark project asserts (no new screen: the same read). */
+const LIST_SCREEN_DARK_TAB: Readonly<Record<string, string>> = {
+  'iphone-dark': 'briefs',
+  'laptop-dark': 'chat-list',
+};
+
 test('list-screen axis: the six list tabs', async ({ page }, testInfo) => {
   const project = testInfo.project.name;
+  const darkTab = LIST_SCREEN_DARK_TAB[project];
   test.skip(
-    project !== 'iphone-light' && project !== 'laptop-light',
-    'iphone-light and laptop-light only',
+    project !== 'iphone-light' && project !== 'laptop-light' && darkTab === undefined,
+    'iphone and laptop, light (six tabs) and dark (one tab)',
   );
   await page.clock.setFixedTime(NOW);
   await page.routeWebSocket(
@@ -7507,14 +7515,15 @@ test('list-screen axis: the six list tabs', async ({ page }, testInfo) => {
   seedTab(network);
   await installDeletedRoutes(page, network);
   const rows: Array<Awaited<ReturnType<typeof readListScreenAxis>>> = [];
-  for (const tab of LIST_SCREEN_TABS) {
+  const tabs =
+    darkTab === undefined ? LIST_SCREEN_TABS : LIST_SCREEN_TABS.filter((t) => t.tab === darkTab);
+  for (const tab of tabs) {
     await page.goto(tab.url);
     await tab.ready(page);
     rows.push(await readListScreenAxis(page, tab.tab));
   }
-  const pipeline = rows[0];
-  if (pipeline !== undefined) assertListScreenAxis(pipeline, project.startsWith('laptop'));
-  reportListScreenAxis(project, rows);
+  if (darkTab === undefined) reportListScreenAxis(project, rows);
+  for (const row of rows) assertListScreenAxis(row, project.startsWith('laptop'));
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 

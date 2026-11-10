@@ -13,7 +13,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { CHAT_HOME_EDGE, CHAT_HOME_STACK, CHAT_ROW_LIST } from '@/components/chat/ChannelList';
+import { CHAT_HOME_STACK, CHAT_ROW_LIST } from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
 import { SelectionHeader } from '@/components/chat/SelectionBar';
 
@@ -135,16 +135,18 @@ describe('11f "1 selected" on the 16px edge', () => {
 });
 
 describe('11g phone chat list edges', () => {
-  it('cards sit on the 16px edge with the chips', () => {
-    // The stack has no side padding; the card list carries the 16 edge.
+  it('cards sit on the shell gutter with the chips', () => {
+    // Neither the stack nor the card list has side padding: the list body
+    // takes shell/ListScreen's gutter and its chip row (16 / 24, both).
     expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
-    expect(CHAT_HOME_EDGE).toBe('px-4');
-    expect(classes(CHAT_ROW_LIST)).toContain('px-4');
-    expect(read('../ChannelList.tsx')).toContain('<ListCard');
-    // The chip row starts on the SectionHeader's 16 edge (no search row above it).
-    expect(read('../../shell/SectionHeader.tsx')).toContain(
-      "'flex items-center gap-2 pl-4 md:pl-6'",
-    );
+    expect(classes(CHAT_ROW_LIST).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
+    const src = read('../ChannelList.tsx');
+    expect(src).toContain('<ListCard');
+    expect(src).toContain('listScreenChipRow(');
+    expect(src).toContain('LIST_SCREEN_GUTTER');
+    expect(src).toContain('LIST_SCREEN_CONTENT_TOP');
+    // No line under the chips (the only tab that had one).
+    expect(src).not.toContain('border-b border-border pb-3');
   });
 });
 

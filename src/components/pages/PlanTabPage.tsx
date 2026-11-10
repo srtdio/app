@@ -35,16 +35,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ScreenFailed } from '@/components/chat/PlanScreen';
 import { useInduction } from '@/components/induction/InductionProvider';
-import { PageHead } from '@/components/shell/PageHead';
-import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import { ListScreen, SectionSelect } from '@/components/shell/ListScreen';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SortMenu } from '@/components/ui/SortMenu';
-import { GUTTER } from '@/components/ui/layout';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
-import { cn } from '@/lib/cn';
 import { useLoadMoreFill } from '@/lib/load-more-rule';
 import { PLAN_BUNDLE_PAGE } from '@/lib/chat/plan-bundle';
 import type { ComposeRange, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
@@ -142,7 +139,7 @@ function PlanTabFlatList(props: {
     onMore: props.more?.onMore,
   });
   return (
-    <div data-plan-tab-list="" className={cn('flex flex-col gap-3 pb-8 pt-4', GUTTER)}>
+    <div data-plan-tab-list="" className="flex flex-col gap-3 pb-8">
       {props.bundles.length === 0 ? (
         <div data-plan-tab-chip-zero="">
           <EmptyState icon={<IconPlan size={ICON_SIZE.tray} />} title={PLAN_WEEK_CHIP_ZERO} />
@@ -318,17 +315,10 @@ export function PlanTabPage(): ReactElement {
   // Decision E: the Bank's visible Select at the chip row's end, where the
   // person can select (creators; a client reads only). The plan list has no
   // select mode, so its head shows none (hide what a person can't do).
-  const head = (
-    <SectionHeader
-      {...(onBank && creator
-        ? {
-            select: <SectionSelect active={bankSelect.active} onToggle={bankSelect.toggleMode} />,
-          }
-        : {})}
-    >
-      {chipRow}
-    </SectionHeader>
-  );
+  const headSelect =
+    onBank && creator ? (
+      <SectionSelect active={bankSelect.active} onToggle={bankSelect.toggleMode} />
+    ) : undefined;
 
   if (data !== null && !zero) mark('plan-tab:paint');
   // A borrowed read with nothing in the picked chip is not this chip's answer
@@ -420,11 +410,15 @@ export function PlanTabPage(): ReactElement {
 
   return (
     <>
-      <PageHead title="Plan" hidden />
-      {head}
-      <div ref={landedRef} className="contents">
-        {body}
-      </div>
+      <ListScreen
+        title="Plan"
+        chips={chipRow}
+        {...(headSelect !== undefined ? { select: headSelect } : {})}
+      >
+        <div ref={landedRef} className="contents">
+          {body}
+        </div>
+      </ListScreen>
       {workspaceId !== null ? (
         <BankFilterSheet
           open={bankSheet === 'filter'}

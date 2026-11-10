@@ -14,6 +14,7 @@ import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ActivityFilterBar, activityChip } from '@/components/pages/activity/ActivityFilterBar';
 import { Text } from '@/components/ui/Text';
+import { ListScreen } from '@/components/shell/ListScreen';
 import { mentionHandle } from '@/lib/chat/mentions';
 import { errorText } from '@/lib/error-copy';
 import { useViewerSide } from '@/lib/chat/viewer-role';
@@ -147,7 +148,7 @@ function restoreAnchor(list: HTMLElement | null, anchor: ScrollAnchor): void {
 /** A load failure: the plain copy and Retry. */
 function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="px-4 md:px-6 mt-4">
+    <div>
       <ErrorNote>{ACTIVITY_LOAD_FAILED}</ErrorNote>
       <div className="mt-3">
         <Button variant="ghost" onClick={onRetry}>
@@ -846,19 +847,92 @@ export function NotificationsPage() {
 
   return (
     <>
-      {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page starts with the
-          chip row (Mark all read lives in the top bar). The h1 stays for
-          screen readers and e2e. */}
-      <h1 tabIndex={-1} className="sr-only">
-        {ACTIVITY_TITLE}
-      </h1>
+      {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page
+          starts with the shell's chip row (Mark all read lives in the top
+          bar); ListScreen keeps the sr-only h1 for screen readers and e2e. The
+          list sits in the shell's content: 16 under the chips, the gutter. */}
+      <ListScreen
+        title={ACTIVITY_TITLE}
+        chips={
+          <ActivityFilterBar
+            state={state}
+            onStateChange={setState}
+            totalUnread={totalUnread}
+            mentionCount={mentionCount}
+          />
+        }
+      >
+        {error && items.length === 0 ? (
+          <LoadFailed onRetry={() => void loadActivity()} />
+        ) : listLoading ? (
+          <ActivityBoxes />
+        ) : buckets.length === 0 ? (
+          state === 'mentions' ? (
+            <EmptyState icon={<IconAt size={ICON_SIZE.status} />} title={EMPTY_LINES.mentions} />
+          ) : state === 'unread' ? (
+            <EmptyState
+              icon={<IconActivity size={ICON_SIZE.status} />}
+              title={EMPTY_LINES.unread}
+            />
+          ) : (
+            <EmptyState
+              icon={<IconActivity size={ICON_SIZE.status} />}
+              title="Activity across posts, briefs and people shows up here."
+            />
+          )
+        ) : (
+          // Plan's list frame (PlanTabList): 24 between sections, 16 heading
+          // to rows; one heading per section, no count.
+          <div ref={listRef} data-activity-list="" className={ACTIVITY_LIST}>
+            {shownBuckets.map((bucket, bucketIndex) => (
+              <section
+                key={bucket.key}
+                data-activity-section={bucket.key}
+                className={ACTIVITY_SECTION}
+              >
+                <Text as="h2" role="section" data-activity-heading="">
+                  {bucket.label}
+                </Text>
+                <div className={LIST_CARD_GRID}>
+                  {bucket.groups.map((group, groupIndex) => {
+                    const id = group[0]?.id ?? bucket.key;
+                    const card = (
+                      <ActivityCard
+                        key={id}
+                        group={group}
+                        nowMs={nowMs}
+                        timeZone={tz}
+                        cache={cache}
+                        presignEnabled={presignEnabled}
+                        onOpenGroup={handleOpenGroup}
+                        selfName={selfName}
+                        side={side}
+                        entering={entering.has(id)}
+                      />
+                    );
+                    // The newest row is what the induction points at (its own box, not the list).
+                    return bucketIndex === 0 && groupIndex === 0 ? (
+                      <div
+                        key={id}
+                        data-induction={INDUCTION_KEYS.activityList}
+                        className="min-w-0"
+                      >
+                        {card}
+                      </div>
+                    ) : (
+                      card
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
 
-      <ActivityFilterBar
-        state={state}
-        onStateChange={setState}
-        totalUnread={totalUnread}
-        mentionCount={mentionCount}
-      />
+            {showLoadMore ? (
+              <LoadMore data-activity-load-more="" busy={loadingMore} onMore={onLoadMore} />
+            ) : null}
+          </div>
+        )}
+      </ListScreen>
 
       {catchUp !== null && catchUp.queue.length > 0 && workspaceId !== null && userId !== null ? (
         <CatchUpScreen
@@ -887,70 +961,6 @@ export function NotificationsPage() {
           onOpenThread={openThreadFromList}
         />
       ) : null}
-
-      {error && items.length === 0 ? (
-        <LoadFailed onRetry={() => void loadActivity()} />
-      ) : listLoading ? (
-        <ActivityBoxes />
-      ) : buckets.length === 0 ? (
-        state === 'mentions' ? (
-          <EmptyState icon={<IconAt size={ICON_SIZE.status} />} title={EMPTY_LINES.mentions} />
-        ) : state === 'unread' ? (
-          <EmptyState icon={<IconActivity size={ICON_SIZE.status} />} title={EMPTY_LINES.unread} />
-        ) : (
-          <EmptyState
-            icon={<IconActivity size={ICON_SIZE.status} />}
-            title="Activity across posts, briefs and people shows up here."
-          />
-        )
-      ) : (
-        // Plan's list frame (PlanTabList): 16 under the chips, 24 between
-        // sections, 16 heading to rows; one heading per section, no count.
-        <div ref={listRef} data-activity-list="" className={ACTIVITY_LIST}>
-          {shownBuckets.map((bucket, bucketIndex) => (
-            <section
-              key={bucket.key}
-              data-activity-section={bucket.key}
-              className={ACTIVITY_SECTION}
-            >
-              <Text as="h2" role="section" data-activity-heading="">
-                {bucket.label}
-              </Text>
-              <div className={LIST_CARD_GRID}>
-                {bucket.groups.map((group, groupIndex) => {
-                  const id = group[0]?.id ?? bucket.key;
-                  const card = (
-                    <ActivityCard
-                      key={id}
-                      group={group}
-                      nowMs={nowMs}
-                      timeZone={tz}
-                      cache={cache}
-                      presignEnabled={presignEnabled}
-                      onOpenGroup={handleOpenGroup}
-                      selfName={selfName}
-                      side={side}
-                      entering={entering.has(id)}
-                    />
-                  );
-                  // The newest row is what the induction points at (its own box, not the list).
-                  return bucketIndex === 0 && groupIndex === 0 ? (
-                    <div key={id} data-induction={INDUCTION_KEYS.activityList} className="min-w-0">
-                      {card}
-                    </div>
-                  ) : (
-                    card
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-
-          {showLoadMore ? (
-            <LoadMore data-activity-load-more="" busy={loadingMore} onMore={onLoadMore} />
-          ) : null}
-        </div>
-      )}
     </>
   );
 }
