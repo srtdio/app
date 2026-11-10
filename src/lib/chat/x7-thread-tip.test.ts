@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   HOLD_TIP_DISMISS,
   HOLD_TIP_TEXT,
+  HOLD_TIP_TEXT_LAPTOP,
+  holdTipShowsKey,
   dismissHoldTip,
   holdTipKey,
   noteHoldTipShown,
@@ -36,7 +38,8 @@ afterEach(() => resetHoldTip());
 
 describe('X7 H6: the one-time hold tip', () => {
   it('copy: the tip and its Got it', () => {
-    expect(HOLD_TIP_TEXT).toBe('Tip: press and hold a message to reply, copy or delete.');
+    expect(HOLD_TIP_TEXT).toBe('Tap a message to reply in thread.');
+    expect(HOLD_TIP_TEXT_LAPTOP).toBe('Click a message to reply in thread.');
     expect(HOLD_TIP_DISMISS).toBe('Got it');
   });
 
@@ -71,5 +74,22 @@ describe('X7 H6: the one-time hold tip', () => {
 
   it('no user, no tip', () => {
     expect(shouldShowHoldTip('', memory())).toBe(false);
+  });
+
+  it('goes for good after 3 chat opens', () => {
+    const storage = memory();
+    noteHoldTipShown('u1', storage);
+    noteHoldTipShown('u1', storage);
+    expect(shouldShowHoldTip('u1', storage)).toBe(true);
+    noteHoldTipShown('u1', storage);
+    expect(storage.data.get(holdTipShowsKey('u1'))).toBe('3');
+    expect(shouldShowHoldTip('u1', storage)).toBe(false);
+  });
+
+  it('goes for good on the first thread open (openThread calls dismiss)', () => {
+    const storage = memory();
+    dismissHoldTip('u1', storage);
+    resetHoldTip();
+    expect(shouldShowHoldTip('u1', storage)).toBe(false);
   });
 });

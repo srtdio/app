@@ -10,7 +10,7 @@ describe('X7 H6: hold tip view', () => {
   it('the line and a 44px Got it, design tokens only', () => {
     const onDismiss = vi.fn();
     const out = renderToStaticMarkup(holdTipView(onDismiss));
-    expect(out).toContain('Tip: press and hold a message to reply, copy or delete.');
+    expect(out).toContain('Tap a message to reply in thread.');
     expect(out).toContain('Got it');
     expect(out).toContain('h-11');
     expect(out).toContain('min-w-11');

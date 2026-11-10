@@ -1606,6 +1606,31 @@ const SCREENS: Screen[] = [
     url: '/chat',
     steps: async (page) => openChat(page, GROUP_NAME),
   },
+  {
+    // 10 Nov 2026: a tap on a message's text opens its thread at once: the
+    // root and placeholder rows (the replies read never answers here).
+    name: 'chat-thread-tap-open',
+    seed: creator,
+    url: '/chat',
+    prepare: (_network, page) => holdThreadPage(page, 'hang'),
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap([plainMessageText(page)], 'message text');
+      await waitFor([page.locator('[data-thread-view] [data-thread-fill]')], 'placeholders');
+    },
+  },
+  {
+    // 10 Nov 2026: the replies read failed: "Couldn't load this thread." + Retry in the view.
+    name: 'chat-thread-load-failed',
+    seed: creator,
+    url: '/chat',
+    prepare: (_network, page) => holdThreadPage(page, 'fail'),
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await tap([plainMessageText(page)], 'message text');
+      await waitFor([page.locator('[data-thread-view] [data-thread-load-failed]')], 'failed');
+    },
+  },
   { name: 'command-palette', seed: creator, url: '/chat', steps: openPaletteFrom },
   {
     // Recent from the device: more than 8, so "Show all (N)" shows.
@@ -4558,6 +4583,27 @@ async function attributeStill(target: Locator, name: string): Promise<void> {
     last = now;
   }
   throw new Error(`${name} never settled`);
+}
+
+/** A thread's replies read (chat_messages by thread root): never answered, or a 500. */
+async function holdThreadPage(page: Page, mode: 'hang' | 'fail'): Promise<void> {
+  await page.route(
+    (url) =>
+      url.pathname.endsWith('/rest/v1/chat_messages') &&
+      (url.searchParams.get('thread_root_message_id') ?? '').startsWith('eq.'),
+    (route) =>
+      mode === 'fail'
+        ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+        : undefined,
+  );
+}
+
+/** The newest top-level message text with no link or mention in it (a tap opens its thread). */
+function plainMessageText(page: Page): Locator {
+  return page
+    .locator('[data-bubble] [data-msg-body]')
+    .filter({ hasNot: page.locator('a, [data-mention], [data-msg-link]') })
+    .last();
 }
 
 /** A pending page route: requests to this path are never answered. */

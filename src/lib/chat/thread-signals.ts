@@ -11,6 +11,7 @@ import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable, withReadTimeout } from '@/lib/chat-reads';
 import type { ThreadMessage } from '@/lib/chat/thread';
+import { resolveMentionText } from '@/lib/chat/mentions';
 
 type Functions = Database['public']['Functions'];
 type ThreadForMeRow = Functions['chat_threads_for_me']['Returns'][number];
@@ -255,18 +256,33 @@ export function repliesLabel(count: number): string {
   return count === 1 ? '1 reply' : `${count} replies`;
 }
 
-/** A body's first line for one-line previews: format stripped, trimmed. Pure. */
-export function firstLineOf(body: string): string {
+/** An unknown mention's name in a one-line preview: never a raw code. */
+export const UNKNOWN_MENTION_NAME = 'someone';
+
+/**
+ * A body's first line for one-line previews: each @[uuid] reads "@Name" from
+ * the caller's in-memory lookup ("@someone" when unknown), format stripped,
+ * trimmed. Pure.
+ */
+export function firstLineOf(
+  body: string,
+  nameOf: (userId: string) => string | undefined = () => undefined,
+): string {
+  const named = resolveMentionText(body, (id) => nameOf(id) || UNKNOWN_MENTION_NAME);
   const line =
-    stripFormat(body)
+    stripFormat(named)
       .split('\n')
       .find((l) => l.trim() !== '') ?? '';
   return line.trim();
 }
 
 /** L5 (2): the chat list preview when the newest message is a thread reply. Pure. */
-export function threadPreviewLine(name: string, body: string): string {
-  return `${name} in thread: ${firstLineOf(body)}`;
+export function threadPreviewLine(
+  name: string,
+  body: string,
+  nameOf?: (userId: string) => string | undefined,
+): string {
+  return `${name} in thread: ${firstLineOf(body, nameOf)}`;
 }
 
 /** L5 (1): the in-app alert text for a thread reply. Pure. */

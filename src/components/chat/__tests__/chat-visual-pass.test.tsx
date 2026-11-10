@@ -68,12 +68,12 @@ describe('chat visual pass', () => {
     expect(read('../../shell/SectionHeader.tsx')).not.toContain('aria-label={search.label}');
   });
 
-  it('the hold tip names right-click on laptop and waits for a first message', () => {
+  it('the thread tip names click on laptop and waits for a first message', () => {
     const touch = renderToStaticMarkup(holdTipView(() => undefined));
     const laptop = renderToStaticMarkup(holdTipView(() => undefined, 'laptop'));
     expect(touch).toContain(HOLD_TIP_TEXT);
     expect(laptop).toContain(HOLD_TIP_TEXT_LAPTOP);
-    expect(HOLD_TIP_TEXT_LAPTOP).toBe('Tip: right-click a message to reply, copy or delete.');
+    expect(HOLD_TIP_TEXT_LAPTOP).toBe('Click a message to reply in thread.');
     expect(HOLD_TIP_TEXT_LAPTOP).not.toContain('—');
     expect(read('../MessageThread.tsx') + read('../MessageBubble.tsx')).toMatch(
       /<ThreadHoldTip\s+userId=\{props\.currentUserId \?\? ''\}\s+layout=\{layout\}\s+empty=\{props\.messages\.length === 0\}/,
