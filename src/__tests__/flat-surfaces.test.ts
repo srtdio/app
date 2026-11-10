@@ -20,6 +20,8 @@ export const FLAT_KEEP: Record<string, string> = {
   'components/chat/MessageThread.tsx': 'chat bubbles',
   'components/chat/VoiceDraft.tsx': 'composer tray draft, the PendingChip frame',
   'components/onboarding/AvatarCropper.tsx': 'media crop stage',
+  'components/pages/activity/ThreadsListScreen.tsx':
+    'Threads list band, Shubham approved 10 Nov 2026',
   'components/preview/PlatformPreviewPanel.tsx': 'mimics a platform feed',
   'components/preview/PostMock.tsx': 'mimics a platform feed',
   'components/ui/ChatCard.tsx': 'the chat bubble card',

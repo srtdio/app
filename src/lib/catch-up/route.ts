@@ -15,6 +15,10 @@ export const CATCH_UP_NEWEST = 'newest';
 /** The value that opens the Threads button's queue (unread threads only) on the same screen. */
 export const CATCH_UP_THREADS = 'threads';
 
+/** The query param (value THREADS_LIST_ON) that opens Activity's Threads list (the Threads button). */
+export const THREADS_LIST_PARAM = 'threads';
+export const THREADS_LIST_ON = '1';
+
 /** Activity's path. */
 export const ACTIVITY_PATH = '/activity';
 

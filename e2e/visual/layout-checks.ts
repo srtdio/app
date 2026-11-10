@@ -1356,7 +1356,7 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
 }
 
 /** Which family the alignment check measures on a screen. */
-export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row';
+export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row' | 'threads-list';
 
 /**
  * Check 14 (9 Nov 2026, CLAUDE.md "Alignment"): measures rules 1, 2, 3 and 5
@@ -1369,6 +1369,11 @@ export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row';
  *   glyph 16 in from the strip's right (374 on a phone), the first reply's
  *   name 8 under the strip, every reply's name and text at x60, 16 from a
  *   reply's last line to the next reply's name.
+ * - threads-list (10 Nov 2026, Activity's Threads list, EXACT +-1): in every
+ *   block the header's two lines, every message's name and text, "N more
+ *   replies" and the Reply button's left edge at x60 from the block; the
+ *   header and every message end on one right edge (16 in); 12+ from the
+ *   band hairline above the header and below Reply to the next band.
  * - chat-replies-row: every replies row in the main chat: no reply text node,
  *   the last reply's time shown, 8 between photos, count, time and dot, the
  *   row's target at least 44 tall.
@@ -1453,6 +1458,85 @@ export async function assertAlignment(
               label: `${name(a)} to ${name(b)}`,
               gap: b.getBoundingClientRect().left - a.getBoundingClientRect().right,
               equals: 8,
+            });
+          }
+          out.push(f);
+        });
+        return out;
+      }
+      if (which === 'threads-list') {
+        const blocks = Array.from(document.querySelectorAll('[data-threads-block]')).filter(shown);
+        if (blocks.length === 0) {
+          return [
+            {
+              label: 'threads list',
+              textLefts: [],
+              rightEdges: [],
+              gaps: [{ label: 'no thread block shown', gap: -1, min: 0 }],
+            },
+          ];
+        }
+        blocks.forEach((block, n) => {
+          const b = block.getBoundingClientRect();
+          const f: AlignFamily = {
+            label: `threads block ${n + 1}`,
+            textLefts: [],
+            rightEdges: [],
+            gaps: [],
+          };
+          const at = (label: string, x: number | null): void => {
+            if (x === null) f.gaps.push({ label: `no ${label}`, gap: -1, min: 0 });
+            else f.gaps.push({ label: `${label} x`, gap: x - b.left, equals: 60 });
+          };
+          const header = block.querySelector('[data-threads-header]');
+          for (const line of Array.from(header?.children ?? []).filter(shown)) {
+            at('header line', textBox(line)?.left ?? null);
+          }
+          if (shown(header)) {
+            f.gaps.push({
+              label: 'header right edge',
+              gap: b.right - header.getBoundingClientRect().right,
+              equals: 16,
+            });
+          }
+          Array.from(block.querySelectorAll('li[data-msg-id]'))
+            .filter(shown)
+            .forEach((row, i) => {
+              const name = row.querySelector('[data-sender-line]');
+              if (shown(name)) at(`message ${i + 1} name`, textBox(name)?.left ?? null);
+              const body = row.querySelector('[data-msg-body]');
+              if (shown(body)) at(`message ${i + 1} text`, textBox(body)?.left ?? null);
+              f.gaps.push({
+                label: `message ${i + 1} right edge`,
+                gap: b.right - row.getBoundingClientRect().right,
+                equals: 16,
+              });
+            });
+          const more = block.querySelector('[data-threads-more]');
+          if (shown(more)) at('more replies', textBox(more)?.left ?? null);
+          const reply = block.querySelector('[data-threads-reply]');
+          if (shown(reply)) {
+            at('Reply button', reply.getBoundingClientRect().left);
+          } else f.gaps.push({ label: 'no Reply button', gap: -1, min: 0 });
+          const prev = block.previousElementSibling;
+          const band = (el: Element | null): el is Element =>
+            el !== null && el.hasAttribute('data-threads-band');
+          if (band(prev) && shown(header)) {
+            const t = textBox(header);
+            if (t !== null) {
+              f.gaps.push({
+                label: 'band hairline to header text',
+                gap: t.top - prev.getBoundingClientRect().bottom,
+                min: 12,
+              });
+            }
+          }
+          const next = block.nextElementSibling;
+          if (band(next) && shown(reply)) {
+            f.gaps.push({
+              label: 'Reply to the next band hairline',
+              gap: next.getBoundingClientRect().top - reply.getBoundingClientRect().bottom,
+              min: 12,
             });
           }
           out.push(f);

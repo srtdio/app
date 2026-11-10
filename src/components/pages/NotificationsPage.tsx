@@ -71,6 +71,9 @@ import {
   ActivityBoxes,
 } from '@/components/pages/activity/ActivityBoxes';
 import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
+import { ThreadsListScreen } from '@/components/pages/activity/ThreadsListScreen';
+import { chatMessageHref } from '@/lib/inbox/bell-types';
+import type { ThreadForMeAll } from '@/lib/chat/thread-signals';
 import { buildCatchUpQueue, heldEntries, type CatchUpItem } from '@/lib/catch-up/queue';
 import { peekThreadsQueue } from '@/lib/catch-up/threads';
 import {
@@ -79,6 +82,8 @@ import {
   CATCH_UP_THREADS,
   catchUpReturnOf,
   takeCatchUpSeed,
+  THREADS_LIST_ON,
+  THREADS_LIST_PARAM,
 } from '@/lib/catch-up/route';
 import { activityLoadMore, readViewport } from '@/lib/load-more-rule';
 import { fillColumns } from '@/lib/use-fill-count';
@@ -663,7 +668,8 @@ export function NotificationsPage() {
     (loading && items.length === 0) ||
     (filling && buckets.length === 0 && !error);
   // The top bar (no sort): Threads | Catch up (topbar-actions). Threads opens
-  // the same catch up on unread threads only (?catchup=threads).
+  // the Threads list (?threads=1); ?catchup=threads (old links) still opens
+  // the threads-only card stack.
   // Catch up from the top bar opens on the newest unread (?catchup=newest);
   // an entry id opens the queue at that entry (a cold link does the same).
   const openCatchUp = useCallback(
@@ -679,9 +685,10 @@ export function NotificationsPage() {
     totalUnread,
     ready: !listLoading,
     onCatchUp: () => openCatchUp(null),
+    // Threads (10 Nov 2026): the Threads list screen, not the card stack.
     onThreads: () => {
       const next = new URLSearchParams(searchParams);
-      next.set(CATCH_UP_PARAM, CATCH_UP_THREADS);
+      next.set(THREADS_LIST_PARAM, THREADS_LIST_ON);
       setSearchParams(next);
     },
     onMarkAllRead: handleMarkAll,
@@ -770,6 +777,20 @@ export function NotificationsPage() {
     setSearchParams(next, { replace: true });
   }, [location.state, navigate, setSearchParams, loadMentionCount]);
 
+  // The Threads list (?threads=1): Back drops the param with replace (as catch
+  // up does); a block's tap opens the thread in the chat (the route a chat row
+  // in Activity uses), at its newest reply.
+  const threadsOpen = searchParams.get(THREADS_LIST_PARAM) === THREADS_LIST_ON;
+  const closeThreads = useCallback(() => {
+    const next = new URLSearchParams(searchParamsRef.current);
+    next.delete(THREADS_LIST_PARAM);
+    setSearchParams(next, { replace: true });
+  }, [setSearchParams]);
+  const openThreadFromList = useCallback(
+    (thread: ThreadForMeAll) => navigate(chatMessageHref(thread.channelId, thread.lastReplyId)),
+    [navigate],
+  );
+
   // Catch up's decisions land in the list at once (and in every kept page).
   const setReadAt = useCallback(
     (ids: readonly string[], read: boolean) => {
@@ -854,6 +875,16 @@ export function NotificationsPage() {
           onRead={onCatchUpRead}
           onUnread={onCatchUpUnread}
           onAllRead={onCatchUpAllRead}
+        />
+      ) : null}
+
+      {threadsOpen && workspaceId !== null && userId !== null ? (
+        <ThreadsListScreen
+          workspaceId={workspaceId}
+          currentUserId={userId}
+          timeZone={tz ?? undefined}
+          onClose={closeThreads}
+          onOpenThread={openThreadFromList}
         />
       ) : null}
 

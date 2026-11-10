@@ -61,7 +61,7 @@ import { cn } from '@/lib/cn';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { breaksRun, deletedMessageLabel, type ThreadMessage } from '@/lib/chat/thread';
 import { classifyAttachment, splitAlbum } from '@/lib/chat/attachments';
-import { civilDay, formatTime } from '@/lib/time';
+import { civilDay, formatTime, threadWhen } from '@/lib/time';
 import {
   BUBBLE_BODY_TYPE,
   BUBBLE_META_TYPE,
@@ -1366,6 +1366,12 @@ export function MessageBubble(props: {
    * Absent: the main chat's row (photo 32, 8 gap), unchanged.
    */
   threadPlace?: 'root' | 'reply' | undefined;
+  /**
+   * The head's time (10 Nov 2026): 'clock' ("2:54 PM", default, every chat
+   * and thread view) or 'day' (threadWhen 'relative', "Yesterday at 12:17 PM";
+   * the Threads list's first message of each day). Ignored when `meta` is passed.
+   */
+  timeLabel?: 'clock' | 'day' | undefined;
   /** The row's piece of the thread rail; absent off the rail and while selecting. */
   rail?: RowRail | undefined;
   /** A voice-only bubble: the voice note right below from the same sender. */
@@ -1447,7 +1453,14 @@ export function MessageBubble(props: {
     message.sharedBriefIds.length === 0 &&
     sharedPlanIds.length === 0 &&
     sharedIdeaIds.length === 0;
-  const fullMeta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
+  const clockMeta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
+  const fullMeta =
+    props.meta === undefined && props.timeLabel === 'day' && clockMeta.time !== ''
+      ? {
+          ...clockMeta,
+          time: threadWhen(messageTimeSource(message), 'relative', new Date(), timeZone),
+        }
+      : clockMeta;
   // The name line carries the time (and own send state) on a head.
   const meta = bodyMetaOf(fullMeta, head);
   const metaEmpty = metaIsEmpty(meta);
