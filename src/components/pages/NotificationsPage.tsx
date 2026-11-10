@@ -7,6 +7,7 @@ import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { useActivityTopbar } from '@/components/shell/topbar-actions';
+import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { ICON_SIZE, IconActivity, IconAt } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
@@ -46,7 +47,6 @@ import {
   msUntilZonedMidnight,
   openAction,
   fetchActivityEntry,
-  unreadCount,
   type ActivityDirection,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -80,6 +80,9 @@ import {
   catchUpReturnOf,
   takeCatchUpSeed,
 } from '@/lib/catch-up/route';
+import { activityLoadMore, readViewport } from '@/lib/load-more-rule';
+import { fillColumns } from '@/lib/use-fill-count';
+import { listCardHeightPx } from '@/components/ui/ListCard';
 
 /** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
@@ -473,7 +476,10 @@ export function NotificationsPage() {
     [items, state, sort, nowMs, tz],
   );
 
-  const totalUnread = useMemo(() => unreadCount(items, nowMs), [items, nowMs]);
+  // One unread count (Part 6, 10 Nov 2026): the Unread chip and Catch up use
+  // the server count the Activity tab badge shows (the inbox store), never
+  // the loaded rows'.
+  const totalUnread = useInboxStore().unreadCount;
 
   // An own write lands at once, on screen and in every kept chip page, so a
   // return paints it.
@@ -578,7 +584,86 @@ export function NotificationsPage() {
     });
   }, [workspaceId, items, nowMs, newTrace, toast, loadMentionCount, editItems, revertRead]);
 
-  const listLoading = workspaceId === null || (loading && items.length === 0);
+  // Load more only when there is more (src/lib/load-more-rule, 10 Nov 2026):
+  // the depth is ITEM ROWS after grouping, never entries. The first depth is
+  // the rows that fill 1.45 viewports from the list's top, each Load more adds
+  // one viewport; a chip short of it reads entry pages silently (one read per
+  // landed page, so a failed read stops and the button comes back as Retry).
+  const [listTop, setListTop] = useState(ACTIVITY_LIST_TOP_GUESS);
+  // The shown rows' real heights (a 2-line preview row is 20 taller), read
+  // when the list resizes (a row's preview cut lands after its first paint).
+  const [rowHeights, setRowHeights] = useState<readonly number[]>([]);
+  const [moreTaps, setMoreTaps] = useState(0);
+  const [tapsFor, setTapsFor] = useState(state);
+  if (tapsFor !== state) {
+    setTapsFor(state);
+    setMoreTaps(0);
+  }
+  const viewport = readViewport();
+  const more = activityLoadMore({
+    layout: {
+      sections: buckets.map((bucket) => bucket.groups.length),
+      columns: fillColumns(viewport.width),
+      rowPx: listCardHeightPx(
+        typeof document === 'undefined' ? undefined : document.documentElement.dataset.density,
+      ),
+      headingPx: ACTIVITY_HEADING_PX,
+      gapPx: ACTIVITY_SECTION_GAP_PX,
+      rowHeights,
+    },
+    listTop,
+    viewportH: viewport.height,
+    taps: moreTaps,
+    serverMore: hasMore,
+  });
+  const shownBuckets = useMemo(() => capBuckets(buckets, more.shown), [buckets, more.shown]);
+  const [triedAt, setTriedAt] = useState<number | null>(null);
+  const [pressedAt, setPressedAt] = useState<number | null>(null);
+  const filling = more.fill && triedAt !== items.length;
+  useEffect(() => {
+    if (!filling || loading || loadingMore || error) return;
+    setTriedAt(items.length);
+    void loadMore();
+  }, [filling, loading, loadingMore, error, items.length, loadMore]);
+  const showLoadMore =
+    more.button ||
+    (more.fill && !filling && !loadingMore) ||
+    (loadingMore && pressedAt === items.length);
+  const onLoadMore = (): void => {
+    setMoreTaps((n) => n + 1);
+    setPressedAt(items.length);
+    if (more.hidden === 0 && hasMore) void loadMore();
+  };
+
+  // The list's top in the page, measured once when it paints (before the frame shows).
+  const hasRows = shownBuckets.length > 0;
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el === null) return;
+    const top = Math.round(
+      el.getBoundingClientRect().top +
+        window.scrollY +
+        (parseFloat(getComputedStyle(el).paddingTop) || 0),
+    );
+    if (top > 0) setListTop((prev) => (Math.abs(top - prev) > 1 ? top : prev));
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const read = (): void => {
+      const next = Array.from(el.querySelectorAll<HTMLElement>('[data-list-card]')).map(
+        (row) => row.offsetHeight,
+      );
+      setRowHeights((prev) =>
+        prev.length === next.length && prev.every((h, i) => h === next[i]) ? prev : next,
+      );
+    };
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasRows]);
+
+  const listLoading =
+    workspaceId === null ||
+    (loading && items.length === 0) ||
+    (filling && buckets.length === 0 && !error);
   // The top bar (no sort): Threads | Catch up (topbar-actions). Threads opens
   // the same catch up on unread threads only (?catchup=threads).
   // Catch up from the top bar opens on the newest unread (?catchup=newest);
@@ -793,7 +878,7 @@ export function NotificationsPage() {
         // Plan's list frame (PlanTabList): 16 under the chips, 24 between
         // sections, 16 heading to rows; one heading per section, no count.
         <div ref={listRef} data-activity-list="" className={ACTIVITY_LIST}>
-          {buckets.map((bucket, bucketIndex) => (
+          {shownBuckets.map((bucket, bucketIndex) => (
             <section
               key={bucket.key}
               data-activity-section={bucket.key}
@@ -832,15 +917,34 @@ export function NotificationsPage() {
             </section>
           ))}
 
-          {hasMore ? (
-            <LoadMore
-              data-activity-load-more=""
-              busy={loadingMore}
-              onMore={() => void loadMore()}
-            />
+          {showLoadMore ? (
+            <LoadMore data-activity-load-more="" busy={loadingMore} onMore={onLoadMore} />
           ) : null}
         </div>
       )}
     </>
   );
+}
+
+/** Before the list paints: a guess at its top (top bar + chip row + the 16 under it). */
+const ACTIVITY_LIST_TOP_GUESS = 128;
+/** A section heading (16 line) and its 16 step to the rows (Plan's list frame). */
+const ACTIVITY_HEADING_PX = 32;
+/** Between sections (Plan's list frame). */
+const ACTIVITY_SECTION_GAP_PX = 24;
+
+/** The first `rows` item rows across the buckets, in order (empty buckets dropped). Pure. */
+function capBuckets<B extends { groups: readonly unknown[] }>(
+  buckets: readonly B[],
+  rows: number,
+): B[] {
+  const out: B[] = [];
+  let left = rows;
+  for (const bucket of buckets) {
+    if (left <= 0) break;
+    const groups = bucket.groups.slice(0, left);
+    left -= groups.length;
+    out.push(groups.length === bucket.groups.length ? bucket : { ...bucket, groups });
+  }
+  return out;
 }

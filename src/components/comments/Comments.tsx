@@ -17,8 +17,6 @@ import type {
   ReactNode,
 } from 'react';
 import { Button } from '@/components/ui/Button';
-import { LoadMore } from '@/components/ui/LoadMore';
-import { getFillCount } from '@/lib/use-fill-count';
 import { Chip } from '@/components/ui/Chip';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Textarea } from '@/components/ui/Textarea';
@@ -993,6 +991,10 @@ export function pointEditedMarker(editedAt: string | null, now: Date): string | 
 
 /** Reply drafts per thread, kept for as long as the page is open (they survive
  *  the panel remounting, never a reload). Keyed by entity + thread root. */
+/** Comments never page (10 Nov 2026): the whole list is read in pages of this
+ *  many rows (PostgREST's default row cap) until one comes back short. */
+export const COMMENTS_READ_PAGE = 1000;
+
 const replyDrafts = new Map<string, string>();
 
 /** The root composer's draft per post (or brief), kept the same way as
@@ -1528,11 +1530,6 @@ export function Comments({
   // checkpoints never pop in after the list (the same paint as a self read).
   const loading = listLoading || (sharedMode && sharedRows === null);
   const [loadError, setLoadError] = useState(false);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  // An older page failed: the loaded list stays, a Retry sits at the bottom.
-  const [moreError, setMoreError] = useState(false);
   // Deleted comments/points hidden while their Undo window runs.
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   // The thread whose reply composer is asking "Discard reply?".
@@ -1642,76 +1639,69 @@ export function Comments({
   // no realtime channel of their own).
   const [reactionEpoch, setReactionEpoch] = useState(0);
 
-  // Fetch a single page. page 0 replaces the list (mount + post-submit refetch);
-  // later pages append. One page is one screen's worth (getFillCount, read once
-  // per app load); a full page implies there may be more.
-  const loadPage = useCallback(
-    async (nextPage: number): Promise<void> => {
-      const seq = nextPage === 0 ? ++page0Seq.current : null;
-      const stale = (): boolean => !mounted.current || (seq !== null && seq !== page0Seq.current);
-      const silent = nextPage === 0 && hasLoaded.current;
-      if (nextPage === 0) {
-        if (!silent) {
-          setLoading(true);
-          setLoadError(false);
-        }
-      } else {
-        setLoadingMore(true);
-        setMoreError(false);
-      }
-      // Page zero on a post reads every checkpoint too (so none is paginated out
-      // of reach), IN PARALLEL with the list: one round trip, not two. Posts only
-      // (checkpoints never exist on a brief); a host-owned read
-      // (sharedCheckpoints) is never repeated here.
-      const withCheckpoints = nextPage === 0 && entityType === 'post' && !sharedMode;
-      const pageSize = getFillCount();
-      const [result, checkpointRows] = await Promise.all([
-        listComments(supabase, {
-          workspace_id: workspaceId,
-          entity_type: entityType,
-          entity_id: entityId,
-          page: nextPage,
-          pageSize,
-        }),
-        withCheckpoints ? fetchCheckpoints(supabase, workspaceId, entityId) : Promise.resolve(null),
-      ]);
-      mark('comments:rows-in');
+  // Read EVERY comment of the entity (10 Nov 2026: comments never page). The
+  // existing listComments in pages of COMMENTS_READ_PAGE until one comes back
+  // short, then one merge and ONE paint (no flicker, no Load more). On a post
+  // every checkpoint is read alongside, in parallel with the first page; a
+  // host-owned read (sharedCheckpoints) is never repeated here. Only the first
+  // read shows the skeleton; later reads (after a write, a refreshSignal bump)
+  // swap the rows in place silently.
+  const loadAll = useCallback(async (): Promise<void> => {
+    const seq = ++page0Seq.current;
+    const stale = (): boolean => !mounted.current || seq !== page0Seq.current;
+    const silent = hasLoaded.current;
+    if (!silent) {
+      setLoading(true);
+      setLoadError(false);
+    }
+    const withCheckpoints = entityType === 'post' && !sharedMode;
+    const checkpointsRead = withCheckpoints
+      ? fetchCheckpoints(supabase, workspaceId, entityId)
+      : Promise.resolve(null);
+    const rows: CommentRow[] = [];
+    let ok = true;
+    for (let page = 0; ; page += 1) {
+      const result = await listComments(supabase, {
+        workspace_id: workspaceId,
+        entity_type: entityType,
+        entity_id: entityId,
+        page,
+        pageSize: COMMENTS_READ_PAGE,
+      });
       if (stale()) return;
       if (!result.ok) {
-        if (nextPage === 0) {
-          // A failed silent refetch keeps the rows already on screen (they were
-          // written in place from the landed write); only a first load shows
-          // LoadError.
-          if (silent) return;
-          setLoading(false);
-          setLoadError(true);
-        } else {
-          setLoadingMore(false);
-          setMoreError(true);
-        }
-        return;
+        ok = false;
+        break;
       }
-      if (checkpointRows !== null) setCheckpoints(checkpointRows);
-      if (nextPage === 0) {
-        hasLoaded.current = true;
-        setReactionEpoch((n) => n + 1);
-      }
-      setComments((prev) => (nextPage === 0 ? result.data : [...prev, ...result.data]));
-      setPage(nextPage);
-      setHasMore(result.data.length === pageSize);
-      if (nextPage === 0) setLoading(false);
-      else setLoadingMore(false);
-    },
-    [workspaceId, entityType, entityId, sharedMode],
-  );
+      rows.push(...result.data);
+      if (result.data.length < COMMENTS_READ_PAGE) break;
+    }
+    const checkpointRows = await checkpointsRead;
+    mark('comments:rows-in');
+    if (stale()) return;
+    if (!ok) {
+      // A failed silent refetch keeps the rows already on screen (they were
+      // written in place from the landed write); only a first load shows
+      // LoadError.
+      if (silent) return;
+      setLoading(false);
+      setLoadError(true);
+      return;
+    }
+    if (checkpointRows !== null) setCheckpoints(checkpointRows);
+    hasLoaded.current = true;
+    setReactionEpoch((n) => n + 1);
+    setComments(rows);
+    setLoading(false);
+  }, [workspaceId, entityType, entityId, sharedMode]);
 
   // Page zero after a write (or Retry): the list, and the checkpoints with it.
-  // A self read does both inside loadPage; a host-owned read is asked to
+  // A self read does both inside loadAll; a host-owned read is asked to
   // re-run alongside, concurrently, so the two still land together.
   const reloadAll = useCallback(async (): Promise<void> => {
     const reload = reloadShared.current;
-    await Promise.all([loadPage(0), reload !== null ? reload() : Promise.resolve()]);
-  }, [loadPage]);
+    await Promise.all([loadAll(), reload !== null ? reload() : Promise.resolve()]);
+  }, [loadAll]);
 
   // After a landed write the row is already right on screen (patched in place
   // below); this page-zero read only reconciles with the server, silently (no
@@ -1766,8 +1756,8 @@ export function Comments({
     // A new entity (or first mount) is a first load again: skeleton, never the
     // previous entity's rows.
     hasLoaded.current = false;
-    void loadPage(0);
-  }, [loadPage]);
+    void loadAll();
+  }, [loadAll]);
 
   // A refreshSignal bump (e.g. a new caption annotation posted on the parent)
   // refetches page 0. The mount load above already covers the initial value, so
@@ -1777,8 +1767,8 @@ export function Comments({
     if (refreshSignal === undefined) return;
     if (lastSignal.current === refreshSignal) return;
     lastSignal.current = refreshSignal;
-    void loadPage(0);
-  }, [refreshSignal, loadPage]);
+    void loadAll();
+  }, [refreshSignal, loadAll]);
 
   // A linked comment not already listed is read by id as soon as the link
   // arrives (on a first mount, alongside page zero), with its thread root when
@@ -3371,28 +3361,6 @@ export function Comments({
           )}
         </ul>
       )}
-
-      {!loading && !loadError && moreError ? (
-        <ErrorNote className="flex items-center gap-3">
-          <span>Couldn&apos;t load older comments.</span>
-          <Button
-            variant="ghost"
-            className="ml-auto min-w-11"
-            busy={loadingMore}
-            onClick={() => void loadPage(page + 1)}
-          >
-            Retry
-          </Button>
-        </ErrorNote>
-      ) : null}
-
-      {!loading && !loadError && !moreError && hasMore ? (
-        <LoadMore
-          data-comments-load-more=""
-          busy={loadingMore}
-          onMore={() => void loadPage(page + 1)}
-        />
-      ) : null}
 
       <div data-comments-composer="">{composer}</div>
 

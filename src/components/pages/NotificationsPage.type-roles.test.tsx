@@ -73,6 +73,14 @@ import { NotificationsPage } from '@/components/pages/NotificationsPage';
 import { resetSessionReads } from '@/lib/session-read';
 import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
 
+// NotificationsPage reads the one unread count from the shell's inbox store
+// (Part 6, 10 Nov 2026); these renders have no shell, so the store is a stub.
+const inboxUnread = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/components/shell/InboxStoreProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useInboxStore: () => ({ unreadCount: inboxUnread.count }),
+}));
+
 /** Stands in for Topbar: renders what the page published into its two slots. */
 function TopbarProbe() {
   const { sort, primary, pair } = useTopbarActionsValue();

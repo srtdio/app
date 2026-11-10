@@ -81,6 +81,8 @@ const RUNS: ReadonlyArray<readonly [string, (el: HTMLElement) => Played | void]>
   // 6. itemIn / itemOut
   ['itemIn', (el) => itemIn(el)],
   ['itemOut', (el) => itemOut(el)],
+  // unfold (Activity more / less)
+  ['unfold', (el) => moves.unfold(el as HTMLElement, 10)],
   // 8. edgeStrip
   ['edgeStrip: stripIn top', (el) => stripIn(el, 'top')],
   ['edgeStrip: stripOut bottom', (el) => stripOut(el, 'bottom')],
@@ -392,5 +394,21 @@ describe('never fade', () => {
       const frames = call[0];
       expect(frames.some((frame) => 'opacity' in frame)).toBe(false);
     }
+  });
+});
+
+describe('unfold (Activity more / less)', () => {
+  it('declares the clip axis and animates height only, never opacity', () => {
+    expect(moves.UNFOLD).toEqual({ move: 'unfold', axis: ['clip'] });
+    expect(() =>
+      checkKeyframes(moves.UNFOLD, [{ height: '92px' }, { height: '140px' }]),
+    ).not.toThrow();
+    expect(() => checkKeyframes(moves.UNFOLD, [{ opacity: 0 }, { opacity: 1 }])).toThrow();
+  });
+
+  it('does nothing when the height did not change, or with no element', () => {
+    const el = document.createElement('div');
+    expect(moves.unfold(el, 0).instant).toBe(true);
+    expect(moves.unfold(null, 40).instant).toBe(true);
   });
 });

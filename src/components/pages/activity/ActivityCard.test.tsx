@@ -417,7 +417,7 @@ describe('ActivityCard titles and previews', () => {
     expect(classes).not.toMatch(/dark:|#[0-9a-f]{6}/i);
   });
 
-  it('"@all" draws bold with the mention-of-me accent (tokens only)', () => {
+  it('@mentions in the preview are plain text (Part 6: "@all" not drawn bold)', () => {
     const html = renderCard([
       item({
         eventType: 'mention',
@@ -429,9 +429,8 @@ describe('ActivityCard titles and previews', () => {
         body: chatMentionPreview('@[all] standup in 5', () => undefined),
       }),
     ]);
-    expect(html).toMatch(
-      /<span data-mention-all="" class="font-semibold text-accent">@all<\/span>/,
-    );
+    expect(html).not.toContain('data-mention-all');
+    expect(html).toContain('@all standup in 5');
   });
 
   it('actor rows: "<Name> approved <Title>", the name first, the title once', () => {
@@ -514,17 +513,13 @@ describe('ActivityCard titles and previews', () => {
     expect(html).not.toContain('data-activity-lead');
   });
 
-  it('a tappable card is one button named by its title, preview and unread dot', () => {
+  it('a tappable card is one button named by its title, the FULL preview and Unread', () => {
     const html = renderCard([
       item({ title: 'Q3', actorName: 'Dev', body: 'Looks good', readAt: null }),
     ]);
     const button = /<button[^>]*data-activity-lead=""[^>]*>/.exec(html)?.[0] ?? '';
-    expect(button).not.toContain('aria-label=');
-    const ids = /aria-labelledby="([^"]+)"/.exec(button)?.[1]?.split(' ') ?? [];
-    expect(ids).toHaveLength(3);
-    expect(html).toContain(`id="${ids[0]}" data-list-card-title=""`);
-    expect(html).toMatch(new RegExp(`<span[^>]*id="${ids[0]}"[^>]*>Q3<`));
-    expect(html).toContain(`id="${ids[1]}" data-list-card-preview=""`);
-    expect(html).toContain(`id="${ids[2]}" data-list-card-unread=""`);
+    // Named outright: the preview on screen can be cut ("… more"), the name never is.
+    expect(button).toContain('aria-label="Q3, Dev: Looks good, Unread"');
+    expect(button).not.toContain('aria-labelledby');
   });
 });

@@ -15,6 +15,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { CoverLookup } from '@/lib/chat/post-covers';
 import type { CardViewer } from '@/components/pages/pipeline/card-status';
 import type { PipelinePost, Stage } from '@srtdio/posts';
+import { loadMoreRule } from '@/lib/load-more-rule';
 
 interface PipelineFeedProps {
   /** The already filtered + sorted list; the feed slices it by the cap. */
@@ -119,7 +120,10 @@ export function PipelineFeed({
   };
 
   const list = activeStage === 'all' ? posts : posts.filter((post) => post.stage === activeStage);
-  const view = list.slice(0, shown);
+  // Load more only when there is more under this stage (src/lib/load-more-rule):
+  // the feed holds every post, so the button is the posts held back alone.
+  const rule = loadMoreRule({ matching: list.length, depth: shown, serverMore: false });
+  const view = list.slice(0, rule.shown);
 
   return (
     <div className={cn('py-4', GUTTER)}>
@@ -142,7 +146,7 @@ export function PipelineFeed({
             covers,
             new Date(nowMs),
           )}
-          {list.length > shown ? (
+          {rule.button ? (
             <div className="mt-4 flex flex-col">
               <LoadMore data-pipeline-load-more="" busy={false} onMore={showMore} />
             </div>

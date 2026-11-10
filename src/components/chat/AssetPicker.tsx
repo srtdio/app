@@ -35,6 +35,7 @@ import {
   toggleLibraryAsset,
   type LibraryAsset,
 } from '@/lib/chat/asset-picker';
+import { loadMoreRule } from '@/lib/load-more-rule';
 
 /** The sheet's title. */
 const ASSET_PICKER_TITLE = 'Add from Assets';
@@ -327,7 +328,13 @@ export function AssetGrid(props: {
           />
         ))}
       </ul>
-      {props.rows.length < props.count ? (
+      {/* Load more only when there is more (src/lib/load-more-rule): the search
+          counts its matches, so nothing is held back. */}
+      {loadMoreRule({
+        matching: props.rows.length,
+        depth: props.rows.length,
+        serverMore: props.rows.length < props.count,
+      }).button ? (
         <LoadMore data-asset-load-more="" busy={props.loadingMore} onMore={props.onLoadMore} />
       ) : null}
     </div>

@@ -24,7 +24,8 @@ export type MoveName =
   | 'glide'
   | 'edgeStrip'
   | 'sweepBoxes'
-  | 'touch';
+  | 'touch'
+  | 'unfold';
 
 export interface MoveSpec {
   move: MoveName;

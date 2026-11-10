@@ -56,6 +56,14 @@ export async function expectAllVisibleControlsTouchSized(
         top = Math.min(top, r.top + px(cs.top));
         right = Math.max(right, r.right - px(cs.right));
         bottom = Math.max(bottom, r.bottom - px(cs.bottom));
+        // A centred expander (top-1/2 h-11 -translate-y-1/2, Activity's pair):
+        // its own top and height, moved by its translate.
+        if (cs.height.endsWith('px') && cs.top.endsWith('px')) {
+          const ty = new DOMMatrixReadOnly(cs.transform === 'none' ? undefined : cs.transform).m42;
+          const pTop = r.top + px(cs.top) + ty;
+          top = Math.min(top, pTop);
+          bottom = Math.max(bottom, pTop + px(cs.height));
+        }
       }
       const name = el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 40) ?? '';
       // A writing box row key (ui/WritingBox): 36 wide on a 44 tall hit, the
@@ -65,7 +73,21 @@ export async function expectAllVisibleControlsTouchSized(
         (el.hasAttribute('data-composer-key') ||
           el.hasAttribute('data-row-send') ||
           el.hasAttribute('data-plus'));
-      return { width: right - left, height: bottom - top, raw: r.width * r.height, name, rowKey };
+      // A phone top bar key (shell/Topbar, 10 Nov 2026): 36 wide on a 44 tall
+      // strip below md, the second approved exception (topbar-keys.test.ts).
+      const topbarKey =
+        window.innerWidth < 768 &&
+        el.closest('header') !== null &&
+        (el.closest('[data-topbar-slot]') !== null ||
+          el.getAttribute('aria-label') === 'Search' ||
+          el.getAttribute('aria-label') === 'Account menu');
+      return {
+        width: right - left,
+        height: bottom - top,
+        raw: r.width * r.height,
+        name,
+        rowKey: rowKey || topbarKey,
+      };
     });
     if (hit.raw === 0) continue;
     expect(hit.width, `touch target width: "${hit.name}"`).toBeGreaterThanOrEqual(

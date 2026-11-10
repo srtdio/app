@@ -24,6 +24,17 @@ const REQUIRED: readonly string[] = [
   'activity-bank',
   'activity-chip-mentions',
   'activity-chip-unread',
+  'activity-load-more-calm',
+  'activity-load-more-compact',
+  'activity-load-more-cozy',
+  'activity-preview-expanded-calm',
+  'activity-preview-expanded-compact',
+  'activity-preview-expanded-cozy',
+  'activity-preview-more-calm',
+  'activity-preview-more-compact',
+  'activity-preview-more-cozy',
+  'activity-topbar-calm',
+  'activity-topbar-compact',
   'approve-confirm-approver',
   'asset-picker',
   'asset-rename-saving',
@@ -35,6 +46,7 @@ const REQUIRED: readonly string[] = [
   'assets-tab-docs',
   'assets-tab-links',
   'assets-tab-media',
+  'bank-short',
   'boxes-activity',
   'boxes-members',
   'boxes-plan-tab',
@@ -43,6 +55,7 @@ const REQUIRED: readonly string[] = [
   'brief-picker',
   'briefs-approver',
   'briefs-empty',
+  'briefs-one-open',
   'catch-up-card-reactions',
   'catch-up-thread-reactions',
   'chat-composer-keyboard',
@@ -233,6 +246,7 @@ const REQUIRED: readonly string[] = [
   'plan-tab-week-zero',
   'post-approve-busy',
   'post-comment-file-viewer',
+  'post-comments-all',
   'post-detail',
   'post-detail-approved',
   'post-detail-approver',
@@ -253,6 +267,7 @@ const REQUIRED: readonly string[] = [
   'settings-profile-paused',
   'settings-profile-switch-off',
   'settings-workspace',
+  'sidebar-activity-active',
   'support-contact-sheet',
   'support-contact-sheet-dark',
   'viewer-remove',
@@ -401,6 +416,17 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   ),
   'name: `assets-tab-${tab}`': ['media', 'docs', 'links'].map((tab) => `assets-tab-${tab}`),
   'name: `activity-chip-${chip}`': ['unread', 'mentions'].map((chip) => `activity-chip-${chip}`),
+  // Activity's top bar and Load more by density (10 Nov 2026).
+  'name: `activity-topbar-${density}`': ['compact', 'calm'].map((d) => `activity-topbar-${d}`),
+  'name: `activity-preview-more-${density}`': ['compact', 'cozy', 'calm'].map(
+    (d) => `activity-preview-more-${d}`,
+  ),
+  'name: `activity-preview-expanded-${density}`': ['compact', 'cozy', 'calm'].map(
+    (d) => `activity-preview-expanded-${d}`,
+  ),
+  'name: `activity-load-more-${density}`': ['compact', 'cozy', 'calm'].map(
+    (d) => `activity-load-more-${d}`,
+  ),
   // Chat media sweep (7 Nov 2026): single photos by shape, albums by count.
   'name: `chat-photo-single-${shape}`': ['portrait', 'landscape', 'square'].map(
     (shape) => `chat-photo-single-${shape}`,
@@ -457,6 +483,7 @@ const LAPTOP_LIGHT_NAMES = [
   'cockpit-panel-users',
   'chip-row-hover',
   'chat-box-expanded-laptop',
+  'sidebar-activity-active',
 ];
 
 /** Laptop dark shots taken in the laptop-light project (`only: 'laptop', dark: true`). */

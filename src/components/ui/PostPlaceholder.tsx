@@ -19,6 +19,7 @@ type GlyphSize = (typeof ICON_SIZE)[keyof typeof ICON_SIZE];
 /** "Aa" drawn at the glyph's size on the type scale (it stands where an icon would). */
 const AA_SIZE: Record<GlyphSize, string> = {
   12: 'text-xs',
+  14: 'text-sm',
   16: 'text-md',
   18: 'text-base',
   20: 'text-lg',

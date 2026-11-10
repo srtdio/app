@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { BriefsPage, briefsLoadMore } from '@/components/pages/BriefsPage';
 import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
+import { getFillCount } from '@/lib/use-fill-count';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -217,7 +218,7 @@ describe('Briefs list read', () => {
     expect(button('Load more')).toBeUndefined();
   });
 
-  it('Load more reads the next page from the cursor and appends without duplicates', async () => {
+  it('a short first page reads the next page silently: appended, no duplicates, no Load more', async () => {
     listBriefs
       .mockResolvedValueOnce({
         ok: true,
@@ -229,7 +230,25 @@ describe('Briefs list read', () => {
         data: { items: [brief('p1'), brief('p2')], next: { done: true } },
       });
     await mount('/briefs?status=all');
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+
+    expect(listBriefs).toHaveBeenCalledTimes(2);
+    expect(listBriefs.mock.calls[1]?.[1]).toBe('w1');
+    expect(listBriefs.mock.calls[1]?.[2]).toEqual(cursor);
+    const links = [...document.querySelectorAll('a')].map((a) => a.getAttribute('aria-label'));
+    expect(links.filter((label) => label === 'Brief p1')).toHaveLength(1);
+    expect(links).toContain('Brief p2');
+    expect(loadMore()).toBeNull();
+  });
+
+  it('a full first page shows Load more; a tap reads the next page from the cursor', async () => {
+    const full = Array.from({ length: getFillCount() }, (_u, i) => brief(`f${i}`));
+    listBriefs
+      .mockResolvedValueOnce({ ok: true, data: { items: full, next: { done: false, cursor } } })
+      .mockResolvedValueOnce({ ok: true, data: { items: [brief('p2')], next: { done: true } } });
+    await mount('/briefs?status=all');
     const control = loadMore();
+    expect(listBriefs).toHaveBeenCalledTimes(1);
     expect(control?.textContent?.trim()).toBe('Load more');
     // The shared Button: 44px touch target, token classes only.
     expect(control?.className).toContain('min-h-11');
@@ -239,11 +258,23 @@ describe('Briefs list read', () => {
     await act(async () => new Promise((r) => setTimeout(r, 0)));
 
     expect(listBriefs).toHaveBeenCalledTimes(2);
-    expect(listBriefs.mock.calls[1]?.[1]).toBe('w1');
     expect(listBriefs.mock.calls[1]?.[2]).toEqual(cursor);
     const links = [...document.querySelectorAll('a')].map((a) => a.getAttribute('aria-label'));
-    expect(links.filter((label) => label === 'Brief p1')).toHaveLength(1);
     expect(links).toContain('Brief p2');
+    expect(loadMore()).toBeNull();
+  });
+
+  it('Open chip: 1 open brief behind a page of closed ones shows the brief and no Load more', async () => {
+    const closed = Array.from({ length: getFillCount() }, (_u, i) =>
+      brief(`c${i}`, { status: 'closed' }),
+    );
+    listBriefs
+      .mockResolvedValueOnce({ ok: true, data: { items: closed, next: { done: false, cursor } } })
+      .mockResolvedValueOnce({ ok: true, data: { items: [brief('o1')], next: { done: true } } });
+    await mount('/briefs?status=open');
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    expect(text()).toContain('Brief o1');
+    expect(text()).not.toContain('Open briefs show up here.');
     expect(loadMore()).toBeNull();
   });
 });
@@ -467,10 +498,12 @@ const chipText = (label: string) =>
 describe('Briefs chip counts', () => {
   it('shows the server totals, not the loaded rows, as plain text', async () => {
     // One loaded row, but the workspace holds 250: the chips say 250 / 200 / 50.
-    listBriefs.mockResolvedValue({
-      ok: true,
-      data: { items: [brief('p1')], next: { done: false, cursor: { createdAt: 'x', id: 'p1' } } },
-    });
+    listBriefs
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { items: [brief('p1')], next: { done: false, cursor: { createdAt: 'x', id: 'p1' } } },
+      })
+      .mockResolvedValue({ ok: true, data: { items: [], next: { done: true } } });
     countBriefs.mockResolvedValue({ ok: true, data: { all: 250, open: 200, closed: 50 } });
     await mount();
     expect(countBriefs).toHaveBeenCalledTimes(1);

@@ -34,6 +34,9 @@ export default {
       '3xl': ['28px', '34px'],
       // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
       input: ['16px', '22px'],
+      // Threads/Catch up count pill only (Compact 9 / Cozy 10; Calm uses xs 11).
+      'pair-pill-compact': ['9px', '14px'],
+      'pair-pill-cozy': ['10px', '16px'],
     },
     // Spacing: the 4px grid (step N = 4N px) as used in src, plus px (hairline),
     // 0.5 (2px, inside badges and pills) and 1.5 (6px). 2.5 and 3.5 are gone.
@@ -112,6 +115,8 @@ export default {
       inset: '4px',
       // rounded-picture: a list row's 40 picture squircle (10), Slack style.
       picture: '10px',
+      // rounded-plus-box: the phone top bar "+" outlined square (shell/topbar-actions TopbarPlus).
+      'plus-box': '7px',
     },
     // Edges: 1 (DEFAULT) and 2; 0 removes a side. The named widths are the only
     // thicker lines.
@@ -125,6 +130,8 @@ export default {
       'cutout-lg': '4px',
       // The quote rail on an annotation draft (Pin / Caption annotation composers).
       rail: '4px',
+      // The phone top bar "+" outlined square's line (shell/topbar-actions TopbarPlus).
+      'plus-box': '1.75px',
     },
     // No line-height utilities: font sizes carry theirs (CLAUDE.md L9).
     // leading-emoji: an emoji glyph with no line box (chat-type.ts emoji roles).
@@ -312,6 +319,21 @@ export default {
         'rail-glyph': '13px',
         // Catch up's centred window on laptop (components/catch-up, 9 Nov 2026: 640 wide).
         'catch-up': '640px',
+        // The phone top bar "+" outlined square's face (shell/topbar-actions TopbarPlus).
+        'plus-box': '22px',
+        // A phone top bar key's hit strip: 36 wide, 44 tall, 36 apart (shell/Topbar).
+        'topbar-key': '36px',
+        // Activity's Threads | Catch up boxes: 96 wide in every density (shell/topbar-actions).
+        'topbar-pair': '96px',
+      },
+      minWidth: {
+        // The Threads | Catch up count pill, Compact (14) and Calm (18) (shell/topbar-actions).
+        'pair-pill-compact': '14px',
+        'pair-pill-calm': '18px',
+      },
+      gap: {
+        // Inside a Threads | Catch up box: the label to its count pill (shell/topbar-actions).
+        pair: '6px',
       },
       height: {
         // Catch up's centred window on laptop: at most 85vh (9 Nov 2026).
@@ -322,16 +344,26 @@ export default {
         dense: '22px',
         // The thread rail glyph in ui/icons.
         'rail-glyph': '13px',
+        // The phone top bar "+" outlined square's face (shell/topbar-actions TopbarPlus).
+        'plus-box': '22px',
+        // The Threads | Catch up count pill, Compact (14) and Calm (18) (shell/topbar-actions).
+        'pair-pill-compact': '14px',
+        'pair-pill-calm': '18px',
       },
       margin: {
         // Room for the plan panel beside the page (PlanBesideLayout, ChatConnected).
         'plan-panel': '440px',
+        // Phone: Catch up's face to the avatar's face is 8 (6 + the photo's 2 inset in its strip) (shell/Topbar).
+        'pair-avatar': '6px',
       },
       padding: {
         // Text field vertical inset (10px): a one-line Textarea / MentionInput is 44 with its edge.
         'field-y': '0.625rem',
         // Compact list row inset (10px): 10 + 40 picture + 10 = the 60 Compact row (ui/ListCard).
         'row-inset': '0.625rem',
+        // Activity's "N new" chip padding-x, Compact (6) and Cozy (7) (activity/ActivityCard).
+        'new-chip-compact': '6px',
+        'new-chip-cozy': '7px',
       },
       // Auto-fill grids that fill the laptop width (ui/Tile TILE_GRID, ui/Card CARD_GRID).
       gridTemplateColumns: {

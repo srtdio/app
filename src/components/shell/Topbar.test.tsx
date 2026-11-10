@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react';
 // The unit env is `node` with no DOM, so Topbar is invoked as a plain function
 // and its element tree walked (the SectionHeader/SortMenu test style in this
 // codebase). Topbar holds no hooks, so no renderer is needed.
-import { WorkspaceNameText, Topbar } from '@/components/shell/Topbar';
+import { WorkspaceNameText, Topbar, shortWorkspaceName } from '@/components/shell/Topbar';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Button } from '@/components/ui/Button';
 
@@ -125,42 +125,45 @@ describe('Topbar create menu', () => {
   });
 });
 
-describe('Notifications lives in the top bar on laptop (the phone tab bar holds it below md)', () => {
-  it('mounts the Notifications button once beside search and the account menu', () => {
+describe('Activity is not in the top bar (10 Nov 2026: laptop Sidebar after Chat, phone tab bar)', () => {
+  it('mounts no Notifications button and no [data-topbar-activity]', () => {
     const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
-    expect(findAll(tree, (el) => el.type === NotificationsButton)).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === NotificationsButton)).toHaveLength(0);
+    expect(
+      findAll(
+        tree,
+        (el) => (el.props as Record<string, unknown>)['data-topbar-activity'] !== undefined,
+      ),
+    ).toHaveLength(0);
   });
 
-  it('hides the button below md with CSS only and shows it md and up', () => {
-    const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
-    const [wrapper] = findAll(
-      tree,
-      (el) => (el.props as Record<string, unknown>)['data-topbar-activity'] !== undefined,
-    );
-    expect(wrapper).toBeDefined();
-    if (wrapper === undefined) return;
-    expect(className(wrapper).split(' ')).toEqual(['hidden', 'md:inline-flex']);
-    const child = (wrapper.props as { children?: ReactNode }).children;
-    expect(isElement(child) && child.type === NotificationsButton).toBe(true);
-  });
-
-  it('phone order: Search sits directly left of the account menu once Activity is hidden', () => {
+  it('Search sits left of the account menu', () => {
     const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
     const order = findAll(
       tree,
       (el) =>
         (el.props as { label?: string }).label === 'Search' ||
-        (el.props as { label?: string }).label === 'Account menu' ||
-        (el.props as Record<string, unknown>)['data-topbar-activity'] !== undefined,
-    ).map((el) => (el.props as { label?: string }).label ?? 'activity');
-    expect(order).toEqual(['Search', 'activity', 'Account menu']);
+        (el.props as { label?: string }).label === 'Account menu',
+    ).map((el) => (el.props as { label?: string }).label);
+    expect(order).toEqual(['Search', 'Account menu']);
+  });
+});
+
+describe('shortWorkspaceName (Activity phone)', () => {
+  it('2+ words: the first letter or digit of each word, uppercase, "-" skipped', () => {
+    expect(shortWorkspaceName('GBL - LinkedIn')).toBe('GL');
+    expect(shortWorkspaceName('College Vidya - LinkedIn')).toBe('CVL');
+    expect(shortWorkspaceName('GBL - Instagram')).toBe('GI');
   });
 
-  it('leaves the button out while there is no workspace yet', () => {
-    const creating = Topbar({ ...baseProps, workspaceName: null, onCreateWorkspace: () => {} });
-    expect(findAll(creating, (el) => el.type === NotificationsButton)).toHaveLength(0);
-    const loading = Topbar({ ...baseProps, workspaceName: null });
-    expect(findAll(loading, (el) => el.type === NotificationsButton)).toHaveLength(0);
+  it('1 word: its first 5 characters', () => {
+    expect(shortWorkspaceName('Acmecorp')).toBe('Acmec');
+    expect(shortWorkspaceName('Acme')).toBe('Acme');
+  });
+
+  it('empty or emoji only: the full name', () => {
+    expect(shortWorkspaceName('')).toBe('');
+    expect(shortWorkspaceName('🚀 ✨')).toBe('🚀 ✨');
   });
 });
 

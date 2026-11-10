@@ -84,7 +84,7 @@ describe('topbar actions (decision A)', () => {
     expect(src).not.toMatch(/\bawait\b|fetchWithTrace|callRpc|supabase/);
   });
 
-  it('TopbarPlus: filled icon-only primary with the old label and induction key', () => {
+  it('TopbarPlus: one Button, two CSS faces, the old label and induction key', () => {
     const html = renderToStaticMarkup(
       <TopbarPlus label="New post" induction="pipeline-new-post" onClick={() => {}} />,
     );
@@ -92,7 +92,37 @@ describe('topbar actions (decision A)', () => {
     expect(html).toContain('data-induction="pipeline-new-post"');
     expect(html).toContain('data-topbar-plus=""');
     expect(html).toContain('h-11');
-    expect(html).not.toContain('>New post<');
+    expect(html.match(/<button/g)).toHaveLength(1);
+    // Phone: the outlined 22 square, 14 glyph, no fill; hidden from md.
+    expect(html).toMatch(
+      /data-topbar-plus-face="phone" class="[^"]*\bh-plus-box w-plus-box\b[^"]*rounded-plus-box border-plus-box border-current bg-transparent md:hidden"/,
+    );
+    expect(html).toMatch(/data-topbar-plus-face="phone"[^>]*><svg[^>]*width="14"/);
+    // md and up: the 112 x 32 Main face "+ New post"; hidden below md.
+    expect(html).toMatch(
+      /data-topbar-plus-face="laptop" class="hidden h-8 w-28 [^"]*md:inline-flex[^"]*bg-accent/,
+    );
+  });
+
+  it('TopbarPlus: the accessible name is the label, read once (faces aria-hidden)', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(<TopbarPlus label="New chat" onClick={() => {}} />);
+    });
+    const btn = document.querySelector<HTMLButtonElement>('[data-topbar-plus]');
+    expect(btn?.getAttribute('aria-label')).toBe('New chat');
+    const faces = Array.from(btn?.querySelectorAll('[data-topbar-plus-face]') ?? []);
+    expect(faces).toHaveLength(2);
+    for (const face of faces) expect(face.getAttribute('aria-hidden')).toBe('true');
+    // The only unhidden text the button carries is its aria-label.
+    const visibleText = Array.from(btn?.childNodes ?? [])
+      .filter((n) => !(n instanceof Element && n.getAttribute('aria-hidden') === 'true'))
+      .map((n) => n.textContent ?? '')
+      .join('');
+    expect(visibleText).toBe('');
+    expect(btn?.textContent?.split('New chat')).toHaveLength(2);
   });
 
   it('TopbarPlus blocked: same slot, aria-disabled (not disabled), a tap toasts and stays blocked', async () => {
@@ -134,5 +164,9 @@ describe('topbar actions (decision A)', () => {
     );
     expect(html).toContain('aria-disabled="true"');
     expect(html).not.toContain(' disabled=""');
+    // Both faces stay; the laptop face greys to fg-3, the phone face follows the fg-3 ink.
+    expect(html).toContain('data-topbar-plus-face="phone"');
+    expect(html).toMatch(/data-topbar-plus-face="laptop" class="[^"]*\bbg-fg-3\b/);
+    expect(html).not.toMatch(/data-topbar-plus-face="laptop" class="[^"]*\bbg-accent\b/);
   });
 });

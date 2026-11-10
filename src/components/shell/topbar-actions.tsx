@@ -22,13 +22,7 @@ import {
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { CountBadge } from '@/components/ui/CountBadge';
-import {
-  IconActivity,
-  IconPlus,
-  IconReply,
-  IconTickDouble,
-  ICON_SIZE,
-} from '@/components/ui/icons';
+import { IconPlus, IconTickDouble, ICON_SIZE } from '@/components/ui/icons';
 import { useOptionalToast } from '@/components/ui/toast';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { CATCH_UP } from '@/lib/catch-up/copy';
@@ -112,16 +106,24 @@ export function useTopbarActions(actions: TopbarActions): void {
 }
 
 /**
- * The filled "+": Button variant primary, icon only (IconPlus). The label is
- * the screen's old create label ("New post", "New brief", "New file", "New
- * plan", "Add idea", "New chat"); the old data-induction key rides on it so the
- * tour keeps its target.
+ * The top bar "+" (10 Nov 2026): ONE Button with two faces switched by CSS
+ * only (no JS width read). The label is the screen's create label ("New
+ * post", "New brief", "New file", "New plan", "Add idea", "New chat"); the old
+ * data-induction key rides on it so the tour keeps its target.
+ *
+ * - Below md: a 36 x 44 hit strip (Topbar's key spacing) around an outlined
+ *   22 square, 1.75 line in currentColor, radius 7, no fill, a 14 glyph; fg ink
+ *   like Search and Sort, the Tool hover overlay only.
+ * - md and up: a 112 x 44 hit around the Main face, 112 x 32, rounded-lg,
+ *   accent fill, "+ <label>".
+ *
+ * Both faces are aria-hidden, so the accessible name (aria-label) is read once.
  *
  * Blocked (9 Nov 2026): a screen's create "+" always shows. Without the
  * capability the caller passes `blocked`: same size, shape and slot, the
  * disabled look via aria-disabled (NOT the disabled attribute, so taps still
- * fire), and a tap only shows a toast saying who creates. The accessible name
- * stays the label.
+ * fire): fg-3 ink on the phone face, a fg-3 fill on the laptop face. A tap
+ * only shows a toast saying who creates.
  */
 export function TopbarPlus({
   label,
@@ -140,61 +142,74 @@ export function TopbarPlus({
 }): ReactElement {
   const { buttonRef, ...aria } = rest;
   const toast = useOptionalToast();
-  if (blocked !== undefined) {
-    return (
-      <Button
-        buttonRef={buttonRef}
-        type="button"
-        variant="primary"
-        aria-label={label}
-        aria-disabled="true"
-        data-topbar-plus=""
-        data-topbar-plus-blocked=""
-        {...(induction !== undefined ? { 'data-induction': induction } : {})}
-        onClick={() => toast?.show({ title: blocked.message })}
-        shape="round"
-        className="shrink-0 rounded-lg"
-      >
-        <IconPlus size={ICON_SIZE.control} />
-      </Button>
-    );
-  }
   return (
     <Button
       buttonRef={buttonRef}
       type="button"
-      variant="primary"
+      variant="ghost"
       aria-label={label}
       data-topbar-plus=""
+      {...(blocked !== undefined
+        ? { 'aria-disabled': 'true' as const, 'data-topbar-plus-blocked': '' }
+        : aria)}
       {...(induction !== undefined ? { 'data-induction': induction } : {})}
-      {...aria}
-      onClick={onClick}
-      shape="round"
-      className="shrink-0 rounded-lg"
+      onClick={blocked !== undefined ? () => toast?.show({ title: blocked.message }) : onClick}
+      className={TOPBAR_PLUS_HIT}
     >
-      <IconPlus size={ICON_SIZE.control} />
+      <span aria-hidden="true" data-topbar-plus-face="phone" className={TOPBAR_PLUS_PHONE_FACE}>
+        <IconPlus size={ICON_SIZE.boxed} />
+      </span>
+      <span
+        aria-hidden="true"
+        data-topbar-plus-face="laptop"
+        className={cn(
+          TOPBAR_PLUS_LAPTOP_FACE,
+          blocked !== undefined ? 'bg-fg-3' : 'bg-accent group-hover:bg-accent-hover',
+        )}
+      >
+        <IconPlus size={ICON_SIZE.inline} className="shrink-0" />
+        <span className="truncate">{label}</span>
+      </span>
     </Button>
   );
 }
 
+/** The "+" hit area: a 36 x 44 strip below md, 112 x 44 from md (the Main face's slot). */
+const TOPBAR_PLUS_HIT =
+  'group shrink-0 px-0 text-fg w-topbar-key min-w-0 md:w-28 md:hover:bg-none md:active:bg-none';
+/** Below md: the outlined 22 square, currentColor line (fg, fg-3 when blocked), no fill. */
+const TOPBAR_PLUS_PHONE_FACE =
+  'inline-flex h-plus-box w-plus-box items-center justify-center rounded-plus-box border-plus-box border-current bg-transparent md:hidden';
+/** md and up: the Main face, 112 x 32, accent fill (fg-3 when blocked), "+ <label>". */
+const TOPBAR_PLUS_LAPTOP_FACE =
+  'hidden h-8 w-28 items-center justify-center gap-2 rounded-lg px-2 text-accent-fg md:inline-flex';
+
 // --- Activity: Threads | Catch up (10 Nov 2026) ------------------------------
 //
 // Activity's top bar has no sort and no "+": Threads then Catch up stand in
-// place of the two 44 slots (TopbarActions.pair, 8 apart), one identical box each: same
-// height (44), radius (8), padding, type and ONE fixed width that fits
-// "Catch up" plus a 2-digit count pill, so neither box changes size between 0
-// and 99+. A count > 0 is the Main level (primary, ink fill) with the count
-// pill; 0 is the outline (Tool level with a border-strong hairline), the label
-// centred. The workspace name truncates first; these never truncate. Only
-// Activity publishes them, so no other tab's bar moves.
+// place of the two slots (TopbarActions.pair, 8 apart). The words at every
+// width (approved on renders 10 Nov 2026), one identical box each, sized by
+// density (compact: / calm:, Cozy default): face 24 / 28 / 32 tall, text 11 /
+// 12 / 13 (500), 96 wide in every density, padding-x 8, gap 6, radius 8, a 1px
+// border; the hit is 44 tall at every density through a ::before, so the face
+// never grows. Each button on its own: a count > 0 is the Main level (primary,
+// ink fill) with the count pill; 0 is the outline (Tool level with a
+// border-strong hairline), no pill. Only Activity publishes them.
+
+/** Threads' and Catch up's one box: the density face, 96 wide, the 44 hit on ::before. */
+export const ACTIVITY_TOPBAR_BOX =
+  'relative h-7 min-h-0 w-topbar-pair min-w-0 shrink-0 gap-pair border px-2 text-sm compact:h-6 compact:text-xs calm:h-8 calm:text-md before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2';
 
 /**
- * Threads' and Catch up's one box: fixed width, the same 1px border on both
- * levels. Below sm (every phone) the full pair, search, avatar and the
- * workspace name's first 8 characters cannot all fit (they need about 480),
- * so the boxes go icon + count only, one fixed 56 x 44 box each.
+ * The pill's text, 9 / 10 / 11 by density (named sizes, the pill only): set on
+ * the wrapper over CountBadge's own size, so CountBadge itself is unchanged.
  */
-export const ACTIVITY_TOPBAR_BOX = 'relative w-28 shrink-0 border px-2 max-sm:w-14 max-sm:px-1';
+export const ACTIVITY_TOPBAR_PILL_TEXT =
+  'inline-flex shrink-0 [&_[data-count-badge]]:text-pair-pill-cozy compact:[&_[data-count-badge]]:text-pair-pill-compact calm:[&_[data-count-badge]]:text-xs';
+
+/** The count pill on a filled box: 14 / 16 / 18 tall by density (CountBadge on-fill). */
+export const ACTIVITY_TOPBAR_PILL =
+  'h-4 min-w-4 px-1 text-xs compact:h-pair-pill-compact compact:min-w-pair-pill-compact calm:h-pair-pill-calm calm:min-w-pair-pill-calm';
 
 /** The pulse: the ring scales out and back, 3 times, 1.4 s each (wipe + slow beats). */
 export const PULSE_CYCLE_MS = DUR_WIPE_MS + DUR_SLOW_MS;
@@ -288,8 +303,6 @@ interface PairButtonProps {
   armed: boolean;
   onClick: () => void;
   data: 'threads' | 'catch-up';
-  /** The phone (icon + count) form's glyph. */
-  icon: typeof IconReply;
   /** At 0: greyed (aria-disabled), no action; the 44 target stays. */
   dimAtZero?: boolean | undefined;
   gesture?: ReturnType<typeof useMenuGesture> | undefined;
@@ -303,7 +316,6 @@ function PairButton({
   armed,
   onClick,
   data,
-  icon: Icon,
   dimAtZero,
   gesture,
 }: PairButtonProps) {
@@ -334,15 +346,10 @@ function PairButton({
         data-topbar-pulse=""
         className="pointer-events-none absolute -inset-px scale-0 rounded-lg border border-fg"
       />
-      <span className="shrink-0 whitespace-nowrap max-sm:hidden">{label}</span>
-      <Icon size={ICON_SIZE.control} className="hidden shrink-0 max-sm:block" />
+      <span className="shrink-0 whitespace-nowrap">{label}</span>
       {on ? (
-        <span
-          aria-hidden="true"
-          data-topbar-count=""
-          className="inline-flex min-w-7 justify-center"
-        >
-          <CountBadge tone="on-fill" count={count} />
+        <span aria-hidden="true" data-topbar-count="" className={ACTIVITY_TOPBAR_PILL_TEXT}>
+          <CountBadge tone="on-fill" count={count} className={ACTIVITY_TOPBAR_PILL} />
         </span>
       ) : null}
     </Button>
@@ -362,7 +369,6 @@ export function ThreadsButton(props: {
       count={props.count}
       armed={props.armed}
       data="threads"
-      icon={IconReply}
       onClick={() => {
         if (props.count > 0) props.onOpen();
       }}
@@ -399,7 +405,6 @@ export function CatchUpButton(props: {
         count={props.count}
         armed={props.armed}
         data="catch-up"
-        icon={IconActivity}
         dimAtZero
         gesture={gesture}
         onClick={() => {

@@ -20,6 +20,9 @@ describe('design tokens: type and radius scales', () => {
       '2xl': ['20px', '26px'],
       '3xl': ['28px', '34px'],
       input: ['16px', '22px'],
+      // Named exception: Threads/Catch up count pill only (10 Nov 2026).
+      'pair-pill-compact': ['9px', '14px'],
+      'pair-pill-cozy': ['10px', '16px'],
     });
     expect(extend).not.toHaveProperty('fontSize');
   });
@@ -40,6 +43,8 @@ describe('design tokens: type and radius scales', () => {
       pill: '9999px',
       // rounded-picture: a list row's 40 picture squircle (flat look, 7 Nov 2026).
       picture: '10px',
+      // The phone top bar "+" outlined square (10 Nov 2026).
+      'plus-box': '7px',
     });
     expect(extend).not.toHaveProperty('borderRadius');
   });
@@ -66,6 +71,8 @@ describe('design tokens: type and radius scales', () => {
       cutout: '3px',
       'cutout-lg': '4px',
       rail: '4px',
+      // The phone top bar "+" outlined square's line (10 Nov 2026).
+      'plus-box': '1.75px',
     });
   });
 

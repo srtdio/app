@@ -1,6 +1,12 @@
 import { NavLink, useMatch } from 'react-router-dom';
 import { Avatar } from '@/components/ui/Avatar';
-import { IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
+import { IconActivity, IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
+import { useInboxStore } from '@/components/shell/InboxStoreProvider';
+import {
+  NOTIFICATIONS_PATH,
+  NOTIFICATIONS_TITLE,
+  notificationsLabel,
+} from '@/components/shell/NotificationsButton';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
@@ -17,6 +23,9 @@ import { textRole } from '@/components/ui/Text';
 import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { Bone, useNudgeOnRise } from '@/lib/motion';
+
+/** A nav item's count badge: on the icon's corner, cut out of the panel by a 2 ring. */
+const NAV_BADGE_CLASS = 'absolute -right-2 -top-2 border-2 border-panel';
 
 interface SidebarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -64,6 +73,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
         {PRIMARY_NAV.map((item) => (
           <SideNavItem key={item.to} item={item} chatUnread={total} planUnread={planUnread} />
         ))}
+        <ActivityNavItem />
       </nav>
     </aside>
   );
@@ -105,19 +115,51 @@ function SideNavItem(props: {
           <item.Icon size={ICON_SIZE.nav} />
         </span>
         {item.showChatBadge === true && chatUnread > 0 ? (
-          <CountBadge
-            count={chatUnread}
-            className="absolute -right-2 -top-2 border-2 border-panel"
-          />
+          <CountBadge count={chatUnread} className={NAV_BADGE_CLASS} />
         ) : null}
         {item.showPlanBadge === true && planUnread > 0 ? (
-          <CountBadge
-            count={planUnread}
-            className="absolute -right-2 -top-2 border-2 border-panel"
-          />
+          <CountBadge count={planUnread} className={NAV_BADGE_CLASS} />
         ) : null}
       </span>
       <span>{item.label}</span>
+    </NavLink>
+  );
+}
+
+/**
+ * Activity, the sidebar's last item after Chat (10 Nov 2026): the same look as
+ * every item (min-h-11, active = the ink fill), IconActivity with the inbox
+ * unread count, active on /notifications. It replaces the laptop top bar's
+ * Activity button; the phone keeps it in the floating tab bar.
+ */
+function ActivityNavItem() {
+  const { unreadCount } = useInboxStore();
+  const active = useMatch({ path: NOTIFICATIONS_PATH, end: false }) !== null;
+  const nudgeRef = useNudgeOnRise(unreadCount);
+  return (
+    <NavLink
+      to={NOTIFICATIONS_PATH}
+      data-sidebar-activity=""
+      data-selected={active ? 'true' : undefined}
+      aria-label={notificationsLabel(unreadCount)}
+      data-induction={INDUCTION_KEYS.activityTab}
+      {...navPrefetchProps(NOTIFICATIONS_PATH)}
+      className={() =>
+        cn(
+          'flex items-center gap-3 min-h-11 px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
+          active
+            ? 'border-transparent bg-accent text-accent-fg lit-pill'
+            : 'border-transparent text-fg-2 lit-hover hover:text-fg',
+        )
+      }
+    >
+      <span className="relative">
+        <span ref={nudgeRef} className="inline-flex">
+          <IconActivity size={ICON_SIZE.nav} />
+        </span>
+        {unreadCount > 0 ? <CountBadge count={unreadCount} className={NAV_BADGE_CLASS} /> : null}
+      </span>
+      <span>{NOTIFICATIONS_TITLE}</span>
     </NavLink>
   );
 }

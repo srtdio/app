@@ -119,6 +119,7 @@ import {
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { errorText } from '@/lib/error-copy';
 import { TEXT_ROLE } from '@/components/ui/Text';
+import { loadMoreRule } from '@/lib/load-more-rule';
 
 /** Inline search debounce, in milliseconds. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -1145,7 +1146,13 @@ export function SearchResultsView(
       {props.rows.map((post) => (
         <PostRow key={post.id} post={post} {...props} />
       ))}
-      {hasMoreResults(props.rows.length, props.count) ? (
+      {/* Load more only when there is more (src/lib/load-more-rule): the search
+          counts its matches, so nothing is held back. */}
+      {loadMoreRule({
+        matching: props.rows.length,
+        depth: props.rows.length,
+        serverMore: hasMoreResults(props.rows.length, props.count),
+      }).button ? (
         <li className="flex flex-col px-4 py-2">
           <LoadMore data-picker-load-more="" busy={props.loadingMore} onMore={props.onLoadMore} />
         </li>

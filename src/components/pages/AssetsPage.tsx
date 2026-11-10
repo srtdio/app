@@ -101,7 +101,9 @@ import {
   type AssetTab,
 } from '@/lib/assets';
 import { errorText } from '@/lib/error-copy';
-import { getFillCount } from '@/lib/use-fill-count';
+import { getFillCount, useFillCount } from '@/lib/use-fill-count';
+import { loadMoreRule } from '@/lib/load-more-rule';
+import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
 
 /** Stable keys for the loading cards (ui/ListCardBox): the screen's fill count. */
 function skeletonKeys(): string[] {
@@ -342,20 +344,21 @@ export function AssetsPage() {
 
   // The next page, appended with duplicates (by id) dropped. A failure keeps
   // what is loaded and says so in a toast; the button stays for another try.
-  const loadMore = useCallback(async () => {
-    if (workspaceId === null || next.done || loadingMore) return;
+  const loadMore = useCallback(async (): Promise<boolean> => {
+    if (workspaceId === null || next.done || loadingMore) return true;
     const generation = loadGeneration.current;
     setLoadingMore(true);
     const result = await listAssetsPage(supabase, workspaceId, next.cursor);
-    if (generation !== loadGeneration.current) return;
+    if (generation !== loadGeneration.current) return true;
     setLoadingMore(false);
     if (!result.ok) {
       logger.warn('assets: next page read failed', { error: result.error.message });
       showToast?.({ title: errorText('load more files', result.error), tone: 'error' });
-      return;
+      return false;
     }
     setItemsAndKeep((prev) => mergeAssetPages(prev, result.data.items), result.data.next);
     setNext(result.data.next);
+    return true;
   }, [workspaceId, next, loadingMore, showToast, setItemsAndKeep]);
 
   const retryLoad = useCallback(async () => {
@@ -786,6 +789,35 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace, setItemsAndKeep],
   );
 
+  // Load more only when there is more under this tab (src/lib/load-more-rule):
+  // each tab shows one screen, +1 screen per Load more (kept per tab for the
+  // session); a tab with fewer loaded files than that reads the next server
+  // pages silently, no button, until it fills or the server is done.
+  const fill = useFillCount();
+  const depthKey = `assets:shown:${workspaceId ?? ''}:${tab}`;
+  const [depth, setDepth] = useState(() => readShown(depthKey, fill));
+  useEffect(() => setDepth(readShown(depthKey, fill)), [depthKey, fill]);
+  const rule = loadMoreRule({ matching: visible.length, depth, serverMore: !next.done });
+  const shownItems = useMemo(() => visible.slice(0, rule.shown), [visible, rule.shown]);
+  const [silentFill, setSilentFill] = useState(false);
+  // The page a silent read failed on: never retried by itself (the toast says so).
+  const [fillFailedAt, setFillFailedAt] = useState<AssetPageNext | null>(null);
+  const filling = rule.fill && fillFailedAt !== next;
+  useEffect(() => {
+    if (!filling || loading || loadingMore || assetsFailed) return;
+    setSilentFill(true);
+    void loadMore().then((ok) => {
+      setSilentFill(false);
+      if (!ok) setFillFailedAt(next);
+    });
+  }, [filling, loading, loadingMore, assetsFailed, loadMore, next]);
+  const onLoadMore = (): void => {
+    const nextDepth = depth + fill;
+    setDepth(nextDepth);
+    writeShown(depthKey, nextDepth);
+    if (rule.hidden < fill) void loadMore();
+  };
+
   const listLoading = workspaceId === null || (loading && items.length === 0);
   if (!listLoading && !assetsFailed) mark('assets:paint');
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
@@ -879,7 +911,7 @@ export function AssetsPage() {
         ) : (
           <div ref={gridRef} className={cn(GUTTER, 'py-4')}>
             <AssetList
-              items={visible}
+              items={shownItems}
               presignEnabled={presignEnabled}
               cache={cache}
               onOpen={(item) => openAsset(item)}
@@ -888,10 +920,12 @@ export function AssetsPage() {
           </div>
         )}
         {/* Older files load a page at a time; tabs and sort work over what is
-            loaded. Shown only while another page exists. */}
-        {!assetsFailed && !listLoading && !next.done ? (
+            loaded. Shown only when there is more under this tab. */}
+        {!assetsFailed &&
+        !listLoading &&
+        (rule.button || (loadingMore && !silentFill) || (fillFailedAt === next && !next.done)) ? (
           <div className={cn(GUTTER, 'pb-4 flex flex-col')}>
-            <LoadMore data-assets-load-more="" busy={loadingMore} onMore={() => void loadMore()} />
+            <LoadMore data-assets-load-more="" busy={loadingMore} onMore={onLoadMore} />
           </div>
         ) : null}
       </div>

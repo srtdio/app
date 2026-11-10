@@ -485,6 +485,8 @@ async function readPage(page: Page): Promise<RawPage> {
         tag: boxOf(card.querySelector('[data-list-card-tag]')),
         hasPreview: card.querySelector('[data-list-card-preview]') !== null,
         unread: card.querySelector('[data-list-card-unread]') !== null,
+        lines2: card.getAttribute('data-list-card-lines') === '2',
+        unfolded: card.querySelector('[data-activity-preview-toggle="less"]') !== null,
       });
     }
 
@@ -525,6 +527,40 @@ async function readPage(page: Page): Promise<RawPage> {
             avatar: firstShown(
               Array.from(header.querySelectorAll('button[aria-label="Account menu"]')),
             ),
+            viewportWidth: vw,
+            cockpit: boxOf(header.querySelector('[data-cockpit-dot]')),
+            // The avatar's visible photo: the first child box inside the button.
+            avatarFace: firstShown(
+              Array.from(
+                header.querySelectorAll('button[aria-label="Account menu"] > *:first-child'),
+              ),
+            ),
+            plus: (() => {
+              const face = Array.from(
+                header.querySelectorAll('[data-topbar-slot="primary"] [data-topbar-plus-face]'),
+              ).find((el) => shown(el));
+              if (face === undefined) return null;
+              const style = getComputedStyle(face);
+              // The page's accent fill, read off a throwaway bg-accent box.
+              const probe = document.createElement('span');
+              probe.className = 'bg-accent';
+              document.body.appendChild(probe);
+              const accent = getComputedStyle(probe).backgroundColor;
+              probe.className = 'bg-fg-3';
+              const blockedFill = getComputedStyle(probe).backgroundColor;
+              probe.remove();
+              const blocked = face.closest('[data-topbar-plus-blocked]') !== null;
+              return {
+                face: face.getAttribute('data-topbar-plus-face') === 'phone' ? 'phone' : 'laptop',
+                box: toBox(face.getBoundingClientRect()),
+                borderWidth: parseFloat(style.borderTopWidth) || 0,
+                radius: parseFloat(style.borderTopLeftRadius) || 0,
+                background: style.backgroundColor,
+                accent,
+                blocked: blocked ? { fill: blockedFill } : null,
+                glyph: boxOf(face.querySelector('svg')),
+              } as const;
+            })(),
           };
 
     // 9 Chip rows with the pinned Select.
@@ -1865,15 +1901,20 @@ export function activityTwinViolations(
   if (plan.row === null) out.push('Plan shows no row to measure');
   if (activity.row === null) out.push('Activity shows no row to measure');
   if (plan.row !== null && activity.row !== null) {
-    eq('row height', activity.row.height, plan.row.height);
+    // An Activity row with a 2-line preview is one 20 line taller (Part 6).
+    const rowH = activity.row.height;
+    if (!same(rowH, plan.row.height) && !same(rowH, plan.row.height + 20)) {
+      eq('row height', rowH, plan.row.height);
+    }
     eq('picture left', activity.row.pictureLeft, plan.row.pictureLeft);
     eq('picture right', activity.row.pictureRight, plan.row.pictureRight);
     eq('title x', activity.row.titleLeft, plan.row.titleLeft);
     eq('time right edge', activity.row.timeRight, plan.row.timeRight);
   }
   for (const h of activity.rowHeights) {
-    if (activity.row !== null && !same(h, activity.row.height)) {
-      out.push(`an Activity row is ${r1(h)} tall, not ${r1(activity.row.height)}`);
+    const base = plan.row?.height ?? activity.row?.height ?? h;
+    if (!same(h, base) && !same(h, base + 20)) {
+      out.push(`an Activity row is ${r1(h)} tall, not ${r1(base)} or ${r1(base + 20)}`);
     }
   }
   const pHead = plan.headings[0];
@@ -1958,39 +1999,41 @@ export function assertActivityTwinsPlan(
   );
 }
 
-// Check 15, the top bar part (Activity, 10 Nov 2026): Threads and Catch up are
-// ONE box. Same width and height (exactly), radius, padding, border and type,
-// in the 0 (outline) and > 0 (filled) states alike; the fixed 112 x 44 box;
-// Threads first, 8 to Catch up; no 44 slots beside them; nothing past the
-// viewport (the workspace name truncates first).
-export const ACTIVITY_PAIR_W_PX = 112;
-export const ACTIVITY_PAIR_H_PX = 44;
-/** Below sm the pair goes icon + count: one fixed 56 x 44 box each (10 Nov 2026). */
-export const ACTIVITY_PAIR_COMPACT_W_PX = 56;
-export const ACTIVITY_PAIR_COMPACT_BELOW_PX = 640;
-/** The workspace name beside the pair keeps at least this many characters. */
-export const ACTIVITY_NAME_MIN_CHARS = 8;
+// Check 15, the top bar part (Activity, approved on renders 10 Nov 2026):
+// Threads and Catch up are ONE box at every width, in words (no icon form):
+// 96 wide in every density, the face 24 / 28 / 32 tall and the text 11 / 12 /
+// 13 (500) by density, padding-x 8, radius 8, a 44 tall hit (::before); the
+// count pill 14 / 16 / 18; each filled (accent) with its pill when its count
+// is > 0, outlined with no pill at 0; Threads first, 8 to Catch up; no slots
+// beside them. Phone: the short workspace name from the 16 gutter, never
+// clipped; Catch up's face 8 from the avatar's face. Laptop: no Activity in
+// the top bar; the Sidebar's last item is Activity, after Chat, filled on
+// /notifications, with the count when there is one.
+export const ACTIVITY_PAIR_W_PX = 96;
+export const ACTIVITY_PAIR_HIT_PX = 44;
 export const ACTIVITY_PAIR_GAP_PX = 8;
-
-interface PairBox {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  radius: string;
-  padding: string;
-  border: string;
-  type: string;
-  count: string | null;
-}
+/** Catch up's face to the avatar's face, phone (10 Nov 2026). */
+export const ACTIVITY_PAIR_AVATAR_GAP_PX = 8;
+type Density = 'compact' | 'cozy' | 'calm';
+/** Face height, text size and pill height per density. */
+export const ACTIVITY_PAIR_BY_DENSITY: Record<
+  Density,
+  { face: number; text: number; pill: number; pillText: number }
+> = {
+  compact: { face: 24, text: 11, pill: 14, pillText: 9 },
+  cozy: { face: 28, text: 12, pill: 16, pillText: 10 },
+  calm: { face: 32, text: 13, pill: 18, pillText: 11 },
+};
 
 export async function assertActivityTopbarPair(page: Page, screenName: string): Promise<void> {
   const got = await page.evaluate(() => {
-    const read = (sel: string): PairBoxRaw | null => {
+    const read = (sel: string) => {
       const el = document.querySelector(`header [data-topbar-pair] ${sel}`);
       if (el === null) return null;
       const r = el.getBoundingClientRect();
       const s = getComputedStyle(el);
+      const hit = getComputedStyle(el, '::before');
+      const pill = el.querySelector('[data-count-badge]');
       return {
         x: r.x,
         y: r.y,
@@ -1999,31 +2042,73 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
         radius: s.borderTopLeftRadius,
         padding: `${s.paddingLeft} ${s.paddingRight}`,
         border: s.borderTopWidth,
-        type: `${s.fontSize} ${s.fontWeight}`,
+        fontSize: parseFloat(s.fontSize),
+        weight: s.fontWeight,
+        background: s.backgroundColor,
+        hit: parseFloat(hit.height) || 0,
+        text: (el.textContent ?? '').trim(),
+        icon: el.querySelector('svg') !== null,
         count: el.getAttribute('data-count'),
+        pill: pill === null ? null : pill.getBoundingClientRect().height,
+        pillFont: pill === null ? null : parseFloat(getComputedStyle(pill).fontSize),
+        pillOff: (() => {
+          if (pill === null) return null;
+          const box = pill.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(pill);
+          const text = range.getBoundingClientRect();
+          return text.height > 0 ? text.top + text.height / 2 - (box.top + box.height / 2) : 0;
+        })(),
       };
     };
-    type PairBoxRaw = {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-      radius: string;
-      padding: string;
-      border: string;
-      type: string;
-      count: string | null;
-    };
+    const probe = document.createElement('span');
+    probe.className = 'bg-accent';
+    document.body.appendChild(probe);
+    const accent = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const header = document.querySelector('header');
+    const avatar = header?.querySelector('button[aria-label="Account menu"] > *:first-child');
+    const name = header?.querySelector('[data-topbar-workspace-name]') ?? null;
+    const nameBox = name?.getBoundingClientRect() ?? null;
+    const nav = document.querySelector('nav[aria-label="Primary"]');
+    const items = nav === null ? [] : Array.from(nav.children);
+    const side = document.querySelector('[data-sidebar-activity]');
+    const sideShown = side !== null && side.getBoundingClientRect().width > 0;
+    const last = items[items.length - 1] ?? null;
+    const before = items[items.length - 2] ?? null;
     return {
       threads: read('[data-topbar-threads]'),
       catchUp: read('[data-topbar-catch-up]'),
+      accent,
+      density: document.documentElement.dataset.density ?? 'cozy',
       slots: document.querySelectorAll('header [data-topbar-slot]').length,
       viewport: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
+      avatarLeft: avatar?.getBoundingClientRect().left ?? null,
+      name:
+        name === null || nameBox === null
+          ? null
+          : {
+              left: nameBox.left,
+              clipped: name.scrollWidth > name.clientWidth + 0.5,
+              short: name.hasAttribute('data-topbar-workspace-short'),
+            },
+      topbarActivity: document.querySelectorAll('[data-topbar-activity]').length,
+      side: sideShown
+        ? {
+            last: last === side,
+            afterChat: before?.getAttribute('href')?.startsWith('/chat') === true,
+            active: side.getAttribute('data-selected') === 'true',
+            background: getComputedStyle(side).backgroundColor,
+            badge: side.querySelector('[data-count-badge]') !== null,
+          }
+        : null,
     };
   });
   const out: string[] = [];
-  const { threads, catchUp } = got as { threads: PairBox | null; catchUp: PairBox | null };
+  const density = (['compact', 'cozy', 'calm'] as const).find((d) => d === got.density) ?? 'cozy';
+  const want = ACTIVITY_PAIR_BY_DENSITY[density];
+  const { threads, catchUp } = got;
   if (threads === null || catchUp === null) {
     out.push('no Threads | Catch up pair in the top bar ([data-topbar-pair])');
   } else {
@@ -2033,21 +2118,42 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
         `${label}: boxes ${threads.width}x${threads.height} vs ${catchUp.width}x${catchUp.height}, not one size`,
       );
     }
-    for (const [name, b] of [
-      ['Threads', threads],
-      ['Catch up', catchUp],
+    for (const [name, b, word] of [
+      ['Threads', threads, 'Threads'],
+      ['Catch up', catchUp, 'Catch up'],
     ] as const) {
-      const wantW =
-        got.viewport < ACTIVITY_PAIR_COMPACT_BELOW_PX
-          ? ACTIVITY_PAIR_COMPACT_W_PX
-          : ACTIVITY_PAIR_W_PX;
-      if (Math.abs(b.width - wantW) > 0.01 || Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01) {
-        out.push(`${name} is ${b.width}x${b.height}, not the fixed ${wantW}x${ACTIVITY_PAIR_H_PX}`);
+      if (Math.abs(b.width - ACTIVITY_PAIR_W_PX) > 0.5 || Math.abs(b.height - want.face) > 0.5) {
+        out.push(
+          `${name} is ${b.width}x${b.height}, not ${ACTIVITY_PAIR_W_PX}x${want.face} (${density})`,
+        );
       }
+      if (Math.abs(b.fontSize - want.text) > 0.1 || b.weight !== '500') {
+        out.push(`${name} text is ${b.fontSize}/${b.weight}, not ${want.text}/500 (${density})`);
+      }
+      if (Math.abs(b.hit - ACTIVITY_PAIR_HIT_PX) > 0.5) {
+        out.push(`${name}'s hit is ${b.hit} tall, not 44`);
+      }
+      if (b.padding !== '8px 8px') out.push(`${name} padding-x ${b.padding}, not 8px`);
       if (b.radius !== '8px') out.push(`${name} radius ${b.radius}, not 8px`);
+      if (b.icon || !b.text.startsWith(word)) {
+        out.push(`${name} shows "${b.text}"${b.icon ? ' with an icon' : ''}, not the word`);
+      }
+      const on = b.count !== null && b.count !== '0';
+      if (on && b.background !== got.accent) out.push(`${name} has ${b.count} but is not filled`);
+      if (!on && b.background === got.accent) out.push(`${name} is filled at 0`);
+      if (on && (b.pill === null || Math.abs(b.pill - want.pill) > 0.5)) {
+        out.push(`${name}'s pill is ${b.pill ?? 'missing'} tall, not ${want.pill} (${density})`);
+      }
+      if (!on && b.pill !== null) out.push(`${name} shows a pill at 0`);
+      if (on && b.pillFont !== null && Math.abs(b.pillFont - want.pillText) > 0.1) {
+        out.push(`${name}'s pill text is ${b.pillFont}, not ${want.pillText} (${density})`);
+      }
+      if (on && b.pillOff !== null && Math.abs(b.pillOff) > 1) {
+        out.push(`${name}'s pill text is ${b.pillOff}px off its centre`);
+      }
       if (b.x + b.width > got.viewport + 0.5) out.push(`${name} ends past the viewport`);
     }
-    for (const key of ['radius', 'padding', 'border', 'type'] as const) {
+    for (const key of ['radius', 'padding', 'border', 'fontSize', 'weight'] as const) {
       if (threads[key] !== catchUp[key]) {
         out.push(`${label}: ${key} ${threads[key]} vs ${catchUp[key]}, not the same box`);
       }
@@ -2056,12 +2162,40 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
     if (Math.abs(gap - ACTIVITY_PAIR_GAP_PX) > 0.5) {
       out.push(`Threads to Catch up is ${gap}px, not ${ACTIVITY_PAIR_GAP_PX} (Threads first)`);
     }
-    if (threads.y !== catchUp.y) out.push(`${label}: tops ${threads.y} vs ${catchUp.y}`);
+    if (got.viewport < 768) {
+      if (got.avatarLeft !== null) {
+        const toAvatar = got.avatarLeft - (catchUp.x + catchUp.width);
+        if (Math.abs(toAvatar - ACTIVITY_PAIR_AVATAR_GAP_PX) > 1) {
+          out.push(`Catch up's face to the avatar's face is ${toAvatar}px, not 8`);
+        }
+      }
+      if (got.name === null) out.push('no workspace name in the phone top bar');
+      else {
+        if (Math.abs(got.name.left - 16) > 1)
+          out.push(`the name starts at ${got.name.left}, not 16`);
+        if (got.name.clipped) out.push('the workspace name is clipped');
+        if (!got.name.short) out.push('the phone shows the full name, not the short form');
+      }
+    }
   }
   if (got.slots !== 0)
     out.push(`${got.slots} sort / "+" slots beside the pair (Activity has none)`);
   if (got.scrollWidth > got.viewport) {
     out.push(`the page scrolls sideways (${got.scrollWidth} > ${got.viewport})`);
+  }
+  if (got.viewport >= 768) {
+    if (got.topbarActivity !== 0) out.push('an Activity button in the laptop top bar');
+    const side = got.side;
+    if (side === null) out.push('no Activity in the Sidebar');
+    else {
+      if (!side.last || !side.afterChat)
+        out.push('Sidebar Activity is not the last item after Chat');
+      if (!side.active || side.background !== got.accent) {
+        out.push('Sidebar Activity is not filled on /notifications');
+      }
+      const unread = catchUp !== null && catchUp.count !== null && catchUp.count !== '0';
+      if (unread && !side.badge) out.push('Sidebar Activity shows no count');
+    }
   }
   settleFindings(
     screenName,
@@ -2070,11 +2204,10 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
 }
 
 /**
- * Check 15, narrow phones (10 Nov 2026): at 390 and 375 wide, Activity's top
- * bar fits. The workspace name shows at least its first 8 characters (then
- * the ellipsis), Threads and Catch up are the icon + count boxes (56 x 44,
- * one size), nothing overlaps and nothing scrolls sideways. Restores the
- * viewport it found.
+ * Check 15, narrow phones: at 390 and 375 wide, Activity's top bar fits: the
+ * short workspace name from the 16 gutter, never clipped; Threads and Catch up
+ * in words, inside the viewport, not overlapping the name; nothing scrolls
+ * sideways. Restores the viewport it found.
  */
 export async function assertActivityTopbarNarrow(page: Page, screenName: string): Promise<void> {
   const before = page.viewportSize();
@@ -2082,60 +2215,41 @@ export async function assertActivityTopbarNarrow(page: Page, screenName: string)
   for (const width of [390, 375]) {
     await page.setViewportSize({ width, height: before?.height ?? 844 });
     await page.waitForTimeout(100);
-    const got = await page.evaluate((minChars) => {
+    const got = await page.evaluate(() => {
       const name = document.querySelector('header [data-topbar-workspace-name]');
-      const boxes = ['[data-topbar-threads]', '[data-topbar-catch-up]'].map((sel) => {
-        const el = document.querySelector(`header ${sel}`);
-        if (el === null) return null;
-        const r = el.getBoundingClientRect();
-        return { left: r.left, right: r.right, width: r.width, height: r.height };
-      });
-      let shownChars = 0;
-      let nameRight = 0;
-      if (name !== null && name.firstChild !== null) {
-        const box = name.getBoundingClientRect();
-        nameRight = box.right;
-        const text = name.firstChild;
-        const total = (text.textContent ?? '').length;
-        const range = document.createRange();
-        for (let i = 1; i <= total; i += 1) {
-          range.setStart(text, 0);
-          range.setEnd(text, i);
-          if (range.getBoundingClientRect().right <= box.right + 0.5) shownChars = i;
-          else break;
-        }
-        if (total < minChars) shownChars = Math.max(shownChars, minChars);
-      }
+      const box = name?.getBoundingClientRect() ?? null;
+      const threads = document
+        .querySelector('header [data-topbar-threads]')
+        ?.getBoundingClientRect();
+      const catchUp = document
+        .querySelector('header [data-topbar-catch-up]')
+        ?.getBoundingClientRect();
       return {
-        hasName: name !== null,
-        shownChars,
-        nameRight,
-        boxes,
-        scrollWidth: document.documentElement.scrollWidth,
+        name:
+          name === null || box === null
+            ? null
+            : {
+                left: box.left,
+                right: box.right,
+                clipped: name.scrollWidth > name.clientWidth + 0.5,
+              },
+        threadsLeft: threads?.left ?? null,
+        catchUpRight: catchUp?.right ?? null,
         viewport: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
       };
-    }, ACTIVITY_NAME_MIN_CHARS);
+    });
     const at = `${width} wide`;
-    if (!got.hasName) out.push(`${at}: no workspace name ([data-topbar-workspace-name])`);
-    else if (got.shownChars < ACTIVITY_NAME_MIN_CHARS) {
-      out.push(
-        `${at}: the workspace name shows ${got.shownChars} characters, under ${ACTIVITY_NAME_MIN_CHARS}`,
-      );
-    }
-    const [threads, catchUp] = got.boxes;
-    if (threads == null || catchUp == null) out.push(`${at}: no Threads | Catch up pair`);
+    if (got.name === null) out.push(`${at}: no workspace name`);
     else {
-      for (const b of [threads, catchUp]) {
-        if (
-          Math.abs(b.width - ACTIVITY_PAIR_COMPACT_W_PX) > 0.01 ||
-          Math.abs(b.height - ACTIVITY_PAIR_H_PX) > 0.01
-        ) {
-          out.push(
-            `${at}: a pair box is ${b.width}x${b.height}, not ${ACTIVITY_PAIR_COMPACT_W_PX}x${ACTIVITY_PAIR_H_PX}`,
-          );
-        }
+      if (Math.abs(got.name.left - 16) > 1) out.push(`${at}: the name starts at ${got.name.left}`);
+      if (got.name.clipped) out.push(`${at}: the name is clipped`);
+      if (got.threadsLeft !== null && got.name.right > got.threadsLeft) {
+        out.push(`${at}: the name runs under Threads`);
       }
-      if (got.nameRight > threads.left + 0.5) out.push(`${at}: the name runs under Threads`);
+    }
+    if (got.catchUpRight === null || got.catchUpRight > got.viewport) {
+      out.push(`${at}: Catch up is missing or past the viewport`);
     }
     if (got.scrollWidth > got.viewport) out.push(`${at}: the page scrolls sideways`);
   }
@@ -2143,5 +2257,248 @@ export async function assertActivityTopbarNarrow(page: Page, screenName: string)
   settleFindings(
     screenName,
     out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/**
+ * Activity's Load more (10 Nov 2026): depth in item rows, never entries. When
+ * more exists, the button's bottom sits between the fold + 0.35 and the fold +
+ * 0.65 viewports (page top, before any scroll), in every density. Read before
+ * the steps scroll. Also the "N new" chip: flat (no shadow, no background
+ * image), 16 / 18 / 20 tall, padding-x 6 / 7 / 8.
+ */
+export async function assertActivityLoadMoreBand(page: Page, screenName: string): Promise<void> {
+  const got = await page.evaluate(() => {
+    const btn = document.querySelector('[data-activity-load-more]');
+    let y = 0;
+    for (let el = btn?.parentElement ?? null; el !== null; el = el.parentElement) {
+      y += el.scrollTop;
+    }
+    const chip = document.querySelector('[data-activity-new-chip]');
+    const cs = chip === null ? null : getComputedStyle(chip);
+    return {
+      bottom: btn === null ? null : btn.getBoundingClientRect().bottom + y + window.scrollY,
+      vh: window.innerHeight,
+      density: document.documentElement.dataset.density ?? 'cozy',
+      chip:
+        chip === null || cs === null
+          ? null
+          : {
+              height: chip.getBoundingClientRect().height,
+              padding: parseFloat(cs.paddingLeft),
+              shadow: cs.boxShadow,
+              image: cs.backgroundImage,
+            },
+    };
+  });
+  const out: string[] = [];
+  if (got.bottom === null) out.push('no Load more under a list with more');
+  else {
+    const lo = got.vh * 1.35;
+    const hi = got.vh * 1.65;
+    if (got.bottom < lo || got.bottom > hi) {
+      out.push(
+        `Load more ends at ${Math.round(got.bottom)}, not between the fold + 0.35 (${Math.round(lo)}) and + 0.65 (${Math.round(hi)}) viewports (${got.density})`,
+      );
+    }
+  }
+  const chipWant: Record<string, { h: number; px: number }> = {
+    compact: { h: 16, px: 6 },
+    cozy: { h: 18, px: 7 },
+    calm: { h: 20, px: 8 },
+  };
+  const want = chipWant[got.density] ?? { h: 18, px: 7 };
+  if (got.chip !== null) {
+    if (got.chip.shadow !== 'none') out.push(`the "N new" chip has a shadow (${got.chip.shadow})`);
+    if (got.chip.image !== 'none') out.push('the "N new" chip has a background image');
+    if (Math.abs(got.chip.height - want.h) > 0.5) {
+      out.push(`the "N new" chip is ${got.chip.height} tall, not ${want.h} (${got.density})`);
+    }
+    if (Math.abs(got.chip.padding - want.px) > 0.1) {
+      out.push(
+        `the "N new" chip padding-x is ${got.chip.padding}, not ${want.px} (${got.density})`,
+      );
+    }
+  }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/**
+ * Part 6 (locked 9 Nov 2026): Activity previews. The long row's preview is
+ * exactly 2 lines ending "… more" on a whole word of its full text (the row
+ * link's name holds the full text); the short row's preview is 1 line with
+ * no marker. "more" unfolds without leaving the page and becomes "less";
+ * "less" folds it back. Leaves the page as it found it (folded).
+ */
+export async function assertActivityPreviews(
+  page: Page,
+  screenName: string,
+  marks: { long: string; short: string },
+): Promise<void> {
+  const out: string[] = [];
+  const read = (needle: string) =>
+    page.evaluate((text) => {
+      const row = Array.from(
+        document.querySelectorAll('[data-activity-list] [data-list-card]'),
+      ).find((el) =>
+        (el.querySelector('[data-activity-preview]')?.textContent ?? '').includes(text),
+      );
+      if (row === undefined) return null;
+      const preview = row.querySelector('[data-activity-preview]');
+      const rects = preview === null ? [] : Array.from(preview.getClientRects());
+      // Lines = distinct tops of the text's own boxes (4px apart or more).
+      const tops: number[] = [];
+      if (preview !== null) {
+        const walk = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const r of Array.from(range.getClientRects())) {
+            if (r.width > 0 && !tops.some((t) => Math.abs(t - r.top) < 4)) tops.push(r.top);
+          }
+        }
+      }
+      return {
+        height: row.getBoundingClientRect().height,
+        // The row's own content height: its body plus its padding (what the
+        // height must settle on once an unfold is done).
+        natural: (() => {
+          const body = row.querySelector('[data-list-card-body]');
+          const cs = getComputedStyle(row);
+          return (
+            (body?.getBoundingClientRect().height ?? 0) +
+            (parseFloat(cs.paddingTop) || 0) +
+            (parseFloat(cs.paddingBottom) || 0)
+          );
+        })(),
+        animating: row.getAnimations().length > 0,
+        lines: tops.length,
+        text: (preview?.textContent ?? '').trim(),
+        name: row.querySelector('[data-activity-lead]')?.getAttribute('aria-label') ?? '',
+        toggle:
+          row
+            .querySelector('[data-activity-preview-toggle]')
+            ?.getAttribute('data-activity-preview-toggle') ?? null,
+        rects: rects.length,
+      };
+    }, needle);
+  const long = await read(marks.long);
+  const short = await read(marks.short);
+  if (long === null) out.push('no long preview row');
+  else {
+    if (long.lines !== 2) out.push(`the long preview takes ${long.lines} lines, not 2`);
+    if (!long.text.endsWith('… more'))
+      out.push(`the long preview ends "${long.text.slice(-12)}", not "… more"`);
+    const kept = long.text.slice(0, -'… more'.length);
+    if (!long.name.includes(`${kept} `)) out.push('the long preview is not cut at a whole word');
+    if (long.toggle !== 'more') out.push('the long row has no "more" toggle');
+  }
+  if (short === null) out.push('no short preview row');
+  else {
+    if (short.lines !== 1) out.push(`the short preview takes ${short.lines} lines, not 1`);
+    if (short.toggle !== null) out.push('the short preview shows a marker');
+  }
+  if (long !== null) {
+    const url = page.url();
+    const toggle = page
+      .locator('[data-activity-list] [data-list-card]', { hasText: marks.long })
+      .locator('[data-activity-preview-toggle]');
+    await toggle.click();
+    await expect(toggle)
+      .toHaveAttribute('data-activity-preview-toggle', 'less', { timeout: 5_000 })
+      .catch(() => undefined);
+    await settleRows(page);
+    const open = await read(marks.long);
+    if (page.url() !== url) out.push('"more" navigated away');
+    if (open?.toggle !== 'less') out.push('"more" did not turn into "less"');
+    if (open !== null && open.height <= long.height) out.push('"more" did not unfold the row');
+    // Once the unfold settles the row is its full content height (+-1).
+    if (open !== null && (open.animating || Math.abs(open.height - open.natural) > 1)) {
+      out.push(`the unfolded row settled at ${open.height}, not its full height ${open.natural}`);
+    }
+    if (open?.toggle === 'less') {
+      await toggle.click();
+      await expect(toggle)
+        .toHaveAttribute('data-activity-preview-toggle', 'more', { timeout: 5_000 })
+        .catch(() => undefined);
+      await settleRows(page);
+    }
+    const folded = await read(marks.long);
+    if (folded?.toggle !== 'more' || Math.abs((folded?.height ?? 0) - long.height) > 1) {
+      out.push('"less" did not fold the row back');
+    }
+  }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'list-card' as const, message })),
+  );
+}
+
+/**
+ * Part 6 D: one unread count. The Unread chip, Catch up and the Activity tab
+ * badge (phone tab bar / laptop Sidebar) show the same server count.
+ */
+export async function assertActivityCounts(page: Page, screenName: string): Promise<void> {
+  const got = await page.evaluate(() => {
+    const num = (s: string | null | undefined): number | null => {
+      const m = /(\d+)/.exec(s ?? '');
+      return m === null ? null : Number(m[1]);
+    };
+    const chip = Array.from(document.querySelectorAll('button')).find((b) =>
+      /^Unread\s*\d/.test((b.textContent ?? '').trim()),
+    );
+    const shownBadge = (sel: string) =>
+      Array.from(document.querySelectorAll(sel)).find((el) => el.getBoundingClientRect().width > 0);
+    const badge = shownBadge('[data-activity-tab] [data-count-badge]');
+    const side = shownBadge('[data-sidebar-activity] [data-count-badge]');
+    return {
+      chip: num(chip?.textContent),
+      catchUp: num(
+        document.querySelector('header [data-topbar-catch-up]')?.getAttribute('data-count'),
+      ),
+      badge: num((badge ?? side)?.textContent),
+      side: side === undefined ? null : num(side.textContent),
+    };
+  });
+  const out: string[] = [];
+  if (got.chip === null || got.catchUp === null || got.badge === null) {
+    out.push(`a count is missing (chip ${got.chip}, Catch up ${got.catchUp}, badge ${got.badge})`);
+  } else if (
+    got.chip !== got.catchUp ||
+    got.catchUp !== got.badge ||
+    (got.side !== null && got.side !== got.badge)
+  ) {
+    out.push(
+      `the counts differ: Unread chip ${got.chip}, Catch up ${got.catchUp}, tab badge ${got.badge}`,
+    );
+  }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/**
+ * Every Activity row has finished its unfold (no running animation on any
+ * row) and the rows hold still across two animation frames. No fixed sleep.
+ */
+async function settleRows(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const rows = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-activity-list] [data-list-card]'),
+        );
+        const read = (): string => rows.map((row) => row.offsetHeight).join(',');
+        const before = read();
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() =>
+            resolve(rows.every((row) => row.getAnimations().length === 0) && read() === before),
+          ),
+        );
+      }),
   );
 }

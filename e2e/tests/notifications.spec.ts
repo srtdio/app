@@ -318,7 +318,7 @@ test(
 );
 
 test(
-  'Activity: floating tab bar on phone, top bar on laptop @desktop',
+  'Activity: floating tab bar on phone, Sidebar on laptop @desktop',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
@@ -329,7 +329,9 @@ test(
     const header = page.locator('header [data-notifications-button]');
     const tab = page.locator('nav [data-activity-tab]');
     if (viewport.width >= 768) {
-      await expect(header).toBeVisible({ timeout: 15_000 });
+      // Laptop: Activity is the Sidebar's last item (10 Nov 2026), not in the top bar.
+      await expect(page.locator('aside [data-sidebar-activity]')).toBeVisible({ timeout: 15_000 });
+      await expect(header).toHaveCount(0);
       await expect(tab).toBeHidden();
       await expect(page.locator('[data-tab-pill]')).toBeHidden();
       expectClean(network);

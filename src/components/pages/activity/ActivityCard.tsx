@@ -1,11 +1,26 @@
 import { stripFormat } from '@srtdio/comments';
-import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
+import { itemIn, rememberCard, unfold, useMoveOnMount } from '@/lib/motion';
+import {
+  cutPreview,
+  PREVIEW_LESS,
+  PREVIEW_MORE,
+  type PreviewCut,
+} from '@/components/pages/activity/preview-cut';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
-import type { ComponentType, ReactElement, ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type MouseEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { ALL_MARK } from '@/lib/chat/mentions';
+import { Button } from '@/components/ui/Button';
 import { ListCard, LIST_CARD_UNREAD_DOT, type ListCardPicture } from '@/components/ui/ListCard';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
-import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail } from '@/components/media';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
@@ -38,7 +53,6 @@ import {
   THREAD_STARTED_EVENT,
   isWelcome,
   opensNothing,
-  segmentSelfMentions,
   welcomeTitle,
   type ActivityItem,
   type AlertInfo,
@@ -69,33 +83,6 @@ interface ActivityCardProps {
   side?: ViewerSide;
   /** A row a live refresh just added: it slides up into place (never sideways). */
   entering?: boolean;
-}
-
-/**
- * Render a resolved mention body as a preview line, accenting only the current
- * user's own `@name` (the same accent the comment thread gives a mention) and
- * leaving every other name in the surrounding body colour. Plain string in, so no
- * `@[uuid]` ever reaches the DOM.
- */
-function mentionPreview(body: string, selfName: string | null, chat = false): ReactElement[] {
-  return segmentSelfMentions(stripFormat(body), selfName).flatMap((seg, i) =>
-    seg.self
-      ? [
-          <span key={`s${i}`} className="font-medium text-accent">
-            {seg.text}
-          </span>,
-        ]
-      : // A chat "@all" reached me too: bold, with the same accent as my own name.
-        (chat ? splitAllMentions(seg.text) : [{ text: seg.text, all: false }]).map((run, j) =>
-          run.all ? (
-            <span key={`a${i}-${j}`} data-mention-all="" className="font-semibold text-accent">
-              {run.text}
-            </span>
-          ) : (
-            <span key={`t${i}-${j}`}>{run.text}</span>
-          ),
-        ),
-  );
 }
 
 /** The newest entry of a group, whatever the sort direction (ties keep the first). */
@@ -426,10 +413,11 @@ export function unreadEntries(group: readonly ActivityItem[]): ActivityItem[] {
  * white text in light, white with ink text in dark), no border, rounded-full,
  * medium. Density by <html data-density>: Compact 16 / Cozy 18 / Calm 20 high
  * (Cozy: the 16 box plus 1 above and below, box-content), text 11 / 11 / 12.
- * Sides 8 (the 4px spacing grid has no 6 or 7). Not a button; never truncates.
+ * Sides 6 / 7 / 8 (named padding). Flat (10 Nov 2026): no lit-badge, so no
+ * shine and no shadow. Not a button; never truncates.
  */
 export const ACTIVITY_NEW_CHIP =
-  'lit-badge box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-2 py-px text-xs font-medium text-accent-fg compact:box-border calm:box-border calm:h-5 calm:text-sm';
+  'box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-new-chip-cozy py-px text-xs font-medium text-accent-fg compact:box-border compact:px-new-chip-compact calm:box-border calm:h-5 calm:px-2 calm:text-sm';
 
 /** Line 1 of an item row: the name (truncates first), then "N new" 8 after it. */
 function itemTitleNode(name: string, unread: number): ReactNode {
@@ -465,7 +453,6 @@ export function ActivityCard({
   cache,
   presignEnabled,
   onOpenGroup,
-  selfName,
   side = 'unknown',
   entering = false,
 }: ActivityCardProps) {
@@ -476,6 +463,7 @@ export function ActivityCard({
   const growKey = group[0]?.entityId ?? '';
   const cardRef = useGrowBackIntoCard<HTMLElement>(growKey);
   useMoveOnMount(cardRef, (el) => itemIn(el), entering);
+  const [lines, setLines] = useState<1 | 2>(1);
   const lead = group[0];
   if (lead === undefined) return null;
   const chat = isChatRow(lead) || lead.alert?.kind === 'task' || !hasItem(lead);
@@ -483,12 +471,19 @@ export function ActivityCard({
   const alert = lead.alert ?? null;
   const unread = unreadEntries(group).length;
   const name = chat ? activityCardTitle(group, side) : itemCardTitle(lead, side);
-  const preview: ReactNode = chat
+  // The preview is plain text (@mentions included), up to 2 lines, cut at a
+  // whole word with "… more" (Part 6, 10 Nov 2026).
+  const previewText: string = chat
     ? lead.eventType === MENTION_EVENT_TYPE && lead.body !== null
-      ? mentionPreview(lead.body, selfName, isChatMention(lead))
+      ? stripFormat(lead.body).replaceAll(ALL_MARK, '')
       : activityPreviewText(group)
     : itemPreviewText(newest, side);
   const tappable = !opensNothing(newest, side);
+  const titleText = !chat && unread >= NEW_CHIP_MIN ? `${name}, ${newLabel(unread)}` : name;
+  // The row's one link is named by its title, the FULL preview and Unread.
+  const rowName = [titleText, previewText, groupHasUnread(group) ? 'Unread' : '']
+    .filter((part) => part !== '')
+    .join(', ');
 
   return (
     <ListCard
@@ -507,7 +502,12 @@ export function ActivityCard({
           : {})}
       title={chat ? name : itemTitleNode(name, unread)}
       unread={groupHasUnread(group)}
-      preview={preview}
+      preview={
+        previewText === '' ? undefined : (
+          <ActivityPreview rowId={lead.id} text={previewText} onLines={setLines} />
+        )
+      }
+      previewLines={lines}
       previewHooks={{ 'data-activity-preview': '' }}
       time={entryAgo(newest, nowMs, timeZone)}
       timeHooks={{ 'data-activity-time': '' }}
@@ -521,10 +521,141 @@ export function ActivityCard({
               if (growKey !== '') rememberCard(growKey, cardRef.current);
               onOpenGroup(group, newest);
             },
-            // Named by the row's own title (with "N new"), unread dot and preview (ListCard).
-            press: { 'data-activity-lead': '' },
+            press: { 'data-activity-lead': '', 'aria-label': rowName },
           }
         : {})}
     />
   );
 }
+
+/** Rows unfolded with "more", by row id: in memory for the session, gone on reload. */
+const unfoldedRows = new Set<string>();
+
+/** The preview's own font, measured on a canvas (no layout read per word). */
+function textMeasure(el: Element): ((s: string) => number) | null {
+  if (typeof document === 'undefined') return null;
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (ctx === null) return null;
+  const style = getComputedStyle(el);
+  ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  return (s: string) => ctx.measureText(s).width;
+}
+
+/**
+ * An Activity row's preview (Part 6, locked 9 Nov 2026): first painted as the
+ * one truncated line, then measured once per width (ResizeObserver on the
+ * preview box) and cut to 2 lines at a whole word with a muted "… more".
+ * "more" unfolds THIS row in place (" less" folds it); both stop the tap, so
+ * the row never opens from them. Tells the row how many lines it takes.
+ */
+function ActivityPreview({
+  rowId,
+  text,
+  onLines,
+}: {
+  rowId: string;
+  text: string;
+  onLines: (lines: 1 | 2) => void;
+}): ReactElement {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [cut, setCut] = useState<PreviewCut | null>(null);
+  const [open, setOpen] = useState(() => unfoldedRows.has(rowId));
+  useLayoutEffect(() => {
+    const box = ref.current?.parentElement ?? null;
+    if (box === null || typeof ResizeObserver === 'undefined') return undefined;
+    const measure = textMeasure(box);
+    if (measure === null) return undefined;
+    let width = -1;
+    const run = (): void => {
+      const next = Math.floor(box.clientWidth);
+      if (next === width || next <= 0) return;
+      width = next;
+      // 1px under the box: canvas and layout round apart by a hair.
+      setCut(cutPreview(text, next - 1, measure));
+    };
+    const observer = new ResizeObserver(run);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [text]);
+  const lines: 1 | 2 = (open && cut?.cut === true) || cut?.lines === 2 ? 2 : 1;
+  useLayoutEffect(() => onLines(lines), [lines, onLines]);
+  // more / less: the row's height eases to its new height (lib/motion unfold,
+  // never a fade; instant under Reduce Motion); the rows below move with it.
+  const unfoldFrom = useRef<{ row: HTMLElement; px: number } | null>(null);
+  useLayoutEffect(() => {
+    const from = unfoldFrom.current;
+    unfoldFrom.current = null;
+    if (from !== null) unfold(from.row, from.px);
+  }, [open, lines]);
+  const toggle = (event: MouseEvent<HTMLButtonElement>): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    const next = !open;
+    if (next) unfoldedRows.add(rowId);
+    else unfoldedRows.delete(rowId);
+    // The row's height before the change: it eases to the new one (unfold).
+    const row = ref.current?.closest<HTMLElement>('[data-list-card]') ?? null;
+    unfoldFrom.current = row === null ? null : { row, px: row.getBoundingClientRect().height };
+    setOpen(next);
+  };
+  const marker = (label: string): ReactElement => (
+    <Button
+      type="button"
+      variant="ghost"
+      aria-expanded={open}
+      data-activity-preview-toggle={open ? 'less' : 'more'}
+      onClick={toggle}
+      onPointerDown={(event) => event.stopPropagation()}
+      className={PREVIEW_TOGGLE}
+    >
+      {label}
+    </Button>
+  );
+  // The text sits straight in the preview box; a hidden anchor finds the box.
+  const anchor = <span ref={ref} aria-hidden="true" className="hidden" />;
+  if (open && cut !== null && cut.cut) {
+    return (
+      <>
+        {text.replace(/\s+/g, ' ').trim()}
+        {marker(PREVIEW_LESS)}
+        {anchor}
+      </>
+    );
+  }
+  // Folded at 2 lines: one fixed two-line box (36), so a taller glyph line
+  // (emoji) never makes the row taller than density + 20.
+  if (cut !== null && cut.cut) {
+    return (
+      <>
+        <span data-activity-preview-fold="" className={PREVIEW_FOLD}>
+          {cut.text}
+          {marker(PREVIEW_MORE)}
+        </span>
+        {anchor}
+      </>
+    );
+  }
+  if (cut !== null && cut.lines === 2) {
+    return (
+      <>
+        <span data-activity-preview-fold="" className={PREVIEW_FOLD}>
+          {text}
+        </span>
+        {anchor}
+      </>
+    );
+  }
+  return (
+    <>
+      {text}
+      {anchor}
+    </>
+  );
+}
+
+/** The folded 2-line preview: two 18 lines, fixed, so the row is exactly density + 20. */
+const PREVIEW_FOLD = 'block h-9';
+
+/** "… more" / " less": fg-3 words in the line, a 44 x 44 hit centred on them (::before). */
+const PREVIEW_TOGGLE =
+  'pointer-events-auto relative inline h-auto min-h-0 min-w-0 rounded-none px-0 align-baseline text-md font-normal text-fg-3 hover:text-fg-2 before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2';

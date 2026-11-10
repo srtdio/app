@@ -527,3 +527,33 @@ export function nudgeIcon(el: Element | null): Played {
     { duration: DUR_SHEET_IN_MS, easing: EASE.pop },
   );
 }
+
+// ---------- unfold (Activity "more" / "less", 10 Nov 2026) ----------
+
+/**
+ * A row's height eases from what it was to what it is now (axis clip: the
+ * height edge moves, never a fade). The rows under it move with it, since
+ * they follow its layout every frame. Instant under Reduce Motion (play).
+ */
+export const UNFOLD: MoveSpec = { move: 'unfold', axis: ['clip'] };
+
+/**
+ * Unfold or fold `el` from `fromPx` to its current height: DUR_SLOW_MS,
+ * ease-ios, overflow clipped while it runs. Nothing runs when the height did
+ * not change.
+ */
+export function unfold(el: HTMLElement | null, fromPx: number): Played {
+  if (el === null) return play(null, UNFOLD, [], { duration: 0, easing: EASE.ios });
+  const toPx = el.getBoundingClientRect().height;
+  if (Math.abs(toPx - fromPx) < 1) return play(null, UNFOLD, [], { duration: 0, easing: EASE.ios });
+  const overflow = el.style.overflow;
+  el.style.overflow = 'hidden';
+  const played = play(el, UNFOLD, [{ height: `${fromPx}px` }, { height: `${toPx}px` }], {
+    duration: DUR_SLOW_MS,
+    easing: EASE.ios,
+  });
+  void played.done.then(() => {
+    el.style.overflow = overflow;
+  });
+  return played;
+}

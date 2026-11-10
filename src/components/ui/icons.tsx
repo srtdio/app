@@ -99,6 +99,8 @@ export const ICON_SIZE = {
   // The list card's icon picture (ui/ListCard): a 24 glyph on its 48 box.
   picture: 24,
   status: 28,
+  // The phone top bar "+" glyph inside its 22 outlined square (shell/topbar-actions TopbarPlus).
+  boxed: 14,
 } as const;
 
 /**

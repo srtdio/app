@@ -95,6 +95,14 @@ import {
   type CacheRecord,
 } from '@/lib/device-cache';
 
+// NotificationsPage reads the one unread count from the shell's inbox store
+// (Part 6, 10 Nov 2026); these renders have no shell, so the store is a stub.
+const inboxUnread = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/components/shell/InboxStoreProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useInboxStore: () => ({ unreadCount: inboxUnread.count }),
+}));
+
 // The Activity boxes (sweepBoxes), labelled for screen readers with the loading copy.
 const activityBoxes = (): Element | null =>
   document.querySelector(`[data-box-skeleton][aria-label="${LOADING_NOTIFICATIONS}"]`);

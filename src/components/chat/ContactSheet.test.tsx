@@ -6,6 +6,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { LoadMore } from '@/components/ui/LoadMore';
+import { FeedMore } from '@/components/chat/ChatInfoTabs';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
@@ -98,6 +99,8 @@ const emptyTitles = (tree: ReactElement): string[] =>
   findAll(tree, (el) => el.type === EmptyState).map((el) => String(el.props.title));
 const loadMore = (tree: ReactElement) =>
   findAll(tree, (el) => el.type === LoadMore && 'data-load-more' in el.props);
+// The full list's Load more decision lives in FeedMore (src/lib/load-more-rule).
+const feedMore = (tree: ReactElement) => findAll(tree, (el) => el.type === FeedMore);
 
 describe('ContactSheetView page', () => {
   it('is a full-screen page, not a sheet', () => {
@@ -204,13 +207,13 @@ describe('ContactSheetView states', () => {
     expect(findAll(tree, (el) => 'data-media-grid' in el.props)).toEqual([]);
   });
 
-  it('Load more shows only on a full page, and calls the tab feed', () => {
+  it('Load more decides through FeedMore, and calls the tab feed', () => {
     expect(loadMore(view(props({ attachments: feed([item()], false) })))).toEqual([]);
     const onLoadMore = vi.fn();
     const tree = view(props({ tab: 'links', onLoadMore, links: feed<ChannelLinkItem>([], true) }));
-    const [button] = loadMore(tree);
-    expect(button).toBeDefined();
-    (button?.props.onMore as () => void)();
+    const [more] = feedMore(tree);
+    expect(more).toBeDefined();
+    (more?.props.onLoadMore as () => void)();
     expect(onLoadMore).toHaveBeenCalledWith('links');
     expect(showLoadMore(FEED_LOADING)).toBe(false);
   });

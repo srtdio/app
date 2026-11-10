@@ -8,6 +8,9 @@ import {
 import {
   assertActivityTopbarPair,
   assertActivityTopbarNarrow,
+  assertActivityLoadMoreBand,
+  assertActivityCounts,
+  assertActivityPreviews,
   assertCommentBars,
   assertCommentTray,
   assertThreadHeader,
@@ -896,6 +899,92 @@ function seedActivitySections(network: HarnessNetwork, saleCount = 8): void {
   t.inbox_entries = entries;
 }
 
+/**
+ * 70 Activity rows, one post each (no two group), newest first over the last
+ * days: more rows than 1.45 screens hold in any density, phone or laptop.
+ */
+function seedManyActivityRows(network: HarnessNetwork): void {
+  seedEightComments(network);
+  const t = network.world.tables;
+  const entries = t.inbox_entries ?? [];
+  const sale = entries[entries.length - 1];
+  const salePost = (t.posts ?? []).find((p) => p.id === sale?.entity_id);
+  if (sale === undefined || salePost === undefined) throw new Error('no Weekend sale entry');
+  const comment = (t.comments ?? []).find((c) => c.entity_id === salePost.id) ?? {};
+  for (let n = 1; n <= 70; n += 1) {
+    const tail = String(n).padStart(3, '0');
+    const postId = `0190d8f2-0000-7000-8000-000000000${tail}`;
+    const commentId = `0190d8f3-0000-7000-8000-000000000${tail}`;
+    const createdAt = new Date(NOW - n * 3_600_000).toISOString();
+    (t.posts ??= []).push({
+      ...salePost,
+      id: postId,
+      number: 500 + n,
+      title: `Campaign post ${n}`,
+    });
+    (t.comments ??= []).push({
+      ...comment,
+      id: commentId,
+      entity_id: postId,
+      body: `Note ${n}: tighten the caption.`,
+      created_at: createdAt,
+    });
+    entries.push({
+      ...sale,
+      id: `0190d8f4-0000-7000-8000-000000000${tail}`,
+      entity_id: postId,
+      payload: { comment_id: commentId },
+      created_at: createdAt,
+      read_at: null,
+    });
+  }
+  t.inbox_entries = entries;
+}
+
+/** Part 6: the long comment (past 2 lines on any width) and the short one. */
+const PREVIEW_LONG =
+  'Swap the hero for the morning shot, tighten the second line of the caption so it reads in one breath, move the logo off the bottom edge, and send the carousel back once the colours match the brand sheet we agreed on last week';
+const PREVIEW_SHORT = 'Looks good to me.';
+
+/** Two Activity rows, one post each: a long comment and a short one. */
+function seedPreviewRows(network: HarnessNetwork): void {
+  seedEightComments(network);
+  const t = network.world.tables;
+  const entries = t.inbox_entries ?? [];
+  const sale = entries[entries.length - 1];
+  const salePost = (t.posts ?? []).find((p) => p.id === sale?.entity_id);
+  if (sale === undefined || salePost === undefined) throw new Error('no Weekend sale entry');
+  const comment = (t.comments ?? []).find((c) => c.entity_id === salePost.id) ?? {};
+  [PREVIEW_LONG, PREVIEW_SHORT].forEach((body, i) => {
+    const n = String(i + 1).padStart(3, '0');
+    const postId = `0190d8f5-0000-7000-8000-000000000${n}`;
+    const commentId = `0190d8f6-0000-7000-8000-000000000${n}`;
+    const createdAt = new Date(NOW - (i + 1) * 60_000).toISOString();
+    (t.posts ??= []).push({
+      ...salePost,
+      id: postId,
+      number: 600 + i,
+      title: `Preview post ${i + 1}`,
+    });
+    (t.comments ??= []).push({
+      ...comment,
+      id: commentId,
+      entity_id: postId,
+      body,
+      created_at: createdAt,
+    });
+    entries.push({
+      ...sale,
+      id: `0190d8f7-0000-7000-8000-000000000${n}`,
+      entity_id: postId,
+      payload: { comment_id: commentId },
+      created_at: createdAt,
+      read_at: null,
+    });
+  });
+  t.inbox_entries = entries;
+}
+
 /** The rows screens' feed: every section on page one in every density. */
 const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 5);
 
@@ -1708,6 +1797,113 @@ const SCREENS: Screen[] = [
         'Catch up',
       );
     },
+    // Cozy: the pair's face, text, pill and hit; phone name and spacing; laptop Sidebar.
+    after: async (page) => assertActivityTopbarPair(page, 'notifications'),
+  },
+  // Activity's top bar in Compact and Calm (Cozy is notifications): the pair
+  // sized by density, the phone short name, the laptop Sidebar item.
+  ...(['compact', 'calm'] as const).map((density) => ({
+    name: `activity-topbar-${density}`,
+    seed: creator,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+      await expectDensity(page, density);
+      await waitFor(
+        [page.locator('header [data-topbar-pair] [data-topbar-catch-up]:not([data-count="0"])')],
+        'Catch up',
+      );
+    },
+    after: async (page: Page) => assertActivityTopbarPair(page, `activity-topbar-${density}`),
+  })),
+  // Activity's Load more (10 Nov 2026): depth in item rows, never entries; the
+  // button sits half a screen below the fold in every density. Measured at
+  // the page top, then scrolled to show the button for the shot.
+  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
+    name: `activity-load-more-${density}`,
+    seed: creator,
+    extra: seedManyActivityRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.locator('[data-activity-load-more]')], 'Load more');
+      await expectDensity(page, density);
+      // Previews cut after their first paint (2-line rows are 20 taller) and
+      // the depth re-reads the rows' real heights: wait until the rows hold
+      // still across two animation frames (no fixed sleep).
+      await page.waitForFunction(
+        () =>
+          new Promise<boolean>((resolve) => {
+            const read = (): string =>
+              Array.from(
+                document.querySelectorAll<HTMLElement>('[data-activity-list] [data-list-card]'),
+              )
+                .map((row) => row.offsetHeight)
+                .join(',');
+            const before = read();
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve(read() === before)));
+          }),
+      );
+      await assertActivityLoadMoreBand(page, `activity-load-more-${density}`);
+      // One unread count on a feed larger than the first page (Part 6 D).
+      await assertActivityCounts(page, `activity-load-more-${density}`);
+      await page.locator('[data-activity-load-more]').scrollIntoViewIfNeeded();
+    },
+  })),
+  // Part 6: Activity previews, 2 lines cut at a whole word with "… more"
+  // (long) and one line, no marker (short); more unfolds, less folds.
+  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
+    name: `activity-preview-more-${density}`,
+    seed: creator,
+    extra: seedPreviewRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
+      await expectDensity(page, density);
+      await assertActivityPreviews(page, `activity-preview-more-${density}`, {
+        long: 'morning shot',
+        short: PREVIEW_SHORT,
+      });
+    },
+  })),
+  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
+    name: `activity-preview-expanded-${density}`,
+    seed: creator,
+    extra: seedPreviewRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
+      await expectDensity(page, density);
+      await page
+        .locator('[data-activity-list] [data-list-card]', { hasText: 'morning shot' })
+        .locator('[data-activity-preview-toggle]')
+        .click();
+      await waitFor([page.locator('[data-activity-preview-toggle="less"]')], 'less');
+      // A tap elsewhere on the row still opens it (checked after the shot).
+    },
+    after: async (page: Page) => {
+      const url = page.url();
+      await page
+        .locator('[data-list-card]', { has: page.locator('[data-activity-preview-toggle="less"]') })
+        .locator('[data-list-card-title]')
+        .click();
+      await expect.poll(() => page.url()).not.toBe(url);
+    },
+  })),
+  {
+    // The laptop Sidebar's last item, Activity after Chat, filled on /notifications.
+    name: 'sidebar-activity-active',
+    seed: creator,
+    only: 'laptop',
+    url: '/activity',
+    steps: async (page) => {
+      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+      await waitFor([page.locator('[data-sidebar-activity][data-selected="true"]')], 'Activity');
+    },
+    after: async (page) => assertActivityTopbarPair(page, 'sidebar-activity-active'),
   },
   {
     // The idea bank's Activity rows (team viewer): added, shown, hidden, moved, planned.
@@ -2526,6 +2722,19 @@ const SCREENS: Screen[] = [
       const more = page.locator('[data-plan-tab-load-more]').first();
       await waitFor([more], 'bank Load more');
       await more.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // Load more only when there is more (10 Nov 2026): a Bank shorter than
+    // one screen ends with no Load more (plan-tab-bank-load-more, 44 ideas,
+    // still shows it).
+    name: 'bank-short',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await expect(page.locator('[data-plan-tab-load-more]')).toHaveCount(0);
     },
   },
   {
@@ -5336,6 +5545,36 @@ function seedFoldedThread(network: HarnessNetwork): void {
   );
 }
 
+/**
+ * Comments never page (10 Nov 2026): 8 checkpoints on POST, 3 replies each
+ * (32 rows, more than one screen), on top of the creator seed.
+ */
+function seedAllComments(network: HarnessNetwork): void {
+  const start = NOW - 6 * 3_600_000;
+  const rows: Row[] = [];
+  for (let n = 1; n <= 8; n += 1) {
+    const root = `0190f310-0000-7000-8000-0000000c${n}000`;
+    rows.push(
+      threadComment(root, PEER, `Checkpoint ${n}: tighten this part.`, start + n * 60_000, {
+        ledger_seq: n,
+        ledger_batch_id: CHECKPOINT_BATCH,
+      }),
+    );
+    for (let r = 1; r <= 3; r += 1) {
+      rows.push(
+        threadComment(
+          `0190f310-0000-7000-8000-0000000c${n}${r}00`,
+          r % 2 === 1 ? ME : PEER,
+          `Reply ${r} on checkpoint ${n}.`,
+          start + 3_600_000 + n * 60_000 + r * 1_000,
+          { parent_comment_id: root },
+        ),
+      );
+    }
+  }
+  (network.world.tables.comments ??= []).push(...rows);
+}
+
 const COMMENT_PDF_NAME = 'Launch deck.pdf';
 const COMMENT_PDF_ASSET = '0190e600-0000-7000-8000-0000000000a9';
 const COMMENT_PDF_VERSION = '0190e600-0000-7000-8000-0000000000b9';
@@ -5441,6 +5680,27 @@ SCREENS.push(
     after: async (page) => {
       await assertProgressRowUnderBar(page, 'post-thread-folded');
       await assertPinnedBarOnScroll(page, 'post-thread-folded');
+    },
+  },
+  {
+    // Comments never page (10 Nov 2026): all 8 checkpoints load at once, each
+    // folded to its latest reply behind "View 2 earlier replies"; no Load more.
+    // The shot is the bottom of the comment scroll.
+    name: 'post-comments-all',
+    seed: creator,
+    extra: seedAllComments,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      for (let n = 1; n <= 8; n += 1) {
+        await expect(
+          page.getByText(`Checkpoint ${n}: tighten this part.`, { exact: true }),
+        ).toHaveCount(1);
+      }
+      await expect(page.locator('[data-comments-load-more]')).toHaveCount(0);
+      const more = page.locator('[data-replies-more]', { hasText: 'View 2 earlier replies' });
+      expect(await more.count()).toBeGreaterThanOrEqual(8);
+      await page.locator('[data-comments-composer]').first().scrollIntoViewIfNeeded();
     },
   },
   {
@@ -5566,6 +5826,40 @@ async function refuseUploads(page: Page): Promise<void> {
   );
 }
 
+/** Every seeded brief closed, then 30 newer closed ones and one older open one. */
+function seedOneOpenBrief(network: HarnessNetwork): void {
+  const briefs = (network.world.tables.briefs ??= []);
+  const template = briefs[0];
+  if (template === undefined) throw new Error('briefs-one-open: no seeded brief to copy');
+  const closedAt = new Date(NOW - 3_600_000).toISOString();
+  const closed = { status: 'closed', closed_at: closedAt, closed_by: ME };
+  for (const brief of briefs) Object.assign(brief, closed);
+  const at = (ms: number) => ({
+    created_at: new Date(ms).toISOString(),
+    updated_at: new Date(ms).toISOString(),
+  });
+  for (let i = 1; i <= 30; i += 1) {
+    briefs.push({
+      ...template,
+      ...closed,
+      ...at(NOW - i * 3_600_000),
+      id: `0190da10-0000-7000-8a00-0000000001${String(i).padStart(2, '0')}`,
+      number: 400 + i,
+      title: `Closed brief ${i}`,
+    });
+  }
+  briefs.push({
+    ...template,
+    ...at(NOW - 40 * 24 * 3_600_000),
+    status: 'open',
+    closed_at: null,
+    closed_by: null,
+    id: '0190da10-0000-7000-8a00-000000000200',
+    number: 399,
+    title: 'Spring lookbook',
+  });
+}
+
 SCREENS.push(
   // Briefs for the creator (no sort; the blocked "+": aria-disabled, the
   // disabled look). briefs-approver is the approver's (the live "+", no sort).
@@ -5585,6 +5879,20 @@ SCREENS.push(
       );
       await blocked.click({ force: true });
       await waitFor([page.getByText('Briefs come from approvers.', { exact: true })], 'toast');
+    },
+  },
+  // Load more only when there is more (10 Nov 2026): the one open brief sits
+  // behind 30 newer closed ones; the Open chip reads on silently and shows it,
+  // with no Load more under the short list.
+  {
+    name: 'briefs-one-open',
+    seed: creator,
+    extra: seedOneOpenBrief,
+    url: '/briefs?status=open',
+    steps: async (page) => {
+      await waitFor([page.getByText('Spring lookbook')], 'the one open brief');
+      await expect(page.locator('[data-briefs-load-more]')).toHaveCount(0);
+      await expect(page.getByText('Open briefs show up here.')).toHaveCount(0);
     },
   },
   {

@@ -24,6 +24,10 @@ const ALLOW: ReadonlyMap<string, string> = new Map([
     'shell/BottomTabs.tsx',
     'flat look (7 Nov 2026): the phone dock is a --border hairline on bg-panel with no lit height; lighting-rules and flat-look guard it',
   ],
+  [
+    'pages/activity/ActivityCard.tsx',
+    'flat ink (10 Nov 2026): the "N new" chip (ACTIVITY_NEW_CHIP) takes no lit-badge: no shine, no shadow',
+  ],
 ]);
 const allowed = (rel: string): boolean =>
   ALLOW.has(rel) || rel.startsWith('ui/viewers/') || rel.startsWith('home/');

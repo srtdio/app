@@ -35,6 +35,8 @@ import {
 import { formatPlanStart } from '@/lib/time';
 import { Text } from '@/components/ui/Text';
 import { getFillCount } from '@/lib/use-fill-count';
+import { useLoadMoreFill } from '@/lib/load-more-rule';
+import { PLAN_BUNDLE_PAGE } from '@/lib/chat/plan-bundle';
 import { LoadMore, LOAD_MORE_LABEL } from '@/components/ui/LoadMore';
 
 /**
@@ -111,6 +113,18 @@ export function PlanTabList(props: {
   );
   // Keyed on every read plan, not the shown ones: a chip pick switches instantly (no rise).
   const rise = useAppendedRise(props.bundles.map((b) => b.plan.id));
+  // Load more only when there is more under this chip (src/lib/load-more-rule,
+  // 10 Nov 2026): the depth is one plan page (the proc's c_page), +1 per tap; a
+  // chip holding fewer plans reads the next pages silently, no button.
+  const more = useLoadMoreFill({
+    filterKey: chip,
+    matching: sections.reduce((sum, section) => sum + section.bundles.length, 0),
+    loaded: props.bundles.length,
+    page: PLAN_BUNDLE_PAGE,
+    serverMore: props.more !== null,
+    busy: props.more?.busy ?? false,
+    onMore: props.more?.onMore,
+  });
   return (
     <div data-plan-tab-list="" className={cn('flex flex-col gap-6 pb-8 pt-4', GUTTER)}>
       {sections.length === 0 ? (
@@ -147,7 +161,7 @@ export function PlanTabList(props: {
           </div>
         </section>
       ))}
-      {props.more !== null ? <PlanTabLoadMore more={props.more} /> : null}
+      {more !== null ? <PlanTabLoadMore more={more} /> : null}
     </div>
   );
 }

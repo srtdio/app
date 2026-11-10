@@ -14,6 +14,7 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 import { resetSessionReads } from '@/lib/session-read';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 import type { AssetListItem } from '@/lib/assets';
+import { getFillCount } from '@/lib/use-fill-count';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -311,10 +312,13 @@ describe('Assets top bar: Sort and the "+" (New file menu)', () => {
     expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');
     expect(trigger?.getAttribute('data-induction')).toBe(INDUCTION_KEYS.assetsAdd);
-    // Icon only: the label is the button's name, not its text.
-    expect(trigger?.textContent?.trim()).toBe('');
+    // The label is the button's name; the only text is the aria-hidden laptop face.
+    for (const face of Array.from(trigger?.querySelectorAll('[data-topbar-plus-face]') ?? [])) {
+      expect(face.getAttribute('aria-hidden')).toBe('true');
+    }
+    expect(trigger?.querySelector('[data-topbar-plus-face="phone"]')?.textContent).toBe('');
     expect(trigger?.querySelector('svg')).not.toBeNull();
-    expect(button('New file')).toBeUndefined();
+    expect(button('New file')).toBe(trigger ?? undefined);
 
     await act(async () => trigger?.click());
     await flush();
@@ -532,12 +536,16 @@ describe('Assets Load more (keyset pages)', () => {
     expect(button('Load more')).toBeUndefined();
   });
 
-  it('renders Load more when another page exists, reads the next page from the cursor, and appends without duplicates', async () => {
+  it('renders Load more when a full page has another after it, reads the next page from the cursor, and appends without duplicates', async () => {
+    // A full first page (one screen) with another page after it shows the button.
+    const fillers = Array.from({ length: getFillCount() - 1 }, (_u, i) =>
+      asset({ id: `f${i}`, filename: `f${i}.png`, folderId: null }),
+    );
     listAssets
       .mockResolvedValueOnce({
         ok: true,
         data: {
-          items: [asset({ id: 'a1', filename: 'one.png', folderId: null })],
+          items: [asset({ id: 'a1', filename: 'one.png', folderId: null }), ...fillers],
           next: { done: false, cursor },
         },
       })
@@ -577,6 +585,8 @@ describe('Assets Load more (keyset pages)', () => {
   });
 
   it('a failed next page keeps the loaded files and toasts "Couldn\'t load more files."', async () => {
+    // A short first page reads the next one silently; it fails: the toast says
+    // so and Load more stays as the way to try again.
     listAssets
       .mockResolvedValueOnce({
         ok: true,
@@ -584,7 +594,6 @@ describe('Assets Load more (keyset pages)', () => {
       })
       .mockResolvedValueOnce({ ok: false, error: { message: 'boom' } });
     await mount();
-    await act(async () => loadMore()?.click());
     await flush();
     expect(text()).toContain('one.png');
     expect(text()).not.toContain('boom');
@@ -598,10 +607,13 @@ describe('Assets Load more (keyset pages)', () => {
   });
 
   it('?asset= for a file beyond the loaded pages is read on its own, never called gone', async () => {
-    listAssets.mockResolvedValue({
-      ok: true,
-      data: { items: [asset({ id: 'a1', filename: 'one.png' })], next: { done: false, cursor } },
-    });
+    listAssets
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { items: [asset({ id: 'a1', filename: 'one.png' })], next: { done: false, cursor } },
+      })
+      // The silent fill's next page (a short first page reads on).
+      .mockResolvedValue({ ok: true, data: { items: [], next: { done: true } } });
     getAssetItem.mockResolvedValue({
       ok: true,
       data: [asset({ id: 'old-1', filename: 'older.png' })],
