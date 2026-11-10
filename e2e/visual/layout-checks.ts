@@ -485,6 +485,8 @@ async function readPage(page: Page): Promise<RawPage> {
         tag: boxOf(card.querySelector('[data-list-card-tag]')),
         hasPreview: card.querySelector('[data-list-card-preview]') !== null,
         unread: card.querySelector('[data-list-card-unread]') !== null,
+        lines2: card.getAttribute('data-list-card-lines') === '2',
+        unfolded: card.querySelector('[data-activity-preview-toggle="less"]') !== null,
       });
     }
 
@@ -1898,15 +1900,20 @@ export function activityTwinViolations(
   if (plan.row === null) out.push('Plan shows no row to measure');
   if (activity.row === null) out.push('Activity shows no row to measure');
   if (plan.row !== null && activity.row !== null) {
-    eq('row height', activity.row.height, plan.row.height);
+    // An Activity row with a 2-line preview is one 20 line taller (Part 6).
+    const rowH = activity.row.height;
+    if (!same(rowH, plan.row.height) && !same(rowH, plan.row.height + 20)) {
+      eq('row height', rowH, plan.row.height);
+    }
     eq('picture left', activity.row.pictureLeft, plan.row.pictureLeft);
     eq('picture right', activity.row.pictureRight, plan.row.pictureRight);
     eq('title x', activity.row.titleLeft, plan.row.titleLeft);
     eq('time right edge', activity.row.timeRight, plan.row.timeRight);
   }
   for (const h of activity.rowHeights) {
-    if (activity.row !== null && !same(h, activity.row.height)) {
-      out.push(`an Activity row is ${r1(h)} tall, not ${r1(activity.row.height)}`);
+    const base = plan.row?.height ?? activity.row?.height ?? h;
+    if (!same(h, base) && !same(h, base + 20)) {
+      out.push(`an Activity row is ${r1(h)} tall, not ${r1(base)} or ${r1(base + 20)}`);
     }
   }
   const pHead = plan.headings[0];
@@ -2296,6 +2303,139 @@ export async function assertActivityLoadMoreBand(page: Page, screenName: string)
         `the "N new" chip padding-x is ${got.chip.padding}, not ${want.px} (${got.density})`,
       );
     }
+  }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/**
+ * Part 6 (locked 9 Nov 2026): Activity previews. The long row's preview is
+ * exactly 2 lines ending "… more" on a whole word of its full text (the row
+ * link's name holds the full text); the short row's preview is 1 line with
+ * no marker. "more" unfolds without leaving the page and becomes "less";
+ * "less" folds it back. Leaves the page as it found it (folded).
+ */
+export async function assertActivityPreviews(
+  page: Page,
+  screenName: string,
+  marks: { long: string; short: string },
+): Promise<void> {
+  const out: string[] = [];
+  const read = (needle: string) =>
+    page.evaluate((text) => {
+      const row = Array.from(
+        document.querySelectorAll('[data-activity-list] [data-list-card]'),
+      ).find((el) =>
+        (el.querySelector('[data-activity-preview]')?.textContent ?? '').includes(text),
+      );
+      if (row === undefined) return null;
+      const preview = row.querySelector('[data-activity-preview]');
+      const rects = preview === null ? [] : Array.from(preview.getClientRects());
+      // Lines = distinct tops of the text's own boxes (4px apart or more).
+      const tops: number[] = [];
+      if (preview !== null) {
+        const walk = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const r of Array.from(range.getClientRects())) {
+            if (r.width > 0 && !tops.some((t) => Math.abs(t - r.top) < 4)) tops.push(r.top);
+          }
+        }
+      }
+      return {
+        height: row.getBoundingClientRect().height,
+        lines: tops.length,
+        text: (preview?.textContent ?? '').trim(),
+        name: row.querySelector('[data-activity-lead]')?.getAttribute('aria-label') ?? '',
+        toggle:
+          row
+            .querySelector('[data-activity-preview-toggle]')
+            ?.getAttribute('data-activity-preview-toggle') ?? null,
+        rects: rects.length,
+      };
+    }, needle);
+  const long = await read(marks.long);
+  const short = await read(marks.short);
+  if (long === null) out.push('no long preview row');
+  else {
+    if (long.lines !== 2) out.push(`the long preview takes ${long.lines} lines, not 2`);
+    if (!long.text.endsWith('… more'))
+      out.push(`the long preview ends "${long.text.slice(-12)}", not "… more"`);
+    const kept = long.text.slice(0, -'… more'.length);
+    if (!long.name.includes(`${kept} `)) out.push('the long preview is not cut at a whole word');
+    if (long.toggle !== 'more') out.push('the long row has no "more" toggle');
+  }
+  if (short === null) out.push('no short preview row');
+  else {
+    if (short.lines !== 1) out.push(`the short preview takes ${short.lines} lines, not 1`);
+    if (short.toggle !== null) out.push('the short preview shows a marker');
+  }
+  if (long !== null) {
+    const url = page.url();
+    const toggle = page
+      .locator('[data-activity-list] [data-list-card]', { hasText: marks.long })
+      .locator('[data-activity-preview-toggle]');
+    await toggle.click();
+    await expect(toggle)
+      .toHaveAttribute('data-activity-preview-toggle', 'less', { timeout: 5_000 })
+      .catch(() => undefined);
+    const open = await read(marks.long);
+    if (page.url() !== url) out.push('"more" navigated away');
+    if (open?.toggle !== 'less') out.push('"more" did not turn into "less"');
+    if (open !== null && open.height <= long.height) out.push('"more" did not unfold the row');
+    if (open?.toggle === 'less') {
+      await toggle.click();
+      await expect(toggle)
+        .toHaveAttribute('data-activity-preview-toggle', 'more', { timeout: 5_000 })
+        .catch(() => undefined);
+    }
+    const folded = await read(marks.long);
+    if (folded?.toggle !== 'more' || Math.abs((folded?.height ?? 0) - long.height) > 1) {
+      out.push('"less" did not fold the row back');
+    }
+  }
+  settleFindings(
+    screenName,
+    out.map((message) => ({ check: 'list-card' as const, message })),
+  );
+}
+
+/**
+ * Part 6 D: one unread count. The Unread chip, Catch up and the Activity tab
+ * badge (phone tab bar / laptop Sidebar) show the same server count.
+ */
+export async function assertActivityCounts(page: Page, screenName: string): Promise<void> {
+  const got = await page.evaluate(() => {
+    const num = (s: string | null | undefined): number | null => {
+      const m = /(\d+)/.exec(s ?? '');
+      return m === null ? null : Number(m[1]);
+    };
+    const chip = Array.from(document.querySelectorAll('button')).find((b) =>
+      /^Unread\s*\d/.test((b.textContent ?? '').trim()),
+    );
+    const badge = Array.from(
+      document.querySelectorAll(
+        '[data-activity-tab] [data-count-badge], [data-sidebar-activity] [data-count-badge]',
+      ),
+    ).find((el) => el.getBoundingClientRect().width > 0);
+    return {
+      chip: num(chip?.textContent),
+      catchUp: num(
+        document.querySelector('header [data-topbar-catch-up]')?.getAttribute('data-count'),
+      ),
+      badge: num(badge?.textContent),
+    };
+  });
+  const out: string[] = [];
+  if (got.chip === null || got.catchUp === null || got.badge === null) {
+    out.push(`a count is missing (chip ${got.chip}, Catch up ${got.catchUp}, badge ${got.badge})`);
+  } else if (got.chip !== got.catchUp || got.catchUp !== got.badge) {
+    out.push(
+      `the counts differ: Unread chip ${got.chip}, Catch up ${got.catchUp}, tab badge ${got.badge}`,
+    );
   }
   settleFindings(
     screenName,

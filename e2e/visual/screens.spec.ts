@@ -9,6 +9,8 @@ import {
   assertActivityTopbarPair,
   assertActivityTopbarNarrow,
   assertActivityLoadMoreBand,
+  assertActivityCounts,
+  assertActivityPreviews,
   assertCommentBars,
   assertCommentTray,
   assertThreadHeader,
@@ -939,6 +941,50 @@ function seedManyActivityRows(network: HarnessNetwork): void {
   t.inbox_entries = entries;
 }
 
+/** Part 6: the long comment (past 2 lines on any width) and the short one. */
+const PREVIEW_LONG =
+  'Swap the hero for the morning shot, tighten the second line of the caption so it reads in one breath, move the logo off the bottom edge, and send the carousel back once the colours match the brand sheet we agreed on last week';
+const PREVIEW_SHORT = 'Looks good to me.';
+
+/** Two Activity rows, one post each: a long comment and a short one. */
+function seedPreviewRows(network: HarnessNetwork): void {
+  seedEightComments(network);
+  const t = network.world.tables;
+  const entries = t.inbox_entries ?? [];
+  const sale = entries[entries.length - 1];
+  const salePost = (t.posts ?? []).find((p) => p.id === sale?.entity_id);
+  if (sale === undefined || salePost === undefined) throw new Error('no Weekend sale entry');
+  const comment = (t.comments ?? []).find((c) => c.entity_id === salePost.id) ?? {};
+  [PREVIEW_LONG, PREVIEW_SHORT].forEach((body, i) => {
+    const n = String(i + 1).padStart(3, '0');
+    const postId = `0190d8f5-0000-7000-8000-000000000${n}`;
+    const commentId = `0190d8f6-0000-7000-8000-000000000${n}`;
+    const createdAt = new Date(NOW - (i + 1) * 60_000).toISOString();
+    (t.posts ??= []).push({
+      ...salePost,
+      id: postId,
+      number: 600 + i,
+      title: `Preview post ${i + 1}`,
+    });
+    (t.comments ??= []).push({
+      ...comment,
+      id: commentId,
+      entity_id: postId,
+      body,
+      created_at: createdAt,
+    });
+    entries.push({
+      ...sale,
+      id: `0190d8f7-0000-7000-8000-000000000${n}`,
+      entity_id: postId,
+      payload: { comment_id: commentId },
+      created_at: createdAt,
+      read_at: null,
+    });
+  });
+  t.inbox_entries = entries;
+}
+
 /** The rows screens' feed: every section on page one in every density. */
 const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 5);
 
@@ -1783,8 +1829,55 @@ const SCREENS: Screen[] = [
     steps: async (page: Page) => {
       await waitFor([page.locator('[data-activity-load-more]')], 'Load more');
       await expectDensity(page, density);
+      // Previews cut after their first paint (2-line rows are 20 taller) and
+      // the depth re-reads the rows' real heights: let that settle first.
+      await page.waitForTimeout(400);
       await assertActivityLoadMoreBand(page, `activity-load-more-${density}`);
+      // One unread count on a feed larger than the first page (Part 6 D).
+      await assertActivityCounts(page, `activity-load-more-${density}`);
       await page.locator('[data-activity-load-more]').scrollIntoViewIfNeeded();
+    },
+  })),
+  // Part 6: Activity previews, 2 lines cut at a whole word with "… more"
+  // (long) and one line, no marker (short); more unfolds, less folds.
+  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
+    name: `activity-preview-more-${density}`,
+    seed: creator,
+    extra: seedPreviewRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
+      await expectDensity(page, density);
+      await assertActivityPreviews(page, `activity-preview-more-${density}`, {
+        long: 'morning shot',
+        short: PREVIEW_SHORT,
+      });
+    },
+  })),
+  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
+    name: `activity-preview-expanded-${density}`,
+    seed: creator,
+    extra: seedPreviewRows,
+    prepare: withDensity(density),
+    url: '/activity',
+    steps: async (page: Page) => {
+      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
+      await expectDensity(page, density);
+      await page
+        .locator('[data-activity-list] [data-list-card]', { hasText: 'morning shot' })
+        .locator('[data-activity-preview-toggle]')
+        .click();
+      await waitFor([page.locator('[data-activity-preview-toggle="less"]')], 'less');
+      // A tap elsewhere on the row still opens it (checked after the shot).
+    },
+    after: async (page: Page) => {
+      const url = page.url();
+      await page
+        .locator('[data-list-card]', { has: page.locator('[data-activity-preview-toggle="less"]') })
+        .locator('[data-list-card-title]')
+        .click();
+      await expect.poll(() => page.url()).not.toBe(url);
     },
   })),
   {

@@ -398,7 +398,14 @@ export interface ListCardGeom {
   hasPreview?: boolean;
   /** Line 2 ends with the unread dot (after the tag). */
   unread?: boolean;
+  /** Activity's 2-line preview row (ListCard previewLines 2, data-list-card-lines). */
+  lines2?: boolean;
+  /** That row unfolded ("less" shows): taller than the 2-line row. */
+  unfolded?: boolean;
 }
+
+/** An Activity row with a 2-line preview is one 20 line taller (Part 6, 10 Nov 2026). */
+export const LIST_CARD_PREVIEW_LINE_PX = 20;
 
 const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean =>
   Math.abs(a - b) <= tolerance;
@@ -416,21 +423,35 @@ export function listCardViolations(
   density: LayoutDensity = DEFAULT_LAYOUT_DENSITY,
 ): string[] {
   const out: string[] = [];
-  const first = cards[0];
+  // Activity's 2-line rows (density + 20; taller only unfolded) are checked
+  // on their own; every other row is one height, the density's.
+  const first = cards.find((c) => c.lines2 !== true);
   const geom = LIST_CARD_GEOM_BY_DENSITY[density];
   for (const c of cards) {
-    if (
-      first !== undefined &&
-      Math.abs(c.card.height - first.card.height) > LIST_CARD_HEIGHT_TOLERANCE_PX
-    ) {
-      out.push(
-        `${c.label} is ${c.card.height}px tall, ${first.label} is ${first.card.height}px (cards differ)`,
-      );
-    }
-    if (Math.abs(c.card.height - geom.height) > LIST_CARD_HEIGHT_TOLERANCE_PX) {
-      out.push(
-        `${c.label} is ${c.card.height}px tall, not ${geom.height} (every list card is one height; ${density})`,
-      );
+    const extra = c.lines2 === true ? c.card.height - geom.height : 0;
+    if (c.lines2 === true) {
+      const want = geom.height + LIST_CARD_PREVIEW_LINE_PX;
+      const off =
+        c.unfolded === true ? c.card.height < want - 1 : Math.abs(c.card.height - want) > 1;
+      if (off) {
+        out.push(
+          `${c.label} is ${c.card.height}px tall, not ${want} (a 2-line preview row is density + 20; ${density})`,
+        );
+      }
+    } else {
+      if (
+        first !== undefined &&
+        Math.abs(c.card.height - first.card.height) > LIST_CARD_HEIGHT_TOLERANCE_PX
+      ) {
+        out.push(
+          `${c.label} is ${c.card.height}px tall, ${first.label} is ${first.card.height}px (cards differ)`,
+        );
+      }
+      if (Math.abs(c.card.height - geom.height) > LIST_CARD_HEIGHT_TOLERANCE_PX) {
+        out.push(
+          `${c.label} is ${c.card.height}px tall, not ${geom.height} (every list card is one height; ${density})`,
+        );
+      }
     }
     if (c.picture === null) {
       out.push(`${c.label} has no picture slot`);
@@ -442,9 +463,11 @@ export function listCardViolations(
     }
     const left = p.x - c.card.x - c.borderLeft;
     const top = p.y - c.card.y - c.borderTop;
-    if (!near(left, LIST_CARD_INSET_X_PX) || !near(top, geom.insetY)) {
+    // A taller (2-line) row keeps its picture centred.
+    const wantTop = geom.insetY + extra / 2;
+    if (!near(left, LIST_CARD_INSET_X_PX) || Math.abs(top - wantTop) > 1) {
       out.push(
-        `${c.label} picture sits ${left},${top} inside the row, not ${LIST_CARD_INSET_X_PX},${geom.insetY} (left, top)`,
+        `${c.label} picture sits ${left},${top} inside the row, not ${LIST_CARD_INSET_X_PX},${wantTop} (left, top)`,
       );
     }
     if (c.text !== null) {

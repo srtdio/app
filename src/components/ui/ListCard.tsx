@@ -76,6 +76,13 @@ export interface ListCardProps {
   preview?: ReactNode;
   /** data-* hooks on the preview. */
   previewHooks?: ListCardHooks;
+  /**
+   * Activity only (10 Nov 2026): 2 when the preview wraps to two lines (or
+   * more, unfolded). The row grows by one line (density height + 20) and the
+   * preview wraps instead of truncating; the caller cuts the text. Default 1:
+   * every other list is unchanged.
+   */
+  previewLines?: 1 | 2;
   /** Line 2 after the preview: the one grey tag (ui/Tag neutral). */
   tag?: string | undefined;
   /** The tag's leading stage dot (Pipeline). */
@@ -182,6 +189,18 @@ export const LIST_CARD_LINE2 = 'flex h-5 min-w-0 items-center gap-2';
 
 /** The preview: secondary role, one line, truncated. */
 export const LIST_CARD_PREVIEW = textRole('secondary', 'min-w-0 flex-1 truncate');
+
+/**
+ * previewLines 2 (Activity): the row grows with its preview, never under the
+ * density height; line 2 is two lines tall at least, so the row is the
+ * density height + 20 (Cozy 92, Compact 80, Calm 100): 44 / 36 / 44 for the
+ * preview line under the 20 title line and its 4 step.
+ */
+export const LIST_CARD_FRAME_2 =
+  'h-auto min-h-18 compact:h-auto compact:min-h-15 calm:h-auto calm:min-h-20';
+export const LIST_CARD_LINE2_2 = 'flex min-h-11 min-w-0 items-start gap-2 compact:min-h-9';
+// The secondary role's look without its truncate (a cut preview wraps; it never ellipsizes in CSS).
+export const LIST_CARD_PREVIEW_2 = 'min-w-0 flex-1 break-words text-md font-normal text-fg-2';
 
 /** The unread dot: 8px, round, fg ink. */
 export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full bg-fg';
@@ -319,6 +338,7 @@ export function ListCard({
   timeBad = false,
   preview,
   previewHooks,
+  previewLines = 1,
   tag,
   tagDot,
   tagHooks,
@@ -365,9 +385,11 @@ export function ListCard({
       ref={rootRef as Ref<never> | undefined}
       {...rest}
       data-list-card=""
+      {...(previewLines === 2 ? { 'data-list-card-lines': '2' } : {})}
       {...(select !== undefined && select.active ? { 'data-list-card-selecting': '' } : {})}
       className={cn(
         listCardFrame(selected || chosen),
+        previewLines === 2 && LIST_CARD_FRAME_2,
         select !== undefined && LIST_CARD_NO_CALLOUT,
         tapped && !disabled && MOVE_CLASS.press,
       )}
@@ -420,13 +442,16 @@ export function ListCard({
               </span>
             ) : null}
           </div>
-          <div data-list-card-line="2" className={LIST_CARD_LINE2}>
+          <div
+            data-list-card-line="2"
+            className={previewLines === 2 ? LIST_CARD_LINE2_2 : LIST_CARD_LINE2}
+          >
             {hasPreview ? (
               <span
                 id={previewId}
                 data-list-card-preview=""
                 {...previewHooks}
-                className={LIST_CARD_PREVIEW}
+                className={previewLines === 2 ? LIST_CARD_PREVIEW_2 : LIST_CARD_PREVIEW}
               >
                 {preview}
               </span>

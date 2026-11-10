@@ -27,6 +27,12 @@ const REQUIRED: readonly string[] = [
   'activity-load-more-calm',
   'activity-load-more-compact',
   'activity-load-more-cozy',
+  'activity-preview-expanded-calm',
+  'activity-preview-expanded-compact',
+  'activity-preview-expanded-cozy',
+  'activity-preview-more-calm',
+  'activity-preview-more-compact',
+  'activity-preview-more-cozy',
   'activity-topbar-calm',
   'activity-topbar-compact',
   'approve-confirm-approver',
@@ -411,6 +417,12 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   'name: `activity-chip-${chip}`': ['unread', 'mentions'].map((chip) => `activity-chip-${chip}`),
   // Activity's top bar and Load more by density (10 Nov 2026).
   'name: `activity-topbar-${density}`': ['compact', 'calm'].map((d) => `activity-topbar-${d}`),
+  'name: `activity-preview-more-${density}`': ['compact', 'cozy', 'calm'].map(
+    (d) => `activity-preview-more-${d}`,
+  ),
+  'name: `activity-preview-expanded-${density}`': ['compact', 'cozy', 'calm'].map(
+    (d) => `activity-preview-expanded-${d}`,
+  ),
   'name: `activity-load-more-${density}`': ['compact', 'cozy', 'calm'].map(
     (d) => `activity-load-more-${d}`,
   ),

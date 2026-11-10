@@ -7,6 +7,7 @@ import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { useActivityTopbar } from '@/components/shell/topbar-actions';
+import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { ICON_SIZE, IconActivity, IconAt } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
@@ -46,7 +47,6 @@ import {
   msUntilZonedMidnight,
   openAction,
   fetchActivityEntry,
-  unreadCount,
   type ActivityDirection,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -476,7 +476,10 @@ export function NotificationsPage() {
     [items, state, sort, nowMs, tz],
   );
 
-  const totalUnread = useMemo(() => unreadCount(items, nowMs), [items, nowMs]);
+  // One unread count (Part 6, 10 Nov 2026): the Unread chip and Catch up use
+  // the server count the Activity tab badge shows (the inbox store), never
+  // the loaded rows'.
+  const totalUnread = useInboxStore().unreadCount;
 
   // An own write lands at once, on screen and in every kept chip page, so a
   // return paints it.
@@ -587,6 +590,9 @@ export function NotificationsPage() {
   // one viewport; a chip short of it reads entry pages silently (one read per
   // landed page, so a failed read stops and the button comes back as Retry).
   const [listTop, setListTop] = useState(ACTIVITY_LIST_TOP_GUESS);
+  // The shown rows' real heights (a 2-line preview row is 20 taller), read
+  // when the list resizes (a row's preview cut lands after its first paint).
+  const [rowHeights, setRowHeights] = useState<readonly number[]>([]);
   const [moreTaps, setMoreTaps] = useState(0);
   const [tapsFor, setTapsFor] = useState(state);
   if (tapsFor !== state) {
@@ -603,6 +609,7 @@ export function NotificationsPage() {
       ),
       headingPx: ACTIVITY_HEADING_PX,
       gapPx: ACTIVITY_SECTION_GAP_PX,
+      rowHeights,
     },
     listTop,
     viewportH: viewport.height,
@@ -639,6 +646,18 @@ export function NotificationsPage() {
         (parseFloat(getComputedStyle(el).paddingTop) || 0),
     );
     if (top > 0) setListTop((prev) => (Math.abs(top - prev) > 1 ? top : prev));
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const read = (): void => {
+      const next = Array.from(el.querySelectorAll<HTMLElement>('[data-list-card]')).map(
+        (row) => row.offsetHeight,
+      );
+      setRowHeights((prev) =>
+        prev.length === next.length && prev.every((h, i) => h === next[i]) ? prev : next,
+      );
+    };
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [hasRows]);
 
   const listLoading =

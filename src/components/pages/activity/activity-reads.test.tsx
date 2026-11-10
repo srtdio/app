@@ -99,6 +99,14 @@ import {
 import { READ_FRESH_MS, resetSessionReads } from '@/lib/session-read';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 
+// NotificationsPage reads the one unread count from the shell's inbox store
+// (Part 6, 10 Nov 2026); these renders have no shell, so the store is a stub.
+const inboxUnread = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/components/shell/InboxStoreProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useInboxStore: () => ({ unreadCount: inboxUnread.count }),
+}));
+
 function item(over: Partial<ActivityItem>): ActivityItem {
   return {
     id: 'e1',
@@ -457,8 +465,12 @@ describe('Activity: the top bar', () => {
     document.querySelector<HTMLElement>('[data-probe-pair] [data-topbar-threads]');
 
   it('Threads then Catch up in place of the slots; no sort, no Mark all read double tick', async () => {
+    // Catch up's count is the inbox store's server count (Part 6), not the rows'.
+    inboxUnread.count = 20;
     render();
     await settle();
+    expect(catchUp()?.getAttribute('aria-label')).toBe('Catch up, 20 unread');
+    inboxUnread.count = 0;
     expect(threads()).not.toBeNull();
     expect(catchUp()).not.toBeNull();
     expect(catchUp()?.getAttribute('aria-label')).toMatch(/^Catch up, \d+ unread$/);

@@ -111,6 +111,11 @@ export interface RowsLayout {
   headingPx: number;
   /** Between sections. */
   gapPx: number;
+  /**
+   * Each row's real height, in order, where it is known (a row on screen;
+   * an Activity row with a 2-line preview is 20 taller). Unknown: rowPx.
+   */
+  rowHeights?: readonly number[] | undefined;
 }
 
 /**
@@ -131,9 +136,14 @@ export function rowsInHeight(
     if (rows > 0) y += layout.gapPx;
     y += layout.headingPx;
     for (let left = n; left > 0; left -= columns) {
-      if (y + layout.rowPx > heightPx) return { rows, reached: true };
-      y += layout.rowPx;
-      rows += Math.min(columns, left);
+      const inLine = Math.min(columns, left);
+      let linePx = 0;
+      for (let k = 0; k < inLine; k += 1) {
+        linePx = Math.max(linePx, layout.rowHeights?.[rows + k] ?? layout.rowPx);
+      }
+      if (y + linePx > heightPx) return { rows, reached: true };
+      y += linePx;
+      rows += inLine;
     }
   }
   return { rows, reached: false };
