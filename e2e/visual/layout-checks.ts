@@ -1371,7 +1371,8 @@ export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row' 
  *   reply's last line to the next reply's name.
  * - threads-list (10 Nov 2026, Activity's Threads list, EXACT +-1): in every
  *   block the header's two lines, every message's name and text, "N more
- *   replies" and the Reply button's left edge at x60 from the block; the
+ *   replies" and the first action's left edge (Mark as read on an unread
+ *   block, 8 before Reply; else Reply) at x60 from the block; the
  *   header and every message end on one right edge (16 in); 12+ from the
  *   band hairline above the header and below Reply to the next band.
  * - chat-replies-row: every replies row in the main chat: no reply text node,
@@ -1506,18 +1507,33 @@ export async function assertAlignment(
               if (shown(name)) at(`message ${i + 1} name`, textBox(name)?.left ?? null);
               const body = row.querySelector('[data-msg-body]');
               if (shown(body)) at(`message ${i + 1} text`, textBox(body)?.left ?? null);
+              const padRight = parseFloat(getComputedStyle(row).paddingRight) || 0;
               f.gaps.push({
                 label: `message ${i + 1} right edge`,
-                gap: b.right - row.getBoundingClientRect().right,
+                gap: b.right - (row.getBoundingClientRect().right - padRight),
                 equals: 16,
               });
             });
           const more = block.querySelector('[data-threads-more]');
           if (shown(more)) at('more replies', textBox(more)?.left ?? null);
           const reply = block.querySelector('[data-threads-reply]');
-          if (shown(reply)) {
+          const markRead = block.querySelector('[data-threads-mark-read]');
+          if (shown(markRead)) {
+            at('Mark as read button', markRead.getBoundingClientRect().left);
+            if (shown(reply)) {
+              f.gaps.push({
+                label: 'Mark as read to Reply',
+                gap: reply.getBoundingClientRect().left - markRead.getBoundingClientRect().right,
+                equals: 8,
+              });
+            }
+          } else if (shown(reply)) {
             at('Reply button', reply.getBoundingClientRect().left);
-          } else f.gaps.push({ label: 'no Reply button', gap: -1, min: 0 });
+          }
+          if (!shown(reply)) f.gaps.push({ label: 'no Reply button', gap: -1, min: 0 });
+          if (block.hasAttribute('data-unread') !== shown(markRead)) {
+            f.gaps.push({ label: 'Mark as read shows on unread blocks only', gap: -1, min: 0 });
+          }
           const prev = block.previousElementSibling;
           const band = (el: Element | null): el is Element =>
             el !== null && el.hasAttribute('data-threads-band');

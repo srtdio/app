@@ -33,7 +33,13 @@ import { HeaderBar } from '@/components/ui/HeaderBar';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Text } from '@/components/ui/Text';
 import { ICON_SIZE, IconActivity } from '@/components/ui/icons';
-import { MessageBubble, messageTimeSource } from '@/components/chat/MessageBubble';
+import {
+  MessageBubble,
+  messageTimeSource,
+  type BubbleReactionChips,
+} from '@/components/chat/MessageBubble';
+import { UnreadDivider } from '@/components/chat/ReadingLayer';
+import { PRESIGN_ENABLED } from '@/components/chat/PostCard';
 import { ThreadViewFill } from '@/components/chat/ThreadView';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
@@ -46,14 +52,33 @@ import {
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import { loadMessagesByIds, loadReactions } from '@/lib/chat/history';
 import { mentionIds } from '@/lib/chat/mentions';
-import { mergeReactions, rowToThreadMessage, type ThreadMessage } from '@/lib/chat/thread';
+import {
+  applyReactionOp,
+  mergeReactions,
+  rowToThreadMessage,
+  type ThreadMessage,
+} from '@/lib/chat/thread';
+import { writeReaction } from '@/lib/reactions/writes';
+import { MARK_AS_READ } from '@/lib/catch-up/copy';
+import { markCatchUpRead } from '@/lib/catch-up/writes';
+import { useUndoableAction } from '@/lib/use-undoable-action';
+import { generateTraceId } from '@/lib/trace';
 import { threadDayTimes } from '@/lib/chat/thread-day-times';
-import { type ThreadForMeAll } from '@/lib/chat/thread-signals';
-import { peekThreads, subscribeThreads } from '@/lib/catch-up/threads';
+import {
+  firstUnreadReply,
+  localThreadReadAt,
+  type ThreadForMeAll,
+} from '@/lib/chat/thread-signals';
+import {
+  buildThreadsQueue,
+  patchThreadUnread,
+  peekThreads,
+  subscribeThreads,
+  unreadThreadCount,
+} from '@/lib/catch-up/threads';
 import { personAvatar, personName, resolvePeople } from '@/lib/people-names';
 import type { PresignCache } from '@/lib/asset-presign';
 import { appPresignCache } from '@/lib/shared-presign';
-import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { pushIn } from '@/lib/motion';
 import { mark } from '@/lib/perf-marks';
@@ -65,6 +90,27 @@ export const THREADS_LIST_TITLE = 'Threads';
 
 /** The zero state ("{Things} show up here."). */
 export const THREADS_LIST_EMPTY = 'Threads show up here.';
+
+/** The Undo strip's label after Mark as read (failure: "Couldn't mark as read. {reason}"). */
+export const MARKED_AS_READ = 'Marked as read';
+
+/** The bar's second line: "N unread" (shown only when N > 0). Pure. */
+export function unreadLabelOf(count: number): string {
+  return `${count} unread`;
+}
+
+/** One reaction op on one message of a block (the chat's applyReactionOp). Pure. */
+export function toggleInBlock(
+  block: ThreadBlockData,
+  messageId: string,
+  emoji: string,
+  op: 'add' | 'remove',
+): ThreadBlockData {
+  const edit = (list: ThreadMessage[]): ThreadMessage[] =>
+    applyReactionOp(list, { messageId, emoji, op, mine: true });
+  const root = block.root === null ? null : (edit([block.root])[0] ?? block.root);
+  return { ...block, root, replies: edit(block.replies) };
+}
 
 /** A DM block's second line. */
 export const DIRECT_MESSAGE_LINE = 'Direct message';
@@ -233,12 +279,22 @@ export function resetThreadBlocks(): void {
   heldBlocks.clear();
 }
 
+/** Test seam: hold a block as if its read landed. */
+export function holdThreadBlock(rootId: string, block: ThreadBlockData): void {
+  heldBlocks.set(rootId, block);
+}
+
 /** The held blocks for the threads, read once after the first paint for any missing or stale. */
 function useThreadBlocks(
   workspaceId: string,
   currentUserId: string,
   threads: readonly ThreadForMeAll[],
-): { blocks: ReadonlyMap<string, ThreadBlockData>; failed: boolean; retry: () => void } {
+): {
+  blocks: ReadonlyMap<string, ThreadBlockData>;
+  failed: boolean;
+  retry: () => void;
+  patch: (rootId: string, edit: (block: ThreadBlockData) => ThreadBlockData) => void;
+} {
   const [, setVersion] = useState(0);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -268,7 +324,16 @@ function useThreadBlocks(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staleKey, workspaceId, currentUserId, attempt]);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
-  return { blocks: heldBlocks, failed, retry };
+  const patch = useCallback(
+    (rootId: string, edit: (block: ThreadBlockData) => ThreadBlockData): void => {
+      const block = heldBlocks.get(rootId);
+      if (block === undefined) return;
+      heldBlocks.set(rootId, edit(block));
+      setVersion((v) => v + 1);
+    },
+    [],
+  );
+  return { blocks: heldBlocks, failed, retry, patch };
 }
 
 function profilesOf(workspaceId: string, ids: Iterable<string>): Map<string, ChatProfile> {
@@ -291,6 +356,28 @@ interface BlockWiring {
   layout: ChatLayout;
   cache: PresignCache;
   presignEnabled: boolean;
+  /** The viewer's reaction toggle on a message of a thread (the chat's optimistic path). */
+  onToggleReaction?: (
+    thread: ThreadForMeAll,
+    messageId: string,
+    emoji: string,
+    mine: boolean,
+  ) => void;
+  /** Mark an unread thread read (Undo strip). */
+  onMarkRead?: (thread: ThreadForMeAll) => void;
+}
+
+/**
+ * The shown reply the "New" line sits above in an unread block: the first
+ * shown reply not mine after this device's read point (the thread view's
+ * rule, firstUnreadReply); null for a read block. Pure.
+ */
+export function newLineReply(
+  thread: Pick<ThreadForMeAll, 'unread'>,
+  replies: readonly ThreadMessage[],
+  readAt: number | null,
+): string | null {
+  return firstUnreadReply(replies, { unread: thread.unread, readAt });
 }
 
 /** One thread's block. Pure render of what it is handed. */
@@ -323,71 +410,104 @@ export function ThreadBlock(props: {
   );
   const isGroup = chat?.channelType !== 'dm';
   const hidden = block !== undefined ? hiddenReplies(thread.replyCount, block.replies.length) : 0;
+  const replies = block?.replies ?? [];
+  const newId = newLineReply(thread, replies, localThreadReadAt(thread.rootId));
+  const newAt = replies.findIndex((r) => r.id === newId);
+  const newCount = newAt < 0 ? 0 : replies.slice(newAt).filter((r) => !r.mine).length;
+  const toggle = wiring.onToggleReaction;
+  const chipsOf = (m: ThreadMessage): BubbleReactionChips | undefined => {
+    if (toggle === undefined) return undefined;
+    const mineOf = (emoji: string): boolean => m.reactions.some((r) => r.emoji === emoji && r.mine);
+    return {
+      onToggle: (emoji) => toggle(thread, m.id, emoji, mineOf(emoji)),
+      onPick: (emoji) => {
+        if (!mineOf(emoji)) toggle(thread, m.id, emoji, false);
+      },
+    };
+  };
   const bubble = (m: ThreadMessage): ReactElement => (
-    <MessageBubble
-      key={m.id}
-      message={m}
-      profiles={profiles}
-      cache={wiring.cache}
-      presignEnabled={wiring.presignEnabled}
-      showTicks={false}
-      isGroup={isGroup}
-      head
-      tail
-      timeZone={wiring.timeZone}
-      layout={wiring.layout}
-      viewerUserId={wiring.currentUserId}
-      workspaceId={wiring.workspaceId}
-      threadPlace="reply"
-      timeLabel={labelOf.get(m.id) ?? 'clock'}
-      onTapOpen={open}
-    />
+    <Fragment key={m.id}>
+      {m.id === newId ? <UnreadDivider count={newCount} /> : null}
+      <MessageBubble
+        message={m}
+        profiles={profiles}
+        cache={wiring.cache}
+        presignEnabled={wiring.presignEnabled}
+        showTicks={false}
+        isGroup={isGroup}
+        head
+        tail
+        timeZone={wiring.timeZone}
+        layout={wiring.layout}
+        viewerUserId={wiring.currentUserId}
+        workspaceId={wiring.workspaceId}
+        threadPlace="reply"
+        timeLabel={labelOf.get(m.id) ?? 'clock'}
+        reactionChips={chipsOf(m)}
+        onTapOpen={open}
+      />
+    </Fragment>
   );
   return (
     <section
       data-threads-block={thread.rootId}
       data-unread={thread.unread ? '' : undefined}
-      className="flex flex-col px-4 py-4"
+      className="flex flex-col py-4"
     >
-      <PressableRow
-        data-threads-header=""
-        aria-label={`Open thread in ${header.name || 'chat'}`}
-        onClick={open}
-        className={`${LINE_HIT} flex flex-col pl-11`}
-      >
-        <Text role="heading" className={thread.unread ? 'truncate' : 'truncate text-fg-2'}>
-          {header.name || ' '}
-        </Text>
-        <Text role="secondary" className="text-fg-3">
-          {header.sub || ' '}
-        </Text>
-      </PressableRow>
+      <div className="flex px-4">
+        <PressableRow
+          data-threads-header=""
+          aria-label={`Open thread in ${header.name || 'chat'}`}
+          onClick={open}
+          className={`${LINE_HIT} flex flex-col pl-11`}
+        >
+          <Text role="heading" className={thread.unread ? 'truncate' : 'truncate text-fg-2'}>
+            {header.name || '\u00a0'}
+          </Text>
+          <Text role="secondary" className="text-fg-3">
+            {header.sub || '\u00a0'}
+          </Text>
+        </PressableRow>
+      </div>
       {block === undefined ? (
         <ThreadViewFill loading={!props.failed} failed={props.failed} onRetry={props.onRetry} />
       ) : (
         <ul className="flex flex-col">
           {block.root !== null ? bubble(block.root) : null}
           {hidden > 0 ? (
-            <li className="flex pl-11 pt-2">
-              <PressableRow
-                inline
-                data-threads-more=""
-                onClick={open}
-                className={`${LINE_HIT} w-auto`}
-              >
-                <Text role="label" className="text-fg underline">
-                  {moreRepliesLabel(hidden)}
-                </Text>
-              </PressableRow>
+            <li className="flex px-4 pt-2">
+              <span className="flex pl-11">
+                <PressableRow
+                  inline
+                  data-threads-more=""
+                  onClick={open}
+                  className={`${LINE_HIT} w-auto`}
+                >
+                  <Text role="label" className="text-fg underline">
+                    {moreRepliesLabel(hidden)}
+                  </Text>
+                </PressableRow>
+              </span>
             </li>
           ) : null}
           {block.replies.map(bubble)}
         </ul>
       )}
-      <div className="flex pl-11 pt-3">
-        <Button variant="secondary" data-threads-reply="" onClick={open}>
-          Reply
-        </Button>
+      <div data-threads-actions="" className="flex px-4 pt-3">
+        <span className="flex gap-2 pl-11">
+          {thread.unread && wiring.onMarkRead !== undefined ? (
+            <Button
+              variant="primary"
+              data-threads-mark-read=""
+              onClick={() => wiring.onMarkRead?.(thread)}
+            >
+              {MARK_AS_READ}
+            </Button>
+          ) : null}
+          <Button variant="secondary" data-threads-reply="" onClick={open}>
+            Reply
+          </Button>
+        </span>
       </div>
     </section>
   );
@@ -459,15 +579,67 @@ export function ThreadsListScreen(props: {
     (channelId: string) => roster.find((c) => c.channelId === channelId),
     [roster],
   );
-  const { blocks, failed, retry } = useThreadBlocks(workspaceId, currentUserId, threads);
+  const { blocks, failed, retry, patch } = useThreadBlocks(workspaceId, currentUserId, threads);
   const layout = useChatLayout();
+  const undoable = useUndoableAction();
+  const unread = unreadThreadCount(held);
+  // Reactions: the chat's optimistic path (applyReactionOp now, the record
+  // proc, the op undone on failure). Reactions never notify.
+  const onToggleReaction = useCallback(
+    (thread: ThreadForMeAll, messageId: string, emoji: string, mine: boolean): void => {
+      const op = mine ? 'remove' : 'add';
+      const apply = (which: 'add' | 'remove'): void =>
+        patch(thread.rootId, (b) => toggleInBlock(b, messageId, emoji, which));
+      apply(op);
+      void writeReaction(
+        supabase,
+        { kind: 'chat', id: messageId, channelId: thread.channelId },
+        emoji,
+        op,
+        generateTraceId(),
+      ).then((res) => {
+        if (res.ok) return;
+        logger.warn('threads list: reaction write failed', { error: res.message });
+        apply(mine ? 'add' : 'remove');
+      });
+    },
+    [patch],
+  );
+  // Mark as read: the block turns read at once (the held store, so the count
+  // drops too); the write (catch up's thread write: chat_thread_read_set to
+  // the newest reply) commits when the Undo strip ends; Undo or a failure puts
+  // it back ("Couldn't mark as read. {reason}").
+  const { run } = undoable;
+  const onMarkRead = useCallback(
+    (thread: ThreadForMeAll): void => {
+      const item = buildThreadsQueue([thread], { workspaceId, selfId: currentUserId })[0];
+      if (item === undefined) return;
+      patchThreadUnread(workspaceId, thread.channelId, thread.rootId, false);
+      run({
+        label: MARKED_AS_READ,
+        commit: async () => {
+          const res = await markCatchUpRead(supabase, {
+            workspaceId,
+            item,
+            latestReplyId: thread.lastReplyId,
+            traceId: generateTraceId(),
+          });
+          if (!res.ok) throw new Error(res.message);
+        },
+        revert: () => patchThreadUnread(workspaceId, thread.channelId, thread.rootId, true),
+      });
+    },
+    [run, workspaceId, currentUserId],
+  );
   const wiring: BlockWiring = {
     workspaceId,
     currentUserId,
     timeZone: props.timeZone,
     layout,
     cache: appPresignCache(),
-    presignEnabled: env.VITE_ASSET_READ_URL !== undefined,
+    presignEnabled: PRESIGN_ENABLED,
+    onToggleReaction,
+    onMarkRead,
   };
   // A deeper screen: it enters from the right (motion module; instant under Reduce Motion).
   const rootRef = useRef<HTMLDivElement>(null);
@@ -487,6 +659,15 @@ export function ThreadsListScreen(props: {
         compact
         title={THREADS_LIST_TITLE}
         onBack={props.onClose}
+        {...(unread > 0
+          ? {
+              subtitleSlot: (
+                <Text role="secondary" data-threads-unread="" className="text-fg-3">
+                  {unreadLabelOf(unread)}
+                </Text>
+              ),
+            }
+          : {})}
         className={SAFE_TOP_BAR_CLASS}
       />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">

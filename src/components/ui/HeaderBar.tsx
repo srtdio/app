@@ -30,6 +30,11 @@ export interface HeaderBarProps {
   actions?: ReactNode;
   /** A second line under the title (meta role), optional. */
   subtitle?: ReactNode;
+  /**
+   * A second line the caller renders itself (its own Text role), in the
+   * subtitle's place; wins over `subtitle`. Absent: unchanged.
+   */
+  subtitleSlot?: ReactNode;
   /** 56 phone, 64 laptop by default; `compact` keeps 56 on both. */
   compact?: boolean;
   /**
@@ -83,6 +88,7 @@ export function HeaderBar({
   mark,
   actions,
   subtitle,
+  subtitleSlot,
   compact = false,
   routeFocus = false,
   titleSlot,
@@ -139,7 +145,9 @@ export function HeaderBar({
             {title}
           </h1>
         )}
-        {subtitle !== undefined ? (
+        {subtitleSlot !== undefined ? (
+          subtitleSlot
+        ) : subtitle !== undefined ? (
           <span className={textRole('meta', 'truncate')}>{subtitle}</span>
         ) : null}
       </div>
