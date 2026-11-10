@@ -1788,9 +1788,8 @@ export type BankSort = 'active' | 'newest' | 'oldest' | 'name';
 
 /**
  * Ideas a Bank page holds: exactly the screen's fill count (lib/use-fill-count,
- * read once per app load, again once if the density changed), no floor of its
- * own. Read at call time (sync, no read), so the first page and every Load more
- * follow the active density. Load more reads the next page of the same size
+ * read once per app load), no floor of its own. Read at call time (sync, no
+ * read), so the first page and every Load more are the same size. Load more reads the next page of the same size
  * with the same .limit(n + 1) query.
  */
 export function bankPageSize(): number {

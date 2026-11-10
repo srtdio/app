@@ -311,18 +311,17 @@ import {
 export const PLAN_PANEL_WIDTH = 'w-plan-narrow min-[972px]:w-plan-panel';
 
 /**
- * Plan day density (flat sections, no card frame). Parts read density through
- * the compact:/calm: CSS variants only; Cozy is the unprefixed default.
- * PLAN_DAY_STACK: the gap inside a day (title, PLAN, POST, Add): 4 / 8 / 12.
- * PLAN_DAY_PAD: a day's top and bottom padding: 8 / 12 / 16; with the hairline
+ * Plan day spacing (flat sections, no card frame; named sizes in ui/layout).
+ * PLAN_DAY_STACK: the gap inside a day (title, PLAN, POST, Add): 8 (PLAN_STACK).
+ * PLAN_DAY_PAD: a day's top and bottom padding: 12 (PLAN_PAD); with the hairline
  * between days this is also the space between two days (no extra margin).
  * PLAN_ROW_RULE: a second row in the same day sits under a hairline, the stack
  * gap above it and below it.
  */
-export const PLAN_DAY_STACK = 'gap-2 compact:gap-1 calm:gap-3';
-export const PLAN_DAY_PAD = 'py-3 compact:py-2 calm:py-4';
-export const PLAN_ROW_RULE = 'border-t border-border pt-2 compact:pt-1 calm:pt-3';
-/** The flat day section: GUTTER sides, density padding, a hairline under. */
+export const PLAN_DAY_STACK = 'gap-2';
+export const PLAN_DAY_PAD = 'py-3';
+export const PLAN_ROW_RULE = 'border-t border-border pt-2';
+/** The flat day section: GUTTER sides, PLAN_DAY_PAD padding, a hairline under. */
 export const PLAN_DAY_SECTION = cn('flex flex-col border-b border-border', GUTTER, PLAN_DAY_PAD);
 
 /**
@@ -760,7 +759,7 @@ export function screenProgressLabel(bundle: PlanBundle, side?: ViewerSide): stri
 
 /**
  * The progress under the header: two flat columns (no boxes), a hairline under,
- * the day's density padding. PLAN: "{ok}/{n} OK" over the items the viewer's side
+ * the day's padding (PLAN_DAY_PAD). PLAN: "{ok}/{n} OK" over the items the viewer's side
  * reviews, a 4px good bar; POST: "{approved}/{n} approved" over the post
  * items, a 4px accent bar. Numbers in JetBrains Mono.
  */
@@ -2875,7 +2874,7 @@ export function PlanBody(props: {
  * A day's Add row (agency, view mode): plus icon and "Add" (13px, 600, accent)
  * in a 44px target. Under a day's rows it sits on the title column and its
  * 44 box overlaps the line (CONTROL_IN_LINE) so the visible gap is the day's
- * density gap (PLAN_DAY_STACK); on an empty day it sits right of "Nothing
+ * stack gap (PLAN_DAY_STACK); on an empty day it sits right of "Nothing
  * planned", beside the date tile.
  */
 function AddRow(props: {
@@ -3160,7 +3159,7 @@ function PlanStatusLines(props: {
     <div data-plan-row-lines="" className={cn('flex flex-col', PLAN_DAY_STACK)}>
       {plan !== null ? (
         // The 44 tap boxes overlap the line (CONTROL_IN_LINE) so the visible
-        // gaps follow the density stack. The switch and the pill draw their
+        // gaps follow the day stack. The switch and the pill draw their
         // whole 44 frame, so their line keeps 44 and the gap runs from the frame.
         <div
           data-plan-line="plan"

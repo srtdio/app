@@ -188,28 +188,27 @@ const TOPBAR_PLUS_LAPTOP_FACE =
 //
 // Activity's top bar has no sort and no "+": Threads then Catch up stand in
 // place of the two slots (TopbarActions.pair, 8 apart). The words at every
-// width (approved on renders 10 Nov 2026), one identical box each, sized by
-// density (compact: / calm:, Cozy default): face 24 / 28 / 32 tall, text 11 /
-// 12 / 13 (500), 96 wide in every density, padding-x 8, gap 6, radius 8, a 1px
-// border; the hit is 44 tall at every density through a ::before, so the face
+// width (approved on renders 10 Nov 2026), one identical box each: face 28
+// tall (PAIR_BOX_HEIGHT), text 12 (500), 96 wide, padding-x 8, gap 6, radius 8,
+// a 1px border; the hit is 44 tall through a ::before, so the face
 // never grows. Each button on its own: a count > 0 is the Main level (primary,
 // ink fill) with the count pill; 0 is the outline (Tool level with a
 // border-strong hairline), no pill. Only Activity publishes them.
 
-/** Threads' and Catch up's one box: the density face, 96 wide, the 44 hit on ::before. */
+/** Threads' and Catch up's one box: the 28 face, 96 wide, the 44 hit on ::before. */
 export const ACTIVITY_TOPBAR_BOX =
-  'relative h-7 min-h-0 w-topbar-pair min-w-0 shrink-0 gap-pair border px-2 text-sm compact:h-6 compact:text-xs calm:h-8 calm:text-md before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2';
+  'relative h-7 min-h-0 w-topbar-pair min-w-0 shrink-0 gap-pair border px-2 text-sm before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2';
 
 /**
- * The pill's text, 9 / 10 / 11 by density (named sizes, the pill only): set on
+ * The pill's text, 10 (the named pair-pill size, the pill only): set on
  * the wrapper over CountBadge's own size, so CountBadge itself is unchanged.
  */
 export const ACTIVITY_TOPBAR_PILL_TEXT =
-  'inline-flex shrink-0 [&_[data-count-badge]]:text-pair-pill-cozy compact:[&_[data-count-badge]]:text-pair-pill-compact calm:[&_[data-count-badge]]:text-xs';
+  'inline-flex shrink-0 [&_[data-count-badge]]:text-pair-pill';
 
-/** The count pill on a filled box: 14 / 16 / 18 tall by density (CountBadge on-fill). */
+/** The count pill on a filled box: 16 tall (PAIR_PILL_HEIGHT; CountBadge on-fill). */
 export const ACTIVITY_TOPBAR_PILL =
-  'h-4 min-w-4 px-1 text-xs compact:h-pair-pill-compact compact:min-w-pair-pill-compact calm:h-pair-pill-calm calm:min-w-pair-pill-calm';
+  'h-4 min-w-4 px-1 text-xs';
 
 /** The pulse: the ring scales out and back, 3 times, 1.4 s each (wipe + slow beats). */
 export const PULSE_CYCLE_MS = DUR_WIPE_MS + DUR_SLOW_MS;

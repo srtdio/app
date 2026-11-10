@@ -100,13 +100,13 @@ describe('Chip onClear', () => {
     // The chip keeps its selected look, with no reserved glyph spacer.
     expect(html).toContain('border-fg text-fg');
     expect(buttons[0]).toContain('min-h-11');
-    expect(html).toContain('min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10');
+    expect(html).toContain('min-h-9 px-4');
     expect(html).not.toContain('w-4 shrink-0');
   });
 });
 
-describe('Chip visible by density (36 Cozy, 32 Compact, 40 Calm), 44 tap box', () => {
-  it('the button is the transparent 44 box; the face is the density chip (16 side padding, 12 in Compact), text-md', () => {
+describe('Chip visible 36, 44 tap box', () => {
+  it('the button is the transparent 44 box; the face is the 36 chip (16 side padding), text-md', () => {
     for (const size of ['sm', 'tap'] as const) {
       const html = renderToStaticMarkup(<Chip label="Open" size={size} selected={false} />);
       const button = /<button[^>]*>/.exec(html)?.[0] ?? '';
@@ -117,7 +117,7 @@ describe('Chip visible by density (36 Cozy, 32 Compact, 40 Calm), 44 tap box', (
       expect(button).not.toMatch(/\b(bg-|lit-well|lit-pill|lit-hover|border|px-)/);
       expect(button).toContain('[&amp;:focus-visible&gt;span]:lit-focus');
       const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
-      expect(face).toContain('min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10');
+      expect(face).toContain('min-h-9 px-4');
       expect(face).toContain('rounded-full');
       expect(face).not.toContain('rounded-lg');
       expect(face).toContain('text-md font-medium');
@@ -151,8 +151,7 @@ describe('Chip visible by density (36 Cozy, 32 Compact, 40 Calm), 44 tap box', (
     const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
     const faceTokens = (/class="([^"]*)"/.exec(face)?.[1] ?? '').split(' ');
     expect(faceTokens).toContain('px-2');
-    // The call site's px-2 replaces the Cozy px-4 (twMerge); the density
-    // variants are a separate group and stay.
+    // The call site's px-2 replaces the px-4 (twMerge).
     expect(faceTokens).not.toContain('px-4');
     expect(faceTokens).not.toContain('px-3');
     expect(face).toContain('truncate');
@@ -166,7 +165,7 @@ describe('Chip edges (8 Nov 2026): rest on the strong edge, picked on the ink li
   it('the exported edges', () => {
     expect(CHIP_REST_EDGE).toBe('border-border-strong text-fg-2');
     expect(CHIP_PICKED_EDGE).toBe('border-fg text-fg');
-    expect(CHIP_FACE_SIZE).toBe('min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10');
+    expect(CHIP_FACE_SIZE).toBe('min-h-9 px-4');
   });
 
   it('rest: border-border-strong in fg-2, never the plain hairline, no fill', () => {
@@ -211,17 +210,9 @@ describe('Chip edges (8 Nov 2026): rest on the strong edge, picked on the ink li
     }
   });
 
-  it("size 'tap' centres the label in its cell; the face size follows the density", () => {
+  it("size 'tap' centres the label in its cell; the face is 36 (min-h-9)", () => {
     const tap = faceClass(renderToStaticMarkup(<Chip label="Cozy" size="tap" />));
-    expect(tap).toEqual(
-      expect.arrayContaining([
-        'justify-center',
-        'text-center',
-        'min-h-9',
-        'compact:min-h-8',
-        'calm:min-h-10',
-      ]),
-    );
+    expect(tap).toEqual(expect.arrayContaining(['justify-center', 'text-center', 'min-h-9']));
     const sm = faceClass(renderToStaticMarkup(<Chip label="Cozy" />));
     expect(sm).not.toContain('text-center');
   });

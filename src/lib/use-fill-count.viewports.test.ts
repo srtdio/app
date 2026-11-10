@@ -1,13 +1,13 @@
 // Guard: "First page fills the screen" (CLAUDE.md). Every list's first page and
 // every Load more step (ui/LoadMore) is the fill count: one row more than the
-// screen holds at the active density's row height (60 / 72 / 80), times the
+// screen holds at the row height (ROW_HEIGHT 72), times the
 // laptop columns, kept in 6..40. No device is hard-coded.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { FILL_COUNT_CEILING, FILL_COUNT_FLOOR, fillColumns, fillCount } from '@/lib/use-fill-count';
-import { LIST_CARD_HEIGHT_BY_DENSITY, listCardHeightPx } from '@/components/ui/ListCard';
+import { ROW_HEIGHT } from '@/components/ui/layout';
 
 const VIEWPORTS = [
   { name: 'iPhone', w: 390, h: 844, columns: 1 },
@@ -16,22 +16,15 @@ const VIEWPORTS = [
   { name: 'laptop', w: 1280, h: 800, columns: 2 },
 ] as const;
 
-const DENSITIES = [
-  { density: 'compact', row: 60 },
-  { density: 'cozy', row: 72 },
-  { density: 'calm', row: 80 },
-] as const;
+const row = ROW_HEIGHT;
 
 function capped(n: number): number {
   return Math.min(FILL_COUNT_CEILING, Math.max(FILL_COUNT_FLOOR, n));
 }
 
-describe('fill count per viewport and density', () => {
-  it('the density row heights are 60 / 72 / 80', () => {
-    for (const { density, row } of DENSITIES) {
-      expect(LIST_CARD_HEIGHT_BY_DENSITY[density]).toBe(row);
-      expect(listCardHeightPx(density)).toBe(row);
-    }
+describe('fill count per viewport', () => {
+  it('the row height is 72', () => {
+    expect(row).toBe(72);
   });
 
   it('counts the laptop columns from the width left after the Sidebar and gutters', () => {
@@ -40,8 +33,8 @@ describe('fill count per viewport and density', () => {
   });
 
   for (const { name, w, h, columns } of VIEWPORTS) {
-    for (const { density, row } of DENSITIES) {
-      it(`${name} ${w}x${h} at ${density} (${row}): at least one row past the fold, times columns`, () => {
+    {
+      it(`${name} ${w}x${h} (${row}): at least one row past the fold, times columns`, () => {
         const count = fillCount(h, fillColumns(w), row);
         const floor = capped((Math.ceil(h / row) + 1) * columns);
         expect(count).toBeGreaterThanOrEqual(floor);
@@ -56,14 +49,10 @@ describe('fill count per viewport and density', () => {
     }
   }
 
-  it('worked values: iPhone 16 / 13 / 12, iPad 21 / 18 / 16, laptop 30 / 26 / 22', () => {
-    expect(DENSITIES.map(({ row }) => fillCount(844, fillColumns(390), row))).toEqual([16, 13, 12]);
-    expect(DENSITIES.map(({ row }) => fillCount(1180, fillColumns(820), row))).toEqual([
-      21, 18, 16,
-    ]);
-    expect(DENSITIES.map(({ row }) => fillCount(800, fillColumns(1280), row))).toEqual([
-      30, 26, 22,
-    ]);
+  it('worked values: iPhone 13, iPad 18, laptop 26', () => {
+    expect(fillCount(844, fillColumns(390), row)).toBe(13);
+    expect(fillCount(1180, fillColumns(820), row)).toBe(18);
+    expect(fillCount(800, fillColumns(1280), row)).toBe(26);
   });
 });
 

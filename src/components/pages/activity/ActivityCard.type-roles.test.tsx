@@ -110,9 +110,9 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
     expectRole(byText('Q3 Launch'), ['min-w-0', 'truncate']);
     const chip = byText('2 new');
     expectRole(chip, ['shrink-0', 'rounded-full', 'font-medium', 'bg-accent', 'text-accent-fg']);
-    // Density by <html data-density>: 16 / 18 / 20 high, text 11 / 11 / 12.
-    expectRole(chip, ['h-4', 'box-content', 'py-px', 'text-xs', 'compact:box-border']);
-    expectRole(chip, ['calm:box-border', 'calm:h-5', 'calm:text-sm']);
+    // 18 high (NEW_CHIP_HEIGHT: the 16 box plus 1 above and below), text 11.
+    expectRole(chip, ['h-4', 'box-content', 'py-px', 'text-xs']);
+    expect(chip.className).not.toMatch(/\b(compact|calm):/);
     const classes = chip.className.split(/\s+/);
     expect(classes).not.toContain('truncate');
     expect(classes).not.toContain('border');

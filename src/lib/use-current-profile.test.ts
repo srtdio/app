@@ -32,16 +32,6 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
-const density = vi.hoisted(() => ({
-  adoptUserDensity: vi.fn(),
-  reconcileDensity: vi.fn(),
-}));
-vi.mock('@/lib/density', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/density')>()),
-  adoptUserDensity: density.adoptUserDensity,
-  reconcileDensity: density.reconcileDensity,
-}));
-
 import {
   authEndsSnapshot,
   getProfileSnapshot,
@@ -89,8 +79,6 @@ beforeEach(() => {
   reads.length = 0;
   resetSessionReads();
   resetProfileStore(null);
-  density.adoptUserDensity.mockClear();
-  density.reconcileDensity.mockClear();
 });
 
 describe('shared profile store', () => {
@@ -439,44 +427,11 @@ describe('emailOptOutBy (who turned catch-up emails off)', () => {
   });
 });
 
-describe('density (users.density, read with the profile)', () => {
-  it('the one users read selects density (no second read)', () => {
-    expect(PROFILE_COLUMNS.split(', ')).toContain('density');
+describe('profile columns (densities removed 10 Nov 2026)', () => {
+  it('the one users read no longer selects density', () => {
+    expect(PROFILE_COLUMNS.split(', ')).not.toContain('density');
     expect(PROFILE_COLUMNS).toBe(
-      'display_name, designation, avatar_url, email_opt_in, profile_completed_at, username, email_opt_out_by, density',
+      'display_name, designation, avatar_url, email_opt_in, profile_completed_at, username, email_opt_out_by',
     );
-  });
-
-  it("a known session adopts that account's device density first (sync), before the read lands", () => {
-    void loadProfile('u-1');
-    expect(density.adoptUserDensity).toHaveBeenCalledTimes(1);
-    expect(density.adoptUserDensity).toHaveBeenCalledWith('u-1');
-    expect(density.reconcileDensity).not.toHaveBeenCalled();
-    resetProfileStore(null);
-    expect(density.adoptUserDensity).toHaveBeenCalledTimes(1);
-  });
-
-  it('a successful read reconciles the server density once; a failed read does not', async () => {
-    void loadProfile('u-1');
-    reads[0]?.resolve({ data: { ...bareRow('Asha'), density: 'calm' }, error: null });
-    await flush();
-    expect(density.reconcileDensity).toHaveBeenCalledTimes(1);
-    expect(density.reconcileDensity).toHaveBeenCalledWith('u-1', 'calm');
-    expect(reads).toHaveLength(1);
-
-    resetProfileStore(null);
-    density.reconcileDensity.mockClear();
-    void loadProfile('u-2');
-    reads[1]?.resolve({ data: null, error: { message: 'down' } });
-    await flush();
-    expect(density.reconcileDensity).not.toHaveBeenCalled();
-  });
-
-  it('a stale read (the user changed mid-read) never reconciles', async () => {
-    void loadProfile('u-1');
-    void loadProfile('u-2');
-    reads[0]?.resolve({ data: { ...bareRow('Old'), density: 'compact' }, error: null });
-    await flush();
-    expect(density.reconcileDensity).not.toHaveBeenCalled();
   });
 });

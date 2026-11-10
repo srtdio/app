@@ -159,10 +159,10 @@ describe('one identical box', () => {
     for (const el of [threads(), catchUp()]) {
       const cls = (el?.className ?? '').split(/\s+/);
       for (const c of box) expect(cls).toContain(c);
-      // One width (96, every density), never a second w-* class.
+      // One width (96), never a second w-* class.
       expect(cls.filter((c) => /^w-/.test(c))).toEqual(['w-topbar-pair']);
-      // The face by density (24 / 28 / 32); the 44 hit rides ::before.
-      expect(cls).toEqual(expect.arrayContaining(['h-7', 'compact:h-6', 'calm:h-8']));
+      // The 28 face (PAIR_BOX_HEIGHT); the 44 hit rides ::before.
+      expect(cls).toEqual(expect.arrayContaining(['h-7']));
       expect(cls).toEqual(expect.arrayContaining(['before:h-11', 'before:inset-x-0']));
       expect(cls).toContain('rounded-lg');
     }

@@ -411,13 +411,12 @@ export function unreadEntries(group: readonly ActivityItem[]): ActivityItem[] {
  * The "N new" chip (Activity twins Plan, 10 Nov 2026): ink, the primary
  * Button's own fill and text tokens (bg-accent / text-accent-fg: ink with
  * white text in light, white with ink text in dark), no border, rounded-full,
- * medium. Density by <html data-density>: Compact 16 / Cozy 18 / Calm 20 high
- * (Cozy: the 16 box plus 1 above and below, box-content), text 11 / 11 / 12.
- * Sides 6 / 7 / 8 (named padding). Flat (10 Nov 2026): no lit-badge, so no
+ * medium. 18 high (NEW_CHIP_HEIGHT: the 16 box plus 1 above and below,
+ * box-content), text 11, sides 7 (named padding new-chip). Flat (10 Nov 2026): no lit-badge, so no
  * shine and no shadow. Not a button; never truncates.
  */
 export const ACTIVITY_NEW_CHIP =
-  'box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-new-chip-cozy py-px text-xs font-medium text-accent-fg compact:box-border compact:px-new-chip-compact calm:box-border calm:h-5 calm:px-2 calm:text-sm';
+  'box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-new-chip py-px text-xs font-medium text-accent-fg';
 
 /** Line 1 of an item row: the name (truncates first), then "N new" 8 after it. */
 function itemTitleNode(name: string, unread: number): ReactNode {
@@ -436,7 +435,7 @@ function itemTitleNode(name: string, unread: number): ReactNode {
 
 /**
  * One item as one ui/ListCard row, exactly as Plan and Chat use it (Activity
- * twins Plan, 10 Nov 2026): the density row (Compact 60 / Cozy 72 / Calm 80).
+ * twins Plan, 10 Nov 2026): the 72 row (ROW_HEIGHT).
  * - A chat row (isChatRow, or a chat task alert), and a row with no item
  *   (deleted files, an invite, the welcome row): the who-did-what title
  *   ("Priya mentioned you"), its preview, its tag; no "N new".
@@ -623,7 +622,7 @@ function ActivityPreview({
     );
   }
   // Folded at 2 lines: one fixed two-line box (36), so a taller glyph line
-  // (emoji) never makes the row taller than density + 20.
+  // (emoji) never makes the row taller than 72 + 20.
   if (cut !== null && cut.cut) {
     return (
       <>
@@ -653,7 +652,7 @@ function ActivityPreview({
   );
 }
 
-/** The folded 2-line preview: two 18 lines, fixed, so the row is exactly density + 20. */
+/** The folded 2-line preview: two 18 lines, fixed, so the row is exactly 72 + 20. */
 const PREVIEW_FOLD = 'block h-9';
 
 /** "… more" / " less": fg-3 words in the line, a 44 x 44 hit centred on them (::before). */

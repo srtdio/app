@@ -29,8 +29,8 @@ interface ChipProps extends Omit<
   tab?: boolean;
   variant?: 'default' | 'add';
   /**
-   * Both sizes render the one visible chip (density: 32 Compact, 36 Cozy, 40
-   * Calm) inside a 44px tap box; 'tap' also centres the label (a chip filling a
+   * Both sizes render the one visible chip (36, CHIP_FACE)
+   * inside a 44px tap box; 'tap' also centres the label (a chip filling a
    * grid cell). 'sm' stays accepted so call sites compile.
    */
   size?: 'sm' | 'tap';
@@ -52,20 +52,10 @@ interface ChipProps extends Omit<
 }
 
 /**
- * The visible chip by density (<html data-density>, CSS variants; borders
- * included): Compact 32 / 12 side pad, Cozy 36 / 16, Calm 40 / 16. The tap box
- * stays 44 in all three.
+ * The visible chip (borders included): 36 face (CHIP_FACE) with 16 side pad;
+ * the tap box stays 44 (CHIP_TAP).
  */
-export const CHIP_FACE_SIZE = 'min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10';
-
-/**
- * The face size classes; a call site's own px-* (the Due chip's px-2) also
- * drops the Compact side pad so it wins in every density. Pure.
- */
-export function chipFaceSize(size: NonNullable<ChipProps['size']>, className?: string): string {
-  const own = className !== undefined && /(^|\s)px-/.test(className);
-  return own ? sizes[size].replace(/\s?compact:px-3/g, '') : sizes[size];
-}
+export const CHIP_FACE_SIZE = 'min-h-9 px-4';
 
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
   sm: CHIP_FACE_SIZE,
@@ -145,7 +135,7 @@ export function Chip({
           // pick is the ink line (black light, white dark) and fg ink, no fill.
           // Hover/press: the lit-hover overlay. Disabled: fg-3 ink, never a fade.
           'inline-flex min-w-0 flex-1 items-center gap-2 rounded-full border text-md font-medium lit-hover group-disabled:text-fg-3',
-          chipFaceSize(size, className),
+          sizes[size],
           // The add chip (a "+" with its label): the rest hairline, fg ink; no
           // dashed box (flat look). Selected never changes it.
           variant === 'add'

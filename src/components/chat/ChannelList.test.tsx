@@ -424,7 +424,6 @@ describe('load status', () => {
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
     expect(html).toContain('h-12 w-12');
-    expect(html).toContain('compact:h-10 compact:w-10');
     expect(html).not.toContain('animate-pulse');
     expect(
       findAll(withStatus('loading'), (el) =>

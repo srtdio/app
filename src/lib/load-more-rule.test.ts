@@ -110,7 +110,7 @@ describe('activityLoadMore: Activity counts item rows, never entries', () => {
     ).toMatchObject({ shown: 2, button: false, fill: false });
   });
 
-  it('rowsInHeight: a 2-line row counts its real height (density + 20)', () => {
+  it('rowsInHeight: a 2-line row counts its real height (72 + 20)', () => {
     const l = { sections: [5], columns: 1, rowPx: 72, headingPx: 32, gapPx: 24 };
     // 32 + 4 x 72 = 320 fits 4 rows; with the 2nd row 92 tall only 3 fit.
     expect(rowsInHeight(l, 320)).toEqual({ rows: 4, reached: true });

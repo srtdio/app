@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { NEW_CHIP_HEIGHT, PAIR_BOX_HEIGHT, PAIR_PILL_HEIGHT } from '../../src/components/ui/layout';
 import {
   alignmentViolations,
   boxText,
@@ -7,7 +8,6 @@ import {
   edgeViolations,
   formatViolations,
   isLiftedLayer,
-  layoutDensity,
   layoutMode,
   movedSideways,
   lineHeightPx,
@@ -36,7 +36,6 @@ import {
   type ChipRowGeom,
   type CommentBarGeom,
   type EdgeItem,
-  type LayoutDensity,
   type LayoutViolation,
   type ListCardGeom,
   type TapTarget,
@@ -67,11 +66,10 @@ import {
 //     (assertSameWidth);
 //   6 list cards (ui/ListCard, [data-list-card]: Pipeline, Briefs, Assets, the
 //     Chat list, Activity, the Plan tab and its Bank): every card on the screen
-//     is the same height (within 1px) and the density height on every screen
-//     (<html data-density>: Compact 60, Cozy 72 default, Calm 80), so all seven
-//     lists match; each picture is the density square (40 Compact, else 48),
-//     left, 16 inside the bled row (x) and the density inset (10 / 12 / 16)
-//     from its top (y), 12 to the text (flat look 7 Nov, density 8 Nov 2026);
+//     is the same height (within 1px) and ROW_HEIGHT (72) on every screen, so
+//     all seven lists match; each picture is the 48 square (ROW_PICTURE), left,
+//     16 inside the bled row (x) and ROW_INSET (12) from its top (y), 12 to the
+//     text (flat look 7 Nov; one size 10 Nov 2026);
 //   7 post screens (after the shot, so the baseline never moves): the pinned
 //     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll),
 //     the checkpoint progress row sits directly under the bar in the same
@@ -84,8 +82,7 @@ import {
 //   9 chip rows with a pinned Select (decision E): the Select ends on the
 //     row's content edge, the chips scroll in a box that ends before it, its
 //     tap box is 44 tall and it sits on the chips' line; every ui/Chip face is
-//     the density height visible (32 Compact, 36 Cozy, 40 Calm) in a 44 tap
-//     box (the chip rule above);
+//     CHIP_FACE (36) visible in a 44 tap box (the chip rule above);
 //  10 upload screens (decision F, assertNoUploadBar): no visible progress bar
 //     and no % figure, only ui/UploadRing (its progressbar is sr-only) or Retry;
 //  11 writing box screens (ui/WritingBox, assertWritingBox): every row key and
@@ -148,8 +145,6 @@ interface RawPart {
 
 interface RawPage {
   viewportWidth: number;
-  /** <html data-density> as the page has it (undefined: Cozy). */
-  density: string | undefined;
   lines: RawLine[];
   targets: RawTarget[];
   edges: EdgeItem[];
@@ -579,7 +574,6 @@ async function readPage(page: Page): Promise<RawPage> {
 
     return {
       viewportWidth: vw,
-      density: document.documentElement.dataset.density,
       lines,
       targets,
       edges,
@@ -642,13 +636,12 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
     }
   }
 
-  // List rows and chips size by the density on <html> (60 / 72 / 80; 32 / 36 / 40).
-  const density: LayoutDensity = layoutDensity(raw.density);
-  for (const message of listCardViolations(raw.listCards, density)) {
+  // List rows (ROW_HEIGHT 72) and chips (CHIP_FACE 36): one size.
+  for (const message of listCardViolations(raw.listCards)) {
     violations.push({ check: 'list-card', message });
   }
 
-  for (const message of chipViolations(raw.chips, density)) {
+  for (const message of chipViolations(raw.chips)) {
     violations.push({ check: 'chip', message });
   }
 
@@ -1730,7 +1723,6 @@ export async function assertNoReactionsHere(page: Page, screenName: string): Pro
 
 /** A list as painted: its chips, sections, headings, first row and chips. */
 export interface ListTwinGeom {
-  density: string;
   /** The first filter chip's bottom edge. */
   chipBottom: number | null;
   /** The list's own gap between sections (computed row-gap). */
@@ -1843,7 +1835,6 @@ export async function readListTwin(page: Page, kind: 'plan' | 'activity'): Promi
         };
       });
     return {
-      density: document.documentElement.dataset.density ?? 'cozy',
       chipBottom: shown(chip) ? rect(chip).bottom : null,
       listGap: list !== null ? Number.parseFloat(getComputedStyle(list).rowGap) || 0 : 0,
       headings,
@@ -1882,9 +1873,6 @@ export async function readActivityBoxes(
     };
   });
 }
-
-/** The "N new" chip's height per density (Compact 16 / Cozy 18 / Calm 20). */
-const NEW_CHIP_HEIGHT_PX: Readonly<Record<string, number>> = { compact: 16, cozy: 18, calm: 20 };
 
 /** Check 15's rules over the two lists (and Activity's boxes). Pure. */
 export function activityTwinViolations(
@@ -1952,11 +1940,10 @@ export function activityTwinViolations(
       eq(`section ${i + 1} last row to the next heading`, next.top - sec.lastRowBottom, planGap);
   });
   if (activity.headings.length < 2) out.push('Activity shows fewer than 2 sections to space');
-  const want = NEW_CHIP_HEIGHT_PX[activity.density] ?? NEW_CHIP_HEIGHT_PX.cozy ?? 18;
+  const want = NEW_CHIP_HEIGHT;
   if (activity.chips.length === 0) out.push('Activity shows no "N new" chip');
   for (const c of activity.chips) {
-    if (!same(c.height, want))
-      out.push(`"${c.text}" is ${r1(c.height)} tall, not ${want} (${activity.density})`);
+    if (!same(c.height, want)) out.push(`"${c.text}" is ${r1(c.height)} tall, not ${want}`);
     if (!same(c.left - c.nameRight, 8))
       out.push(`"${c.text}" sits ${r1(c.left - c.nameRight)} after the name, not 8`);
     if (activity.row !== null && !same(c.rowHeight, activity.row.height)) {
@@ -2001,9 +1988,9 @@ export function assertActivityTwinsPlan(
 
 // Check 15, the top bar part (Activity, approved on renders 10 Nov 2026):
 // Threads and Catch up are ONE box at every width, in words (no icon form):
-// 96 wide in every density, the face 24 / 28 / 32 tall and the text 11 / 12 /
-// 13 (500) by density, padding-x 8, radius 8, a 44 tall hit (::before); the
-// count pill 14 / 16 / 18; each filled (accent) with its pill when its count
+// 96 wide, the face 28 tall (PAIR_BOX_HEIGHT) and the text 12 (500),
+// padding-x 8, radius 8, a 44 tall hit (::before); the count pill 16
+// (PAIR_PILL_HEIGHT), its text 10; each filled (accent) with its pill when its count
 // is > 0, outlined with no pill at 0; Threads first, 8 to Catch up; no slots
 // beside them. Phone: the short workspace name from the 16 gutter, never
 // clipped; Catch up's face 8 from the avatar's face. Laptop: no Activity in
@@ -2014,16 +2001,13 @@ export const ACTIVITY_PAIR_HIT_PX = 44;
 export const ACTIVITY_PAIR_GAP_PX = 8;
 /** Catch up's face to the avatar's face, phone (10 Nov 2026). */
 export const ACTIVITY_PAIR_AVATAR_GAP_PX = 8;
-type Density = 'compact' | 'cozy' | 'calm';
-/** Face height, text size and pill height per density. */
-export const ACTIVITY_PAIR_BY_DENSITY: Record<
-  Density,
-  { face: number; text: number; pill: number; pillText: number }
-> = {
-  compact: { face: 24, text: 11, pill: 14, pillText: 9 },
-  cozy: { face: 28, text: 12, pill: 16, pillText: 10 },
-  calm: { face: 32, text: 13, pill: 18, pillText: 11 },
-};
+/** Face height, text size and pill height (ui/layout named sizes). */
+export const ACTIVITY_PAIR = {
+  face: PAIR_BOX_HEIGHT,
+  text: 12,
+  pill: PAIR_PILL_HEIGHT,
+  pillText: 10,
+} as const;
 
 export async function assertActivityTopbarPair(page: Page, screenName: string): Promise<void> {
   const got = await page.evaluate(() => {
@@ -2080,7 +2064,6 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
       threads: read('[data-topbar-threads]'),
       catchUp: read('[data-topbar-catch-up]'),
       accent,
-      density: document.documentElement.dataset.density ?? 'cozy',
       slots: document.querySelectorAll('header [data-topbar-slot]').length,
       viewport: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -2106,8 +2089,7 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
     };
   });
   const out: string[] = [];
-  const density = (['compact', 'cozy', 'calm'] as const).find((d) => d === got.density) ?? 'cozy';
-  const want = ACTIVITY_PAIR_BY_DENSITY[density];
+  const want = ACTIVITY_PAIR;
   const { threads, catchUp } = got;
   if (threads === null || catchUp === null) {
     out.push('no Threads | Catch up pair in the top bar ([data-topbar-pair])');
@@ -2123,12 +2105,10 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
       ['Catch up', catchUp, 'Catch up'],
     ] as const) {
       if (Math.abs(b.width - ACTIVITY_PAIR_W_PX) > 0.5 || Math.abs(b.height - want.face) > 0.5) {
-        out.push(
-          `${name} is ${b.width}x${b.height}, not ${ACTIVITY_PAIR_W_PX}x${want.face} (${density})`,
-        );
+        out.push(`${name} is ${b.width}x${b.height}, not ${ACTIVITY_PAIR_W_PX}x${want.face}`);
       }
       if (Math.abs(b.fontSize - want.text) > 0.1 || b.weight !== '500') {
-        out.push(`${name} text is ${b.fontSize}/${b.weight}, not ${want.text}/500 (${density})`);
+        out.push(`${name} text is ${b.fontSize}/${b.weight}, not ${want.text}/500`);
       }
       if (Math.abs(b.hit - ACTIVITY_PAIR_HIT_PX) > 0.5) {
         out.push(`${name}'s hit is ${b.hit} tall, not 44`);
@@ -2142,11 +2122,11 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
       if (on && b.background !== got.accent) out.push(`${name} has ${b.count} but is not filled`);
       if (!on && b.background === got.accent) out.push(`${name} is filled at 0`);
       if (on && (b.pill === null || Math.abs(b.pill - want.pill) > 0.5)) {
-        out.push(`${name}'s pill is ${b.pill ?? 'missing'} tall, not ${want.pill} (${density})`);
+        out.push(`${name}'s pill is ${b.pill ?? 'missing'} tall, not ${want.pill}`);
       }
       if (!on && b.pill !== null) out.push(`${name} shows a pill at 0`);
       if (on && b.pillFont !== null && Math.abs(b.pillFont - want.pillText) > 0.1) {
-        out.push(`${name}'s pill text is ${b.pillFont}, not ${want.pillText} (${density})`);
+        out.push(`${name}'s pill text is ${b.pillFont}, not ${want.pillText}`);
       }
       if (on && b.pillOff !== null && Math.abs(b.pillOff) > 1) {
         out.push(`${name}'s pill text is ${b.pillOff}px off its centre`);
@@ -2263,9 +2243,9 @@ export async function assertActivityTopbarNarrow(page: Page, screenName: string)
 /**
  * Activity's Load more (10 Nov 2026): depth in item rows, never entries. When
  * more exists, the button's bottom sits between the fold + 0.35 and the fold +
- * 0.65 viewports (page top, before any scroll), in every density. Read before
- * the steps scroll. Also the "N new" chip: flat (no shadow, no background
- * image), 16 / 18 / 20 tall, padding-x 6 / 7 / 8.
+ * 0.65 viewports (page top, before any scroll). Read before the steps
+ * scroll. Also the "N new" chip: flat (no shadow, no background image), 18
+ * tall (NEW_CHIP_HEIGHT), padding-x 7.
  */
 export async function assertActivityLoadMoreBand(page: Page, screenName: string): Promise<void> {
   const got = await page.evaluate(() => {
@@ -2279,7 +2259,6 @@ export async function assertActivityLoadMoreBand(page: Page, screenName: string)
     return {
       bottom: btn === null ? null : btn.getBoundingClientRect().bottom + y + window.scrollY,
       vh: window.innerHeight,
-      density: document.documentElement.dataset.density ?? 'cozy',
       chip:
         chip === null || cs === null
           ? null
@@ -2298,26 +2277,19 @@ export async function assertActivityLoadMoreBand(page: Page, screenName: string)
     const hi = got.vh * 1.65;
     if (got.bottom < lo || got.bottom > hi) {
       out.push(
-        `Load more ends at ${Math.round(got.bottom)}, not between the fold + 0.35 (${Math.round(lo)}) and + 0.65 (${Math.round(hi)}) viewports (${got.density})`,
+        `Load more ends at ${Math.round(got.bottom)}, not between the fold + 0.35 (${Math.round(lo)}) and + 0.65 (${Math.round(hi)}) viewports`,
       );
     }
   }
-  const chipWant: Record<string, { h: number; px: number }> = {
-    compact: { h: 16, px: 6 },
-    cozy: { h: 18, px: 7 },
-    calm: { h: 20, px: 8 },
-  };
-  const want = chipWant[got.density] ?? { h: 18, px: 7 };
+  const want = { h: NEW_CHIP_HEIGHT, px: 7 };
   if (got.chip !== null) {
     if (got.chip.shadow !== 'none') out.push(`the "N new" chip has a shadow (${got.chip.shadow})`);
     if (got.chip.image !== 'none') out.push('the "N new" chip has a background image');
     if (Math.abs(got.chip.height - want.h) > 0.5) {
-      out.push(`the "N new" chip is ${got.chip.height} tall, not ${want.h} (${got.density})`);
+      out.push(`the "N new" chip is ${got.chip.height} tall, not ${want.h}`);
     }
     if (Math.abs(got.chip.padding - want.px) > 0.1) {
-      out.push(
-        `the "N new" chip padding-x is ${got.chip.padding}, not ${want.px} (${got.density})`,
-      );
+      out.push(`the "N new" chip padding-x is ${got.chip.padding}, not ${want.px}`);
     }
   }
   settleFindings(

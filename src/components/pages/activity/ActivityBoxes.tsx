@@ -1,8 +1,8 @@
 // Activity's loading boxes (sweepBoxes, docs/motion.md) in Plan's list frame
 // (PlanTabList / PlanTabBoxes): one section heading bone on the heading's own
-// 16 line, then ui/ListCardBox rows (the density row, picture and lines) in
+// 16 line, then ui/ListCardBox rows (the row, picture and lines) in
 // LIST_CARD_GRID, so the first heading and the first row land on the same
-// pixel (0 delta) in every density.
+// pixel (0 delta).
 // Rendered ONLY when the device or session holds nothing for the list; a kept
 // list paints at once.
 import type { ReactElement } from 'react';

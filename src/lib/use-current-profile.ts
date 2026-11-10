@@ -32,7 +32,6 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useSession } from '@/lib/session-context';
 import { logger } from '@/lib/logger';
 import { onSessionReadsHydrated, peekKept, primeRead, readKey } from '@/lib/session-read';
-import { adoptUserDensity, reconcileDensity } from '@/lib/density';
 
 export interface CurrentProfile {
   display_name: string;
@@ -46,13 +45,11 @@ export interface CurrentProfile {
    * person (a workspace manager); null when on or turned off by the person.
    */
   emailOptOutBy: string | null;
-  /** users.density (Compact / Cozy / Calm); absent on a copy saved before it was read. */
-  density?: string;
 }
 
 /** The users columns the profile read selects (one query). */
 export const PROFILE_COLUMNS =
-  'display_name, designation, avatar_url, email_opt_in, profile_completed_at, username, email_opt_out_by, density';
+  'display_name, designation, avatar_url, email_opt_in, profile_completed_at, username, email_opt_out_by';
 
 /**
  * The read row (email_opt_out_by) or a held/saved profile (emailOptOutBy, absent
@@ -147,8 +144,6 @@ function startRead(userId: string): Promise<void> {
     } else {
       if (data !== null) {
         primeRead(profileReadKey(userId), data);
-        // Server density reconciles silently after paint (same read, no new one).
-        reconcileDensity(userId, data.density);
       }
       publish({ userId, profile: data, loading: false, error: false });
     }
@@ -171,8 +166,6 @@ export function resetProfileStore(userId: string | null = null): void {
   queued = false;
   latestSeq += 1;
   readSettledFor = null;
-  // This account's density from the device (sync), before its row lands.
-  if (userId !== null) adoptUserDensity(userId);
   const next = userId === null ? EMPTY : firstSnapshot(userId);
   if (!next.loading) mark('device-cache:profile');
   publish(next);

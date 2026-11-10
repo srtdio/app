@@ -865,9 +865,9 @@ const LONG_ACTIVITY_TITLE =
  * Activity's three sections (10 Nov 2026), and nothing else in the feed:
  * Weekend sale with `saleCount` unread comments today ("8 new" by default), a
  * long-titled post with 3 unread comments yesterday ("3 new"), and a read
- * post three days back (Earlier, no chip). A phone's first page holds 10
- * (Calm) to 11 (Cozy) entries, so the rows screens take 5 on Weekend sale and
- * every section lands on page one in every density.
+ * post three days back (Earlier, no chip). A phone's first page holds 11
+ * entries, so the rows screens take 5 on Weekend sale and
+ * every section lands on page one.
  */
 function seedActivitySections(network: HarnessNetwork, saleCount = 8): void {
   seedEightComments(network);
@@ -908,7 +908,7 @@ function seedActivitySections(network: HarnessNetwork, saleCount = 8): void {
 
 /**
  * 70 Activity rows, one post each (no two group), newest first over the last
- * days: more rows than 1.45 screens hold in any density, phone or laptop.
+ * days: more rows than 1.45 screens hold, phone or laptop.
  */
 function seedManyActivityRows(network: HarnessNetwork): void {
   seedEightComments(network);
@@ -992,7 +992,7 @@ function seedPreviewRows(network: HarnessNetwork): void {
   t.inbox_entries = entries;
 }
 
-/** The rows screens' feed: every section on page one in every density. */
+/** The rows screens' feed: every section on page one. */
 const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 5);
 
 /**
@@ -1839,38 +1839,20 @@ const SCREENS: Screen[] = [
         'Catch up',
       );
     },
-    // Cozy: the pair's face, text, pill and hit; phone name and spacing; laptop Sidebar.
+    // The pair's face, text, pill and hit; phone name and spacing; laptop Sidebar.
     after: async (page) => assertActivityTopbarPair(page, 'notifications'),
   },
-  // Activity's top bar in Compact and Calm (Cozy is notifications): the pair
-  // sized by density, the phone short name, the laptop Sidebar item.
-  ...(['compact', 'calm'] as const).map((density) => ({
-    name: `activity-topbar-${density}`,
-    seed: creator,
-    prepare: withDensity(density),
-    url: '/activity',
-    steps: async (page: Page) => {
-      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
-      await expectDensity(page, density);
-      await waitFor(
-        [page.locator('header [data-topbar-pair] [data-topbar-catch-up]:not([data-count="0"])')],
-        'Catch up',
-      );
-    },
-    after: async (page: Page) => assertActivityTopbarPair(page, `activity-topbar-${density}`),
-  })),
   // Activity's Load more (10 Nov 2026): depth in item rows, never entries; the
-  // button sits half a screen below the fold in every density. Measured at
-  // the page top, then scrolled to show the button for the shot.
-  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
-    name: `activity-load-more-${density}`,
+  // button sits half a screen below the fold. Measured at the page top, then
+  // scrolled to show the button for the shot. The name keeps its -cozy
+  // suffix so the baseline stays the same file.
+  {
+    name: 'activity-load-more-cozy',
     seed: creator,
     extra: seedManyActivityRows,
-    prepare: withDensity(density),
     url: '/activity',
     steps: async (page: Page) => {
       await waitFor([page.locator('[data-activity-load-more]')], 'Load more');
-      await expectDensity(page, density);
       // Previews cut after their first paint (2-line rows are 20 taller) and
       // the depth re-reads the rows' real heights: wait until the rows hold
       // still across two animation frames (no fixed sleep).
@@ -1887,38 +1869,34 @@ const SCREENS: Screen[] = [
             requestAnimationFrame(() => requestAnimationFrame(() => resolve(read() === before)));
           }),
       );
-      await assertActivityLoadMoreBand(page, `activity-load-more-${density}`);
+      await assertActivityLoadMoreBand(page, 'activity-load-more-cozy');
       // One unread count on a feed larger than the first page (Part 6 D).
-      await assertActivityCounts(page, `activity-load-more-${density}`);
+      await assertActivityCounts(page, 'activity-load-more-cozy');
       await page.locator('[data-activity-load-more]').scrollIntoViewIfNeeded();
     },
-  })),
+  },
   // Part 6: Activity previews, 2 lines cut at a whole word with "… more"
   // (long) and one line, no marker (short); more unfolds, less folds.
-  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
-    name: `activity-preview-more-${density}`,
+  {
+    name: 'activity-preview-more-cozy',
     seed: creator,
     extra: seedPreviewRows,
-    prepare: withDensity(density),
     url: '/activity',
     steps: async (page: Page) => {
       await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
-      await expectDensity(page, density);
-      await assertActivityPreviews(page, `activity-preview-more-${density}`, {
+      await assertActivityPreviews(page, 'activity-preview-more-cozy', {
         long: 'morning shot',
         short: PREVIEW_SHORT,
       });
     },
-  })),
-  ...(['compact', 'cozy', 'calm'] as const).map((density) => ({
-    name: `activity-preview-expanded-${density}`,
+  },
+  {
+    name: 'activity-preview-expanded-cozy',
     seed: creator,
     extra: seedPreviewRows,
-    prepare: withDensity(density),
     url: '/activity',
     steps: async (page: Page) => {
       await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
-      await expectDensity(page, density);
       await page
         .locator('[data-activity-list] [data-list-card]', { hasText: 'morning shot' })
         .locator('[data-activity-preview-toggle]')
@@ -1934,7 +1912,7 @@ const SCREENS: Screen[] = [
         .click();
       await expect.poll(() => page.url()).not.toBe(url);
     },
-  })),
+  },
   {
     // The laptop Sidebar's last item, Activity after Chat, filled on /notifications.
     name: 'sidebar-activity-active',
@@ -3392,51 +3370,6 @@ SCREENS.push({
   steps: planScreenToday,
 });
 
-// Density (Compact / Cozy / Calm, 8 Nov 2026; Cozy is the default every other
-// screen shows). The device's density is set before the app boots: the boot
-// key (src/lib/density bootDensity) and this account's key (adoptUserDensity),
-// with the users row agreeing so the profile read's reconcile keeps it.
-type VisualDensity = 'compact' | 'cozy' | 'calm';
-
-/** A prepare step that boots the app in `density` on this device for ME. */
-function withDensity(density: VisualDensity) {
-  return async (network: HarnessNetwork, page: Page): Promise<void> => {
-    for (const u of network.world.tables.users ?? []) {
-      if (u.id === ME) u.density = density;
-    }
-    await page.addInitScript(
-      ([bootKey, userKey, value]) => {
-        window.localStorage.setItem(bootKey, value);
-        window.localStorage.setItem(userKey, value);
-      },
-      ['sorted-density', `sorted-density:${ME}`, density] as const,
-    );
-  };
-}
-
-/** <html data-density> is the density the screen was asked for (before the shot). */
-async function expectDensity(page: Page, density: VisualDensity): Promise<void> {
-  await expect(page.locator('html')).toHaveAttribute('data-density', density);
-}
-
-/** The account menu (Topbar avatar), open on its Density row. */
-async function openAccountMenuDensity(page: Page): Promise<void> {
-  await tap([page.getByRole('button', { name: 'Account menu' })], 'Account menu');
-  await waitFor([page.locator('[data-density-row]')], 'Density row');
-  await waitFor([page.locator('[data-density-pick="cozy"][data-selected="true"]')], 'Cozy picked');
-}
-
-// The account menu with the Density row under Appearance (Cozy picked).
-SCREENS.push({
-  name: 'account-menu-density',
-  seed: creator,
-  url: '/pipeline',
-  steps: async (page) => {
-    await pipelineReady(page);
-    await openAccountMenuDensity(page);
-  },
-});
-
 // New plan (agency): Add from bank opens the bank picker in many-pick mode.
 SCREENS.push({
   name: 'new-plan-bank',
@@ -3457,72 +3390,27 @@ SCREENS.push({
   },
 });
 
-// The plan screen in each density.
-for (const density of ['compact', 'cozy', 'calm'] as const) {
-  SCREENS.push({
-    name: `plan-screen-${density}`,
-    seed: creator,
-    extra: seedChatPlan,
-    prepare: withDensity(density),
-    url: '/chat',
-    steps: async (page) => {
-      await openChatPlan(page);
-      await expectDensity(page, density);
-    },
-  });
-}
+// The plan screen (its -cozy name keeps the baseline file).
+SCREENS.push({
+  name: 'plan-screen-cozy',
+  seed: creator,
+  extra: seedChatPlan,
+  url: '/chat',
+  steps: async (page) => {
+    await openChatPlan(page);
+  },
+});
 
-// The two list screens in the non-default densities (rows 60 / 80, chips 32 /
-// 40; layout-checks reads <html data-density> for the list-card and chip rules).
-for (const density of ['compact', 'calm'] as const) {
-  SCREENS.push({
-    name: `pipeline-${density}`,
-    seed: creator,
-    prepare: withDensity(density),
-    url: '/pipeline',
-    steps: async (page) => {
-      await pipelineReady(page);
-      await expectDensity(page, density);
-    },
-  });
-  SCREENS.push({
-    name: `chat-list-${density}`,
-    seed: creator,
-    prepare: withDensity(density),
-    url: '/chat',
-    steps: async (page) => {
-      await chatListAllRows(page);
-      await expectDensity(page, density);
-    },
-  });
-}
-
-// Activity's rows in each density (10 Nov 2026, Activity twins Plan): the
-// Cozy screen boots in Cozy explicitly, Compact and Calm are its twins.
-const activityRowsSteps =
-  (density: VisualDensity) =>
-  async (page: Page): Promise<void> => {
-    await activitySectionsReady(page);
-    await expectDensity(page, density);
-  };
+// Activity's rows (10 Nov 2026, Activity twins Plan).
 SCREENS.push({
   name: 'activity-rows',
   seed: creator,
   extra: seedActivityRows,
-  prepare: withDensity('cozy'),
   url: '/activity',
-  steps: activityRowsSteps('cozy'),
+  steps: async (page: Page): Promise<void> => {
+    await activitySectionsReady(page);
+  },
 });
-for (const density of ['compact', 'calm'] as const) {
-  SCREENS.push({
-    name: `activity-rows-${density}`,
-    seed: creator,
-    extra: seedActivityRows,
-    prepare: withDensity(density),
-    url: '/activity',
-    steps: activityRowsSteps(density),
-  });
-}
 
 // The New chat sheet with New group blocked by the groups-per-workspace rule
 // (20261029120000_group_limit.sql): the workspace's group_allowance (1, the
@@ -7277,8 +7165,8 @@ const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
 // list, Activity, the Plan tab and its Bank): checkLayout's list-card rule
-// (every row the density height, 72 Cozy / 60 Compact / 80 Calm, the picture
-// at 16 and the density inset in the bled row, 12 to the text)
+// (every row ROW_HEIGHT 72, the picture at 16 and the 12 inset in the bled
+// row, 12 to the text)
 // runs on every screen; these must show cards. The chip screens above may land
 // on a chip's zero line, so they are checked whenever cards show.
 const LIST_CARD_SCREENS = new Set([
@@ -7296,8 +7184,6 @@ const LIST_CARD_SCREENS = new Set([
   'activity-bank',
   'activity-sections',
   'activity-rows',
-  'activity-rows-compact',
-  'activity-rows-calm',
   'plan-tab',
   'plan-tab-live',
   'plan-tab-ended',
@@ -7310,10 +7196,6 @@ const LIST_CARD_SCREENS = new Set([
   'assets-select-on',
   'plan-tab-bank-select-on',
   'chat-list-select-on',
-  'pipeline-compact',
-  'pipeline-calm',
-  'chat-list-compact',
-  'chat-list-calm',
 ]);
 
 // Laptop dark: these screens also run in the laptop-dark project
@@ -7442,11 +7324,9 @@ const LAPTOP_DARK_SCREENS = new Set([
   'catch-up-error',
   'chat-thread-view-divider',
   // Alignment and one thread strip (9 Nov 2026): phone and laptop, light and dark.
-  // Activity twins Plan in each density (10 Nov 2026): phone and laptop, light and dark.
+  // Activity twins Plan (10 Nov 2026): phone and laptop, light and dark.
   'activity-sections',
   'activity-rows',
-  'activity-rows-compact',
-  'activity-rows-calm',
   'boxes-activity',
   'chat-thread-replies',
   'catch-up-thread-empty',
@@ -7669,41 +7549,37 @@ for (const screen of SCREENS.filter((s) => TABLET_SCREENS.has(s.name))) {
   test(`${screen.name} @tablet`, async ({ page }) => capture(screen, page));
 }
 
-// Check 15 (10 Nov 2026, Activity twins Plan): in each density, Activity's
+// Check 15 (10 Nov 2026, Activity twins Plan): Activity's
 // rows, sections and headings are measured against the Plan tab's on the same
 // page (row height, picture x, title x, time right edge, chips to the first
 // heading, heading to rows, a section's last row to the next heading, the
-// heading's computed style); the "N new" chip (height by density, 8 after
+// heading's computed style); the "N new" chip (18 tall, 8 after
 // the name, the primary Button's ink); none of the retired hooks; and the
 // loading boxes' first heading and first row land on the same pixel (0 delta).
 // No screenshot (the shots are activity-rows*).
-for (const density of ['compact', 'cozy', 'calm'] as const) {
-  test(`activity twins plan (${density})`, async ({ page }) => {
-    await page.clock.setFixedTime(NOW);
-    await page.routeWebSocket(
-      (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
-      () => undefined,
-    );
-    const network = await installHarnessNetwork(page);
-    Object.assign(network.world, buildWorld(NOW));
-    seedAudit(network, creator, NOW);
-    seedTab(network);
-    seedActivityRows(network);
-    await withDensity(density)(network, page);
-    await installDeletedRoutes(page, network);
-    // Activity's read is held from the start, so no prefetch lands before its boxes paint.
-    const hold = network.holdTable('inbox_entries');
-    await page.goto('/plan');
-    await planTabReady(page);
-    await expectDensity(page, density);
-    const plan = await readListTwin(page, 'plan');
-    await page.goto('/activity');
-    await waitFor([page.locator('[data-activity-boxes]')], 'activity boxes');
-    const boxes = await readActivityBoxes(page);
-    hold.release();
-    await activitySectionsReady(page);
-    const activity = await readListTwin(page, 'activity');
-    assertActivityTwinsPlan(`activity twins plan (${density})`, plan, activity, boxes);
-    expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
-  });
-}
+test('activity twins plan (cozy)', async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(page);
+  Object.assign(network.world, buildWorld(NOW));
+  seedAudit(network, creator, NOW);
+  seedTab(network);
+  seedActivityRows(network);
+  await installDeletedRoutes(page, network);
+  // Activity's read is held from the start, so no prefetch lands before its boxes paint.
+  const hold = network.holdTable('inbox_entries');
+  await page.goto('/plan');
+  await planTabReady(page);
+  const plan = await readListTwin(page, 'plan');
+  await page.goto('/activity');
+  await waitFor([page.locator('[data-activity-boxes]')], 'activity boxes');
+  const boxes = await readActivityBoxes(page);
+  hold.release();
+  await activitySectionsReady(page);
+  const activity = await readListTwin(page, 'activity');
+  assertActivityTwinsPlan('activity twins plan (cozy)', plan, activity, boxes);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});

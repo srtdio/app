@@ -119,7 +119,7 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
     // The flat row frame carries the 16 sides; the body has no padding of its own.
     expect(classOf(person, 'data-list-card-body=""')).not.toContain('p-3');
     expect(classOf(person, 'data-list-card=""')).toEqual(
-      expect.arrayContaining(['-mx-4', 'px-4', 'h-18', 'compact:h-15', 'calm:h-20']),
+      expect.arrayContaining(['-mx-4', 'px-4', 'h-18']),
     );
     expect(person).not.toContain('data-list-card-line="3"');
   });
@@ -128,7 +128,7 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
     const h = card(dm, { ...read, unread: 4 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('h-12 w-12 compact:h-10 compact:w-10');
+    expect(h).toContain('h-12 w-12');
     // Unread: the heading's bold; read: the same size at regular weight.
     expect(h).toMatch(/text-lg font-semibold[^"]*">Asha Rao</);
     expect(card(dm, read)).toMatch(/text-lg[^"]*font-normal[^"]*">Asha Rao</);

@@ -78,7 +78,7 @@ export interface ListCardProps {
   previewHooks?: ListCardHooks;
   /**
    * Activity only (10 Nov 2026): 2 when the preview wraps to two lines (or
-   * more, unfolded). The row grows by one line (density height + 20) and the
+   * more, unfolded). The row grows by one line (72 + 20) and the
    * preview wraps instead of truncating; the caller cuts the text. Default 1:
    * every other list is unchanged.
    */
@@ -127,39 +127,14 @@ export interface ListCardProps {
  * The row frame (flat look, 7 Nov 2026): no border, no radius, no lit height.
  * It bleeds -mx-4 / px-4 so the selected, chosen and pressed fill runs edge to
  * edge on phone, never boxed inside the 16 gutter. Selected: the panel-2 fill.
- * Density (8 Nov 2026, <html data-density>): Cozy 12 + 48 + 12 = 72; Compact
- * 10 + 40 + 10 = 60 (py-row-inset, the one 10 token); Calm 16 + 48 + 16 = 80.
+ * One size: 12 + 48 + 12 = 72 (ROW_INSET, ROW_PICTURE, ROW_HEIGHT in ui/layout).
  */
 export function listCardFrame(selected = false): string {
   return cn(
-    'relative -mx-4 flex h-18 min-w-0 px-4 py-3 compact:h-15 compact:py-row-inset calm:h-20 calm:py-4',
+    'relative -mx-4 flex h-18 min-w-0 px-4 py-3',
     selected && 'bg-panel-2',
   );
 }
-
-/** The row height per density: picture + inset above and below. */
-export const LIST_CARD_HEIGHT_BY_DENSITY = { compact: 60, cozy: 72, calm: 80 } as const;
-
-/** The row picture per density (Avatar 'card' matches it). */
-export const LIST_CARD_PICTURE_BY_DENSITY = { compact: 40, cozy: 48, calm: 48 } as const;
-
-/**
- * The active density's row height (60 / 72 / 80): the given density, else the
- * one on <html data-density>, else Cozy. Sync, no read.
- */
-export function listCardHeightPx(density?: string): number {
-  const d =
-    density ??
-    (typeof document === 'undefined' ? undefined : document.documentElement.dataset.density);
-  return d === 'compact' || d === 'calm'
-    ? LIST_CARD_HEIGHT_BY_DENSITY[d]
-    : LIST_CARD_HEIGHT_BY_DENSITY.cozy;
-}
-
-/**
- * The default (Cozy) row height. Use listCardHeightPx() for the active density.
- */
-export const LIST_CARD_HEIGHT_PX = LIST_CARD_HEIGHT_BY_DENSITY.cozy;
 
 /**
  * The inner row: picture then text, 12 apart, vertically centred (the frame
@@ -168,14 +143,14 @@ export const LIST_CARD_HEIGHT_PX = LIST_CARD_HEIGHT_BY_DENSITY.cozy;
  */
 export const LIST_CARD_BODY = 'pointer-events-none relative flex min-w-0 flex-1 items-center gap-3';
 
-/** The picture box: 48 (Cozy, Calm) or 40 (Compact), never shrinks. */
+/** The picture box: 48 (ROW_PICTURE), never shrinks. */
 export const LIST_CARD_PICTURE =
-  'relative flex h-12 w-12 shrink-0 items-center justify-center compact:h-10 compact:w-10';
+  'relative flex h-12 w-12 shrink-0 items-center justify-center';
 
 /** The rounded-picture (10) squircle a non-person picture sits in; flat. */
 const PICTURE_BOX = 'overflow-hidden rounded-picture';
 
-/** The text column: two 20 lines, 4 apart (44), every density. */
+/** The text column: two 20 lines, 4 apart (44). */
 export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-1';
 
 /** Line 1: title then the time on the right; one 20 line. */
@@ -192,13 +167,12 @@ export const LIST_CARD_PREVIEW = textRole('secondary', 'min-w-0 flex-1 truncate'
 
 /**
  * previewLines 2 (Activity): the row grows with its preview, never under the
- * density height; line 2 is two lines tall at least, so the row is the
- * density height + 20 (Cozy 92, Compact 80, Calm 100): 44 / 36 / 44 for the
- * preview line under the 20 title line and its 4 step.
+ * row height; line 2 is two lines tall at least, so the row is 72 + 20 = 92:
+ * 44 for the preview line under the 20 title line and its 4 step.
  */
 export const LIST_CARD_FRAME_2 =
-  'h-auto min-h-18 compact:h-auto compact:min-h-15 calm:h-auto calm:min-h-20';
-export const LIST_CARD_LINE2_2 = 'flex min-h-11 min-w-0 items-start gap-2 compact:min-h-9';
+  'h-auto min-h-18';
+export const LIST_CARD_LINE2_2 = 'flex min-h-11 min-w-0 items-start gap-2';
 // The secondary role's look without its truncate (a cut preview wraps; it never ellipsizes in CSS).
 export const LIST_CARD_PREVIEW_2 = 'min-w-0 flex-1 break-words text-md font-normal text-fg-2';
 
@@ -207,10 +181,9 @@ export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full 
 
 /**
  * Rows a card shows under itself (Activity's one line per notification) start on the
- * card's text column: the density picture plus its 12 gap (48 + 12 = 60 Cozy
- * and Calm, 40 + 12 = 52 Compact).
+ * card's text column: the picture plus its 12 gap (48 + 12 = 60, ROW_TEXT_START).
  */
-export const LIST_CARD_SUB_INSET = 'pl-15 compact:pl-13';
+export const LIST_CARD_SUB_INSET = 'pl-15';
 
 /** The list the rows stack in: rows touching, no divider (phone, and the chat list pane). */
 export const LIST_CARD_STACK = 'flex flex-col';
@@ -326,7 +299,7 @@ function clickCover(event: MouseEvent<HTMLElement>): void {
  *   2. preview (secondary, one line) then the one grey Tag then the unread dot;
  *      with no preview the tag sits on the right end, under the time.
  * No third line and no ⋮: a card's actions live on its list's select bar
- * (long-press / right-click selects). Every row is exactly the density height (listCardHeightPx); line 2 stays even when it
+ * (long-press / right-click selects). Every row is exactly ROW_HEIGHT (ui/layout); line 2 stays even when it
  * is empty.
  */
 export function ListCard({
@@ -486,8 +459,8 @@ export function ListCard({
 }
 
 /**
- * A loading box in ListCard's own frame and slots (the density picture, the title
- * line with its time, the preview line), the density row height, so nothing moves
+ * A loading box in ListCard's own frame and slots (the picture, the title
+ * line with its time, the preview line), the row height, so nothing moves
  * when the cards land. Pure render; the screen's BoxSkeleton decides when it shows.
  */
 export function ListCardBox({

@@ -14,8 +14,8 @@ import {
 // bubbles) and turns headers, side panes and the dock into a --border
 // hairline. Floating layers (lit-float, lit-overlay) keep their soft shadow:
 // the flat block never names them. List rows (ui/ListCard) are flat frames:
-// no border, radius, lit height or clip, bled -mx-4 / px-4, the density height
-// (h-18 Cozy 72; compact:h-15 60; calm:h-20 80).
+// no border, radius, lit height or clip, bled -mx-4 / px-4, the 72 height
+// (h-18).
 const CSS = readFileSync(fileURLToPath(new URL('../index.css', import.meta.url)), 'utf8');
 
 const FLAT_OPEN = /(^|\n):root,\s*\n?\s*\.dark \{/;
@@ -141,14 +141,12 @@ describe('flat look: the list row frame (ui/ListCard)', () => {
     ['listCardFrame()', listCardFrame()],
     ['listCardFrame(true)', listCardFrame(true)],
   ] as const) {
-    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4, px-4, h-18 (compact:h-15, calm:h-20)`, () => {
+    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4, px-4, h-18`, () => {
       expect(frame).not.toMatch(/border/);
       expect(frame).not.toMatch(/rounded/);
       expect(frame).not.toMatch(/lit-/);
       expect(frame).not.toContain('overflow-hidden');
-      expect(tokens(frame)).toEqual(
-        expect.arrayContaining(['-mx-4', 'px-4', 'h-18', 'compact:h-15', 'calm:h-20']),
-      );
+      expect(tokens(frame)).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-18']));
     });
   }
 
