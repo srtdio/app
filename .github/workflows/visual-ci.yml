@@ -1,31 +1,33 @@
 name: Visual CI
 
-# select: picks the screens this change can change (scripts/ci/visual-select.ts, the same selection pnpm prepush uses).
-#   Pull request: the selected screens only (a screen not run is not failed); ALL for a global file (CSS, fonts, tokens, tailwind / vite config,
-#   the app shell, layout-checks*.ts, playwright.visual.config.ts, shared code in screens.spec.ts, package.json, pnpm-lock.yaml, ...), an unknown
-#   file or a selection error; nothing for docs, scripts, Workers, unit tests and the like. Push to main: always ALL.
-#   20 or fewer selected screens run in one shard, more (and ALL) in 4.
+# select: picks the screens this change can change (scripts/ci/visual-select.ts --pr, the same selection pnpm prepush uses), per screen:
+#   a changed src/ or packages/ file runs the screens whose entry in e2e/visual/screen-files.json (the screen-to-files map the nightly run
+#   records) holds it, plus new screens of its areas; a file in no entry, or no map, falls back to the area rule (scripts/ci/e2e-areas.ts).
+#   Nothing for docs, scripts, Workers, unit tests and the like. A pull request never runs ALL and never more than 20 screens (ONE_SHARD_MAX,
+#   one shard): past the cap, or for a global file (CSS, fonts, tokens, tailwind / vite config, the app shell, layout-checks*.ts,
+#   playwright.visual.config.ts, shared code in screens.spec.ts, package.json, pnpm-lock.yaml, ...), an unknown file or a selection error, it
+#   runs the selected screens first, then one smoke screen per area not yet covered, cut at 20. The log names the true radius and the run.
+#   The whole set renders once a night on main (visual-nightly.yml, 02:30 IST), which refreshes the baselines and the map through one bot PR
+#   (branch bot/visual-baselines, "Visual baselines refresh").
 # visual-shard: renders the selected screens (iPhone 13 light and dark, 1280x800 light, four ipad-* tablet projects; WebKit, harness, no DB, no secrets)
-#   and compares each with its committed baseline in e2e/visual/__screenshots__/. Any screen over 0.2% different fails; that shard's diff, actual
-#   and expected images upload as the visual-diffs-<N> artifact.
-# visual: the one required check. Passes when every shard succeeded, or when nothing was selected (no shard runs).
-#   Runs on every pull request and every push to main (no paths filter, so the check always reports).
+#   and compares each with its committed baseline in e2e/visual/__screenshots__/. Any screen over 0.2% different fails; the diff, actual
+#   and expected images upload as the visual-diffs-1 artifact.
+# visual: the one required check. Passes when the shard succeeded, or when nothing was selected (no shard runs).
+#   Runs on every pull request (no paths filter, so the check always reports). No push-to-main run: the nightly covers main.
 # Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines] and whose author is not a bot
-#   (loop guard: the bot commit's message never carries the tag, and a bot-authored head never renders), each shard re-renders its selected screens
-#   (--update-snapshots=all) on this CI WebKit image, compares them again on the same tree, and uploads only the files it rendered as
-#   visual-baselines-<N>. Baselines of screens not run are never touched (ALL clears and re-renders the whole set).
+#   (loop guard: the bot commit's message never carries the tag, and a bot-authored head never renders), the shard re-renders the screens this
+#   PR renders (--update-snapshots=all) on this CI WebKit image, compares them again on the same tree, and uploads only the files it rendered as
+#   visual-baselines-1. Baselines of screens not run are never touched; a PR never clears the whole set.
 #   commit-baselines lays them over the PR's head branch and commits them. With the Sorted CI GitHub App (secrets SORTED_CI_APP_ID and
 #   SORTED_CI_APP_PRIVATE_KEY; the token is scoped to this repository, contents: write) the push is the App's, so every PR workflow runs on the bot
 #   commit for real. Without those secrets it pushes with GITHUB_TOKEN (which starts no run) and, as before, dispatches CI, reports visual /
 #   visual-shard as passed and copies every other check of the tested head onto the bot commit; a notice names the missing secrets.
-# Screenshot-only push: when a PR push changes only e2e/visual/__screenshots__/ since the last push, that push was a baseline refresh
-#   ([update-visual-baselines]) and this workflow passed on it (scripts/ci/screenshot-only.sh --refresh), select picks nothing: those are the
-#   baselines that run rendered and compared. Any other screenshot-only push (baselines committed by hand) compares as usual.
+# Screenshot-only push: when a PR push changes only e2e/visual/__screenshots__/ (and e2e/visual/screen-files.json) since the last push, that push
+#   was a baseline refresh ([update-visual-baselines]) and this workflow passed on it (scripts/ci/screenshot-only.sh --refresh), select picks
+#   nothing: those are the baselines that run rendered and compared. Any other screenshot-only push (baselines committed by hand) compares as usual.
 # Locally: pnpm prepush runs the layout checks on at most 12 selected screens; screenshots are never compared or committed from a local render.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 concurrency:
   group: visual-ci-${{ github.event.pull_request.number || github.ref }}
@@ -47,6 +49,7 @@ jobs:
       mode: ${{ steps.pick.outputs.mode }}
       grep: ${{ steps.pick.outputs.grep }}
       count: ${{ steps.pick.outputs.count }}
+      radius: ${{ steps.pick.outputs.radius }}
       shards: ${{ steps.pick.outputs.shards }}
       total: ${{ steps.pick.outputs.total }}
     steps:
@@ -90,8 +93,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # On a PR the checkout is the merge commit: its first parent is the base
-      # it merges into, so HEAD^1..HEAD is exactly this PR's change. A
-      # selection error selects ALL (the script prints ALL and mode=all).
+      # it merges into, so HEAD^1..HEAD is exactly this PR's change. --pr caps
+      # the run at 20 screens (one shard); a selection error runs the smoke
+      # screens. mode=all on a PR means the selector itself broke: select fails.
       - name: Select screens
         id: pick
         env:
@@ -107,28 +111,28 @@ jobs:
           : > "$out"
           if [ "$(scripts/ci/screenshot-only.sh visual-ci.yml --refresh)" = true ]; then
             echo "mode=none" >> "$out"
-          elif [ "$EVENT_NAME" = "pull_request" ]; then
+          else
             GITHUB_OUTPUT="$out" node --experimental-strip-types --no-warnings scripts/ci/visual-select.ts \
-              --base HEAD^1 --head HEAD --github-output || echo "mode=all" >> "$out"
+              --base HEAD^1 --head HEAD --pr --github-output || echo "mode=all" >> "$out"
           fi
           mode=$(grep '^mode=' "$out" | tail -1 | cut -d= -f2- || true)
           grep=$(grep '^grep=' "$out" | tail -1 | cut -d= -f2- || true)
           count=$(grep '^count=' "$out" | tail -1 | cut -d= -f2- || true)
+          radius=$(grep '^radius=' "$out" | tail -1 | cut -d= -f2- || true)
           [ -z "$mode" ] && mode=all
-          if [ "$mode" = all ]; then grep=''; fi
-          if [ "$mode" = some ] && [ "${count:-0}" -le 20 ]; then
-            shards='[1]'; total=1
-          else
-            shards='[1,2,3,4]'; total=4
+          if [ "$mode" = all ]; then
+            echo "::error::visual-select gave ALL on a pull request (the selector broke); a PR runs at most 20 screens"
+            exit 1
           fi
           {
             echo "mode=$mode"
             echo "grep=$grep"
             echo "count=${count:-0}"
-            echo "shards=$shards"
-            echo "total=$total"
+            echo "radius=${radius:-0}"
+            echo "shards=[1]"
+            echo "total=1"
           } >> "$GITHUB_OUTPUT"
-          echo "visual: $mode, ${count:-?} screens, $total shard(s)"
+          echo "visual: $mode, radius ${radius:-?} screens, running ${count:-?} in 1 shard"
 
   visual-shard:
     name: visual-shard (${{ matrix.shard }}/${{ needs.select.outputs.total }})
@@ -147,10 +151,6 @@ jobs:
       MODE: ${{ needs.select.outputs.mode }}
       GREP: ${{ needs.select.outputs.grep }}
       SHARD: ${{ matrix.shard }}/${{ needs.select.outputs.total }}
-      # Shard weights (Playwright's per-shard share of the test groups) for the
-      # 4-shard run: shard 4 takes the tail (laptop-dark and ipad projects, the
-      # slowest screens per test), so it gets a smaller share. One shard: none.
-      PWTEST_SHARD_WEIGHTS: ${{ needs.select.outputs.total == '4' && '26:26:26:22' || '' }}
     steps:
       # A refresh renders the PR head itself (the commit the baselines land on);
       # a compare renders what checkout gives (the merge commit on a PR).
@@ -216,13 +216,8 @@ jobs:
           if [ "$MODE" = some ]; then args+=(-g "$GREP"); fi
           pnpm exec playwright test "${args[@]}"
 
-      # ALL re-renders the whole set, so the checked-out baselines go first
-      # (screens removed from the spec lose theirs). A selection keeps every
-      # baseline it does not render.
-      - name: Clear the checked-out baselines
-        if: env.UPDATE == 'true' && env.MODE == 'all'
-        run: find e2e/visual/__screenshots__ -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
-
+      # A PR re-renders only the screens it runs; every other baseline stays
+      # (the nightly run refreshes the whole set).
       - name: Render new baselines
         if: env.UPDATE == 'true'
         timeout-minutes: 25
@@ -330,12 +325,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ steps.app.outputs.token || github.token }}
 
-      # ALL replaces the project folders (the .gitkeep stays); a selection
-      # lays its files over the rest.
-      - name: Clear the old baselines
-        if: needs.select.outputs.mode == 'all'
-        run: find e2e/visual/__screenshots__ -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
-
+      # The rendered files lay over the rest (a PR never clears the set).
       - uses: actions/download-artifact@v4
         with:
           pattern: visual-baselines-*

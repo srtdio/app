@@ -5,8 +5,9 @@
 # result for the calling workflow, else "false" (never fails the job):
 #   1. the event is a pull_request synchronize with a previous head (BEFORE),
 #   2. every file changed from BEFORE to the new head (HEAD_SHA) is a visual
-#      baseline under e2e/visual/__screenshots__/ (no deletes of other files,
-#      no code, no merge of main),
+#      baseline under e2e/visual/__screenshots__/ or the screen-to-files map
+#      e2e/visual/screen-files.json (the nightly bot PR carries both; no
+#      deletes of other files, no code, no merge of main),
 #   3. the newest pull_request run of WORKFLOW on BEFORE concluded success,
 #   4. with --refresh: BEFORE's commit message carries [update-visual-baselines]
 #      (the baselines in this push are the ones that run rendered and checked).
@@ -37,7 +38,7 @@ files=$(git diff --name-only "$BEFORE" "$HEAD_SHA") || no "diff failed"
 [ -n "$files" ] || no "no files changed"
 while IFS= read -r f; do
   case "$f" in
-    e2e/visual/__screenshots__/*) ;;
+    e2e/visual/__screenshots__/* | e2e/visual/screen-files.json) ;;
     *) no "$f changed" ;;
   esac
 done <<< "$files"

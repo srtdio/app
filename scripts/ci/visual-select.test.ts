@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { AREAS } from './e2e-areas.ts';
 import {
   AREA_SCREENS,
+  areaOfScreen,
+  ciPlan,
   localScreens,
   ONE_SHARD_MAX,
   parseScreens,
@@ -265,5 +267,92 @@ describe('visual-select: local runs and the grep', () => {
     expect(re.test('pipeline-compact')).toBe(true);
     expect(re.test('briefs-empty')).toBe(false);
     expect(ONE_SHARD_MAX).toBe(20);
+  });
+});
+
+describe('visual-select: per screen (screen-files.json) and the PR cap', () => {
+  const MAP = {
+    'chat-list': ['src/components/chat/List.tsx', 'src/components/chat/Shared.tsx'],
+    'chat-box': ['src/components/chat/Shared.tsx'],
+    'pipeline-compact': ['src/components/chat/Shared.tsx'],
+    briefs: ['src/components/pages/BriefsPage.tsx'],
+    'brief-detail': ['src/components/pages/BriefsPage.tsx'],
+    assets: ['src/components/pages/Assets.tsx'],
+    settings: [],
+    help: [],
+    homepage: [],
+    'onboarding-sign-up': [],
+  };
+  // pipeline (plain) is missing from the map: a new screen.
+
+  it("(a) a file in two screens' map entries selects exactly those two", () => {
+    const sel = selectVisual(input({ files: ['src/components/pages/BriefsPage.tsx'], map: MAP }));
+    expect(sel.all).toBe(false);
+    expect(sorted(sel.names)).toEqual(['brief-detail', 'briefs']);
+    // A shared file: its map holders plus the new screens of its areas (pipeline).
+    const shared = selectVisual(input({ files: ['src/components/chat/Shared.tsx'], map: MAP }));
+    expect(sorted(shared.names)).toEqual(['chat-box', 'chat-list', 'pipeline', 'pipeline-compact']);
+  });
+
+  it('(b) a FORCE_ALL file on a PR: mode some, at most 20, one smoke screen per uncovered area', () => {
+    const sel = selectVisual(input({ files: ['src/index.css'], map: MAP }));
+    expect(sel.all).toBe(true);
+    const plan = ciPlan(sel, screens, MAP, true);
+    expect(plan.mode).toBe('some');
+    expect(plan.names.length).toBeLessThanOrEqual(ONE_SHARD_MAX);
+    expect(plan.radius).toBe(screens.length);
+    const areas = plan.names.map((n) => areaOfScreen(screens.find((s) => s.name === n)));
+    expect(new Set(areas).size).toBe(areas.length);
+    expect(sorted(plan.names)).toEqual(sorted(smokeScreens(screens)));
+  });
+
+  it('(c) a radius of 50 screens runs 20 on a PR, the selected screens first in map order', () => {
+    const many = Array.from(
+      { length: 50 },
+      (_, i) => `  { name: 'chat-${100 + i}', url: '/chat/${i}' },`,
+    );
+    const big = parseScreens(
+      ['const SCREENS = [', ...many, ...SPEC.split('\n').slice(3, 27), '];'].join('\n'),
+    );
+    const names = big.map((s) => s.name).filter((n) => /^chat-1\d\d$/.test(n));
+    const map = Object.fromEntries([...names].reverse().map((n) => [n, ['src/x.ts']]));
+    const plan = ciPlan({ all: false, names, targeted: names, reasons: [] }, big, map, true);
+    expect(plan).toMatchObject({ mode: 'some', radius: 50 });
+    expect(plan.names).toHaveLength(ONE_SHARD_MAX);
+    expect(plan.names).toEqual(Object.keys(map).slice(0, ONE_SHARD_MAX));
+    // Under the cap: the selection as is.
+    const few = ciPlan(
+      { all: false, names: ['briefs'], targeted: ['briefs'], reasons: [] },
+      big,
+      map,
+      true,
+    );
+    expect(few).toEqual({ mode: 'some', names: ['briefs'], radius: 1 });
+  });
+
+  it('(d) a new file (in no map entry) falls back to its area', () => {
+    const sel = selectVisual(input({ files: ['src/components/pages/BriefCard.tsx'], map: MAP }));
+    expect(sel.all).toBe(false);
+    expect(sorted(sel.names)).toEqual(['brief-detail', 'briefs', 'onboarding-sign-up']);
+  });
+
+  it('(e) a missing map: the area rule', () => {
+    const sel = selectVisual(input({ files: ['src/components/chat/Shared.tsx'], map: null }));
+    expect(sorted(sel.names)).toEqual(['chat-box', 'chat-list', 'pipeline', 'pipeline-${density}']);
+    expect(sel.reasons.join('\n')).toMatch(/missing or unreadable/);
+  });
+
+  it('(f) the nightly path (not a PR) yields all', () => {
+    const sel = selectVisual(input({ files: ['src/index.css'], map: MAP }));
+    expect(ciPlan(sel, screens, MAP, false)).toEqual({
+      mode: 'all',
+      names: [],
+      radius: screens.length,
+    });
+  });
+
+  it('screen-files.json itself selects nothing', () => {
+    const sel = selectVisual(input({ files: ['e2e/visual/screen-files.json'], map: MAP }));
+    expect(sel).toMatchObject({ all: false, names: [] });
   });
 });

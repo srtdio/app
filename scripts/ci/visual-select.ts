@@ -2,13 +2,27 @@
 // One copy, used by pnpm prepush (scripts/prepush.ts) and Visual CI
 // (.github/workflows/visual-ci.yml).
 //
-//   node --experimental-strip-types scripts/ci/visual-select.ts [--base REF] [--head REF] [--github-output]
+//   node --experimental-strip-types scripts/ci/visual-select.ts [--base REF] [--head REF] [--pr] [--github-output]
 //
 // --base defaults to the merge base with origin/main; without --head the
 // working tree (untracked files included) is the new side. stdout: "ALL" or
 // the playwright -g regex of the selected screens ("" = no screen). stderr:
 // the reasons and the names. --github-output also writes mode (all | some |
-// none), grep and count to $GITHUB_OUTPUT. Any error in the selection is ALL.
+// none), grep, count and radius to $GITHUB_OUTPUT. Any error in the
+// selection is ALL.
+//
+// Per screen (e2e/visual/screen-files.json, the screen-to-files map the
+// nightly run records, scripts/ci/visual-map.ts): a changed src/ or
+// packages/ file selects the screens whose map entry holds it, plus the
+// screens of its areas the map does not know yet (new screens). A file no
+// entry holds (a new file) falls back to the area rule below; no readable map:
+// the area rule for everything.
+//
+// --pr (Visual CI on a pull request): never ALL and never more than
+// ONE_SHARD_MAX (one shard). Past the cap, or where the selection is ALL, the
+// run is the selected screens first (map order), then one smoke screen per
+// area not yet covered, cut at ONE_SHARD_MAX; the log names the true radius.
+// The whole set renders nightly on main (.github/workflows/visual-nightly.yml).
 //
 // Rules, per changed file:
 // - ALL (FORCE_ALL): global CSS, fonts, design tokens, tailwind / postcss /
@@ -30,6 +44,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MAP_FILE, parseMap, type ScreenMap } from './visual-map.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -89,7 +104,7 @@ export const FORCE_ALL: readonly RegExp[] = [
   /^e2e\/fixtures\//,
   /^e2e\/visual\/layout-checks(-core)?\.ts$/,
   /^e2e\/visual\/playwright\.visual\.config\.ts$/,
-  /^scripts\/ci\/(visual-select|e2e-areas|e2e-select)\.ts$/,
+  /^scripts\/ci\/(visual-select|visual-map|e2e-areas|e2e-select)\.ts$/,
   /^\.github\/workflows\/visual-ci\.yml$/,
 ];
 
@@ -110,6 +125,7 @@ export const NO_SCREEN: readonly RegExp[] = [
   /(^|\/)__snapshots__\/|\.snap$/,
   /^e2e\/tests\//,
   /^\.github\//,
+  /^e2e\/visual\/screen-files\.json$/,
   /^\.claude\//,
   /^\.(gitignore|nvmrc|npmrc|prettierrc[^/]*|prettierignore|editorconfig|env\.example)$/,
   /^eslint\.config\.[cm]?[jt]s$/,
@@ -343,6 +359,8 @@ export interface VisualInput {
   changedLines: (file: string) => number[];
   /** Built lazily: only src/ or packages/ code needs it. */
   graph: () => GraphView;
+  /** The screen-to-files map (screen-files.json); null or absent: the area rule. */
+  map?: ScreenMap | null | undefined;
 }
 
 export interface VisualSelection {
@@ -364,6 +382,23 @@ export function selectVisual(input: VisualInput): VisualSelection {
   const reasons: string[] = [];
   let all = false;
   let smoke = false;
+  const map = input.map ?? null;
+  // file -> the screens (map keys that still name a screen) that load it.
+  const byFile = new Map<string, string[]>();
+  const mapped = new Set<ScreenDef>();
+  if (map !== null) {
+    const exact = new Map(screens.map((s) => [s.name, s]));
+    const templates = screens
+      .filter((s) => s.name.includes('${'))
+      .map((s) => ({ s, re: new RegExp(`^${nameSource(s.name)}$`) }));
+    for (const [key, files] of Object.entries(map)) {
+      const s = exact.get(key) ?? templates.find((t) => t.re.test(key))?.s;
+      if (s === undefined) continue;
+      mapped.add(s);
+      for (const f of files) byFile.set(f, [...(byFile.get(f) ?? []), key]);
+    }
+  } else reasons.push('screen-files.json missing or unreadable: the area rule');
+  const unmapped = map === null ? [] : screens.filter((s) => !mapped.has(s));
   const force = (why: string): void => {
     all = true;
     reasons.push(`ALL: ${why}`);
@@ -403,6 +438,21 @@ export function selectVisual(input: VisualInput): VisualSelection {
     } else if (NO_SCREEN.some((r) => r.test(f))) {
       continue;
     } else if ((f.startsWith('src/') || f.startsWith('packages/')) && CODE.test(f)) {
+      const holders = map === null ? [] : (byFile.get(f) ?? []);
+      if (holders.length > 0) {
+        holders.forEach((n) => names.add(n));
+        reasons.push(`${f}: ${holders.length} screens load it (screen-files.json)`);
+        if (unmapped.length > 0) {
+          graph ??= input.graph();
+          for (const a of graph.areasOf(f)) {
+            const fresh = unmapped.filter((s) => areaOfScreen(s) === a);
+            fresh.forEach((s) => names.add(s.name));
+            if (fresh.length > 0) reasons.push(`${f}: ${fresh.length} new screens of area ${a}`);
+          }
+        }
+        continue;
+      }
+      if (map !== null) reasons.push(`${f}: in no screen-files.json entry, the area rule`);
       graph ??= input.graph();
       const areas = graph.areasOf(f);
       if (areas.length === 0) {
@@ -435,6 +485,52 @@ export function selectVisual(input: VisualInput): VisualSelection {
   if (smoke) smokeScreens(screens).forEach((n) => names.add(n));
   const targeted = [...names];
   return { all, names: all ? [] : targeted, targeted, reasons };
+}
+
+export interface CiPlan {
+  mode: 'all' | 'some' | 'none';
+  /** The screens to run (mode some). */
+  names: string[];
+  /** How many screens the change can reach (all: every screen). */
+  radius: number;
+}
+
+/**
+ * Visual CI's run. Nightly (pr false): the selection as is, ALL included.
+ * Pull request: never ALL, at most `cap` screens (one shard): the selected
+ * screens first in map order (screens the map lacks after, in spec order),
+ * then one smoke screen per area not yet covered, cut at the cap.
+ */
+export function ciPlan(
+  sel: VisualSelection,
+  screens: readonly ScreenDef[],
+  map: Readonly<ScreenMap> | null,
+  pr: boolean,
+  cap: number = ONE_SHARD_MAX,
+): CiPlan {
+  const radius = sel.all ? screens.length : sel.names.length;
+  if (!pr) {
+    if (sel.all) return { mode: 'all', names: [], radius };
+    return { mode: sel.names.length > 0 ? 'some' : 'none', names: sel.names, radius };
+  }
+  if (!sel.all && sel.names.length <= cap) {
+    return { mode: sel.names.length > 0 ? 'some' : 'none', names: sel.names, radius };
+  }
+  const keys = Object.keys(map ?? {});
+  const rank = (n: string): number => {
+    const k = keys.indexOf(n);
+    if (k >= 0) return k;
+    const s = screenOf(screens, n);
+    return keys.length + (s === undefined ? 1e9 : SCREEN_FILES.indexOf(s.file) * 1e6 + s.start);
+  };
+  const wanted = sel.all ? sel.targeted : sel.names;
+  const first = [...new Set(wanted)].sort((a, b) => rank(a) - rank(b)).slice(0, cap);
+  const covered = new Set(first.map((n) => areaOfScreen(screenOf(screens, n))));
+  const smoke = smokeScreens(screens).filter(
+    (n) => !first.includes(n) && !covered.has(areaOfScreen(screenOf(screens, n))),
+  );
+  const names = [...first, ...smoke].slice(0, cap);
+  return { mode: names.length > 0 ? 'some' : 'none', names, radius };
 }
 
 /**
@@ -543,11 +639,18 @@ export function readScreenDefs(head?: string): ScreenDef[] {
   });
 }
 
+/** The committed screen-to-files map on the new side, else null. */
+export function readMap(head?: string): ScreenMap | null {
+  const text = readSource(MAP_FILE, head);
+  return text === undefined ? null : parseMap(text);
+}
+
 /** Selection for a diff in this repo; an error selects ALL. */
 export async function selectForDiff(
   base: string,
   head?: string,
   files: readonly string[] = changedFiles(base, head),
+  map: ScreenMap | null = readMap(head),
 ): Promise<VisualSelection> {
   try {
     const { buildGraph } = await import('./e2e-select.ts');
@@ -559,6 +662,7 @@ export async function selectForDiff(
     return selectVisual({
       files,
       sources,
+      map,
       changedLines: (f) => diffLines(base, f, head),
       graph: () => {
         const g = buildGraph();
@@ -581,20 +685,29 @@ async function main(argv: string[]): Promise<void> {
   };
   const base = opt('--base') ?? defaultBase();
   const head = opt('--head');
-  const sel = await selectForDiff(base, head);
-  const grep = sel.all ? 'ALL' : sel.names.length > 0 ? screensGrep(sel.names) : '';
-  for (const r of sel.reasons) process.stderr.write(`${r}\n`);
+  const pr = argv.includes('--pr');
+  const map = readMap(head);
+  const sel = await selectForDiff(base, head, undefined, map);
+  const plan = ciPlan(sel, readScreenDefs(head), map, pr);
+  report(plan, sel.reasons, argv);
+}
+
+function report(plan: CiPlan, reasons: readonly string[], argv: readonly string[]): void {
+  const grep = plan.mode === 'all' ? 'ALL' : plan.names.length > 0 ? screensGrep(plan.names) : '';
+  for (const r of reasons) process.stderr.write(`${r}\n`);
   process.stderr.write(
-    sel.all
-      ? `visual-select: ALL (targeted ${sel.targeted.length})\n`
-      : `visual-select: ${sel.names.length} screens: ${[...sel.names].sort().join(' ')}\n`,
+    plan.mode === 'all'
+      ? `visual-select: ALL (${plan.radius} screens)\n`
+      : `visual-select: radius ${plan.radius} screens, running ${plan.names.length} (cap ${ONE_SHARD_MAX} on a PR): ${[...plan.names].sort().join(' ')}\n`,
   );
   process.stdout.write(`${grep}\n`);
   const out = process.env.GITHUB_OUTPUT;
   if (argv.includes('--github-output') && out !== undefined && out !== '') {
-    const mode = sel.all ? 'all' : sel.names.length > 0 ? 'some' : 'none';
-    const count = sel.all ? readScreenDefs(head).length : sel.names.length;
-    appendFileSync(out, `mode=${mode}\ngrep=${sel.all ? '' : grep}\ncount=${count}\n`);
+    const count = plan.mode === 'all' ? plan.radius : plan.names.length;
+    appendFileSync(
+      out,
+      `mode=${plan.mode}\ngrep=${plan.mode === 'all' ? '' : grep}\ncount=${count}\nradius=${plan.radius}\n`,
+    );
   }
 }
 
@@ -603,8 +716,23 @@ if (
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   main(process.argv.slice(2)).catch((err: unknown) => {
-    // An error selects ALL, never nothing.
+    // An error selects ALL, never nothing; on a PR that is the smoke screens.
     process.stderr.write(`visual-select: ${err instanceof Error ? err.message : String(err)}\n`);
+    const argv = process.argv.slice(2);
+    if (argv.includes('--pr')) {
+      try {
+        const sel = { all: true, names: [], targeted: [], reasons: [`ALL: selection error`] };
+        const i = argv.indexOf('--head');
+        const head = i >= 0 ? argv[i + 1] : undefined;
+        const screens = readScreenDefs(head);
+        if (screens.length > 0) {
+          report(ciPlan(sel, screens, null, true), sel.reasons, argv);
+          return;
+        }
+      } catch {
+        // fall through: mode=all, which Visual CI refuses on a PR
+      }
+    }
     process.stdout.write('ALL\n');
     const out = process.env.GITHUB_OUTPUT;
     if (process.argv.includes('--github-output') && out !== undefined && out !== '') {
