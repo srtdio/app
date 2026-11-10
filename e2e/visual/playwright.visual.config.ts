@@ -19,6 +19,9 @@ import { defineConfig, devices } from '@playwright/test';
 // Plus four touch tablet projects (iPad 820x1180 portrait and 1180x820
 // landscape, hasTouch, light and dark) that run only the @tablet shots: the
 // page-mode screens (src/lib/scroll-mode.ts TOUCH_TABLET_QUERY).
+// The parts gallery (gallery.spec.ts, @gallery @laptop-dark) runs in the
+// iphone-* and laptop-* projects, never in ipad-*, and alone in chrome-phone
+// (Chromium, Pixel 7, light): no other screen runs in Chromium.
 // VISUAL_PORT picks the harness port (default 4195).
 const isCI = process.env.CI === 'true';
 const port = Number(process.env.VISUAL_PORT ?? 4195);
@@ -47,10 +50,12 @@ const tablet = {
 const portrait = { ...tablet, viewport: { width: 820, height: 1180 } } as const;
 const landscape = { ...tablet, viewport: { width: 1180, height: 820 } } as const;
 const TABLET = /@tablet/;
+// The parts gallery (gallery.spec.ts) also runs once in Chrome on a phone.
+const chromePhone = { ...devices['Pixel 7'], ...stable } as const;
 
 export default defineConfig({
   testDir: '.',
-  testMatch: ['screens.spec.ts', 'emails.spec.ts'],
+  testMatch: ['screens.spec.ts', 'emails.spec.ts', 'gallery.spec.ts'],
   snapshotPathTemplate: '{testDir}/__screenshots__/{projectName}/{arg}{ext}',
   // e2e/results is gitignored; the html report sits beside, never inside, outputDir.
   outputDir: '../results/visual',
@@ -88,6 +93,7 @@ export default defineConfig({
     { name: 'ipad-portrait-dark', use: { ...portrait, colorScheme: 'dark' }, grep: TABLET },
     { name: 'ipad-landscape-light', use: { ...landscape, colorScheme: 'light' }, grep: TABLET },
     { name: 'ipad-landscape-dark', use: { ...landscape, colorScheme: 'dark' }, grep: TABLET },
+    { name: 'chrome-phone', use: { ...chromePhone, colorScheme: 'light' }, grep: /@gallery/ },
   ],
   webServer: {
     command: `pnpm exec vite --config e2e/harness/vite.config.ts --port ${port} --strictPort`,

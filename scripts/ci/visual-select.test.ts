@@ -17,6 +17,8 @@ import {
   smokeScreens,
   SPEC_FILE,
   ONBOARDING_FILE,
+  GALLERY_FILE,
+  galleryScreenOf,
   type GraphView,
   type VisualInput,
 } from './visual-select.ts';
@@ -354,5 +356,104 @@ describe('visual-select: per screen (screen-files.json) and the PR cap', () => {
   it('screen-files.json itself selects nothing', () => {
     const sel = selectVisual(input({ files: ['e2e/visual/screen-files.json'], map: MAP }));
     expect(sel).toMatchObject({ all: false, names: [] });
+  });
+});
+
+describe('visual-select: the parts gallery (gallery.spec.ts)', () => {
+  // A small gallery.spec.ts: one line per gallery screen.
+  const GALLERY = [
+    "import { test } from '@playwright/test';", // 1
+    '', // 2
+    'const GALLERY: GalleryScreen[] = [', // 3
+    "  { name: 'gallery-Button', url: '/gallery/Button' },", // 4
+    "  { name: 'gallery-Chip', url: '/gallery/Chip' },", // 5
+    "  { name: 'gallery-Tag', url: '/gallery/Tag' },", // 6
+    '];', // 7
+    '', // 8
+    'for (const screen of GALLERY) test(screen.name, async () => {});', // 9
+  ].join('\n');
+  const withGallery = (over: Partial<VisualInput>): VisualInput =>
+    input({
+      sources: {
+        [SPEC_FILE]: SPEC,
+        [ONBOARDING_FILE]: ONBOARDING,
+        [LC]: CHECKS,
+        [GALLERY_FILE]: GALLERY,
+      },
+      ...over,
+    });
+  const all = [...screens, ...parseScreens(GALLERY, GALLERY_FILE)];
+  const MAP = { 'chat-list': ['src/components/ui/Button.tsx'], briefs: ['src/x.tsx'] };
+
+  it('parses one gallery screen per line, url /gallery/<Part>', () => {
+    const own = parseScreens(GALLERY, GALLERY_FILE);
+    expect(own.map((s) => [s.name, s.url, s.start, s.end])).toEqual([
+      ['gallery-Button', '/gallery/Button', 4, 4],
+      ['gallery-Chip', '/gallery/Chip', 5, 5],
+      ['gallery-Tag', '/gallery/Tag', 6, 6],
+    ]);
+    expect(galleryScreenOf('src/components/ui/Chip.tsx')).toBe('gallery-Chip');
+    expect(galleryScreenOf('src/components/ui/Chip.test.tsx')).toBeNull();
+  });
+
+  it("a gallery test's own line selects it; a shared line runs ALL", () => {
+    const own = selectVisual(withGallery({ files: [GALLERY_FILE], changedLines: () => [5] }));
+    expect(own).toMatchObject({ all: false, names: ['gallery-Chip'] });
+    const shared = selectVisual(withGallery({ files: [GALLERY_FILE], changedLines: () => [9] }));
+    expect(shared.all).toBe(true);
+  });
+
+  it('a changed ui part always selects its gallery screen, beside its map screens', () => {
+    const sel = selectVisual(withGallery({ files: ['src/components/ui/Button.tsx'], map: MAP }));
+    expect(sorted(sel.names)).toEqual(['chat-list', 'gallery-Button']);
+    // A ui part with no gallery page yet: no gallery screen.
+    const none = selectVisual(withGallery({ files: ['src/components/ui/Sheet.tsx'], map: MAP }));
+    expect(none.targeted).not.toContain('gallery-Sheet');
+    // Even when the part runs ALL (no area, no map entry), its gallery screen is targeted.
+    const wide = selectVisual(withGallery({ files: ['src/components/ui/Tag.tsx'], map: MAP }));
+    expect(wide.all).toBe(true);
+    expect(wide.targeted).toContain('gallery-Tag');
+  });
+
+  it('a gallery page selects its screen; a shared gallery file every gallery screen', () => {
+    const page = selectVisual(withGallery({ files: ['e2e/gallery/Chip.tsx'] }));
+    expect(page).toMatchObject({ all: false, names: ['gallery-Chip'] });
+    for (const f of ['e2e/gallery/register.ts', 'e2e/gallery/frame.tsx', 'e2e/gallery/New.tsx']) {
+      const sel = selectVisual(withGallery({ files: [f] }));
+      expect(sel.all, f).toBe(false);
+      expect(sorted(sel.names), f).toEqual(['gallery-Button', 'gallery-Chip', 'gallery-Tag']);
+    }
+  });
+
+  it('a gallery baseline selects its screen', () => {
+    const sel = selectVisual(
+      withGallery({ files: ['e2e/visual/__screenshots__/chrome-phone/gallery-Tag.png'] }),
+    );
+    expect(sel).toMatchObject({ all: false, names: ['gallery-Tag'] });
+  });
+
+  it('on a PR the gallery screens go first inside the cap', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `chat-${i}`);
+    const big = [
+      ...parseScreens(
+        ['const SCREENS = [', ...many.map((n) => `  { name: '${n}', url: '/chat/x' },`), '];'].join(
+          '\n',
+        ),
+      ),
+      ...parseScreens(GALLERY, GALLERY_FILE),
+    ];
+    const map = Object.fromEntries(many.map((n) => [n, ['src/a.tsx']]));
+    const sel = {
+      all: false,
+      names: [...many, 'gallery-Tag', 'gallery-Button'],
+      targeted: [],
+      reasons: [],
+    };
+    const plan = ciPlan(sel, big, map, true);
+    expect(plan.names).toHaveLength(ONE_SHARD_MAX);
+    expect(plan.names.slice(0, 2)).toEqual(['gallery-Button', 'gallery-Tag']);
+    // ALL on a PR (a global file): the targeted gallery screen still leads.
+    const wide = selectVisual(withGallery({ files: ['src/components/ui/Tag.tsx'], map: MAP }));
+    expect(ciPlan(wide, all, MAP, true).names[0]).toBe('gallery-Tag');
   });
 });

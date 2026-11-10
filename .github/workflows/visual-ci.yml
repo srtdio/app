@@ -10,6 +10,7 @@ name: Visual CI
 #   The whole set renders once a night on main (visual-nightly.yml, 02:30 IST), which refreshes the baselines and the map through one bot PR
 #   (branch bot/visual-baselines, "Visual baselines refresh").
 # visual-shard: renders the selected screens (iPhone 13 light and dark, 1280x800 light, four ipad-* tablet projects; WebKit, harness, no DB, no secrets)
+#   plus the parts gallery screens (gallery-<Part>) in Chromium on a Pixel 7 (chrome-phone);
 #   and compares each with its committed baseline in e2e/visual/__screenshots__/. Any screen over 0.2% different fails; the diff, actual
 #   and expected images upload as the visual-diffs-1 artifact.
 # visual: the one required check. Passes when the shard succeeded, or when nothing was selected (no shard runs).
@@ -205,6 +206,40 @@ jobs:
           pnpm exec playwright install-deps webkit
           if [ "${{ steps.deb-cache.outputs.cache-hit }}" != 'true' ]; then
             cp /var/cache/apt/archives/*.deb ~/webkit-debs/ 2>/dev/null || true
+          fi
+
+      # The parts gallery also runs in Chromium (chrome-phone project,
+      # playwright.visual.config.ts): its browser and system packages, cached
+      # the same way as WebKit under their own keys.
+      - name: Cache Playwright Chromium
+        id: chromium-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright Chromium
+        if: steps.chromium-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install chromium
+
+      - name: Cache Chromium system packages
+        id: chromium-deb-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/chromium-debs
+          key: chromium-debs-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright Chromium system dependencies
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          mkdir -p ~/chromium-debs
+          if compgen -G "$HOME/chromium-debs/*.deb" > /dev/null; then
+            sudo cp ~/chromium-debs/*.deb /var/cache/apt/archives/
+          fi
+          pnpm exec playwright install-deps chromium
+          if [ "${{ steps.chromium-deb-cache.outputs.cache-hit }}" != 'true' ]; then
+            cp /var/cache/apt/archives/*.deb ~/chromium-debs/ 2>/dev/null || true
           fi
 
       - name: Compare screens with the baselines

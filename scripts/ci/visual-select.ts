@@ -40,6 +40,11 @@
 // - src/ and packages/ code: the screens of every e2e area (scripts/ci/
 //   e2e-areas.ts) whose import closure holds it; an area with no screen adds
 //   one smoke screen per area instead of ALL.
+// - Parts gallery (e2e/visual/gallery.spec.ts): a changed
+//   src/components/ui/<Part>.tsx always adds gallery-<Part>; a changed
+//   e2e/gallery/<Part>.tsx page selects gallery-<Part>, any other e2e/gallery
+//   file (register, frame, fixtures) every gallery screen. On a PR the
+//   gallery screens go first inside the cap.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -50,7 +55,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 export const SPEC_FILE = 'e2e/visual/screens.spec.ts';
 export const ONBOARDING_FILE = 'e2e/visual/onboarding-steps.ts';
-export const SCREEN_FILES = [SPEC_FILE, ONBOARDING_FILE];
+/** The parts gallery (e2e/gallery): one gallery-<Part> screen per registered ui part. */
+export const GALLERY_FILE = 'e2e/visual/gallery.spec.ts';
+export const SCREEN_FILES = [SPEC_FILE, ONBOARDING_FILE, GALLERY_FILE];
+
+/** A ui part file -> its gallery screen name (whether or not the gallery has it yet). */
+export const galleryScreenOf = (file: string): string | null => {
+  const m = /^src\/components\/ui\/(\w+)\.tsx$/.exec(file);
+  return m?.[1] === undefined ? null : `gallery-${m[1]}`;
+};
+
+/** An e2e/gallery page module (e2e/gallery/<Part>.tsx) -> its screen; null for shared gallery files. */
+const galleryPageScreen = (file: string): string | null => {
+  const m = /^e2e\/gallery\/([A-Z]\w*)\.tsx$/.exec(file);
+  return m?.[1] === undefined ? null : `gallery-${m[1]}`;
+};
 export const CHECK_FILES = ['e2e/visual/layout-checks.ts', 'e2e/visual/layout-checks-core.ts'];
 
 /** Most screens a local run renders (pnpm prepush); the full set runs in CI. */
@@ -428,6 +447,14 @@ export function selectVisual(input: VisualInput): VisualSelection {
         break;
       }
       if (!shared) reasons.push(`${f}: the edited screen entries`);
+    } else if (f.startsWith('e2e/gallery/')) {
+      const gallery = screens.filter((s) => s.file === GALLERY_FILE);
+      const own = galleryPageScreen(f);
+      // A page of no gallery screen yet (or a shared file): every gallery screen.
+      const mine = gallery.filter((s) => s.name === own);
+      const hit = mine.length > 0 ? mine : gallery;
+      hit.forEach((s) => names.add(s.name));
+      reasons.push(`${f}: ${hit.length} gallery screens`);
     } else if (CHECK_FILES.includes(f)) {
       changedChecks[f] = input.changedLines(f);
       force(`${f}: layout checks run inside every screen`);
@@ -438,6 +465,11 @@ export function selectVisual(input: VisualInput): VisualSelection {
     } else if (NO_SCREEN.some((r) => r.test(f))) {
       continue;
     } else if ((f.startsWith('src/') || f.startsWith('packages/')) && CODE.test(f)) {
+      const page = galleryScreenOf(f);
+      if (page !== null && screens.some((s) => s.name === page && s.file === GALLERY_FILE)) {
+        names.add(page);
+        reasons.push(`${f}: its gallery page ${page}`);
+      }
       const holders = map === null ? [] : (byFile.get(f) ?? []);
       if (holders.length > 0) {
         holders.forEach((n) => names.add(n));
@@ -517,11 +549,15 @@ export function ciPlan(
     return { mode: sel.names.length > 0 ? 'some' : 'none', names: sel.names, radius };
   }
   const keys = Object.keys(map ?? {});
+  // Gallery screens first (they are cheap and aimed at the changed parts).
   const rank = (n: string): number => {
-    const k = keys.indexOf(n);
-    if (k >= 0) return k;
     const s = screenOf(screens, n);
-    return keys.length + (s === undefined ? 1e9 : SCREEN_FILES.indexOf(s.file) * 1e6 + s.start);
+    const first = s?.file === GALLERY_FILE ? -1e12 : 0;
+    const k = keys.indexOf(n);
+    if (k >= 0) return first + k;
+    return (
+      first + keys.length + (s === undefined ? 1e9 : SCREEN_FILES.indexOf(s.file) * 1e6 + s.start)
+    );
   };
   const wanted = sel.all ? sel.targeted : sel.names;
   const first = [...new Set(wanted)].sort((a, b) => rank(a) - rank(b)).slice(0, cap);
