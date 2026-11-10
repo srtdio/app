@@ -79,7 +79,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Scope freeze: a new ask that arrives while a PR is open goes in a new PR after that one merges, never onto the open PR, unless Shubham says "same PR".
 - Before changing a size, gap or count, grep `e2e/visual/layout-checks*.ts`, `e2e/tests` and `src/__tests__` for the old value and update every check that asserts it in the same commit.
 - A unit test with big data (hundreds of rows) must finish under 1s locally; CI is about 3x slower and times out at 5s.
-- Screenshot-only commits (`e2e/visual/__screenshots__/` only, plus `e2e/visual/screen-files.json`) skip code CI when the push before was green (scripts/ci/screenshot-only.sh). Keep baseline commits screenshot-only: never mix code into them.
+- Screenshot-only commits (`e2e/visual/__screenshots__/` only, plus `e2e/visual/screen-files.json`) skip code CI when the push before was green (scripts/ci/screenshot-only.sh); without the CI App the Visual CI bot commit carries [skip ci] and gets the tested head's checks copied, so nothing runs again. Keep baseline commits screenshot-only: never mix code into them.
 - Shared check files (`e2e/visual/layout-checks*.ts`, `e2e/visual/screens.spec.ts`, `src/__tests__/visual-coverage.test.ts`, playwright configs, `.github/workflows`) change in their own small PR first, merged before feature PRs that rely on them.
 - One PR per prompt. Aim under 400 changed lines per PR, excluding generated files and screenshots. One feature per PR.
 - Never auto-merge a PR.
