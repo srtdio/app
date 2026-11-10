@@ -130,10 +130,7 @@ export interface ListCardProps {
  * One size: 12 + 48 + 12 = 72 (ROW_INSET, ROW_PICTURE, ROW_HEIGHT in ui/layout).
  */
 export function listCardFrame(selected = false): string {
-  return cn(
-    'relative -mx-4 flex h-18 min-w-0 px-4 py-3',
-    selected && 'bg-panel-2',
-  );
+  return cn('relative -mx-4 flex h-18 min-w-0 px-4 py-3', selected && 'bg-panel-2');
 }
 
 /**
@@ -144,8 +141,7 @@ export function listCardFrame(selected = false): string {
 export const LIST_CARD_BODY = 'pointer-events-none relative flex min-w-0 flex-1 items-center gap-3';
 
 /** The picture box: 48 (ROW_PICTURE), never shrinks. */
-export const LIST_CARD_PICTURE =
-  'relative flex h-12 w-12 shrink-0 items-center justify-center';
+export const LIST_CARD_PICTURE = 'relative flex h-12 w-12 shrink-0 items-center justify-center';
 
 /** The rounded-picture (10) squircle a non-person picture sits in; flat. */
 const PICTURE_BOX = 'overflow-hidden rounded-picture';
@@ -170,8 +166,7 @@ export const LIST_CARD_PREVIEW = textRole('secondary', 'min-w-0 flex-1 truncate'
  * row height; line 2 is two lines tall at least, so the row is 72 + 20 = 92:
  * 44 for the preview line under the 20 title line and its 4 step.
  */
-export const LIST_CARD_FRAME_2 =
-  'h-auto min-h-18';
+export const LIST_CARD_FRAME_2 = 'h-auto min-h-18';
 export const LIST_CARD_LINE2_2 = 'flex min-h-11 min-w-0 items-start gap-2';
 // The secondary role's look without its truncate (a cut preview wraps; it never ellipsizes in CSS).
 export const LIST_CARD_PREVIEW_2 = 'min-w-0 flex-1 break-words text-md font-normal text-fg-2';

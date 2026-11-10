@@ -17,11 +17,7 @@ import {
   ROW_PICTURE,
   ROW_TEXT_START,
 } from '@/components/ui/layout';
-import {
-  LIST_CARD_PICTURE,
-  LIST_CARD_SUB_INSET,
-  listCardFrame,
-} from '@/components/ui/ListCard';
+import { LIST_CARD_PICTURE, LIST_CARD_SUB_INSET, listCardFrame } from '@/components/ui/ListCard';
 import { CHIP_FACE_SIZE, CHIP_HIT } from '@/components/ui/Chip';
 import { Avatar } from '@/components/ui/Avatar';
 import { PLAN_DAY_PAD, PLAN_DAY_STACK } from '@/components/chat/PlanScreen';

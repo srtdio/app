@@ -207,8 +207,7 @@ export const ACTIVITY_TOPBAR_PILL_TEXT =
   'inline-flex shrink-0 [&_[data-count-badge]]:text-pair-pill';
 
 /** The count pill on a filled box: 16 tall (PAIR_PILL_HEIGHT; CountBadge on-fill). */
-export const ACTIVITY_TOPBAR_PILL =
-  'h-4 min-w-4 px-1 text-xs';
+export const ACTIVITY_TOPBAR_PILL = 'h-4 min-w-4 px-1 text-xs';
 
 /** The pulse: the ring scales out and back, 3 times, 1.4 s each (wipe + slow beats). */
 export const PULSE_CYCLE_MS = DUR_WIPE_MS + DUR_SLOW_MS;
