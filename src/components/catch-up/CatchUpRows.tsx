@@ -258,6 +258,11 @@ export function MessageRow(props: {
           </Text>
         </div>
       ) : null}
+      {row.threadRoot !== undefined ? (
+        <Text role="secondary" as="p" data-catch-up-in-thread="" className="truncate">
+          Replied in thread: {row.threadRoot.text}
+        </Text>
+      ) : null}
       {props.onOpenThread !== null ? (
         <PressableRow
           type="button"

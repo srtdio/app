@@ -47,9 +47,11 @@ vi.mock('@/components/catch-up/CatchUpReply', () => ({
   ),
 }));
 
-import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
+import { CatchUpScreen, boxDraft, cardThreadTarget } from '@/components/catch-up/CatchUpScreen';
+import { snapToRowTop } from '@/components/catch-up/CatchUpCard';
 import { CatchUpEnd } from '@/components/catch-up/CatchUpEnd';
-import type { CatchUpBodyResult } from '@/lib/catch-up/body';
+import type { CatchUpBody, CatchUpBodyResult, CatchUpMessageRow } from '@/lib/catch-up/body';
+import { EMPTY_DRAFT } from '@/lib/catch-up/types';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import { cardOf, entry } from '@/lib/catch-up/test-fixtures';
 import { endLine, leftLabel } from '@/lib/catch-up/copy';
@@ -359,5 +361,61 @@ describe('catch-up ink, never green (addendum C)', () => {
     expect(light).toBeDefined();
     expect(dark).toBeDefined();
     expect(light).not.toBe(dark);
+  });
+});
+
+describe('catch up thread sheet (10 Nov 2026)', () => {
+  const message = (id: string, createdAt: string, rootId?: string): CatchUpMessageRow => ({
+    kind: 'message',
+    id,
+    author: { id: 'u2', name: 'Ana', avatarUrl: null },
+    createdAt,
+    text: id,
+    replyCount: 0,
+    ...(rootId !== undefined ? { threadRoot: message(rootId, '2026-11-08T08:00:00Z') } : {}),
+  });
+  const withRows = (rows: CatchUpMessageRow[]): CatchUpBody => ({
+    title: 'Post',
+    context: null,
+    rows,
+    firstNewId: null,
+    hasOlder: false,
+    threads: true,
+    latestReplyId: null,
+  });
+
+  it("the card box posts into the newest thread-reply row's thread", () => {
+    const item = card('p1');
+    const body = withRows([
+      message('c1', '2026-11-08T09:00:00Z'),
+      message('r1', '2026-11-08T10:00:00Z', 'root-a'),
+      message('r2', '2026-11-08T11:00:00Z', 'root-b'),
+    ]);
+    expect(cardThreadTarget(item, body)).toEqual({
+      kind: 'comment',
+      entityType: 'post',
+      entityId: 'p1',
+      parentCommentId: 'root-b',
+    });
+    expect(cardThreadTarget(item, withRows([message('c1', '2026-11-08T09:00:00Z')]))).toBeNull();
+    expect(cardThreadTarget(item, null)).toBeNull();
+  });
+
+  it('the draft moves into the sheet box while it is open and back when it closes', () => {
+    const draft = { text: 'Looks good @ana', picks: [{ userId: 'u2', name: 'ana' }] };
+    // Open: the sheet box holds it, the card box is empty.
+    expect(boxDraft(true, true, draft)).toBe(draft);
+    expect(boxDraft(false, true, draft)).toEqual(EMPTY_DRAFT);
+    // Closed without sending: back in the card box.
+    expect(boxDraft(false, false, draft)).toBe(draft);
+    expect(boxDraft(true, false, draft)).toEqual(EMPTY_DRAFT);
+  });
+
+  it('the fill rule never leaves a half-cut row at the top', () => {
+    const tops = [0, 72, 144, 216, 288];
+    expect(snapToRowTop(100, tops)).toBe(72);
+    expect(snapToRowTop(144, tops)).toBe(144);
+    expect(snapToRowTop(0, tops)).toBe(0);
+    expect(snapToRowTop(40, [])).toBe(40);
   });
 });

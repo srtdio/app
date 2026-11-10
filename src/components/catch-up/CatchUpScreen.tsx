@@ -7,13 +7,15 @@
 // there is nothing to undo; hidden while typing and inside a thread). The
 // bottom row: Keep unread (Button) | Mark as read (Main, ink, never green).
 // The card swipes on X with a lean (never Y); the next card settles in. A
-// tap on a message's text or its "N replies" pushes the thread in full screen
-// and "<" returns to the exact card state (scroll kept). Escape closes the
-// menu, then the thread, then catch up. The first card paints from what
+// tap on a message's text or its "N replies" raises the thread sheet over the
+// card (which stays put behind a scrim) with its reply field focused; "<", the
+// scrim or system Back lowers it. Escape closes the menu, then the thread
+// sheet, then catch up. The first card paints from what
 // Activity holds; only the current and next card are read, batched, in the
 // background. Read only: no edit, no resolve.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
@@ -26,16 +28,7 @@ import { useModalFocus } from '@/lib/modal-focus';
 import { copyText } from '@/lib/clipboard';
 import { env } from '@/lib/env';
 import { appPresignCache } from '@/lib/shared-presign';
-import {
-  dialogIn,
-  dialogOut,
-  itemIn,
-  pushBack,
-  pushIn,
-  riseIn,
-  riseOut,
-  type Played,
-} from '@/lib/motion';
+import { dialogIn, dialogOut, itemIn, riseIn, riseOut, type Played } from '@/lib/motion';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -58,7 +51,15 @@ import { createComment } from '@srtdio/comments';
 import { planItemCommentCreate } from '@srtdio/rpc';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { newMessageId } from '@/lib/chat/message-id';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { useCatchUp } from '@/lib/catch-up/use-catch-up';
+import {
+  THREAD_TIP_TEXT,
+  THREAD_TIP_TEXT_LAPTOP,
+  dismissThreadTip,
+  noteThreadTipShown,
+  threadTipVisible,
+} from '@/lib/catch-up/tip';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import {
   readCatchUpBodies,
@@ -70,7 +71,12 @@ import {
   type CatchUpRow,
   type CatchUpThread,
 } from '@/lib/catch-up/body';
-import type { CatchUpReplyTarget, CatchUpSend } from '@/lib/catch-up/types';
+import {
+  EMPTY_DRAFT,
+  type CatchUpDraft,
+  type CatchUpReplyTarget,
+  type CatchUpSend,
+} from '@/lib/catch-up/types';
 import { KEEP_UNREAD, MARK_AS_READ, UNDO, leftLabel } from '@/lib/catch-up/copy';
 import {
   flyOut,
@@ -154,6 +160,35 @@ export function cardReplyTarget(item: CatchUpItem): CatchUpReplyTarget {
   }
 }
 
+/** Slack's way: a post/brief card showing thread replies posts into the newest one's thread. Pure. */
+export function cardThreadTarget(
+  item: CatchUpItem,
+  body: CatchUpBody | null,
+): CatchUpReplyTarget | null {
+  let newest: CatchUpMessageRow | null = null;
+  for (const row of body?.rows ?? []) {
+    if (
+      row.kind === 'message' &&
+      row.threadRoot !== undefined &&
+      row.createdAt >= (newest?.createdAt ?? '')
+    )
+      newest = row;
+  }
+  const root = newest?.threadRoot;
+  if ((item.kind !== 'post' && item.kind !== 'brief') || root === undefined) return null;
+  return {
+    kind: 'comment',
+    entityType: item.kind,
+    entityId: item.entityId,
+    parentCommentId: root.id,
+  };
+}
+
+/** The movable draft sits in the sheet's box while it is open, else in the card's. Pure. */
+export function boxDraft(sheetBox: boolean, sheetOpen: boolean, draft: CatchUpDraft): CatchUpDraft {
+  return sheetBox === sheetOpen ? draft : EMPTY_DRAFT;
+}
+
 /** The reply box's hint. Pure. */
 export function replyHint(item: CatchUpItem, inThread: boolean): string {
   if (inThread || item.kind === 'chat-thread') return 'Reply in thread';
@@ -214,6 +249,11 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const [thread, setThread] = useState<OpenThread | null>(null);
   const [lightbox, setLightbox] = useState<{ pictures: string[]; index: number } | null>(null);
   const [retryTick, setRetryTick] = useState(0);
+  // The card box's text + @ picks: they move into the thread sheet's box and back.
+  const [draft, setDraft] = useState<CatchUpDraft>(EMPTY_DRAFT);
+  const [tipOn, setTipOn] = useState(() => threadTipVisible(currentUserId));
+  const tipNotedRef = useRef(false);
+  const threadInputRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
@@ -226,7 +266,6 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   const playedRef = useRef<Played | null>(null);
   const requestedRef = useRef(new Set<string>());
   const olderBusyRef = useRef(new Set<string>());
-  const cardScrollRef = useRef(0);
   const closingRef = useRef(false);
 
   useModalFocus(rootRef, true, { initial: () => backRef.current });
@@ -280,6 +319,19 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     if (current !== null && currentBody === 'skip') cu.skip(current.key);
   }, [current, currentBody, cu]);
 
+  // The thread tip: on cards whose rows open threads, never while typing;
+  // counted once per catch-up open, never per card render.
+  const tipShown = tipOn && typeof currentBody === 'object' && currentBody.threads && !typing;
+  useEffect(() => {
+    if (!tipShown || tipNotedRef.current) return;
+    tipNotedRef.current = true;
+    noteThreadTipShown(currentUserId);
+  }, [tipShown, currentUserId]);
+  const dropTip = (): void => {
+    setTipOn(false);
+    dismissThreadTip(currentUserId);
+  };
+
   // A new card rests unmoved (drop the last card's held fly-out pose), then settles in.
   useLayoutEffect(() => {
     playedRef.current?.cancel();
@@ -313,12 +365,18 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     [flying, current, bodies, cu],
   );
 
-  // The thread: push in (X) on a phone, instant on a laptop; "<" pushes back.
+  // A new card starts with an empty box (the old card's draft stays behind).
+  useEffect(() => setDraft(EMPTY_DRAFT), [current?.key]);
+
+  // The thread sheet: rises (Y only) over the card on a phone, instant on a
+  // laptop; it paints at once (Bone rows) and its reply field takes focus in
+  // the same tap (iOS opens the keyboard only then).
   const openThread = useCallback(
     (root: CatchUpMessageRow, kind: 'chat' | 'comment', target: CatchUpReplyTarget): void => {
       if (current === null) return;
-      cardScrollRef.current = cardBodyRef.current?.scrollTop ?? 0;
-      setThread({ cardKey: current.key, root, kind, target, data: null });
+      flushSync(() => setThread({ cardKey: current.key, root, kind, target, data: null }));
+      threadInputRef.current?.focus({ preventScroll: true });
+      dropTip();
       void readCatchUpThread(supabase, {
         workspaceId,
         kind,
@@ -330,28 +388,32 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         ),
       );
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [current, workspaceId],
   );
   useLayoutEffect(() => {
-    if (thread !== null && thread.data === null && !laptop) pushIn(threadRef.current);
+    if (thread !== null && thread.data === null && !laptop) riseIn(threadRef.current);
     // Only when a thread opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread?.root.id]);
-  const closeThread = useCallback((): void => {
-    const finish = (): void => setThread(null);
-    if (laptop) {
-      finish();
-      return;
-    }
-    const played = pushBack(threadRef.current);
-    if (played.instant) finish();
-    else void played.done.then(finish);
-  }, [laptop]);
-  // Back in the card: the exact scroll it had.
-  useLayoutEffect(() => {
-    if (thread === null && cardBodyRef.current !== null)
-      cardBodyRef.current.scrollTop = cardScrollRef.current;
-  }, [thread]);
+  const closeThread = useCallback(
+    (then?: () => void): void => {
+      const finish = (): void => {
+        setThread(null);
+        then?.();
+      };
+      if (laptop) {
+        finish();
+        return;
+      }
+      const played = riseOut(threadRef.current);
+      if (played.instant) finish();
+      else void played.done.then(finish);
+    },
+    [laptop],
+  );
+  // Phone system Back closes the sheet: one history step.
+  useHistoryStep(!laptop && thread !== null, 'catchUpThread', () => closeThread());
 
   const retryThread = (): void => {
     if (thread === null) return;
@@ -588,10 +650,12 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
 
   const hideKeyboard = (): void => {
     inputRef.current?.blur();
+    threadInputRef.current?.blur();
     setTyping(false);
   };
   const typingRead = (): void => {
     inputRef.current?.blur();
+    threadInputRef.current?.blur();
     go('read');
   };
 
@@ -637,33 +701,21 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   // Undo only after a decision on a card in this session, inside its window;
   // never before the first decision, after the undo, while typing or in a thread.
   const undoShown = cu.canUndo && !phoneTyping && !inThread;
-  const barTitle = cu.done ? '' : inThread ? null : leftLabel(cu.left);
   const bar = (
     <div data-catch-up-bar="" className={cn(CATCH_UP_BAR_CLASS, laptop && 'pt-0')}>
       <IconButton
-        label={inThread ? 'Back to the card' : 'Close catch up'}
+        label="Close catch up"
         buttonRef={backRef}
         data-catch-up-back=""
-        onClick={inThread ? closeThread : close}
+        onClick={close}
         className={CATCH_UP_ROUND_KEY}
       >
         <IconChevronLeft size={ICON_SIZE.control} />
       </IconButton>
       <div className="flex min-w-0 flex-1 flex-col items-center justify-center text-center">
-        {barTitle !== null ? (
-          <Text role="heading" as="h1" data-catch-up-left="" className="truncate font-semibold">
-            {barTitle}
-          </Text>
-        ) : (
-          <>
-            <Text role="label" as="h1" data-catch-up-thread-title="">
-              Thread
-            </Text>
-            <Text role="secondary" className="max-w-full truncate text-fg-3">
-              {menuTitle()}
-            </Text>
-          </>
-        )}
+        <Text role="heading" as="h1" data-catch-up-left="" className="truncate font-semibold">
+          {cu.done ? '' : leftLabel(cu.left)}
+        </Text>
       </div>
       <IconButton
         label={UNDO}
@@ -697,7 +749,8 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     const key = current.key;
     const raw = bodies.get(key);
     const ready = raw !== undefined && raw !== 'skip' && raw !== 'error' ? raw : null;
-    const cardTarget = cardReplyTarget(current);
+    const inCardThread = cardThreadTarget(current, ready);
+    const cardTarget = inCardThread ?? cardReplyTarget(current);
     const threadKey = thread !== null ? `${key}#${thread.root.id}` : key;
     const replyFor = (target: CatchUpReplyTarget, sentKey: string, hint: string): ReactElement => (
       <CatchUpReply
@@ -709,27 +762,19 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         target={target}
         onSend={(payload) => send(sentKey, target, payload)}
         onFocusChange={setTyping}
-        inputRef={inputRef}
+        inputRef={sentKey !== key ? threadInputRef : inputRef}
+        draft={boxDraft(sentKey !== key, inThread, draft)}
+        onDraftChange={(sentKey !== key) === inThread ? setDraft : undefined}
       />
     );
+    const decide = (decision: 'keep' | 'read'): void => {
+      if (inThread) closeThread(() => goRef.current(decision));
+      else go(decision);
+    };
     body = (
       <>
-        {inThread && thread !== null ? (
-          <CatchUpThreadView
-            viewRef={threadRef}
-            root={thread.root}
-            thread={thread.data}
-            sent={sent.get(threadKey) ?? []}
-            selfName={props.selfName}
-            timeZone={props.timeZone}
-            reply={replyFor(thread.target, threadKey, replyHint(current, true))}
-            onRetryLoad={retryThread}
-            onRetrySend={(id) => retrySend(threadKey, id)}
-            reactionsOf={current}
-          />
-        ) : null}
         <div
-          className={cn('flex min-h-0 flex-1 flex-col px-3 pb-3 pt-1', inThread && 'hidden')}
+          className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-1"
           aria-hidden={inThread || undefined}
         >
           <CatchUpCard
@@ -744,7 +789,12 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             tint={tint}
             typing={phoneTyping ? { onHideKeyboard: hideKeyboard, onRead: typingRead } : null}
             menu={menuFor(current, ready)}
-            reply={replyFor(cardTarget, key, replyHint(current, false))}
+            reply={replyFor(cardTarget, key, replyHint(current, inCardThread !== null))}
+            tip={
+              tipShown
+                ? { text: laptop ? THREAD_TIP_TEXT_LAPTOP : THREAD_TIP_TEXT, onDismiss: dropTip }
+                : null
+            }
             onRetrySend={(id) => retrySend(key, id)}
             onRetryLoad={() => retryLoad(current)}
             onOpenThread={(root) =>
@@ -803,46 +853,99 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             }}
           />
         </div>
-        {!phoneTyping && !inThread ? (
+        {inThread ? (
+          // The scrim covers the whole page (the top bar too); a tap closes the sheet.
           <div
-            data-catch-up-actions=""
-            className="grid shrink-0 grid-cols-2 gap-3 px-3 pb-[max(16px,env(safe-area-inset-bottom))]"
-          >
-            <Button
-              type="button"
-              variant="secondary"
-              data-catch-up-keep=""
-              disabled={flying}
-              onClick={() => go('keep')}
-            >
-              {KEEP_UNREAD}
-              {laptop ? (
-                <span aria-hidden="true" className={textRole('meta')}>
-                  ←
-                </span>
-              ) : null}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              data-catch-up-read=""
-              disabled={flying}
-              {...allRead.handlers}
-              onContextMenu={(event) => event.preventDefault()}
-              onClick={() => {
-                if (allRead.consumeClickSuppression()) return;
-                go('read');
-              }}
-            >
-              {MARK_AS_READ}
-              {laptop ? (
-                <span aria-hidden="true" className={textRole('meta', 'text-current')}>
-                  →
-                </span>
-              ) : null}
-            </Button>
-          </div>
+            aria-hidden="true"
+            data-catch-up-scrim=""
+            className="absolute inset-0 z-sticky bg-scrim"
+            onClick={() => closeThread()}
+          />
         ) : null}
+        <div
+          ref={threadRef}
+          data-catch-up-thread-sheet={inThread ? '' : undefined}
+          className={
+            inThread
+              ? 'catch-up-card absolute inset-x-0 bottom-0 top-16 z-nav flex flex-col rounded-t-2xl border-t'
+              : 'contents'
+          }
+        >
+          {inThread && thread !== null ? (
+            <>
+              <div className="flex h-14 shrink-0 items-center gap-2 px-2">
+                <IconButton
+                  label="Back to the card"
+                  data-catch-up-thread-back=""
+                  onClick={() => closeThread()}
+                  className={CATCH_UP_ROUND_KEY}
+                >
+                  <IconChevronLeft size={ICON_SIZE.control} />
+                </IconButton>
+                <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+                  <Text role="label" as="h2" data-catch-up-thread-title="">
+                    Thread
+                  </Text>
+                  <Text role="secondary" className="max-w-full truncate text-fg-3">
+                    {menuTitle()}
+                  </Text>
+                </div>
+                <span aria-hidden="true" className="w-12 shrink-0" />
+              </div>
+              <CatchUpThreadView
+                root={thread.root}
+                thread={thread.data}
+                sent={sent.get(threadKey) ?? []}
+                selfName={props.selfName}
+                timeZone={props.timeZone}
+                reply={replyFor(thread.target, threadKey, replyHint(current, true))}
+                onRetryLoad={retryThread}
+                onRetrySend={(id) => retrySend(threadKey, id)}
+                reactionsOf={current}
+              />
+            </>
+          ) : null}
+          {!phoneTyping ? (
+            <div
+              data-catch-up-actions=""
+              className="grid shrink-0 grid-cols-2 gap-3 px-3 pb-[max(16px,env(safe-area-inset-bottom))]"
+            >
+              <Button
+                type="button"
+                variant="secondary"
+                data-catch-up-keep=""
+                disabled={flying}
+                onClick={() => decide('keep')}
+              >
+                {KEEP_UNREAD}
+                {laptop ? (
+                  <span aria-hidden="true" className={textRole('meta')}>
+                    ←
+                  </span>
+                ) : null}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                data-catch-up-read=""
+                disabled={flying}
+                {...allRead.handlers}
+                onContextMenu={(event) => event.preventDefault()}
+                onClick={() => {
+                  if (allRead.consumeClickSuppression()) return;
+                  decide('read');
+                }}
+              >
+                {MARK_AS_READ}
+                {laptop ? (
+                  <span aria-hidden="true" className={textRole('meta', 'text-current')}>
+                    →
+                  </span>
+                ) : null}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </>
     );
   }

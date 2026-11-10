@@ -1,3 +1,5 @@
+import type { MentionPick } from '@/lib/chat/mentions';
+
 // Shared catch-up contracts between the screen (owns every write) and the
 // reply box (owns the field, the + tray, @, the mic and the voice draft).
 
@@ -29,3 +31,11 @@ export type CatchUpReplyTarget =
       parentCommentId: string | null;
     }
   | { kind: 'plan-comment'; itemId: string };
+
+/** A reply box's movable draft (text + @ picks); it moves into the thread sheet and back. */
+export interface CatchUpDraft {
+  text: string;
+  picks: readonly MentionPick[];
+}
+
+export const EMPTY_DRAFT: CatchUpDraft = { text: '', picks: [] };

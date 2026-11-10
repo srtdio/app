@@ -46,6 +46,8 @@ export interface CatchUpMessageRow {
   replyCount: number;
   /** A comment on words the caption no longer has: the old words. */
   earlierCaption?: string | null;
+  /** A reply drawn on its card: the thread it sits in ("Replied in thread: ..."). */
+  threadRoot?: CatchUpMessageRow;
 }
 
 /** One feedback point. */
@@ -229,16 +231,24 @@ export function commentRows(
       });
       continue;
     }
-    out.push({
-      kind: 'message',
-      id: c.id,
-      author: nameOf(workspaceId, c.author_user_id),
-      createdAt: c.created_at,
-      text: cleanText(workspaceId, c.body),
-      replyCount: replyCounts.get(c.id) ?? 0,
-    });
+    out.push(messageOf(workspaceId, c, replyCounts));
   }
   return out;
+}
+
+function messageOf(
+  workspaceId: string,
+  c: CommentRowLite,
+  counts: ReadonlyMap<string, number>,
+): CatchUpMessageRow {
+  return {
+    kind: 'message',
+    id: c.id,
+    author: nameOf(workspaceId, c.author_user_id),
+    createdAt: c.created_at,
+    text: cleanText(workspaceId, c.body),
+    replyCount: counts.get(c.id) ?? 0,
+  };
 }
 
 /**
@@ -322,6 +332,88 @@ async function replyCountsFor(
   return counts;
 }
 
+// Top-level comments, one query per entity in parallel, so a busy item never
+// pushes another's rows out of a shared limit. Bounded, not N+1: the bodies
+// read only ever gets the current and next card (<= 2 entities, <= 2 queries).
+export async function topLevelComments(
+  client: Client,
+  entityIds: readonly string[],
+): Promise<{ data: CommentRowLite[]; error: unknown }> {
+  const all = await Promise.all(
+    entityIds.map((id) =>
+      client
+        .from('comments')
+        .select(COMMENT_COLUMNS)
+        .eq('entity_id', id)
+        .is('parent_comment_id', null)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(CATCH_UP_PAGE),
+    ),
+  );
+  const failed = all.find((r) => r.error !== null);
+  return {
+    data: all.flatMap((r) => (r.data ?? []) as CommentRowLite[]),
+    error: failed?.error ?? null,
+  };
+}
+
+/** Unread post/brief entries' comment ids not drawn as top-level rows. Pure. */
+export function threadReplyIds(
+  items: readonly CatchUpItem[],
+  drawn: readonly { id: string }[],
+): string[] {
+  const shown = new Set(drawn.map((c) => c.id));
+  const ids = items
+    .filter((i) => i.kind === 'post' || i.kind === 'brief')
+    .flatMap((i) => i.entries.filter((e) => e.readAt === null && !isOwnEntry(e, null)))
+    .flatMap((e) => (e.commentId !== null && !shown.has(e.commentId) ? [e.commentId] : []));
+  return [...new Set(ids)];
+}
+
+// The replies by id (ONE IN read), kept when inside a thread; roots not in
+// `have` in ONE more IN read, their reply counts beside it.
+async function threadRepliesFor(
+  client: Client,
+  ids: string[],
+  have: readonly CommentRowLite[],
+): Promise<{ replies: CommentRowLite[]; roots: CommentRowLite[]; counts: Map<string, number> }> {
+  const none = { replies: [], roots: [], counts: new Map<string, number>() };
+  if (ids.length === 0) return none;
+  const res = await client
+    .from('comments')
+    .select(COMMENT_COLUMNS)
+    .in('id', ids)
+    .is('deleted_at', null);
+  if (res.error !== null) return none;
+  const replies = ((res.data ?? []) as CommentRowLite[]).filter(
+    (c) => c.parent_comment_id !== null,
+  );
+  const known = new Set(have.map((c) => c.id));
+  const missing = [...new Set(replies.map((c) => c.parent_comment_id ?? ''))].filter(
+    (id) => !known.has(id),
+  );
+  if (missing.length === 0) return { ...none, replies };
+  const [roots, counts] = await Promise.all([
+    client.from('comments').select(COMMENT_COLUMNS).in('id', missing).is('deleted_at', null),
+    replyCountsFor(client, 'comments', missing),
+  ]);
+  return { replies, roots: (roots.data ?? []) as CommentRowLite[], counts };
+}
+
+/** One message row per thread reply, its root attached (gone root: none). Pure. */
+export function threadReplyRows(
+  workspaceId: string,
+  parts: Pick<BodyParts, 'threadReplies' | 'threadRoots' | 'counts'>,
+): CatchUpMessageRow[] {
+  return (parts.threadReplies ?? []).flatMap((c) => {
+    const root = parts.threadRoots?.get(c.parent_comment_id ?? '');
+    if (root === undefined) return [];
+    const row = messageOf(workspaceId, c, new Map());
+    return [{ ...row, threadRoot: messageOf(workspaceId, root, parts.counts) }];
+  });
+}
+
 /**
  * The bodies of `items` (the current and next cards), by item key. One read
  * per kind across both cards. `zone` is the workspace zone (due words).
@@ -381,14 +473,7 @@ export async function readCatchUpBodies(
               .order('attached_at', { ascending: true })
           : Promise.resolve(null),
         commentEntityIds.length > 0
-          ? client
-              .from('comments')
-              .select(COMMENT_COLUMNS)
-              .in('entity_id', commentEntityIds)
-              .is('parent_comment_id', null)
-              .is('deleted_at', null)
-              .order('created_at', { ascending: false })
-              .limit(CATCH_UP_PAGE * commentEntityIds.length)
+          ? topLevelComments(client, commentEntityIds)
           : Promise.resolve(null),
         itemIds.length > 0
           ? client
@@ -417,7 +502,7 @@ export async function readCatchUpBodies(
       ...new Set((planItems?.data ?? []).flatMap((r) => (r.plan_id !== null ? [r.plan_id] : []))),
     ];
     const commentRowsAll = (comments?.data ?? []) as CommentRowLite[];
-    const [plans, counts] = await Promise.all([
+    const [plans, counts, inThread] = await Promise.all([
       planIds.length > 0
         ? client.from('plans').select('id, title').in('id', planIds)
         : Promise.resolve(null),
@@ -426,10 +511,15 @@ export async function readCatchUpBodies(
         'comments',
         commentRowsAll.map((c) => c.id),
       ),
+      threadRepliesFor(client, threadReplyIds(items, commentRowsAll), commentRowsAll),
     ]);
+    for (const [id, n] of inThread.counts) counts.set(id, n);
     const authors = [
       ...new Set([
-        ...commentRowsAll.flatMap((c) => [c.author_user_id, ...parseMentions(c.body)]),
+        ...[...commentRowsAll, ...inThread.replies, ...inThread.roots].flatMap((c) => [
+          c.author_user_id,
+          ...parseMentions(c.body),
+        ]),
         ...((planComments?.data ?? []) as PlanCommentLite[]).flatMap((c) => [
           ...(c.author_user_id !== null ? [c.author_user_id] : []),
           ...parseMentions(c.body),
@@ -484,6 +574,10 @@ export async function readCatchUpBodies(
           planTitle,
           pictures: picturesBy.get(item.entityId) ?? { images: [], video: null },
           comments: commentRowsAll.filter((c) => c.entity_id === item.entityId),
+          threadReplies: inThread.replies.filter((c) => c.entity_id === item.entityId),
+          threadRoots: new Map(
+            [...commentRowsAll, ...inThread.roots].map((c) => [c.id, c] as const),
+          ),
           planComments: ((planComments?.data ?? []) as PlanCommentLite[]).filter(
             (c) => c.item_id === item.entityId,
           ),
@@ -543,6 +637,9 @@ interface BodyParts {
   comments: CommentRowLite[];
   planComments: PlanCommentLite[];
   counts: ReadonlyMap<string, number>;
+  /** Unread thread replies and their roots by id. */
+  threadReplies?: readonly CommentRowLite[];
+  threadRoots?: ReadonlyMap<string, CommentRowLite>;
 }
 
 /** One non-chat card's body from its read rows; 'skip' when gone or hidden. Pure. */
@@ -572,6 +669,7 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
             text: caption,
           };
     rows = commentRows(workspaceId, [...parts.comments].reverse(), parts.counts);
+    rows.push(...threadReplyRows(workspaceId, parts));
     hasOlder = parts.comments.length >= CATCH_UP_PAGE;
   } else if (item.kind === 'brief') {
     const brief = parts.brief;
@@ -585,6 +683,7 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
       text: foldNewlines(brief.objective ?? ''),
     };
     rows = commentRows(workspaceId, [...parts.comments].reverse(), parts.counts);
+    rows.push(...threadReplyRows(workspaceId, parts));
     hasOlder = parts.comments.length >= CATCH_UP_PAGE;
   } else {
     const planItem = parts.planItem;
