@@ -29,6 +29,7 @@ import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { taskTitleFrom } from '@/lib/comment-tasks';
 import { useMentionCandidates } from '@/lib/workspace-members';
 import { useWorkspace } from '@/lib/workspace-context';
+import { safeTimeZone } from '@/lib/time';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import type { CatchUpMessageRow } from '@/lib/catch-up/body';
 
@@ -135,7 +136,7 @@ function ChatTasks(props: {
       seenMs={null}
       focusTaskId={null}
       prefill={props.prefill}
-      timeZone={props.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
+      timeZone={safeTimeZone(props.timeZone)}
       weekStartDay={workspaces.find((w) => w.id === workspaceId)?.week_start_day ?? 1}
     />
   );
@@ -196,8 +197,9 @@ export function useCatchUpActions(input: {
   const keys = t !== null ? actionKeysOf(t, roster) : { tasks: false, forward: false };
   const channel = t !== null ? roster.find((c) => c.channelId === t.item.entityId) : undefined;
   const link = t !== null ? input.linkOf(t.item) : null;
-  const copied = (ok: boolean, word: string): void =>
+  const copied = (ok: boolean, word: string): void => {
     toast?.show(ok ? { title: `${word} copied` } : { title: COPY_FAILED, tone: 'error' });
+  };
   const layer = (
     <>
       <MessageActionMenu

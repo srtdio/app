@@ -15,7 +15,8 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ComponentType } from 'react';
 import type { HTMLAttributes, ReactElement, ReactNode, Ref, UIEvent } from 'react';
 import { cn } from '@/lib/cn';
-import { Text, textRole } from '@/components/ui/Text';
+import { Text } from '@/components/ui/Text';
+import { Tag } from '@/components/ui/Tag';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -134,19 +135,12 @@ export function stickerOf(kind: CatchUpItem['kind']): {
   }
 }
 
-/** The solid kind sticker (ink: black in light, white in dark; never grey, never faded). */
+/** The solid kind sticker (ui/Tag, ink fill: black in light, white in dark; never grey, never faded). */
 export function KindSticker(props: { kind: CatchUpItem['kind'] }): ReactElement {
   const { label, Icon } = stickerOf(props.kind);
   return (
-    <span
-      data-catch-up-sticker={props.kind}
-      className={textRole(
-        'section',
-        'mr-1 flex h-5 shrink-0 items-center gap-1 rounded-md bg-accent px-2 text-xs text-accent-fg',
-      )}
-    >
-      <Icon size={ICON_SIZE.inline} />
-      {label}
+    <span data-catch-up-sticker={props.kind} className="mr-1 flex shrink-0">
+      <Tag label={label} icon={Icon} className="bg-accent font-semibold uppercase text-accent-fg" />
     </span>
   );
 }
@@ -223,7 +217,6 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
     placedRef.current = true;
     place(el);
     // Once per card; place reads only refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
   const placed = ready !== null;
   useEffect(() => {
@@ -237,7 +230,6 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
     watch.observe(list);
     return () => watch.disconnect();
     // Once the rows list exists; place reads only refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placed]);
 
   // Older rows above: keep the reading position (add what grew above).

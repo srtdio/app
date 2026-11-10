@@ -343,7 +343,8 @@ export function MessageRow(props: {
             : undefined
         }
         onClickCapture={(event) => {
-          if (props.onHold !== undefined && press.consumeClickSuppression()) event.stopPropagation();
+          if (props.onHold !== undefined && press.consumeClickSuppression())
+            event.stopPropagation();
         }}
         className="flex min-w-0 flex-col gap-1"
       >
@@ -363,12 +364,7 @@ export function MessageRow(props: {
           text
         )}
         {link !== null ? (
-          <LinkPreviewCard
-            url={link}
-            size="compact"
-            tone="plain"
-            className="w-full max-w-sm"
-          />
+          <LinkPreviewCard url={link} size="compact" tone="plain" className="w-full max-w-sm" />
         ) : null}
       </div>
       {props.onOpenThread !== null && row.replyCount > 0 ? (

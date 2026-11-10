@@ -2613,11 +2613,18 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await catchUpReady(page);
       await tap(
-        [page.locator(`[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`)],
+        [
+          page.locator(
+            `[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`,
+          ),
+        ],
         'reply text',
       );
       const sheet = page.locator('[data-catch-up-thread-sheet]');
-      await waitFor([sheet.locator('[data-catch-up-thread-replies] [data-catch-up-message]')], 'replies');
+      await waitFor(
+        [sheet.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
+        'replies',
+      );
       await expect(sheet.locator('[data-catch-up-thread-title]')).toHaveText('Replies');
       for (const key of ['tasks', 'forward', 'more'])
         await waitFor([sheet.locator(`[data-thread-root-action="${key}"]`)], `${key} key`);
@@ -2632,7 +2639,11 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await catchUpReady(page);
       await tap(
-        [page.locator(`[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`)],
+        [
+          page.locator(
+            `[data-catch-up-message="${CU_THREAD_REPLY_ID}"] [data-catch-up-open-thread]`,
+          ),
+        ],
         'reply text',
       );
       await tap([page.locator('[data-thread-root-action="more"]')], 'more key');
