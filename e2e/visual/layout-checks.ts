@@ -2,6 +2,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { NEW_CHIP_HEIGHT, PAIR_BOX_HEIGHT, PAIR_PILL_HEIGHT } from '../../src/components/ui/layout';
 import {
   alignmentViolations,
+  listScreenAxisExpected,
+  listScreenAxisReport,
+  listScreenAxisViolations,
+  type ListScreenAxis,
   boxText,
   clipBox,
   distinctRoles,
@@ -2573,4 +2577,79 @@ async function settleRows(page: Page): Promise<void> {
         );
       }),
   );
+}
+
+/**
+ * The list-screen axis (shell/ListScreen, 10 Nov 2026): the five positions a
+ * list tab's shell owns, read on the page as it stands. (a) top bar bottom to
+ * the chip row, (b) <main> left to the first chip, (c) chip row bottom to the
+ * first content row, (d) <main> left to that row's text, (e) the first line's
+ * right-most row content edge to <main> right. NaN where the tab has none.
+ */
+export async function readListScreenAxis(page: Page, screen: string): Promise<ListScreenAxis> {
+  const at = await page.evaluate(() => {
+    const shown = (el: Element | null | undefined): el is Element =>
+      el !== null && el !== undefined && el.getBoundingClientRect().height > 0;
+    const main = document.querySelector('main');
+    const frame = main?.getBoundingClientRect();
+    const left = frame?.x ?? 0;
+    const right = frame !== undefined && main !== null ? frame.x + main.clientWidth : innerWidth;
+    const bar = Array.from(document.querySelectorAll('header')).find(
+      (h) => h.closest('main') === null && shown(h),
+    );
+    const barBottom = bar?.getBoundingClientRect().bottom ?? frame?.y ?? 0;
+    const row = Array.from(
+      document.querySelectorAll('main [data-chip-row], main [data-activity-chips]'),
+    ).find(shown);
+    const chips = row?.getBoundingClientRect();
+    const chip =
+      row === undefined
+        ? undefined
+        : Array.from(row.querySelectorAll('[data-chip-face]')).find(shown);
+    const cards = Array.from(document.querySelectorAll('main [data-list-card]')).filter(
+      (c) => shown(c) && (chips === undefined || c.getBoundingClientRect().y >= chips.bottom - 1),
+    );
+    const first = cards[0];
+    const firstTop = first?.getBoundingClientRect().y;
+    const lineRights = cards
+      .filter(
+        (c) => firstTop !== undefined && Math.abs(c.getBoundingClientRect().y - firstTop) <= 1,
+      )
+      .map((c) => c.querySelector('[data-list-card-body]')?.getBoundingClientRect().right)
+      .filter((n): n is number => n !== undefined);
+    const title = first?.querySelector('[data-list-card-title]')?.getBoundingClientRect();
+    return {
+      chipsTop: chips === undefined ? Number.NaN : chips.y - barBottom,
+      chipX: chip === undefined ? Number.NaN : chip.getBoundingClientRect().x - left,
+      contentTop:
+        chips === undefined || firstTop === undefined ? Number.NaN : firstTop - chips.bottom,
+      textX: title === undefined ? Number.NaN : title.x - left,
+      rightInset: lineRights.length === 0 ? Number.NaN : right - Math.max(...lineRights),
+    };
+  });
+  return { screen, ...at };
+}
+
+/** Pipeline (on the shell): the five positions equal the SCREEN_* constants, +-1. */
+export function assertListScreenAxis(axis: ListScreenAxis, laptop: boolean): void {
+  settleFindings(
+    `list-screen axis ${axis.screen}`,
+    listScreenAxisViolations(axis, listScreenAxisExpected(laptop)).map((message) => ({
+      check: 'list-screen' as const,
+      message,
+    })),
+  );
+}
+
+/**
+ * The other tabs, measure only (the next PR moves them onto the shell): log
+ * each tab's five numbers and the delta from Pipeline under "list-screen axis"
+ * in the Visual CI log, and annotate the test. Never fails.
+ */
+export function reportListScreenAxis(project: string, rows: readonly ListScreenAxis[]): void {
+  const base = rows[0];
+  if (base === undefined) return;
+  const text = `list-screen axis (${project}, delta from ${base.screen}):\n${listScreenAxisReport(rows, base)}`;
+  test.info().annotations.push({ type: 'list-screen axis', description: text });
+  console.log(text);
 }

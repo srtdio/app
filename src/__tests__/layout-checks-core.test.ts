@@ -860,3 +860,58 @@ describe('alignmentViolations (9 Nov 2026: rules 1, 2, 3, 5 measured)', () => {
     ]);
   });
 });
+
+describe('list-screen axis (shell/ListScreen)', () => {
+  const load = async () => import('../../e2e/visual/layout-checks-core');
+  const pipelinePhone = {
+    screen: 'pipeline',
+    chipsTop: 12,
+    chipX: 16,
+    contentTop: 16,
+    textX: 76,
+    rightInset: 16,
+  };
+
+  it('expects the SCREEN_* constants at the phone and laptop gutter', async () => {
+    const { listScreenAxisExpected } = await load();
+    expect(listScreenAxisExpected(false)).toEqual({
+      chipsTop: 12,
+      chipX: 16,
+      contentTop: 16,
+      textX: 76,
+      rightInset: 16,
+    });
+    expect(listScreenAxisExpected(true)).toEqual({
+      chipsTop: 12,
+      chipX: 24,
+      contentTop: 16,
+      textX: 84,
+      rightInset: 24,
+    });
+  });
+
+  it('passes on the shell within 1px, fails off it, and names a missing position', async () => {
+    const { listScreenAxisExpected, listScreenAxisViolations } = await load();
+    const phone = listScreenAxisExpected(false);
+    expect(listScreenAxisViolations(pipelinePhone, phone)).toEqual([]);
+    expect(listScreenAxisViolations({ ...pipelinePhone, contentTop: 16.8 }, phone)).toEqual([]);
+    expect(listScreenAxisViolations({ ...pipelinePhone, contentTop: 12 }, phone)).toEqual([
+      'pipeline: contentTop is 12px, not 16',
+    ]);
+    expect(listScreenAxisViolations({ ...pipelinePhone, chipX: Number.NaN }, phone)).toEqual([
+      'pipeline: chipX not found',
+    ]);
+    expect(listScreenAxisViolations(pipelinePhone, listScreenAxisExpected(true))).toHaveLength(3);
+  });
+
+  it('reports each tab with its delta from the base, n/a where missing', async () => {
+    const { listScreenAxisReport } = await load();
+    const plan = { ...pipelinePhone, screen: 'plan', contentTop: 20, rightInset: Number.NaN };
+    const text = listScreenAxisReport([pipelinePhone, plan], pipelinePhone);
+    expect(text.split('\n')).toEqual([
+      'screen | chipsTop | chipX | contentTop | textX | rightInset',
+      'pipeline | 12 (0) | 16 (0) | 16 (0) | 76 (0) | 16 (0)',
+      'plan | 12 (0) | 16 (0) | 20 (+4) | 76 (0) | n/a (n/a)',
+    ]);
+  });
+});

@@ -12,13 +12,11 @@ import {
   visibleSelectActions,
   type SelectBarAction,
 } from '@/components/ui/SelectBar';
-import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
-import { PageHead } from '@/components/shell/PageHead';
-import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import { ListScreen, SectionSelect, type ListScreenChips } from '@/components/shell/ListScreen';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import {
   ICON_SIZE,
@@ -105,7 +103,6 @@ import {
   type PostSort,
 } from '@/lib/list-sort';
 import { groupByStage } from '@/lib/post-board';
-import { cn } from '@/lib/cn';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Stage } from '@srtdio/posts';
@@ -152,29 +149,28 @@ export function stageChipItems(
 }
 
 /**
- * The Pipeline chip row (decisions A, B, E): the shared SectionHeader with the
- * stage chips and the visible Select pinned at its end. Sort and New post live
+ * The Pipeline chip row (decisions A, B, E): the shell's chip slots
+ * (shell/ListScreen) with the stage chips and the visible Select pinned at
+ * its end, the row's wrapper keeping [data-pipeline-toolbar]. Sort and New post live
  * in the app top bar ({@link pipelineTopbarActions}); search lives only in the
  * top bar's command palette. Each chip carries its label and post count as
  * discrete fields (StageChips renders the count as a trailing badge). Pure (no
  * hooks) so the wiring is unit-tested by walking the returned tree; the page
  * owns the state.
  */
-export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
+export function pipelineHeader(props: PipelineHeaderProps): ListScreenChips {
   // The stages keep their transition-map order, All closes the row.
   const hideDraft = props.hideDraft === true;
   const items = stageChipItems(props.counts, hideDraft);
-  return (
-    <div data-pipeline-toolbar="">
-      <SectionHeader
-        select={<SectionSelect active={props.selectMode} onToggle={props.onSelectToggle} />}
-      >
-        <StageRow hideDraft={hideDraft}>
-          <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
-        </StageRow>
-      </SectionHeader>
-    </div>
-  );
+  return {
+    chipsHook: { 'data-pipeline-toolbar': '' },
+    select: <SectionSelect active={props.selectMode} onToggle={props.onSelectToggle} />,
+    chips: (
+      <StageRow hideDraft={hideDraft}>
+        <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
+      </StageRow>
+    ),
+  };
 }
 
 /** The blocked "+" toast on the Pipeline (no post.create). */
@@ -345,7 +341,7 @@ export function viewFiltered(query: PipelineQuery): boolean {
 /** The board's load failure: the shared plain line and a Retry that re-reads. */
 export function postsLoadError(onRetry: () => void, retrying: boolean): ReactElement {
   return (
-    <div data-posts-load-error="" className={cn('mt-4', GUTTER)}>
+    <div data-posts-load-error="">
       <LoadError title="posts" onRetry={onRetry} retrying={retrying} />
     </div>
   );
@@ -386,13 +382,7 @@ export function listedCovers(
 export function postsSkeleton(): ReactElement {
   mark('pipeline:skeleton');
   return (
-    <div
-      data-guide-wait=""
-      data-posts-skeleton=""
-      role="status"
-      aria-busy="true"
-      className={cn('py-4', GUTTER)}
-    >
+    <div data-guide-wait="" data-posts-skeleton="" role="status" aria-busy="true" className="pb-4">
       <span className="sr-only">Loading posts</span>
       <div aria-hidden="true" className={LIST_CARD_GRID}>
         {Array.from({ length: getFillCount() }, (_unused, index) => (
@@ -410,7 +400,7 @@ export function postsSkeleton(): ReactElement {
  */
 export function emptyPipeline(): ReactElement {
   return (
-    <div data-pipeline-empty="" className={GUTTER}>
+    <div data-pipeline-empty="">
       <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="Posts show up here." />
     </div>
   );
@@ -555,7 +545,7 @@ export function pipelineSelectActions(input: PipelineSelectInput): SelectBarActi
  */
 export function filteredEmpty(onClear: () => void): ReactElement {
   return (
-    <div data-filtered-empty="" className={GUTTER}>
+    <div data-filtered-empty="">
       <NoResults filtersActive onClear={onClear} />
     </div>
   );
@@ -1242,53 +1232,56 @@ export function PipelinePage() {
 
   return (
     <>
-      <PageHead title="Pipeline" hidden />
-      {pipelineHeader({
-        stage,
-        onStageChange: setStage,
-        counts,
-        hideDraft: isClient(role),
-        selectMode: selectMode.on,
-        onSelectToggle: selectMode.toggle,
-      })}
-
-      {/* Counts live on the chips. While a date filter narrows the
-          view: the honest "{shown} of {total} posts", and the undated posts the
-          date filter hides with "Show them". */}
-      {narrowed && !boardLoading && !postsFailed ? (
-        <div className={cn('flex flex-col gap-1 pt-3', GUTTER)}>
-          <span data-posts-count="" className="text-base text-fg-3">
-            {countLabel}
-          </span>
-          {undatedHint(dateChipLabel(query), hiddenUndated, () => setUndatedShownFor(dateKey))}
-        </div>
-      ) : null}
-
-      {/* The chips and filters above stay usable through a failed read. */}
-      {live && postsFailed ? (
-        postsLoadError(() => void loadPosts(), postsLoading)
-      ) : boardLoading ? (
-        postsSkeleton()
-      ) : pipelineEmpty ? (
-        emptyPipeline()
-      ) : showFilteredEmpty ? (
-        filteredEmpty(clearFilters)
-      ) : (
-        <div ref={landRef} className="contents">
-          {pipelineSurface({
-            stage,
-            sorted,
-            cache,
-            presignEnabled,
-            workspaceKey,
-            selectFor: selectMode.selectFor,
-            shownKey,
-            timeZone,
-            viewer,
-            covers,
-          })}
-        </div>
-      )}
+      <ListScreen
+        title="Pipeline"
+        {...pipelineHeader({
+          stage,
+          onStageChange: setStage,
+          counts,
+          hideDraft: isClient(role),
+          selectMode: selectMode.on,
+          onSelectToggle: selectMode.toggle,
+        })}
+        // Counts live on the chips. While a date filter narrows the view: the
+        // honest "{shown} of {total} posts", and the undated posts the date
+        // filter hides with "Show them".
+        lead={
+          narrowed && !boardLoading && !postsFailed ? (
+            <div className="flex flex-col gap-1">
+              <span data-posts-count="" className="text-base text-fg-3">
+                {countLabel}
+              </span>
+              {undatedHint(dateChipLabel(query), hiddenUndated, () => setUndatedShownFor(dateKey))}
+            </div>
+          ) : null
+        }
+      >
+        {/* The chips and filters above stay usable through a failed read. */}
+        {live && postsFailed ? (
+          postsLoadError(() => void loadPosts(), postsLoading)
+        ) : boardLoading ? (
+          postsSkeleton()
+        ) : pipelineEmpty ? (
+          emptyPipeline()
+        ) : showFilteredEmpty ? (
+          filteredEmpty(clearFilters)
+        ) : (
+          <div ref={landRef} className="contents">
+            {pipelineSurface({
+              stage,
+              sorted,
+              cache,
+              presignEnabled,
+              workspaceKey,
+              selectFor: selectMode.selectFor,
+              shownKey,
+              timeZone,
+              viewer,
+              covers,
+            })}
+          </div>
+        )}
+      </ListScreen>
 
       {selectMode.on ? (
         <SelectBar

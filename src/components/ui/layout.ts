@@ -78,3 +78,17 @@ export const PAIR_BOX_HEIGHT = 28;
 export const PAIR_PILL_HEIGHT = 16;
 /** Activity's ink "N new" chip height. */
 export const NEW_CHIP_HEIGHT = 18;
+
+/*
+ * The list-screen shell (shell/ListScreen): what sits under the top bar on a
+ * list tab. ListScreen draws these with literal classes; named-sizes.test.ts
+ * proves each class equals its constant, and assertListScreenAxis reads them.
+ */
+/** Top bar bottom to the chip row (mt-3). */
+export const SCREEN_CHIPS_TOP = 12;
+/** Chip row bottom to the first content row (pt-4). */
+export const SCREEN_CONTENT_TOP = 16;
+/** The list tab's side gutter on a phone (px-4, pl-4). */
+export const SCREEN_GUTTER_PHONE = 16;
+/** The list tab's side gutter on a laptop (md:px-6, md:pl-6). */
+export const SCREEN_GUTTER_LAPTOP = 24;

@@ -16,7 +16,18 @@ import {
   ROW_INSET,
   ROW_PICTURE,
   ROW_TEXT_START,
+  SCREEN_CHIPS_TOP,
+  SCREEN_CONTENT_TOP,
+  SCREEN_GUTTER_LAPTOP,
+  SCREEN_GUTTER_PHONE,
 } from '@/components/ui/layout';
+import {
+  LIST_SCREEN_CHIPS_END,
+  LIST_SCREEN_CHIPS_PAD,
+  LIST_SCREEN_CHIPS_TOP,
+  LIST_SCREEN_CONTENT_TOP,
+  LIST_SCREEN_GUTTER,
+} from '@/components/shell/ListScreen';
 import { LIST_CARD_PICTURE, LIST_CARD_SUB_INSET, listCardFrame } from '@/components/ui/ListCard';
 import { CHIP_FACE_SIZE, CHIP_HIT } from '@/components/ui/Chip';
 import { Avatar } from '@/components/ui/Avatar';
@@ -87,5 +98,16 @@ describe('named sizes: each part class equals its ui/layout constant', () => {
     expect(ACTIVITY_NEW_CHIP).toMatch(/(^|\s)box-content(\s|$)/);
     expect(ACTIVITY_NEW_CHIP).toMatch(/(^|\s)py-px(\s|$)/);
     expect(px(ACTIVITY_NEW_CHIP, 'h') + 2).toBe(NEW_CHIP_HEIGHT);
+  });
+
+  it('SCREEN_*: the list-screen shell (shell/ListScreen)', () => {
+    expect(px(LIST_SCREEN_CHIPS_TOP, 'mt')).toBe(SCREEN_CHIPS_TOP);
+    expect(px(LIST_SCREEN_CONTENT_TOP, 'pt')).toBe(SCREEN_CONTENT_TOP);
+    expect(px(LIST_SCREEN_GUTTER, 'px')).toBe(SCREEN_GUTTER_PHONE);
+    expect(px(LIST_SCREEN_GUTTER, 'md:px')).toBe(SCREEN_GUTTER_LAPTOP);
+    expect(px(LIST_SCREEN_CHIPS_PAD, 'pl')).toBe(SCREEN_GUTTER_PHONE);
+    expect(px(LIST_SCREEN_CHIPS_PAD, 'md:pl')).toBe(SCREEN_GUTTER_LAPTOP);
+    expect(px(LIST_SCREEN_CHIPS_END, 'pr')).toBe(SCREEN_GUTTER_PHONE);
+    expect(px(LIST_SCREEN_CHIPS_END, 'md:pr')).toBe(SCREEN_GUTTER_LAPTOP);
   });
 });

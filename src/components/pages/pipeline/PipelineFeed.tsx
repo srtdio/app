@@ -1,5 +1,3 @@
-import { cn } from '@/lib/cn';
-import { GUTTER } from '@/components/ui/layout';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { LoadMore } from '@/components/ui/LoadMore';
@@ -126,7 +124,7 @@ export function PipelineFeed({
   const view = list.slice(0, rule.shown);
 
   return (
-    <div className={cn('py-4', GUTTER)}>
+    <div className="pb-4">
       {list.length === 0 ? (
         activeStage === 'all' ? (
           <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="Posts show up here." />

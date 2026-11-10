@@ -18,6 +18,13 @@ interface SectionHeaderProps {
    * through. Default false keeps every other caller rendering identically.
    */
   stickyChildren?: boolean;
+  /**
+   * shell/ListScreen passes the row's top gap and side pads (its own literal
+   * classes, the same values). Absent: the defaults below, so every direct
+   * caller renders as before.
+   */
+  topClass?: string;
+  padClass?: string;
 }
 
 /**
@@ -27,19 +34,29 @@ interface SectionHeaderProps {
  * classes only; every interactive control is at least 44x44. The component
  * owns no data and no filtering logic (command/query separation).
  */
-export function SectionHeader({ children, select, stickyChildren = false }: SectionHeaderProps) {
+export function SectionHeader({
+  children,
+  select,
+  stickyChildren = false,
+  topClass,
+  padClass,
+}: SectionHeaderProps) {
   if (children === undefined && select === undefined) return null;
   return (
     <div
       data-chip-row=""
       className={cn(
         // z-sticky sits above the grid (z-base) and below the top bar (z-nav).
-        'flex items-center gap-2 pl-4 md:pl-6',
-        // The pinned Select's 44 box is pulled out to the edge like a trailing control.
-        select !== undefined ? 'pr-1 md:pr-3' : 'pr-4 md:pr-6',
+        padClass === undefined
+          ? cn(
+              'flex items-center gap-2 pl-4 md:pl-6',
+              // The pinned Select's 44 box is pulled out to the edge like a trailing control.
+              select !== undefined ? 'pr-1 md:pr-3' : 'pr-4 md:pr-6',
+            )
+          : cn('flex items-center gap-2', padClass),
         stickyChildren
           ? cn('sticky z-sticky border-b bg-bg py-3 lit-header', SHELL_STICKY_TOP_CLASS)
-          : 'mt-3',
+          : (topClass ?? 'mt-3'),
       )}
     >
       <div
