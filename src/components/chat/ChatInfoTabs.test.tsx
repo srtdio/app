@@ -8,11 +8,13 @@ vi.mock('agora-chat', () => ({
 
 import { Button } from '@/components/ui/Button';
 import { LoadMore } from '@/components/ui/LoadMore';
+import { getFillCount } from '@/lib/use-fill-count';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   CONTACT_EMPTY,
   ChatInfoTabsView,
   FeedBody,
+  FeedMore,
   NOTHING_RECENT,
   PREVIEW_COUNT,
   SEE_ALL_LABEL,
@@ -119,6 +121,11 @@ const listRows = (tree: ReactElement, attr: string) =>
 const seeAll = (tree: ReactElement) => findAll(tree, (el) => el.type === SeeAllRow);
 const loadMore = (tree: ReactElement) =>
   findAll(tree, (el) => el.type === LoadMore && 'data-load-more' in el.props);
+// The full list's Load more decision lives in FeedMore (src/lib/load-more-rule).
+const feedMore = (tree: ReactElement) => findAll(tree, (el) => el.type === FeedMore);
+/** FeedMore's first paint: the Load more button, or none (a short tab fills silently). */
+const feedMoreButton = (el: ReactElement | undefined): boolean =>
+  el !== undefined && renderToStaticMarkup(el).includes('data-load-more');
 const range = (n: number): number[] => Array.from({ length: n }, (_, i) => i + 1);
 
 describe('ChatInfoTabsView preview', () => {
@@ -156,7 +163,10 @@ describe('ChatInfoTabsView preview', () => {
     const full = view(props({ attachments, expanded: new Set<ContactTab>(['media']) }));
     expect(tiles(full)).toHaveLength(9);
     expect(seeAll(full)).toEqual([]);
-    expect(loadMore(full)).toHaveLength(1);
+    // Load more only once the 9 tiles fill one screen; shorter, the next page reads silently.
+    expect(feedMore(full)).toHaveLength(1);
+    expect(feedMore(full)[0]?.props.matching).toBe(9);
+    expect(feedMoreButton(feedMore(full)[0])).toBe(9 >= getFillCount());
   });
 
   it('keeps See-all state per tab', () => {
@@ -230,11 +240,25 @@ describe('ChatInfoTabsView preview', () => {
     expect(seeAll(tree)).toEqual([]);
   });
 
-  it('full mode is unchanged when empty with an older page: Load more, no line', () => {
+  it('full mode, empty with an older page: no line, the older page reads silently (no button)', () => {
     const tree = view(props({ mode: 'full', attachments: feed<ChannelAttachmentItem>([], true) }));
     expect(findAll(tree, (el) => 'data-nothing-recent' in el.props)).toEqual([]);
     expect(seeAll(tree)).toEqual([]);
-    expect(loadMore(tree)).toHaveLength(1);
+    expect(feedMore(tree)).toHaveLength(1);
+    expect(feedMoreButton(feedMore(tree)[0])).toBe(false);
+  });
+
+  it('full mode, a full screen with an older page: Load more', () => {
+    const full = feed(
+      range(getFillCount()).map((n) => item(n)),
+      true,
+    );
+    const tree = view(props({ mode: 'full', attachments: full }));
+    expect(feedMoreButton(feedMore(tree)[0])).toBe(true);
+    const done = view(
+      props({ mode: 'full', attachments: feed(range(getFillCount()).map((n) => item(n))) }),
+    );
+    expect(feedMoreButton(feedMore(done)[0])).toBe(false);
   });
 
   it('See all is the 44px full-width secondary button', () => {

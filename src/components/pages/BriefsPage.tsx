@@ -69,6 +69,7 @@ import { errorText } from '@/lib/error-copy';
 import { Text } from '@/components/ui/Text';
 import { getFillCount, useFillCount } from '@/lib/use-fill-count';
 import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
+import { loadMoreRule } from '@/lib/load-more-rule';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -239,17 +240,19 @@ export const BRIEFS_LOAD_MORE_FAILED = errorText('load more briefs', null);
 
 /**
  * The Load more control under the list: the shared ui/LoadMore (Button level,
- * left aligned, busy keeps its width), shown while loaded briefs are
- * still held back by the fill count (`hidden`) or another server page exists.
- * Pure (no hooks) so the show/hide rule is unit-tested directly.
+ * left aligned, busy keeps its width). `show` is src/lib/load-more-rule's
+ * decision for the current chip (10 Nov 2026: only when there is more under
+ * it); without one, while loaded briefs are held back (`hidden`) or another
+ * server page exists. Pure (no hooks) so the show/hide rule is unit-tested.
  */
 export function briefsLoadMore(
   next: BriefPageNext,
   loadingMore: boolean,
   onLoadMore: () => void,
   hidden = 0,
+  show?: boolean,
 ): ReactElement[] {
-  if (next.done && hidden <= 0) return [];
+  if (show !== undefined ? !show : next.done && hidden <= 0) return [];
   return [
     <div key="load-more" className={cn(GUTTER, 'pb-6 flex flex-col')}>
       <LoadMore data-briefs-load-more="" busy={loadingMore} onMore={onLoadMore} />
@@ -683,19 +686,20 @@ export function BriefsPage() {
 
   // The next page, appended with duplicates (by id) dropped. A failure keeps
   // what is loaded and says so in a toast; the button stays for another try.
-  const loadMore = useCallback(async () => {
-    if (workspaceId === null || next.done || loadingMore) return;
+  const loadMore = useCallback(async (): Promise<boolean> => {
+    if (workspaceId === null || next.done || loadingMore) return true;
     const generation = loadGeneration.current;
     setLoadingMore(true);
     const result = await listBriefsPage(supabase, workspaceId, next.cursor);
-    if (generation !== loadGeneration.current) return;
+    if (generation !== loadGeneration.current) return true;
     setLoadingMore(false);
     if (!result.ok) {
       showToast?.({ title: errorText('load more briefs', result.error), tone: 'error' });
-      return;
+      return false;
     }
     setBriefsAndKeep((prev) => mergeBriefPages(prev, result.data.items), result.data.next);
     setNext(result.data.next);
+    return true;
   }, [workspaceId, next, loadingMore, showToast, setBriefsAndKeep]);
 
   useEffect(() => {
@@ -753,7 +757,23 @@ export function BriefsPage() {
   const depthKey = briefsShownKey(workspaceId, filter, showFlat ? 'fixed' : 'sections');
   const [depth, setDepth] = useState(() => readShown(depthKey, fill));
   useEffect(() => setDepth(readShown(depthKey, fill)), [depthKey, fill]);
-  const hiddenCount = Math.max(0, shownCount - depth);
+  // Load more only when there is more under this chip (src/lib/load-more-rule):
+  // a chip with fewer loaded briefs than its depth reads the next server pages
+  // silently (no button) until the depth fills or the server is done.
+  const rule = loadMoreRule({ matching: shownCount, depth, serverMore: !next.done });
+  const hiddenCount = rule.hidden;
+  const [silentFill, setSilentFill] = useState(false);
+  // The page a silent read failed on: never retried by itself (the toast says so).
+  const [fillFailedAt, setFillFailedAt] = useState<BriefPageNext | null>(null);
+  const filling = rule.fill && fillFailedAt !== next;
+  useEffect(() => {
+    if (!filling || loading || loadingMore || loadFailed) return;
+    setSilentFill(true);
+    void loadMore().then((ok) => {
+      setSilentFill(false);
+      if (!ok) setFillFailedAt(next);
+    });
+  }, [filling, loading, loadingMore, loadFailed, loadMore, next]);
   const shownGroups = useMemo(() => capBriefGroups(groups, depth), [groups, depth]);
   const shownSorted = useMemo(() => sortedBriefs.slice(0, depth), [sortedBriefs, depth]);
   const onLoadMore = (): void => {
@@ -779,7 +799,12 @@ export function BriefsPage() {
     toast?.show(createdToast(created, navigate));
   }
 
-  const listLoading = workspaceId === null || (loading && briefs.length === 0);
+  // A chip with nothing loaded yet while its silent fill runs keeps the boxes
+  // (never "Open briefs show up here." over briefs still on their way).
+  const listLoading =
+    workspaceId === null ||
+    (loading && briefs.length === 0) ||
+    (filling && shownCount === 0 && !loadFailed);
   const listFailed = loadFailed;
   if (!listLoading && !listFailed) mark('briefs:paint');
   // Back on Briefs, the scroll lands where it was once the cards painted.
@@ -856,7 +881,13 @@ export function BriefsPage() {
       {/* Older briefs load a page at a time; chips narrow what is
           loaded, while the chip counts are server totals. */}
       {!listFailed && !listLoading
-        ? briefsLoadMore(next, loadingMore, onLoadMore, hiddenCount)
+        ? briefsLoadMore(
+            next,
+            loadingMore,
+            onLoadMore,
+            hiddenCount,
+            rule.button || (loadingMore && !silentFill) || (fillFailedAt === next && !next.done),
+          )
         : null}
 
       <CreateBriefSheet

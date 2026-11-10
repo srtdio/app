@@ -65,6 +65,7 @@ import { LoadMore } from '@/components/ui/LoadMore';
 import { ToastProvider } from '@/components/ui/toast';
 import { PlanTabPage } from '@/components/pages/PlanTabPage';
 import { civilToday } from '@/lib/plan-week';
+import { PLAN_BUNDLE_PAGE } from '@/lib/chat/plan-bundle';
 
 const TODAY = civilToday(new Date(), 'UTC');
 
@@ -243,7 +244,12 @@ describe('PlanTabPage', () => {
     it(`${width}: Load more ends the list while more plans remain; busy keeps the label; none when all are in`, () => {
       Object.assign(env, { desktop, side: 'agency', data: DATA, moreBusy: false });
       expect(render()).not.toContain('data-plan-tab-load-more');
-      env.data = { ...DATA, nextCursor: { startsOn: TODAY, id: 'draft' } };
+      // A short chip never ends with Load more (src/lib/load-more-rule): a full
+      // plan page under the chip with more after it does.
+      const full = Array.from({ length: PLAN_BUNDLE_PAGE }, (_u, i) =>
+        bundle(plan(`p${i}`, `Plan ${i}`, 'client'), []),
+      );
+      env.data = { ...DATA, bundles: full, nextCursor: { startsOn: TODAY, id: 'p11' } };
       let html = render();
       expect(html).toContain('data-plan-tab-load-more');
       expect(html).toContain('>Load more</button>');

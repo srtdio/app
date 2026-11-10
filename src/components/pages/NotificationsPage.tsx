@@ -80,6 +80,7 @@ import {
   catchUpReturnOf,
   takeCatchUpSeed,
 } from '@/lib/catch-up/route';
+import { loadMoreRule } from '@/lib/load-more-rule';
 
 /** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
@@ -832,7 +833,10 @@ export function NotificationsPage() {
             </section>
           ))}
 
-          {hasMore ? (
+          {/* Load more only when there is more (src/lib/load-more-rule): the
+              server reads per chip, so every loaded row shows. */}
+          {loadMoreRule({ matching: items.length, depth: items.length, serverMore: hasMore })
+            .button ? (
             <LoadMore
               data-activity-load-more=""
               busy={loadingMore}

@@ -18,6 +18,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { LoadMore } from '@/components/ui/LoadMore';
+import { useLoadMoreFill } from '@/lib/load-more-rule';
+import { getFillCount } from '@/lib/use-fill-count';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -561,6 +563,10 @@ export function FeedBody<T>(props: {
   feed: Feed<T> | null;
   empty: ReactElement;
   isEmpty: boolean;
+  /** The rows this tab shows out of the feed (Media and Files split one feed); default all. */
+  matching?: number | undefined;
+  /** Which tab the feed body is for: Load more's depth starts over per tab. */
+  moreKey?: string | undefined;
   onLoadMore: () => void;
   onRetry: () => void;
   seeAll?: { show: boolean; onClick: () => void };
@@ -589,8 +595,13 @@ export function FeedBody<T>(props: {
       props.seeAll.show ? (
         <SeeAllRow onClick={props.seeAll.onClick} />
       ) : null
-    ) : showLoadMore(feed) ? (
-      <LoadMore data-load-more="" busy={feed.loadingMore} onMore={props.onLoadMore} />
+    ) : feed.status === 'ready' ? (
+      <FeedMore
+        key={props.moreKey}
+        feed={feed}
+        matching={props.matching ?? feed.items.length}
+        onLoadMore={props.onLoadMore}
+      />
     ) : null;
   return (
     <div data-feed="ready" className="flex flex-col gap-3">
@@ -605,6 +616,30 @@ export function FeedBody<T>(props: {
       )}
       {more}
     </div>
+  );
+}
+
+/**
+ * Load more only when there is more under this tab (src/lib/load-more-rule,
+ * 10 Nov 2026): one screen, +1 per tap; a tab holding fewer rows than that
+ * while the feed has more reads on silently, no button.
+ */
+export function FeedMore(props: {
+  feed: Feed<unknown>;
+  matching: number;
+  onLoadMore: () => void;
+}): ReactElement | null {
+  const more = useLoadMoreFill({
+    filterKey: 'feed',
+    matching: props.matching,
+    loaded: props.feed.items.length,
+    page: getFillCount(),
+    serverMore: showLoadMore(props.feed),
+    busy: props.feed.loadingMore,
+    onMore: props.onLoadMore,
+  });
+  return more === null ? null : (
+    <LoadMore data-load-more="" busy={more.busy} onMore={more.onMore} />
   );
 }
 
@@ -664,6 +699,8 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
       <FeedBody
         feed={props.attachments}
         isEmpty={split.images.length === 0}
+        matching={split.images.length}
+        moreKey="media"
         empty={
           <EmptyState icon={<IconPhoto size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.media} />
         }
@@ -690,6 +727,8 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
       <FeedBody
         feed={props.attachments}
         isEmpty={split.files.length === 0}
+        matching={split.files.length}
+        moreKey="files"
         empty={<EmptyState icon={<IconFile size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.files} />}
         {...feedProps('attachments', view.seeAll)}
       >
@@ -715,6 +754,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
       <FeedBody
         feed={props.links}
         isEmpty={items.length === 0}
+        moreKey="links"
         empty={<EmptyState icon={<IconLink size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.links} />}
         {...feedProps('links', view.seeAll)}
       >
