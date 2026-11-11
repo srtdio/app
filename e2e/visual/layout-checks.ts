@@ -1,5 +1,10 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { NEW_CHIP_HEIGHT, PAIR_BOX_HEIGHT, PAIR_PILL_HEIGHT } from '../../src/components/ui/layout';
+import {
+  NEW_CHIP_HEIGHT,
+  ROW_HEIGHT,
+  ROW_INSET,
+  ROW_PICTURE,
+} from '../../src/components/ui/layout';
 import {
   alignmentViolations,
   listScreenAxisExpected,
@@ -2288,7 +2293,7 @@ export async function assertNoReactionsHere(page: Page, screenName: string): Pro
 
 /** A list as painted: its chips, sections, headings, first row and chips. */
 export interface ListTwinGeom {
-  /** The first filter chip's bottom edge. */
+  /** The first filter chip's bottom edge (Activity: plus its lead slot's height). */
   chipBottom: number | null;
   /** The list's own gap between sections (computed row-gap). */
   listGap: number;
@@ -2399,8 +2404,12 @@ export async function readListTwin(page: Page, kind: 'plan' | 'activity'): Promi
           border: cs.borderTopStyle === 'none' ? '0' : cs.borderTopWidth,
         };
       });
+    // Activity's solid rows (the shell's lead slot) sit between the chips and
+    // the content: the first heading's step is measured from under them.
+    const lead = which === 'activity' ? document.querySelector('[data-shell="lead"]') : null;
+    const leadHeight = shown(lead) ? rect(lead).height : 0;
     return {
-      chipBottom: shown(chip) ? rect(chip).bottom : null,
+      chipBottom: shown(chip) ? rect(chip).bottom + leadHeight : null,
       listGap: list !== null ? Number.parseFloat(getComputedStyle(list).rowGap) || 0 : 0,
       headings,
       sections: parts,
@@ -2551,91 +2560,264 @@ export function assertActivityTwinsPlan(
   );
 }
 
-// Check 15, the lead row (Activity, 10 Nov 2026): Threads and Catch up sit in
-// ListScreen's lead slot under the filter pills, two equal boxes filling the
-// row 8 apart (Threads first, from the gutter to the content's right edge), in
-// words: the face 28 tall (PAIR_BOX_HEIGHT) and the text 12 (500), padding-x 8,
-// radius 8, a 44 tall hit (::before); the count pill 16 (PAIR_PILL_HEIGHT), its
-// text 10; each filled (accent) with its pill when its count is > 0, outlined
-// with no pill at 0. Nothing of them in the top bar. Laptop: no Activity in
-// the top bar; the Sidebar's last item is Activity, after Chat, filled on
-// /notifications, with the count when there is one.
-export const ACTIVITY_PAIR_HIT_PX = 44;
-export const ACTIVITY_PAIR_GAP_PX = 8;
-/** Face height, text size and pill height (ui/layout named sizes). */
-export const ACTIVITY_PAIR = {
-  face: PAIR_BOX_HEIGHT,
-  text: 12,
-  pill: PAIR_PILL_HEIGHT,
-  pillText: 10,
-} as const;
+// Check 15, the solid rows (Activity, 11 Nov 2026): Catch up and Threads are
+// solid list rows (ui/ListCard solid + count) in ListScreen's lead slot, 12
+// under the filter chips: Catch up first, then Threads, each only while its
+// count is above 0 (both at 0: no lead slot at all, the content 16 under the
+// chips). A row is a list row: 72 tall, the 48 tile, the title 12 after it on
+// the list rows' text column, the count pill on the list rows' right edge,
+// vertically centred; ink fill, accent-fg text. Phone: the rows run edge to
+// edge, stacked and touching. md and up: each row is a cell of the list
+// cards' grid (first column, then the second; stacked on a one-column
+// tablet), side-by-side cells touching. The seam is each row's ::before: a
+// 1px top and left border in the page background. Nothing of them in the top
+// bar. Laptop: no Activity in the top bar; the Sidebar's last item is
+// Activity, after Chat, filled on /activity, with the count when there is one.
 
-export async function assertActivityLeadRow(page: Page, screenName: string): Promise<void> {
-  const got = await page.evaluate(() => {
-    const read = (sel: string) => {
-      const el = document.querySelector(`[data-shell="lead"] ${sel}`);
-      if (el === null) return null;
+/** Which solid rows a screen shows (a row at count 0 is not in the DOM). */
+export interface ActivitySolidRowsWant {
+  catchUp: boolean;
+  threads: boolean;
+}
+
+interface SolidRowGeom {
+  key: 'catch-up' | 'threads' | 'other';
+  /** The cover button's data-count (NaN when missing). */
+  count: number;
+  name: string;
+  title: string;
+  preview: string;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  titleLeft: number | null;
+  picture: { right: number; width: number; height: number } | null;
+  badge: { right: number; centre: number; tone: string; text: string } | null;
+  /** A time, tag or unread dot in the row (a solid row has none). */
+  extras: number;
+  hover: boolean;
+  fill: string;
+  ink: string;
+  previewInk: string | null;
+  seam: { top: string; left: string; topColour: string; leftColour: string };
+}
+
+/** One column of the list cards under the rows, as painted. */
+interface ListColumnGeom {
+  left: number;
+  width: number;
+  titleLeft: number | null;
+  /** A drawn unread dot's right edge, else the row body's. */
+  edgeRight: number | null;
+}
+
+interface SolidRowsGeom {
+  viewport: number;
+  scrollWidth: number;
+  leads: number;
+  leadTop: number | null;
+  leadBottom: number | null;
+  chipsBottom: number | null;
+  content: { top: number; pad: number } | null;
+  firstContentTop: number | null;
+  rows: SolidRowGeom[];
+  /** Solid rows outside the lead slot. */
+  stray: number;
+  /** The retired pair's hooks still in the DOM. */
+  retired: number;
+  inTopbar: number;
+  pageBg: string;
+  accent: string;
+  accentFg: string;
+  columns: ListColumnGeom[];
+  /** The list grid's column tracks and the step from one to the next. */
+  tracks: number;
+  step: number | null;
+  topbarActivity: number;
+  side: {
+    last: boolean;
+    afterChat: boolean;
+    active: boolean;
+    background: string;
+    badge: boolean;
+  } | null;
+}
+
+async function readActivitySolidRows(page: Page): Promise<SolidRowsGeom> {
+  return page.evaluate((): SolidRowsGeom => {
+    const shown = (el: Element | null | undefined): el is Element => {
+      if (el === null || el === undefined) return false;
       const r = el.getBoundingClientRect();
-      const s = getComputedStyle(el);
-      const hit = getComputedStyle(el, '::before');
-      const pill = el.querySelector('[data-count-badge]');
-      return {
-        x: r.x,
-        y: r.y,
-        width: r.width,
-        height: r.height,
-        radius: s.borderTopLeftRadius,
-        padding: `${s.paddingLeft} ${s.paddingRight}`,
-        border: s.borderTopWidth,
-        fontSize: parseFloat(s.fontSize),
-        weight: s.fontWeight,
-        background: s.backgroundColor,
-        hit: parseFloat(hit.height) || 0,
-        text: (el.textContent ?? '').trim(),
-        icon: el.querySelector('svg') !== null,
-        count: el.getAttribute('data-count'),
-        pill: pill === null ? null : pill.getBoundingClientRect().height,
-        pillFont: pill === null ? null : parseFloat(getComputedStyle(pill).fontSize),
-        pillOff: (() => {
-          if (pill === null) return null;
-          const box = pill.getBoundingClientRect();
-          const range = document.createRange();
-          range.selectNodeContents(pill);
-          const text = range.getBoundingClientRect();
-          return text.height > 0 ? text.top + text.height / 2 - (box.top + box.height / 2) : 0;
-        })(),
-      };
+      return r.width > 0 && r.height > 0;
     };
-    const probe = document.createElement('span');
-    probe.className = 'bg-accent';
-    document.body.appendChild(probe);
-    const accent = getComputedStyle(probe).backgroundColor;
-    probe.remove();
-    const lead = document.querySelector('[data-shell="lead"]');
-    const leadBox = lead?.getBoundingClientRect() ?? null;
-    const leadPad = lead === null ? 0 : parseFloat(getComputedStyle(lead).paddingLeft);
+    const colourOf = (className: string, prop: 'backgroundColor' | 'color'): string => {
+      const probe = document.createElement('span');
+      probe.className = className;
+      document.body.appendChild(probe);
+      const value = getComputedStyle(probe)[prop];
+      probe.remove();
+      return value;
+    };
+    const clear = (c: string): boolean => c === 'transparent' || c === 'rgba(0, 0, 0, 0)';
+    // The page background: the bg token, else what the page itself paints.
+    const pageBg =
+      [
+        colourOf('bg-bg', 'backgroundColor'),
+        getComputedStyle(document.body).backgroundColor,
+        getComputedStyle(document.documentElement).backgroundColor,
+      ].find((c) => !clear(c)) ?? '';
+    const leads = Array.from(document.querySelectorAll('[data-shell="lead"]'));
+    const lead = leads[0] ?? null;
+    const chips = Array.from(
+      document.querySelectorAll('main [data-chip-row], main [data-activity-chips]'),
+    ).find(shown);
+    const content = document.querySelector('main [data-shell="content"]');
+    const contentTops = Array.from(
+      content?.querySelectorAll('[data-list-card], [data-list-card-box], h2, h3') ?? [],
+    )
+      .filter(shown)
+      .map((el) => el.getBoundingClientRect().top);
+    const solid = Array.from(document.querySelectorAll('[data-list-card-solid]'));
+    const rows = solid.filter(shown).map((row): SolidRowGeom => {
+      const r = row.getBoundingClientRect();
+      const press = row.querySelector('button[data-list-card-press]');
+      const title = row.querySelector('[data-list-card-title]');
+      const preview = row.querySelector('[data-list-card-preview]');
+      const picture = row.querySelector('[data-list-card-picture]')?.getBoundingClientRect();
+      const badge = row.querySelector('[data-list-card-count] [data-count-badge]');
+      const badgeBox = badge?.getBoundingClientRect();
+      const before = getComputedStyle(row, '::before');
+      const width = (w: string, style: string): string => (style === 'none' ? '0px' : w);
+      return {
+        key:
+          press?.hasAttribute('data-topbar-catch-up') === true
+            ? 'catch-up'
+            : press?.hasAttribute('data-topbar-threads') === true
+              ? 'threads'
+              : 'other',
+        count: Number.parseInt(press?.getAttribute('data-count') ?? '', 10),
+        name: press?.getAttribute('aria-label') ?? '',
+        title: (title?.textContent ?? '').trim(),
+        preview: (preview?.textContent ?? '').trim(),
+        left: r.left,
+        right: r.right,
+        top: r.top,
+        bottom: r.bottom,
+        titleLeft: title?.getBoundingClientRect().left ?? null,
+        picture:
+          picture === undefined
+            ? null
+            : { right: picture.right, width: picture.width, height: picture.height },
+        badge:
+          badge === null || badgeBox === undefined
+            ? null
+            : {
+                right: badgeBox.right,
+                centre: badgeBox.top + badgeBox.height / 2,
+                tone: badge.getAttribute('data-count-badge') ?? '',
+                text: (badge.textContent ?? '').trim(),
+              },
+        extras: row.querySelectorAll(
+          '[data-list-card-time], [data-list-card-tag], [data-list-card-unread]',
+        ).length,
+        hover: row.matches(':hover'),
+        fill: getComputedStyle(row).backgroundColor,
+        ink: title === null ? '' : getComputedStyle(title).color,
+        previewInk: preview === null ? null : getComputedStyle(preview).color,
+        seam: {
+          top: width(before.borderTopWidth, before.borderTopStyle),
+          left: width(before.borderLeftWidth, before.borderLeftStyle),
+          topColour: before.borderTopColor,
+          leftColour: before.borderLeftColor,
+        },
+      };
+    });
+    // The list cards under the rows, one entry per grid column (by left edge).
+    const cards = Array.from(content?.querySelectorAll('[data-list-card]') ?? []).filter(
+      (c) => shown(c) && !c.hasAttribute('data-list-card-solid'),
+    );
+    const columns: ListColumnGeom[] = [];
+    const dots: Array<{ left: number; right: number }> = [];
+    for (const card of cards) {
+      const box = card.getBoundingClientRect();
+      for (const dot of Array.from(card.querySelectorAll('[data-list-card-unread]'))) {
+        const d = dot.getBoundingClientRect();
+        // A drawn dot is 8 square; the sr-only one is a clipped 1px box.
+        if (d.width >= 4 && d.height >= 4 && getComputedStyle(dot).position !== 'absolute') {
+          dots.push({ left: box.left, right: d.right });
+        }
+      }
+      if (columns.some((c) => Math.abs(c.left - box.left) <= 1)) continue;
+      columns.push({
+        left: box.left,
+        width: box.width,
+        titleLeft:
+          card.querySelector('[data-list-card-title]')?.getBoundingClientRect().left ?? null,
+        edgeRight:
+          card.querySelector('[data-list-card-body]')?.getBoundingClientRect().right ?? null,
+      });
+    }
+    for (const column of columns) {
+      const dot = dots.find((d) => Math.abs(d.left - column.left) <= 1);
+      if (dot !== undefined) column.edgeRight = dot.right;
+    }
+    columns.sort((a, b) => a.left - b.left);
+    // The grid the list cards sit in (else the solid rows' own): its tracks.
+    const gridOf = (el: Element | null): Element | null => {
+      for (let at = el?.parentElement ?? null; at !== null; at = at.parentElement) {
+        if (getComputedStyle(at).display === 'grid') return at;
+        if (at.hasAttribute('data-shell')) return null;
+      }
+      return null;
+    };
+    const grid = gridOf(cards[0] ?? null) ?? gridOf(solid[0] ?? null);
+    const gridStyle = grid === null ? null : getComputedStyle(grid);
+    const trackWidths = (gridStyle?.gridTemplateColumns ?? '')
+      .split(/\s+/)
+      .map((t) => Number.parseFloat(t))
+      .filter((n) => Number.isFinite(n));
+    const firstTrack = trackWidths[0];
     const nav = document.querySelector('nav[aria-label="Primary"]');
     const items = nav === null ? [] : Array.from(nav.children);
     const side = document.querySelector('[data-sidebar-activity]');
-    const sideShown = side !== null && side.getBoundingClientRect().width > 0;
-    const last = items[items.length - 1] ?? null;
-    const before = items[items.length - 2] ?? null;
     return {
-      threads: read('[data-topbar-threads]'),
-      catchUp: read('[data-topbar-catch-up]'),
-      accent,
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      leads: leads.length,
+      leadTop: lead?.getBoundingClientRect().top ?? null,
+      leadBottom: lead?.getBoundingClientRect().bottom ?? null,
+      chipsBottom: chips?.getBoundingClientRect().bottom ?? null,
+      content:
+        content === null
+          ? null
+          : {
+              top: content.getBoundingClientRect().top,
+              pad: Number.parseFloat(getComputedStyle(content).paddingTop) || 0,
+            },
+      firstContentTop: contentTops.length > 0 ? Math.min(...contentTops) : null,
+      rows,
+      stray: solid.filter((row) => row.closest('[data-shell="lead"]') === null).length,
+      retired: document.querySelectorAll(
+        '[data-activity-lead-row], [data-topbar-pulse], [data-topbar-catch-up-wrap], [data-topbar-count]',
+      ).length,
       inTopbar: document.querySelectorAll(
         'header :is([data-topbar-threads], [data-topbar-catch-up])',
       ).length,
-      viewport: window.innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-      row:
-        leadBox === null ? null : { left: leadBox.left + leadPad, right: leadBox.right - leadPad },
+      pageBg,
+      accent: colourOf('bg-accent', 'backgroundColor'),
+      accentFg: colourOf('text-accent-fg', 'color'),
+      columns,
+      tracks: Math.max(trackWidths.length, 1),
+      step:
+        firstTrack === undefined || gridStyle === null
+          ? null
+          : firstTrack + (Number.parseFloat(gridStyle.columnGap) || 0),
       topbarActivity: document.querySelectorAll('[data-topbar-activity]').length,
-      side: sideShown
+      side: shown(side)
         ? {
-            last: last === side,
-            afterChat: before?.getAttribute('href')?.startsWith('/chat') === true,
+            last: items[items.length - 1] === side,
+            afterChat: items[items.length - 2]?.getAttribute('href')?.startsWith('/chat') === true,
             active: side.getAttribute('data-selected') === 'true',
             background: getComputedStyle(side).backgroundColor,
             badge: side.querySelector('[data-count-badge]') !== null,
@@ -2643,135 +2825,241 @@ export async function assertActivityLeadRow(page: Page, screenName: string): Pro
         : null,
     };
   });
+}
+
+/** The solid rows' rules over one read. Pure. */
+function activitySolidRowsFindings(got: SolidRowsGeom, want: ActivitySolidRowsWant): string[] {
   const out: string[] = [];
-  const want = ACTIVITY_PAIR;
-  const { threads, catchUp } = got;
-  if (threads === null || catchUp === null) {
-    out.push('no Threads | Catch up in the lead row ([data-shell="lead"])');
-  } else {
-    const label = `Threads (${threads.count}) / Catch up (${catchUp.count})`;
-    if (threads.width !== catchUp.width || threads.height !== catchUp.height) {
-      out.push(
-        `${label}: boxes ${threads.width}x${threads.height} vs ${catchUp.width}x${catchUp.height}, not one size`,
-      );
-    }
-    for (const [name, b, word] of [
-      ['Threads', threads, 'Threads'],
-      ['Catch up', catchUp, 'Catch up'],
-    ] as const) {
-      if (Math.abs(b.height - want.face) > 0.5) {
-        out.push(`${name}'s face is ${b.height} tall, not ${want.face}`);
-      }
-      if (Math.abs(b.fontSize - want.text) > 0.1 || b.weight !== '500') {
-        out.push(`${name} text is ${b.fontSize}/${b.weight}, not ${want.text}/500`);
-      }
-      if (Math.abs(b.hit - ACTIVITY_PAIR_HIT_PX) > 0.5) {
-        out.push(`${name}'s hit is ${b.hit} tall, not 44`);
-      }
-      if (b.padding !== '8px 8px') out.push(`${name} padding-x ${b.padding}, not 8px`);
-      if (b.radius !== '8px') out.push(`${name} radius ${b.radius}, not 8px`);
-      if (b.icon || !b.text.startsWith(word)) {
-        out.push(`${name} shows "${b.text}"${b.icon ? ' with an icon' : ''}, not the word`);
-      }
-      const on = b.count !== null && b.count !== '0';
-      if (on && b.background !== got.accent) out.push(`${name} has ${b.count} but is not filled`);
-      if (!on && b.background === got.accent) out.push(`${name} is filled at 0`);
-      if (on && (b.pill === null || Math.abs(b.pill - want.pill) > 0.5)) {
-        out.push(`${name}'s pill is ${b.pill ?? 'missing'} tall, not ${want.pill}`);
-      }
-      if (!on && b.pill !== null) out.push(`${name} shows a pill at 0`);
-      if (on && b.pillFont !== null && Math.abs(b.pillFont - want.pillText) > 0.1) {
-        out.push(`${name}'s pill text is ${b.pillFont}, not ${want.pillText}`);
-      }
-      if (on && b.pillOff !== null && Math.abs(b.pillOff) > 1) {
-        out.push(`${name}'s pill text is ${b.pillOff}px off its centre`);
-      }
-      if (b.x + b.width > got.viewport + 0.5) out.push(`${name} ends past the viewport`);
-    }
-    for (const key of ['radius', 'padding', 'border', 'fontSize', 'weight'] as const) {
-      if (threads[key] !== catchUp[key]) {
-        out.push(`${label}: ${key} ${threads[key]} vs ${catchUp[key]}, not the same box`);
-      }
-    }
-    const gap = catchUp.x - (threads.x + threads.width);
-    if (Math.abs(gap - ACTIVITY_PAIR_GAP_PX) > 0.5) {
-      out.push(`Threads to Catch up is ${gap}px, not ${ACTIVITY_PAIR_GAP_PX} (Threads first)`);
-    }
-    if (got.row !== null) {
-      if (Math.abs(threads.x - got.row.left) > 1) {
-        out.push(`Threads starts at ${threads.x}, not the row's left ${got.row.left}`);
-      }
-      const end = catchUp.x + catchUp.width;
-      if (Math.abs(end - got.row.right) > 1) {
-        out.push(`Catch up ends at ${end}, not the row's right ${got.row.right}`);
-      }
-    }
+  const same = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+  const r1 = (n: number): number => Math.round(n * 10) / 10;
+  const { rows } = got;
+  const phone = got.viewport < 768;
+  const NAMES = { 'catch-up': 'Catch up', threads: 'Threads', other: 'A solid row' } as const;
+
+  // Which rows show: exactly the ones the screen expects, Catch up first.
+  for (const [key, expected] of [
+    ['catch-up', want.catchUp],
+    ['threads', want.threads],
+  ] as const) {
+    const n = rows.filter((r) => r.key === key).length;
+    if (expected && n !== 1) out.push(`${NAMES[key]}: ${n} solid rows, not 1`);
+    if (!expected && n !== 0) out.push(`${NAMES[key]} shows a solid row (expected none)`);
   }
+  if (rows.some((r) => r.key === 'other')) out.push('a solid row is neither Catch up nor Threads');
+  const order = rows.map((r) => r.key).join(' > ');
+  if (order === 'threads > catch-up') out.push('Threads sits before Catch up (Catch up first)');
+  if (got.stray > 0) out.push(`${got.stray} solid rows outside the lead slot`);
+  if (got.retired > 0) out.push(`${got.retired} retired Threads | Catch up hooks still render`);
   if (got.inTopbar !== 0) out.push('Threads or Catch up in the top bar (one top bar on every tab)');
   if (got.scrollWidth > got.viewport) {
     out.push(`the page scrolls sideways (${got.scrollWidth} > ${got.viewport})`);
   }
-  if (got.viewport >= 768) {
-    if (got.topbarActivity !== 0) out.push('an Activity button in the laptop top bar');
-    const side = got.side;
-    if (side === null) out.push('no Activity in the Sidebar');
+
+  // The lead slot: only while a row shows, 12 under the chips; the content 16 under it.
+  if (rows.length === 0) {
+    if (got.leads !== 0) out.push('a lead slot ([data-shell="lead"]) with no solid row in it');
+    if (
+      got.chipsBottom !== null &&
+      got.firstContentTop !== null &&
+      !same(got.firstContentTop - got.chipsBottom, 16)
+    ) {
+      out.push(
+        `the content starts ${r1(got.firstContentTop - got.chipsBottom)} under the chips, not 16`,
+      );
+    }
+  } else {
+    if (got.leads !== 1) out.push(`${got.leads} lead slots, not 1`);
+    const top = Math.min(...rows.map((r) => r.top));
+    const bottom = Math.max(...rows.map((r) => r.bottom));
+    if (got.chipsBottom === null) out.push('no chip row above the solid rows');
     else {
-      if (!side.last || !side.afterChat)
-        out.push('Sidebar Activity is not the last item after Chat');
-      if (!side.active || side.background !== got.accent) {
-        out.push('Sidebar Activity is not filled on /notifications');
+      if (!same(top - got.chipsBottom, 12)) {
+        out.push(`the solid rows start ${r1(top - got.chipsBottom)} under the chips, not 12`);
       }
-      const unread = catchUp !== null && catchUp.count !== null && catchUp.count !== '0';
-      if (unread && !side.badge) out.push('Sidebar Activity shows no count');
+      if (got.leadTop !== null && !same(got.leadTop, got.chipsBottom)) {
+        out.push(
+          `the lead slot starts ${r1(got.leadTop - got.chipsBottom)} under the chips, not 0`,
+        );
+      }
+    }
+    if (got.leadBottom !== null && !same(got.leadBottom, bottom)) {
+      out.push(`the lead slot ends ${r1(got.leadBottom - bottom)} under its last row, not 0`);
+    }
+    if (got.content === null) out.push('no [data-shell="content"] under the solid rows');
+    else if (!same(got.content.top + got.content.pad - bottom, 16)) {
+      out.push(
+        `the content starts ${r1(got.content.top + got.content.pad - bottom)} under the last solid row, not 16`,
+      );
+    }
+    if (got.firstContentTop !== null && !same(got.firstContentTop - bottom, 16)) {
+      out.push(
+        `the first content sits ${r1(got.firstContentTop - bottom)} under the last solid row, not 16`,
+      );
     }
   }
-  settleFindings(
-    screenName,
-    out.map((message) => ({ check: 'topbar' as const, message })),
-  );
+
+  // Each row against a list row of its own column.
+  const base = got.columns[0];
+  if (rows.length > 0 && base === undefined)
+    out.push('no list row under the solid rows to measure');
+  rows.forEach((row, i) => {
+    const name = NAMES[row.key];
+    const height = row.bottom - row.top;
+    if (!same(height, ROW_HEIGHT)) out.push(`${name} is ${r1(height)} tall, not ${ROW_HEIGHT}`);
+    if (!(row.count > 0)) out.push(`${name} shows at count ${row.count} (a row at 0 is absent)`);
+    if (row.key !== 'other') {
+      const line = row.key === 'catch-up' ? `${row.count} unread` : `${row.count} new`;
+      if (row.title !== name) out.push(`${name}'s title reads "${row.title}"`);
+      if (row.preview !== line)
+        out.push(`${name}'s second line reads "${row.preview}", not "${line}"`);
+      if (row.name !== `${name}, ${line}`) {
+        out.push(`${name}'s button is named "${row.name}", not "${name}, ${line}"`);
+      }
+    }
+    if (row.extras > 0) out.push(`${name} carries a time, tag or unread dot`);
+    if (row.picture === null) out.push(`${name} has no picture tile`);
+    else {
+      if (!same(row.picture.width, ROW_PICTURE) || !same(row.picture.height, ROW_PICTURE)) {
+        out.push(
+          `${name}'s tile is ${r1(row.picture.width)}x${r1(row.picture.height)}, not ${ROW_PICTURE}x${ROW_PICTURE}`,
+        );
+      }
+      if (row.titleLeft !== null && !same(row.titleLeft - row.picture.right, ROW_INSET)) {
+        out.push(
+          `${name}'s title starts ${r1(row.titleLeft - row.picture.right)} after the tile, not ${ROW_INSET}`,
+        );
+      }
+    }
+    if (row.titleLeft === null) out.push(`${name} has no title`);
+    if (row.badge === null) out.push(`${name} has no count pill`);
+    else {
+      if (row.badge.tone !== 'on-fill') out.push(`${name}'s count pill is not the on-fill tone`);
+      const text = row.count > 99 ? '99+' : String(row.count);
+      if (row.badge.text !== text)
+        out.push(`${name}'s pill reads "${row.badge.text}", not "${text}"`);
+      const off = row.badge.centre - (row.top + row.bottom) / 2;
+      if (Math.abs(off) > 1) out.push(`${name}'s count pill is ${r1(off)}px off the row's centre`);
+    }
+    // Look: the ink fill (a hovered row is one step off it), accent-fg text.
+    if (!row.hover && row.fill !== got.accent) {
+      out.push(`${name}'s fill is ${row.fill}, not the accent ${got.accent}`);
+    }
+    if (row.ink !== got.accentFg || (row.previewInk !== null && row.previewInk !== got.accentFg)) {
+      out.push(`${name}'s text is ${row.ink} / ${row.previewInk}, not accent-fg ${got.accentFg}`);
+    }
+    // The seam: a 1px top and left line in the page background (::before).
+    if (row.seam.top !== '1px' || row.seam.left !== '1px') {
+      out.push(`${name}'s seam is ${row.seam.top} top / ${row.seam.left} left, not 1px / 1px`);
+    }
+    if (row.seam.topColour !== got.pageBg || row.seam.leftColour !== got.pageBg) {
+      out.push(
+        `${name}'s seam is ${row.seam.topColour} / ${row.seam.leftColour}, not the page background ${got.pageBg}`,
+      );
+    }
+    if (phone) {
+      if (!same(row.left, 0) || !same(row.right, got.viewport)) {
+        out.push(
+          `${name} spans ${r1(row.left)}..${r1(row.right)}, not the viewport 0..${got.viewport}`,
+        );
+      }
+    }
+    if (base === undefined) return;
+    // md and up: cell i sits in grid column i (a one-column grid stacks them).
+    const index = phone || got.tracks < 2 ? 0 : i;
+    const wantLeft = got.step !== null ? base.left + got.step * index : got.columns[index]?.left;
+    if (wantLeft === undefined) {
+      out.push(`${name}: no list column ${index + 1} to measure against`);
+      return;
+    }
+    // A list row painted in that column, else the first column moved over by the grid's step.
+    const column = got.columns.find((c) => same(c.left, wantLeft));
+    const col = column ?? base;
+    const shift = column === undefined ? wantLeft - base.left : 0;
+    if (!phone && (!same(row.left, col.left + shift) || !same(row.right - row.left, col.width))) {
+      out.push(
+        `${name} sits at ${r1(row.left)} and is ${r1(row.right - row.left)} wide; list column ${index + 1} is at ${r1(col.left + shift)}, ${r1(col.width)} wide`,
+      );
+    }
+    if (row.titleLeft !== null && col.titleLeft !== null) {
+      if (!same(row.titleLeft, col.titleLeft + shift)) {
+        out.push(
+          `${name}'s title starts at ${r1(row.titleLeft)}, the list rows' at ${r1(col.titleLeft + shift)}`,
+        );
+      }
+    }
+    if (
+      row.badge !== null &&
+      col.edgeRight !== null &&
+      !same(row.badge.right, col.edgeRight + shift)
+    ) {
+      out.push(
+        `${name}'s count pill ends at ${r1(row.badge.right)}, the list rows' right edge is ${r1(col.edgeRight + shift)}`,
+      );
+    }
+  });
+
+  // Two rows: stacked and touching (phone, a one-column grid) or side by side and touching.
+  const [a, b] = rows;
+  if (a !== undefined && b !== undefined) {
+    if (phone || got.tracks < 2) {
+      const gap = b.top - a.bottom;
+      if (Math.abs(gap) > 0.5) out.push(`the solid rows are ${r1(gap)}px apart, not touching`);
+      if (!same(a.left, b.left)) out.push('the stacked solid rows do not share a left edge');
+    } else {
+      if (!same(b.left, a.right)) {
+        out.push(`the two cells are ${r1(b.left - a.right)}px apart, not touching`);
+      }
+      if (!same(a.top, b.top)) out.push('the two cells are not on one line');
+    }
+  }
+  return out;
 }
 
 /**
- * Check 15, narrow phones: at 390 and 375 wide, Activity's lead row fits:
- * Threads and Catch up in words, inside the viewport; nothing scrolls
- * sideways. Restores the viewport it found.
+ * Check 15, the solid rows: measures Activity's Catch up and Threads rows on
+ * the page as it stands (phone and laptop, light and dark) and fails on a
+ * breach. `want` states which rows this screen shows: a row is asserted
+ * present or absent exactly, and with neither there is no lead slot.
+ * `narrow` (phones) measures again at 390 and 375 wide, then restores the
+ * viewport it found.
  */
-export async function assertActivityLeadRowNarrow(page: Page, screenName: string): Promise<void> {
-  const before = page.viewportSize();
-  const out: string[] = [];
-  for (const width of [390, 375]) {
-    await page.setViewportSize({ width, height: before?.height ?? 844 });
-    await page.waitForTimeout(100);
-    const got = await page.evaluate(() => {
-      const read = (sel: string) => {
-        const el = document.querySelector(`[data-shell="lead"] ${sel}`);
-        if (el === null) return null;
-        const r = el.getBoundingClientRect();
-        return { left: r.left, right: r.right, text: (el.textContent ?? '').trim() };
-      };
-      return {
-        threads: read('[data-topbar-threads]'),
-        catchUp: read('[data-topbar-catch-up]'),
-        viewport: window.innerWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-      };
-    });
-    const at = `${width} wide`;
-    for (const [name, b] of [
-      ['Threads', got.threads],
-      ['Catch up', got.catchUp],
-    ] as const) {
-      if (b === null || b.left < 0 || b.right > got.viewport) {
-        out.push(`${at}: ${name} is missing or past the viewport`);
-      } else if (!b.text.startsWith(name)) out.push(`${at}: ${name} shows "${b.text}"`);
+export async function assertActivitySolidRows(
+  page: Page,
+  screenName: string,
+  want: ActivitySolidRowsWant,
+  opts: { narrow?: boolean } = {},
+): Promise<void> {
+  const got = await readActivitySolidRows(page);
+  const rows = activitySolidRowsFindings(got, want);
+  const bar: string[] = [];
+  if (got.viewport >= 768) {
+    if (got.topbarActivity !== 0) bar.push('an Activity button in the laptop top bar');
+    const side = got.side;
+    if (side === null) bar.push('no Activity in the Sidebar');
+    else {
+      if (!side.last || !side.afterChat)
+        bar.push('Sidebar Activity is not the last item after Chat');
+      if (!side.active || side.background !== got.accent) {
+        bar.push('Sidebar Activity is not filled on /activity');
+      }
+      if (want.catchUp && !side.badge) bar.push('Sidebar Activity shows no count');
     }
-    if (got.scrollWidth > got.viewport) out.push(`${at}: the page scrolls sideways`);
   }
-  if (before !== null) await page.setViewportSize(before);
-  settleFindings(
-    screenName,
-    out.map((message) => ({ check: 'topbar' as const, message })),
-  );
+  const before = page.viewportSize();
+  if (opts.narrow === true && before !== null && before.width < 768) {
+    for (const width of [390, 375]) {
+      await page.setViewportSize({ width, height: before.height });
+      await page.waitForFunction((w) => window.innerWidth === w, width);
+      const at = await readActivitySolidRows(page);
+      rows.push(...activitySolidRowsFindings(at, want).map((m) => `${width} wide: ${m}`));
+    }
+    await page.setViewportSize(before);
+    await page.waitForFunction((w) => window.innerWidth === w, before.width);
+  }
+  settleFindings(screenName, [
+    ...rows.map((message) => ({ check: 'list-card' as const, message })),
+    ...bar.map((message) => ({ check: 'topbar' as const, message })),
+  ]);
 }
 
 /**
@@ -3047,7 +3335,7 @@ export async function readListScreenAxis(page: Page, screen: string): Promise<Li
       row === undefined
         ? undefined
         : Array.from(row.querySelectorAll('[data-chip-face]')).find(shown);
-    // The shell's lead strip (a count line, Activity's Threads | Catch up) sits
+    // The shell's lead strip (a count line, Activity's solid rows) sits
     // between the chips and the content: the content's 16 is measured from it.
     const lead = Array.from(document.querySelectorAll('main [data-shell="lead"]')).find(
       (el) =>
