@@ -386,9 +386,10 @@ const REQUIRED: readonly string[] = [
   // Activity twins Plan (10 Nov 2026): sections and rows.
   'activity-sections',
   'activity-rows',
-  // Activity's Threads | Catch up (10 Nov 2026); activity-all-read re-shot above.
+  // Activity's Catch up and Threads solid rows (11 Nov 2026); activity-all-read re-shot above.
   'activity-threads-new',
   'activity-catch-up-menu',
+  'activity-solid-rows',
   'threads-stack-card',
 ];
 

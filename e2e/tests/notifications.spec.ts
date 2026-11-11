@@ -121,11 +121,29 @@ test(
     for (const name of ['Briefs', 'Plans']) {
       await expect(chipRow.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
-    // The lead row under the pills: Threads | Catch up; Catch up filled with the unread count.
-    await expect(page.locator('[data-shell="lead"] [data-topbar-catch-up]')).toHaveAttribute(
+    // The solid rows under the chips (11 Nov 2026): Catch up is a ui/ListCard
+    // row in the lead slot, first, with the unread count on its second line
+    // and in its pill. A row shows only while its count is above 0, so no row
+    // sits at 0; nothing of the old Threads | Catch up pair is left.
+    const solidRows = page.locator('[data-shell="lead"] [data-list-card-solid]');
+    const catchUpRow = solidRows.first();
+    await expect(catchUpRow.locator('button[data-topbar-catch-up]')).toHaveAttribute(
       'aria-label',
       /^Catch up, \d+ unread$/,
     );
+    await expect(catchUpRow.locator('button[data-topbar-catch-up]')).not.toHaveAttribute(
+      'data-count',
+      '0',
+    );
+    await expect(catchUpRow.locator('[data-list-card-title]')).toHaveText('Catch up');
+    await expect(catchUpRow.locator('[data-list-card-preview]')).toHaveText(/^\d+ unread$/);
+    await expect(catchUpRow.locator('[data-count-badge="on-fill"]')).toBeVisible();
+    await expect(solidRows.locator('button[data-count="0"]')).toHaveCount(0);
+    await expect(
+      page.locator(
+        '[data-activity-lead-row], [data-topbar-count], [data-topbar-pulse], [data-topbar-catch-up-wrap]',
+      ),
+    ).toHaveCount(0);
     await expect(page.locator('[data-activity-mark-all]')).toHaveCount(0);
     // Snooze is gone: no Snoozed chip.
     await expect(page.getByRole('button', { name: /^Snoozed/ })).toHaveCount(0);

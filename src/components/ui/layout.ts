@@ -72,10 +72,6 @@ export const CHIP_TAP = 44;
 export const PLAN_STACK = 8;
 /** A Plan day's top and bottom padding (PLAN_DAY_PAD). */
 export const PLAN_PAD = 12;
-/** The top bar Threads | Catch up box face height. */
-export const PAIR_BOX_HEIGHT = 28;
-/** The count pill inside a Threads | Catch up box. */
-export const PAIR_PILL_HEIGHT = 16;
 /** Activity's ink "N new" chip height. */
 export const NEW_CHIP_HEIGHT = 18;
 

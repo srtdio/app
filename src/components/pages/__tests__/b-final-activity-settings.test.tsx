@@ -146,9 +146,9 @@ describe('Activity: the day line and the card with no trailing ⋯', () => {
     expect(page).toContain('<Text as="h2" role="section" data-activity-heading="">');
     expect(page).not.toContain('data-activity-bucket-head');
     expect(page).not.toContain('data-bucket-count');
-    // Mark all read is Catch up's long-press in the lead row, never a page button.
+    // Mark all read is Catch up's long-press on its solid row, never a page button.
     expect(page).not.toContain('data-activity-mark-all');
-    expect(page).toContain('useActivityLeadRow({');
+    expect(page).toContain('useActivitySolidRows({');
     expect(page).toContain('lead={leadRow}');
     expect(page).not.toContain('AvatarStack');
   });

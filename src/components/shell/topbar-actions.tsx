@@ -9,7 +9,6 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -17,26 +16,22 @@ import {
   type ReactElement,
   type ReactNode,
   type Ref,
-  type RefObject,
 } from 'react';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
-import { CountBadge } from '@/components/ui/CountBadge';
-import { IconPlus, IconTickDouble, ICON_SIZE } from '@/components/ui/icons';
+import {
+  IconActivity,
+  IconPlus,
+  IconThreads,
+  IconTickDouble,
+  ICON_SIZE,
+} from '@/components/ui/icons';
+import { LIST_CARD_SOLID_GROUP, ListCard } from '@/components/ui/ListCard';
 import { useOptionalToast } from '@/components/ui/toast';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { CATCH_UP } from '@/lib/catch-up/copy';
 import { useWorkspaceThreads, unreadThreadCount } from '@/lib/catch-up/threads';
 import { cn } from '@/lib/cn';
-import {
-  DUR_SLOW_MS,
-  DUR_WIPE_MS,
-  EASE,
-  motionOff,
-  play,
-  type MoveSpec,
-  type Played,
-} from '@/lib/motion';
 
 export interface TopbarActions {
   /** The screen's sort control (an IconSort IconButton that opens its menu or sheet). */
@@ -178,105 +173,13 @@ const TOPBAR_PLUS_PHONE_FACE =
 const TOPBAR_PLUS_LAPTOP_FACE =
   'hidden h-8 w-28 items-center justify-center gap-2 rounded-lg px-2 text-accent-fg md:inline-flex';
 
-// --- Activity: Threads | Catch up (lead row, 10 Nov 2026) --------------------
+// --- Activity: Catch up and Threads, solid rows (11 Nov 2026) ----------------
 //
-// The top bar is the same on every tab; Activity's Threads and Catch up sit in
-// ListScreen's lead slot under the filter pills: two equal buttons filling the
-// row, 8 apart (ActivityLeadRow). One identical box each: face 28 tall
-// (PAIR_BOX_HEIGHT), text 12 (500), padding-x 8, gap 6, radius 8, a 1px
-// border; the hit is 44 tall through a ::before, so the face never grows.
-// Each button on its own: a count > 0 is the Main level (primary, ink fill)
-// with the count pill; 0 is the outline (Tool level with a border-strong
-// hairline), no pill.
-
-/** Threads' and Catch up's one box: the 28 face, the row's half, the 44 hit on ::before. */
-export const ACTIVITY_TOPBAR_BOX =
-  'relative h-7 min-h-0 w-full min-w-0 gap-pair border px-2 text-sm before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2';
-
-/** The lead row: two equal columns, 8 apart, filling the content width. */
-export const ACTIVITY_LEAD_ROW = 'grid grid-cols-2 gap-2';
-
-/**
- * The pill's text, 10 (the named pair-pill size, the pill only): set on
- * the wrapper over CountBadge's own size, so CountBadge itself is unchanged.
- */
-export const ACTIVITY_TOPBAR_PILL_TEXT =
-  'inline-flex shrink-0 [&_[data-count-badge]]:text-pair-pill';
-
-/** The count pill on a filled box: 16 tall (PAIR_PILL_HEIGHT; CountBadge on-fill). */
-export const ACTIVITY_TOPBAR_PILL = 'h-4 min-w-4 px-1 text-xs';
-
-/** The pulse: the ring scales out and back, 3 times, 1.4 s each (wipe + slow beats). */
-export const PULSE_CYCLE_MS = DUR_WIPE_MS + DUR_SLOW_MS;
-export const PULSE_CYCLES = 3;
-/** Rises this soon after the button mounts or the tab returns never pulse (a refresh landing). */
-export const PULSE_QUIET_MS = 3000;
-const PULSE_MOVE: MoveSpec = { move: 'touch', axis: ['scale'] };
-
-/** Whether a count change pulses: only a rise, armed, on screen, outside the quiet window. Pure. */
-export function shouldPulse(input: {
-  prev: number | null;
-  next: number;
-  armed: boolean;
-  hidden: boolean;
-  quiet: boolean;
-}): boolean {
-  if (!input.armed || input.hidden || input.quiet || input.prev === null) return false;
-  return input.next > input.prev;
-}
-
-/**
- * The ring's three pulses (scale only, never a fade). Its rest pose is
- * scale 0 (hidden), so when the move ends or any tap finishes it, it is gone.
- * Nothing runs under Reduce Motion.
- */
-export function pulseRing(el: Element | null): Played | null {
-  if (el === null || motionOff()) return null;
-  const frames: Keyframe[] = [];
-  for (let i = 0; i < PULSE_CYCLES; i += 1) {
-    const at = i / PULSE_CYCLES;
-    frames.push({ transform: 'scale(1)', offset: at });
-    frames.push({ transform: 'scale(1.15)', offset: at + 0.5 / PULSE_CYCLES });
-  }
-  frames.push({ transform: 'scale(1)', offset: 1 });
-  return play(el, PULSE_MOVE, frames, {
-    duration: PULSE_CYCLE_MS * PULSE_CYCLES,
-    easing: EASE.ios,
-  });
-}
-
-/**
- * The one pulse helper: the ring under the returned ref pulses when `count`
- * RISES while the button is on screen and armed. Never on mount (the first
- * armed count is the baseline), never in the quiet window after mount or a
- * tab return, never on a fall, never while hidden; never continuous.
- */
-export function usePulseOnRise(count: number, armed: boolean): RefObject<HTMLSpanElement> {
-  const ring = useRef<HTMLSpanElement>(null);
-  const prev = useRef<number | null>(null);
-  const quietUntil = useRef(0);
-  useEffect(() => {
-    quietUntil.current = Date.now() + PULSE_QUIET_MS;
-    const onVisibility = (): void => {
-      if (!document.hidden) quietUntil.current = Date.now() + PULSE_QUIET_MS;
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, []);
-  useEffect(() => {
-    if (!armed) return;
-    const pulse = shouldPulse({
-      prev: prev.current,
-      next: count,
-      armed,
-      hidden: typeof document !== 'undefined' && document.hidden,
-      quiet: Date.now() < quietUntil.current,
-    });
-    prev.current = count;
-    if (pulse) pulseRing(ring.current);
-  }, [count, armed]);
-  return ring;
-}
+// The top bar is the same on every tab; Activity's Catch up and Threads are
+// solid list rows (ui/ListCard solid + count) on top of the notification
+// list, in ListScreen's lead slot under the filter chips: Catch up first, then
+// Threads. A row shows only while its count is above 0; both at 0, the lead
+// slot is not rendered at all. Rows appear and leave at once (no motion).
 
 /** Threads' accessible name: "Threads, N new" / "Threads". Pure. */
 export function threadsLabel(count: number): string {
@@ -291,87 +194,79 @@ export function catchUpLabel(count: number): string {
 /** The long-press menu's one row. */
 export const MARK_ALL_AS_READ = 'Mark all as read';
 
-interface PairButtonProps {
-  label: string;
-  ariaLabel: string;
-  count: number;
-  armed: boolean;
-  onClick: () => void;
-  data: 'threads' | 'catch-up';
-  gesture?: ReturnType<typeof useMenuGesture> | undefined;
+/** The rows' second line: the short count line. Pure. */
+export function catchUpLine(count: number): string {
+  return `${count} unread`;
+}
+export function threadsLine(count: number): string {
+  return `${count} new`;
 }
 
-/** One of the pair: the box, the label, the count pill (> 0) and the pulse ring. */
-function PairButton({ label, ariaLabel, count, armed, onClick, data, gesture }: PairButtonProps) {
-  const ring = usePulseOnRise(count, armed);
-  const on = count > 0;
+/** Threads: the unread threads I am in. A tap opens the Threads list. */
+function ThreadsRow(props: { count: number; onOpen: () => void }): ReactElement {
   return (
-    <Button
-      type="button"
-      variant={on ? 'primary' : 'ghost'}
-      aria-label={ariaLabel}
-      {...(data === 'threads' ? { 'data-topbar-threads': '' } : { 'data-topbar-catch-up': '' })}
-      data-count={count}
-      {...(gesture !== undefined ? gesture.handlers : {})}
-      onClick={() => {
-        if (gesture?.consumeClickSuppression() === true) return;
-        onClick();
-      }}
-      className={cn(
-        ACTIVITY_TOPBAR_BOX,
-        on ? 'border-transparent' : 'border-border-strong text-fg',
-      )}
-    >
-      <span
-        ref={ring}
-        aria-hidden="true"
-        data-topbar-pulse=""
-        className="pointer-events-none absolute -inset-px scale-0 rounded-lg border border-fg"
-      />
-      <span className="shrink-0 whitespace-nowrap">{label}</span>
-      {on ? (
-        <span aria-hidden="true" data-topbar-count="" className={ACTIVITY_TOPBAR_PILL_TEXT}>
-          <CountBadge tone="on-fill" count={count} className={ACTIVITY_TOPBAR_PILL} />
-        </span>
-      ) : null}
-    </Button>
-  );
-}
-
-/** Threads: the unread threads I am in. A tap opens catch up on them (nothing at 0). */
-export function ThreadsButton(props: {
-  count: number;
-  armed: boolean;
-  onOpen: () => void;
-}): ReactElement {
-  return (
-    <PairButton
-      label="Threads"
-      ariaLabel={threadsLabel(props.count)}
+    <ListCard
+      solid
+      unread
       count={props.count}
-      armed={props.armed}
-      data="threads"
-      onClick={() => {
-        if (props.count > 0) props.onOpen();
+      picture={{ kind: 'icon', icon: IconThreads }}
+      title="Threads"
+      preview={threadsLine(props.count)}
+      onPress={props.onOpen}
+      press={{
+        'aria-label': threadsLabel(props.count),
+        'data-topbar-threads': '',
+        'data-count': String(props.count),
       }}
     />
   );
 }
 
 /**
- * Catch up: the unread count. A tap opens catch up (nothing at 0, never
- * greyed: the same outline as Threads at 0, 10 Nov 2026); a
- * long-press (touch) or right-click (laptop) opens the menu with one row,
- * Mark all as read: the whole inbox read at once, no toast, no Undo.
+ * Catch up: the unread count. A tap opens catch up; a long-press (touch) or
+ * right-click (laptop) opens the menu with one row, Mark all as read: the
+ * whole inbox read at once, no toast, no Undo.
  */
-export function CatchUpButton(props: {
+function CatchUpRow(props: {
   count: number;
-  armed: boolean;
   onOpen: () => void;
-  onMarkAllRead: () => void;
+  onMenu: () => void;
 }): ReactElement {
+  const gesture = useMenuGesture(props.onMenu);
+  return (
+    <ListCard
+      solid
+      unread
+      count={props.count}
+      picture={{ kind: 'icon', icon: IconActivity }}
+      title={CATCH_UP}
+      preview={catchUpLine(props.count)}
+      onPress={() => {
+        if (gesture.consumeClickSuppression()) return;
+        props.onOpen();
+      }}
+      press={{
+        ...gesture.handlers,
+        'aria-label': catchUpLabel(props.count),
+        'data-topbar-catch-up': '',
+        'data-count': String(props.count),
+      }}
+    />
+  );
+}
+
+/** The solid rows and Catch up's menu. Renders nothing when both counts are 0. */
+export function ActivitySolidRows(props: {
+  unread: number;
+  threads: number;
+  onCatchUp: () => void;
+  onThreads: () => void;
+  onMarkAllRead: () => void;
+}): ReactElement | null {
   const [menuOpen, setMenuOpen] = useState(false);
-  const gesture = useMenuGesture(() => setMenuOpen(true));
+  const showCatchUp = props.unread > 0;
+  const showThreads = props.threads > 0;
+  if (!showCatchUp && !showThreads) return null;
   const items: ActionMenuItem[] = [
     {
       id: 'mark-all-read',
@@ -381,70 +276,66 @@ export function CatchUpButton(props: {
     },
   ];
   return (
-    <span data-topbar-catch-up-wrap="" className="relative flex min-w-0">
-      <PairButton
-        label={CATCH_UP}
-        ariaLabel={catchUpLabel(props.count)}
-        count={props.count}
-        armed={props.armed}
-        data="catch-up"
-        gesture={gesture}
-        onClick={() => {
-          if (props.count > 0) props.onOpen();
-        }}
-      />
-      {/* The menu anchors to the button's box (its trailing edge, under it). */}
-      <span className="pointer-events-none absolute inset-0 flex justify-end">
-        <ActionMenu
-          title={CATCH_UP}
-          items={items}
-          trigger={null}
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-        />
-      </span>
-    </span>
+    <div data-activity-solid-rows="" className="relative">
+      <div className={LIST_CARD_SOLID_GROUP}>
+        {showCatchUp ? (
+          <CatchUpRow
+            count={props.unread}
+            onOpen={props.onCatchUp}
+            onMenu={() => setMenuOpen(true)}
+          />
+        ) : null}
+        {showThreads ? <ThreadsRow count={props.threads} onOpen={props.onThreads} /> : null}
+      </div>
+      {/* The menu anchors to the rows' box (its trailing edge, under it). */}
+      {showCatchUp ? (
+        <span className="pointer-events-none absolute inset-0 flex justify-end">
+          <ActionMenu
+            title={CATCH_UP}
+            items={items}
+            trigger={null}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+          />
+        </span>
+      ) : null}
+    </div>
   );
 }
 
 /**
- * Activity's lead row: Threads and Catch up, for ListScreen's `lead` slot.
- * The threads read starts after the first paint (useWorkspaceThreads'
- * effect), never awaited by it; the buttons paint at once from what the
- * device holds (0 before the first read). `ready`: the list has landed (Catch
- * up's pulse arms then). Handlers ride a ref so the row changes only with the
- * counts.
+ * Activity's solid rows, for ListScreen's `lead` slot: null when both counts
+ * are 0 (ListScreen then skips the slot). Pure render from the two stores
+ * already held: totalUnread from the inbox store, the threads the device
+ * holds (the threads read starts after the first paint in
+ * useWorkspaceThreads' effect and is never awaited; 0 before it lands).
+ * Handlers ride a ref so the rows change only with the counts. `ready` is
+ * kept for the callers' shape; nothing waits on it.
  */
-export function useActivityLeadRow(input: {
+export function useActivitySolidRows(input: {
   workspaceId: string | null;
   totalUnread: number;
   ready: boolean;
   onCatchUp: () => void;
   onThreads: () => void;
   onMarkAllRead: () => void;
-}): ReactElement {
+}): ReactElement | null {
   const threads = useWorkspaceThreads(input.workspaceId);
   const threadCount = unreadThreadCount(threads);
   const handlers = useRef(input);
   handlers.current = input;
-  const { totalUnread, ready } = input;
-  const threadsArmed = threads !== null;
+  const { totalUnread } = input;
   return useMemo(
-    () => (
-      <div data-activity-lead-row="" className={ACTIVITY_LEAD_ROW}>
-        <ThreadsButton
-          count={threadCount}
-          armed={threadsArmed}
-          onOpen={() => handlers.current.onThreads()}
-        />
-        <CatchUpButton
-          count={totalUnread}
-          armed={ready}
-          onOpen={() => handlers.current.onCatchUp()}
+    () =>
+      totalUnread > 0 || threadCount > 0 ? (
+        <ActivitySolidRows
+          unread={totalUnread}
+          threads={threadCount}
+          onCatchUp={() => handlers.current.onCatchUp()}
+          onThreads={() => handlers.current.onThreads()}
           onMarkAllRead={() => handlers.current.onMarkAllRead()}
         />
-      </div>
-    ),
-    [threadCount, threadsArmed, totalUnread, ready],
+      ) : null,
+    [threadCount, totalUnread],
   );
 }

@@ -8,6 +8,9 @@ import {
   LIST_CARD_LINE2,
   LIST_CARD_PICTURE,
   LIST_CARD_PREVIEW,
+  LIST_CARD_SOLID,
+  LIST_CARD_SOLID_GROUP,
+  LIST_CARD_SOLID_TILE,
   LIST_CARD_STACK,
   LIST_CARD_TEXT,
   LIST_CARD_UNREAD_DOT,
@@ -514,5 +517,88 @@ describe('ListCard tag holds the row (11 Nov 2026)', () => {
     expect(html).toMatch(/text-ellipsis[^"]*">A very long tag that would run off the row<\/span>/);
     expect(classOf(html, 'data-list-card-unread=""')).toContain('shrink-0');
     expect(classOf(html, 'data-list-card-time=""')).toContain('shrink-0');
+  });
+});
+
+describe('ListCard solid + count (11 Nov 2026)', () => {
+  const solid = (over: Partial<ListCardProps> = {}): string =>
+    render({ solid: true, count: 7, time: undefined, tag: undefined, ...over });
+
+  it('both default off: a plain row carries no solid class, hook or count slot', () => {
+    const html = render({ unread: true });
+    expect(html).not.toContain('data-list-card-solid');
+    expect(html).not.toContain('data-list-card-count');
+    expect(html).not.toMatch(/bg-accent|text-accent-fg|before:|data-count-badge/);
+    expect(html).toBe(render({ unread: true, solid: false }));
+  });
+
+  it('solid: the ink fill, accent-fg text, the laptop hover, same 72 frame and bleed', () => {
+    const html = solid();
+    const root = classOf(html, 'data-list-card=""');
+    for (const c of LIST_CARD_SOLID.split(' ')) expect(root).toContain(c);
+    expect(root).toEqual(
+      expect.arrayContaining(['bg-accent', 'text-accent-fg', 'hover:bg-accent-hover']),
+    );
+    for (const c of listCardFrame().split(' ')) expect(root).toContain(c);
+    expect(root).toEqual(expect.arrayContaining(['select-none', MOVE_CLASS.press]));
+    expect(classOf(html, 'data-list-card-title=""')).toContain('text-accent-fg');
+    expect(classOf(html, 'data-list-card-preview=""')).toContain('text-accent-fg');
+    expect(classOf(html, 'data-list-card-preview=""')).not.toContain('text-fg-2');
+    expect(html).toContain('data-list-card-solid=""');
+  });
+
+  it('solid picture tile: bg-panel with an fg icon in the rounded-picture box', () => {
+    const html = solid();
+    for (const c of LIST_CARD_SOLID_TILE.split(' ')) expect(html).toContain(c);
+    expect(html).toMatch(/aria-hidden="true" class="[^"]*bg-panel text-fg"/);
+    expect(html).not.toContain('bg-panel-2');
+    expect(classOf(html, 'data-list-card-picture-box=""')).toContain('rounded-picture');
+  });
+
+  it('tokens only: no hex, no dark:, no shadow, no fade or slide on a solid row', () => {
+    const html = solid();
+    expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b|dark:|shadow-|drop-shadow|backdrop-blur/);
+    expect(html).not.toMatch(/mv-(fade|slide|rise)/);
+  });
+
+  it('the seam is a border token in the page background, never a pixel value', () => {
+    expect(LIST_CARD_SOLID.split(' ')).toEqual(
+      expect.arrayContaining(['before:border-l', 'before:border-t', 'before:border-bg']),
+    );
+    expect(`${LIST_CARD_SOLID} ${LIST_CARD_SOLID_GROUP}`).not.toMatch(/\[\d+px\]/);
+  });
+
+  it('count: the on-fill pill at the right edge of the body, in place of time, tag and dot', () => {
+    const html = solid({ time: '5m', tag: 'Open', unread: true });
+    expect(html).not.toContain('data-list-card-time');
+    expect(html).not.toContain('data-list-card-tag');
+    expect(html).not.toContain('data-list-card-unread');
+    expect(html).toMatch(
+      /data-list-card-count="" aria-hidden="true" class="flex shrink-0 items-center"><span data-count-badge="on-fill"[^>]*>7<\/span><\/span><\/div><\/div>$/,
+    );
+    expect(solid({ count: 150 })).toContain('>99+</span>');
+  });
+
+  it('count 0 or absent: no count slot; a count without solid is the unread pill', () => {
+    expect(solid({ count: 0 })).not.toContain('data-list-card-count');
+    expect(render({ solid: true })).not.toContain('data-list-card-count');
+    const plain = render({ count: 3 });
+    expect(plain).toContain('data-count-badge=""');
+    expect(plain).not.toContain('data-count-badge="on-fill"');
+  });
+
+  it('never selectable: no tick, no time, tag or dot on a solid counted row', () => {
+    const html = solid();
+    expect(html).not.toContain('data-list-card-tick');
+    expect(html).not.toContain('data-list-card-selecting');
+  });
+
+  it('the solid group: the list grid, bleeding and clipped, outer corners at md+', () => {
+    const group = LIST_CARD_SOLID_GROUP.split(' ');
+    for (const c of LIST_CARD_GRID.split(' ')) expect(group).toContain(c);
+    expect(group).toEqual(
+      expect.arrayContaining(['-mx-4', 'px-4', 'overflow-hidden', 'md:rounded-lg']),
+    );
+    expect(LIST_CARD_SOLID.split(' ')).toContain('md:only:rounded-lg');
   });
 });

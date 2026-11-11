@@ -232,8 +232,9 @@ describe('Mark all read', () => {
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // The lead row is Threads | Catch up (useActivityLeadRow); Catch up's
-    // long-press "Mark all as read" is the whole-inbox write.
+    // The lead slot holds the solid rows, Catch up then Threads
+    // (useActivitySolidRows); Catch up's long-press "Mark all as read" is the
+    // whole-inbox write.
     expect(page).not.toContain('MARK_ALL_READ_LABEL');
     expect(page).not.toContain('IconTickDouble');
     expect(page).not.toContain('data-activity-mark-all');

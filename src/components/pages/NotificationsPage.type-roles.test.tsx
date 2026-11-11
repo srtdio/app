@@ -220,32 +220,50 @@ describe('Notifications type roles', () => {
 });
 
 describe('Activity header, order and the Unread zero state', () => {
-  it('no search field and no sort (decided 7 Nov): Threads | Catch up live in the lead row', async () => {
+  it('no search field and no sort (decided 7 Nov): Catch up is a solid row in the lead slot', async () => {
+    // The row's count is the inbox store's; a row shows only above 0.
+    inboxUnread.count = 3;
     await mount();
+    inboxUnread.count = 0;
     expect(document.querySelector('input[aria-label="Search activity"]')).toBeNull();
     expect(document.querySelector('[data-search-group]')).toBeNull();
     const bar = document.querySelector('[data-test-topbar]');
     expect(document.querySelector('[aria-label="Sort activity"]')).toBeNull();
     expect(document.querySelector('[data-test-topbar-sort]')?.childElementCount).toBe(0);
     const lead = document.querySelector('[data-shell="lead"]');
-    const threads = lead?.querySelector('[data-topbar-threads]');
-    const catchUp = document.querySelector('[data-topbar-catch-up]');
-    expect(threads).not.toBeNull();
-    expect(lead?.contains(catchUp)).toBe(true);
+    const rows = lead?.querySelector('[data-activity-solid-rows]');
+    const catchUp = document.querySelector('button[data-list-card-press][data-topbar-catch-up]');
+    expect(rows).not.toBeNull();
+    expect(catchUp?.getAttribute('aria-label')).toBe('Catch up, 3 unread');
+    expect(catchUp?.getAttribute('data-count')).toBe('3');
+    expect(rows?.contains(catchUp)).toBe(true);
     expect(bar?.contains(catchUp)).toBe(false);
+    // No unread threads: the Threads row is not in the DOM.
+    expect(document.querySelector('[data-topbar-threads]')).toBeNull();
+    // The solid row's type roles: the ListCard heading and secondary, in accent-fg.
+    const row = catchUp?.closest('[data-list-card-solid]');
+    const title = row?.querySelector('[data-list-card-title]');
+    const line = row?.querySelector('[data-list-card-preview]');
+    expect(title?.textContent).toBe('Catch up');
+    expectRole(title as HTMLElement, ['text-lg', 'truncate', 'text-accent-fg']);
+    expect(line?.textContent).toBe('3 unread');
+    expectRole(line as HTMLElement, ['truncate', 'text-accent-fg']);
+    expect(
+      row?.querySelector('[data-list-card-count] [data-count-badge="on-fill"]'),
+    ).not.toBeNull();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
   });
 
-  it('nothing unread: Catch up stays (outlined), no double tick', async () => {
+  it('nothing unread: no Catch up row, no lead slot, no double tick', async () => {
     h.fetchActivityEntries.mockReset().mockResolvedValue({
       ok: true,
       data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
     });
     await mount();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
-    expect(document.querySelector('[data-topbar-catch-up]')?.getAttribute('aria-label')).toBe(
-      'Catch up',
-    );
+    expect(document.querySelector('[data-topbar-catch-up]')).toBeNull();
+    expect(document.querySelector('[data-activity-solid-rows]')).toBeNull();
+    expect(document.querySelector('[data-shell="lead"]')).toBeNull();
   });
 
   it('reads newest first even when an old Oldest first is stored on the device', async () => {
