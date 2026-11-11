@@ -70,6 +70,14 @@ describe('Chip aria', () => {
     const html = renderToStaticMarkup(<Chip label="Open" count={3} selected={false} />);
     expect(html).toContain('<span class="tabular-nums text-fg-3">3</span>');
   });
+
+  it('the count caps at 99+ through the shared formatter (countBadgeText)', () => {
+    const at = renderToStaticMarkup(<Chip label="Open" count={99} />);
+    expect(at).toContain('<span class="tabular-nums text-fg-3">99</span>');
+    const over = renderToStaticMarkup(<Chip label="Open" count={120} />);
+    expect(over).toContain('<span class="tabular-nums text-fg-3">99+</span>');
+    expect(over).not.toContain('120');
+  });
 });
 
 describe('Chip onClear', () => {

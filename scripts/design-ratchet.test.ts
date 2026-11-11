@@ -21,8 +21,13 @@ function countsOf(metric: string): Counts {
   return countHits(scanSource(`src/${metric}.tsx`, src));
 }
 
+// The lock metrics are scoped by path (outside ui/, pages + chat), so they are
+// tested inline below with their own paths, not through a src/<metric>.tsx fixture.
+const LOCK_METRICS = ['rawTypeSize', 'negativeMargin', 'pagePadding'] as const;
+type FixtureMetric = Exclude<Metric, (typeof LOCK_METRICS)[number]>;
+
 // One fixture per metric; the number is what that fixture is built to hold.
-const EXPECTED: Record<Metric, number> = {
+const EXPECTED: Record<FixtureMetric, number> = {
   arbitraryPx: 3,
   offGrid: 5,
   zValues: 3,
@@ -46,7 +51,12 @@ const EXPECTED: Record<Metric, number> = {
 };
 
 describe('design ratchet: per-metric counts', () => {
-  for (const metric of METRIC_NAMES) {
+  it('every metric has a fixture count or is a lock metric', () => {
+    const covered = [...Object.keys(EXPECTED), ...LOCK_METRICS].sort();
+    expect(covered).toEqual([...METRIC_NAMES].sort());
+  });
+
+  for (const metric of Object.keys(EXPECTED) as FixtureMetric[]) {
     it(`${metric}`, () => {
       // zArbitrary shares the zValues fixture (z-[60] is both).
       const fixture = metric === 'zArbitrary' ? 'zValues' : metric;
@@ -120,6 +130,57 @@ describe('design ratchet: per-metric counts', () => {
       scanSource('src/a.ts', "import x from '../...';\nexport const k = 'lit-card';"),
     );
     expect(c.threeDots).toBe(0);
+  });
+});
+
+describe('design ratchet: lock metrics (outside src/components/ui)', () => {
+  const count = (file: string, src: string): Counts => countHits(scanSource(file, src));
+
+  it('rawTypeSize counts text-xs .. text-3xl outside ui, with variants, not colours or ui/', () => {
+    const src = `export const a = <p className="text-sm md:text-lg text-fg-2 text-xs" />;
+export const b = <p className="text-3xl text-[13px] text-base text-md text-2xl text-xl" />;`;
+    expect(count('src/components/pages/A.tsx', src).rawTypeSize).toBe(8);
+    expect(count('src/lib/a.tsx', src).rawTypeSize).toBe(8);
+    expect(count('src/components/ui/A.tsx', src).rawTypeSize).toBe(0);
+  });
+
+  it('negativeMargin counts -m/-mx/-my/-mt/-mr/-mb/-ml with a step, with variants', () => {
+    const src = `export const a = <div className="-mx-4 md:-mt-2 -m-1 -my-3 -mr-px -mb-[3px] -ml-6" />;
+export const b = <div className="mx-4 -translate-x-2 -top-1 -mx-auto -ms-2" />;`;
+    expect(count('src/components/chat/A.tsx', src).negativeMargin).toBe(7);
+    expect(count('src/components/ui/A.tsx', src).negativeMargin).toBe(0);
+  });
+
+  it('pagePadding counts distinct padding classes in pages and chat only', () => {
+    const src = `export const a = <div className="px-4 py-2 md:px-6 pt-3" />;
+export const b = <div className="px-4 py-2 -px-1 p-0" />;`;
+    expect(count('src/components/pages/A.tsx', src).pagePadding).toBe(5);
+    expect(count('src/components/chat/A.tsx', src).pagePadding).toBe(5);
+    expect(count('src/components/shell/A.tsx', src).pagePadding).toBe(0);
+    expect(count('src/components/ui/A.tsx', src).pagePadding).toBe(0);
+    const two = countHits([
+      ...scanSource('src/components/pages/A.tsx', '<div className="px-4" />'),
+      ...scanSource('src/components/chat/B.tsx', '<div className="px-4 py-3" />'),
+    ]);
+    expect(two.pagePadding).toBe(2);
+  });
+
+  it('a raise in a lock metric fails like any other; update only lowers', () => {
+    const base = { ...zeroCounts(), rawTypeSize: 2, negativeMargin: 1, pagePadding: 3 };
+    const cmp = compare({ ...base, rawTypeSize: 3 }, base);
+    expect(cmp.raised).toEqual([{ metric: 'rawTypeSize', count: 3, baseline: 2 }]);
+    expect(() => lowerBaseline({ ...base, pagePadding: 4 }, base)).toThrow(/Refusing to raise/);
+    expect(lowerBaseline({ ...base, negativeMargin: 0 }, base).negativeMargin).toBe(0);
+  });
+
+  it('the repo baseline carries the three lock metrics', () => {
+    const baseline = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL('./design-ratchet.baseline.json', import.meta.url)),
+        'utf8',
+      ),
+    ) as Record<string, number>;
+    for (const m of LOCK_METRICS) expect(typeof baseline[m], m).toBe('number');
   });
 });
 

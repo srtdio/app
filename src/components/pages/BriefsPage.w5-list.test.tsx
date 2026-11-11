@@ -497,7 +497,7 @@ const chipText = (label: string) =>
 
 describe('Briefs chip counts', () => {
   it('shows the server totals, not the loaded rows, as plain text', async () => {
-    // One loaded row, but the workspace holds 250: the chips say 250 / 200 / 50.
+    // One loaded row, but the workspace holds 250: the chips say 99+ / 99+ / 50 (Chip caps at 99+).
     listBriefs
       .mockResolvedValueOnce({
         ok: true,
@@ -509,8 +509,8 @@ describe('Briefs chip counts', () => {
     expect(countBriefs).toHaveBeenCalledTimes(1);
     expect(countBriefs.mock.calls[0]?.[1]).toBe('w1');
     expect(countBriefs.mock.calls[0]?.[2]).toBe('');
-    expect(chipText('All')).toBe('All 250');
-    expect(chipText('Open')).toBe('Open 200');
+    expect(chipText('All')).toBe('All 99+');
+    expect(chipText('Open')).toBe('Open 99+');
     expect(chipText('Closed')).toBe('Closed 50');
   });
 

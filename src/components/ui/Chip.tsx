@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
 import { ClearButton } from '@/components/ui/Button';
+import { countBadgeText } from '@/components/ui/CountBadge';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -166,7 +167,7 @@ export function Chip({
         {count !== undefined && count > 0 ? (
           <>
             {' '}
-            <span className="tabular-nums text-fg-3">{count}</span>
+            <span className="tabular-nums text-fg-3">{countBadgeText(count)}</span>
           </>
         ) : null}
       </span>

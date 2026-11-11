@@ -124,6 +124,21 @@ export const METRICS = {
     what: 'eslint-disable for no-restricted-syntax (design rule exemptions)',
     fix: 'Fix the code instead of disabling the rule; a disable needs a reason after --.',
   },
+  rawTypeSize: {
+    distinct: false,
+    what: 'raw font-size class (text-xs .. text-3xl) outside src/components/ui',
+    fix: 'Use a type role through ui/Text (or the part that owns the text) (CLAUDE.md Type roles).',
+  },
+  negativeMargin: {
+    distinct: false,
+    what: 'negative margin (-m, -mx, -my, -mt, -mr, -mb, -ml with a step) outside src/components/ui',
+    fix: 'Let the part apply the pull (TRAILING_PULL / LEADING_PULL, ListCard bleed); never at call sites.',
+  },
+  pagePadding: {
+    distinct: true,
+    what: 'distinct padding classes in src/components/pages and src/components/chat',
+    fix: 'Reuse a padding class already used on these screens, or move the padding into a part.',
+  },
 } as const;
 
 export type Metric = keyof typeof METRICS;
@@ -160,6 +175,30 @@ const LEADING = /^leading-(none|tight|snug|normal|relaxed|loose|\d+|\[[^\]]+\])$
 const TRACKING = /^tracking-(tighter|tight|normal|wide|wider|widest|\[[^\]]+\])$/;
 const BORDER_WIDTH = /^border(?:-[xytrblse])?-(2|4|8|\[\d+(?:\.\d+)?px\])$/;
 const PADDING = /^p[trblxyse]?-/;
+const RAW_TYPE_SIZE = /^text-(xs|sm|md|base|lg|xl|2xl|3xl)$/;
+const NEGATIVE_MARGIN = /^-m[xytrbl]?-(\d+(\.\d+)?|px|\[[^\]]+\])$/;
+/** Parts own their text, pulls and paddings; the lock metrics count outside ui/ only. */
+const UI_DIR = 'src/components/ui/';
+const PAGE_PADDING_DIRS = ['src/components/pages/', 'src/components/chat/'];
+
+/** Lock metrics for one class token, scoped by file (CLAUDE.md Lock). */
+export function lockTokenHits(
+  file: string,
+  token: string,
+): Array<{ metric: Metric; value: string }> {
+  if (file.startsWith(UI_DIR)) return [];
+  const out: Array<{ metric: Metric; value: string }> = [];
+  const { variants, base } = splitVariant(token);
+  let raw = token.slice(variants.length);
+  if (raw.startsWith('!')) raw = raw.slice(1);
+  const negative = raw.startsWith('-');
+  if (RAW_TYPE_SIZE.test(base) && !negative) out.push({ metric: 'rawTypeSize', value: token });
+  if (NEGATIVE_MARGIN.test(raw)) out.push({ metric: 'negativeMargin', value: token });
+  if (PAGE_PADDING_DIRS.some((d) => file.startsWith(d)) && PADDING.test(base) && !negative) {
+    out.push({ metric: 'pagePadding', value: token });
+  }
+  return out;
+}
 const HEIGHT_SMALL = /^(?:h|size)-(5|6|7|8|9|10|\[(\d+(?:\.\d+)?)px\])$/;
 const ICONS_TRACKED = /^(IconX|IconChevron\w*|IconSearch|IconPlus|IconCheck)$/;
 const TAP_PRIMITIVES = new Set(['Button', 'IconButton', 'Chip', 'PressableRow']);
@@ -303,6 +342,7 @@ export function scanSource(file: string, src: string): Hit[] {
         if (roleTable && (h.metric === 'leading' || h.metric === 'tracking')) continue;
         add(h.metric, n, h.value);
       }
+    for (const t of tokens(text)) for (const h of lockTokenHits(file, t)) add(h.metric, n, h.value);
     if (text.includes('...')) add('threeDots', n, text.slice(0, 40));
   };
 

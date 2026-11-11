@@ -27,6 +27,18 @@ const UI_FILES = readdirSync(`${ROOT}src/components/ui`)
   .map((n) => `src/components/ui/${n}`)
   .sort();
 
+/**
+ * Lock (CLAUDE.md "Lock"): PENDING only shrinks. Pinned at its length on the
+ * lock commit; a part leaving PENDING lowers this number in the same commit.
+ */
+const PENDING_PINNED = 54;
+
+/** The ui files PENDING held on the lock commit; nothing else may ever be PENDING. */
+const PENDING_AT_LOCK: readonly string[] =
+  'ActionMenu ActionRow AddLinkSheet ApproveConfirm Backdrop Card ChatCard Checkbox Composer ConfirmDialog DatePicker DropZone EmojiSheet EmptyState ErrorBoundary ErrorNote Field FileTile FileViewer ImageLightbox LinkButton LinkPreviewCard LoadError NoResults OnBehalfApproveSheet PendingChip PersonCard PersonMessageInput PersonTrigger PhotoOptionsSheet PhotoViewer PlatformMark PostPlaceholder PressableRow ProgressRing ReactionChips Row SearchHighlight Select SelectBar SelectCheck Sheet SidePanel SortMenu StatusDot Switch Textarea Tile UnsafeLinkSheet UploadRing ViewerBackButton WritingBox format-icon icons'
+    .split(' ')
+    .map((n) => `src/components/ui/${n}.tsx`);
+
 /** The cell ids a page module declares, in order. */
 export function cellIds(src: string): string[] {
   return [...src.matchAll(/\bcell\(\s*'([\w-]+)'/g)].map((m) => m[1] ?? '');
@@ -48,6 +60,15 @@ describe('gallery register', () => {
     expect(neither, 'ui part files in neither PARTS nor PENDING').toEqual([]);
     const gone = [...registered, ...PENDING].filter((f) => !UI_FILES.includes(f));
     expect(gone, 'register entries with no ui part file').toEqual([]);
+  });
+
+  it('PENDING only shrinks: never longer than the pin, never a new file', () => {
+    expect(
+      PENDING.length,
+      'PENDING grew: register the new part with its states and a gallery page',
+    ).toBeLessThanOrEqual(PENDING_PINNED);
+    const fresh = PENDING.filter((f) => !PENDING_AT_LOCK.includes(f));
+    expect(fresh, 'new ui parts go into PARTS with a gallery page, never PENDING').toEqual([]);
   });
 
   it('each part names its own file', () => {

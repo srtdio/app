@@ -18,5 +18,8 @@
   "exitMix": 0,
   "handTap": 9,
   "fullWidthButton": 0,
-  "designDisables": 1
+  "designDisables": 1,
+  "rawTypeSize": 702,
+  "negativeMargin": 72,
+  "pagePadding": 74
 }
