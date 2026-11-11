@@ -731,8 +731,13 @@ export function Comments(props: CommentsProps): ReactElement {
         : (profiles.get(id)?.displayName ?? personName(workspaceId, id) ?? ''),
     [profiles, workspaceId],
   );
+  // My role from the members this session holds, else the @ picker's read
+  // (already started after paint for mentions): no read of its own.
   const viewerIsAgency = isAgencyRole(
-    me === null ? null : held?.rows.find((r) => r.user_id === me && r.active === true)?.role,
+    me === null
+      ? null
+      : (held?.rows.find((r) => r.user_id === me && r.active === true)?.role ??
+          mentionMembers.members?.find((m) => m.userId === me)?.role),
   );
   // On a draft post the @ picker offers Creators only (Approvers can't see drafts).
   const draftPost = entityType === 'post' && props.postStage === 'draft';
@@ -1366,14 +1371,21 @@ export function Comments(props: CommentsProps): ReactElement {
                           }),
                       }}
                     />
-                    {threadRows(replyMessages, Date.now(), undefined, { days: false }).map((r) =>
-                      r.kind === 'message'
-                        ? renderRow(
-                            r.message,
-                            { head: r.head, tail: r.tail, afterLabel: false, threadPlace: 'reply' },
-                            { onOpen: undefined, highlighted: thread.focusId === r.message.id },
-                          )
-                        : null,
+                    {threadRows(replyMessages, Date.now(), undefined, { days: false }).map(
+                      (r, i) =>
+                        r.kind === 'message'
+                          ? renderRow(
+                              r.message,
+                              // The first reply sits under the strip, which carries the gap (chat's afterStrip).
+                              {
+                                head: r.head,
+                                tail: r.tail,
+                                afterLabel: i === 0,
+                                threadPlace: 'reply',
+                              },
+                              { onOpen: undefined, highlighted: thread.focusId === r.message.id },
+                            )
+                          : null,
                     )}
                   </ul>
                 </div>
