@@ -307,6 +307,9 @@ export function RowSend({
   );
 }
 
+/** A field-shape box whose field is switched off: the grey edge, never the ink line. */
+export const WRITING_FIELD_DISABLED = 'has-[textarea:disabled]:border-border-strong';
+
 // The field inside the box drops its own look: the box draws the line, the
 // fill and the focus line. Tokens only.
 const BOX_OWNS_FIELD =
@@ -864,6 +867,8 @@ export function WritingBox(props: WritingBoxProps) {
       cn(
         'lit-well flex-col rounded-lg px-3 focus-within:lit-focus',
         invalid ? 'border-bad lit-bad' : 'border-field',
+        // Switched off (11 Nov 2026): the field's ink line drops to the grey edge.
+        WRITING_FIELD_DISABLED,
       ),
     phoneExpanded && 'flex-1 rounded-none border-0',
   );

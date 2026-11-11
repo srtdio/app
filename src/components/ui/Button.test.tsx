@@ -382,3 +382,59 @@ describe('press (motion move 5): the shared mv-press class, never a call-site tr
     expect(tokens(chipClass())).toContain('[&:focus-visible>span]:lit-focus');
   });
 });
+
+describe('Button holds its shape (11 Nov 2026)', () => {
+  it('a text label stays on one line and cuts with an ellipsis; never wider than its container; 44 tall', () => {
+    for (const variant of VARIANTS) {
+      const t = tokens(classOf({ variant, children: 'A very long label that cannot fit' }));
+      for (const c of [
+        'inline-block',
+        'overflow-hidden',
+        'text-ellipsis',
+        'whitespace-nowrap',
+        'max-w-full',
+        'h-11',
+        'py-3',
+      ]) {
+        expect(t, `${variant} ${c}`).toContain(c);
+      }
+    }
+    expect(renderToStaticMarkup(<Button>Save</Button>)).toMatch(/>Save<\/button>$/);
+  });
+
+  it('beside an icon: one line, never wider than its container, the icon never shrinks', () => {
+    const t = tokens(classOf({ children: [<svg key="i" />, 'Send'] }));
+    for (const c of ['whitespace-nowrap', 'overflow-hidden', 'max-w-full', '[&>svg]:shrink-0']) {
+      expect(t).toContain(c);
+    }
+    expect(t).not.toContain('inline-block');
+  });
+
+  it('an icon-only round button keeps its 44 circle (no text classes)', () => {
+    const t = tokens(classOf({ shape: 'round', children: <svg /> }));
+    expect(t).toContain('w-11');
+    expect(t).not.toContain('text-ellipsis');
+  });
+
+  it('switched off: Main keeps the disabled fill, Button and Tool take fg-3, IconButton fg-3', () => {
+    for (const variant of ['primary', 'success', 'danger'] as const) {
+      expect(tokens(classOf({ variant }))).toEqual(
+        expect.arrayContaining(['disabled:bg-fg-3', 'aria-disabled:bg-fg-3']),
+      );
+    }
+    for (const variant of ['secondary', 'ghost', 'link'] as const) {
+      expect(tokens(classOf({ variant }))).toEqual(
+        expect.arrayContaining(['disabled:text-fg-3', 'aria-disabled:text-fg-3']),
+      );
+    }
+    expect(tokens(classOf({ variant: 'secondary' }))).toContain('aria-disabled:hover:bg-fg/10');
+    const icon = renderToStaticMarkup(<IconButton label="Close" disabled />);
+    for (const c of [
+      'disabled:text-fg-3',
+      'aria-disabled:text-fg-3',
+      'disabled:pointer-events-none',
+    ]) {
+      expect(icon).toContain(c);
+    }
+  });
+});

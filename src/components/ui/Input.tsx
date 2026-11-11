@@ -10,9 +10,15 @@ import { Text } from '@/components/ui/Text';
  */
 export type InputTone = 'field' | 'search';
 
-// Default field: the exact classes it has always had (ink line at rest).
-const FIELD =
-  'lit-well w-full h-11 px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3';
+/**
+ * Switched off (11 Nov 2026), the one field look: the ink line drops to the
+ * grey edge, text and placeholder fg-3, default cursor. Never a fade.
+ */
+export const FIELD_DISABLED =
+  'disabled:border-border-strong disabled:text-fg-3 disabled:placeholder:text-fg-3 disabled:cursor-default';
+
+// Default field: the ink line at rest; switched off, FIELD_DISABLED.
+const FIELD = `lit-well w-full h-11 px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus ${FIELD_DISABLED}`;
 
 // One clear X per search field (B1): the field's own IconButton. WebKit's
 // native type="search" cancel glyph (the second, backspace-like X) is hidden.

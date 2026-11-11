@@ -35,7 +35,21 @@ const NEW = (
   </Button>
 );
 
+const CHIPS_OFF = (
+  <div className="flex flex-wrap items-start gap-2">
+    <Chip label="All" selected disabled onClick={noop} />
+    <Chip label="Review" disabled onClick={noop} />
+  </div>
+);
+
+const NEW_OFF = (
+  <Button variant="primary" aria-disabled="true" onClick={noop}>
+    New
+  </Button>
+);
+
 export const cells: readonly GalleryCell[] = [
+  cell('disabled', () => <Toolbar context={CHIPS_OFF} icons={SORT} primary={NEW_OFF} />),
   cell('default', () => <Toolbar context={CHIPS} icons={SORT} primary={NEW} />),
   cell('zero-items', () => <Toolbar context={CHIPS} icons={[]} primary={NEW} />),
   cell('one-item', () => <Toolbar context={CHIPS} icons={SORT} />),

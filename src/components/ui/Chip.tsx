@@ -11,8 +11,8 @@ interface ChipProps extends Omit<
   /** An optional leading mark before the label (Pipeline's stage dot). */
   dot?: ReactNode;
   /**
-   * An optional mark after the label (the Plan tab's Draft tag). When set, the
-   * label truncates in its own span so the mark keeps the chip's right end.
+   * An optional mark after the label (the Plan tab's Draft tag). The label
+   * truncates in its own span, so the mark keeps the chip's right end.
    */
   trailing?: ReactNode;
   /** A filter's count, shown after the label only when above 0. */
@@ -76,7 +76,18 @@ export const CHIP_PICKED_EDGE = 'border-fg text-fg';
  * focus line is drawn on the visible chip, the box's one child span.
  */
 export const CHIP_HIT =
-  'group relative inline-flex min-h-11 min-w-11 items-center rounded-full outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default';
+  'group relative inline-flex min-h-11 min-w-11 max-w-full items-center rounded-full outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default aria-disabled:cursor-default';
+
+/**
+ * Switched off (11 Nov 2026), the one look: fg-3 ink and the grey edge (the
+ * pick's ink line drops to border-strong), the aria-disabled twin the same.
+ * Never a fade.
+ */
+export const CHIP_DISABLED =
+  'group-disabled:border-border-strong group-disabled:text-fg-3 group-aria-disabled:border-border-strong group-aria-disabled:text-fg-3';
+
+/** The label: one line, cut with an ellipsis; the chip never grows past its row. */
+export const CHIP_LABEL = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap';
 
 /** A call site's layout classes that also apply to the tap box (it sits in their row). */
 const LAYOUT = /^(flex|shrink|grow|basis-|self-|order-|w-|min-w-|max-w-)/;
@@ -133,8 +144,8 @@ export function Chip({
         className={cn(
           // Flat outline pill (7 Nov 2026): at rest a hairline and fg-2 ink; the
           // pick is the ink line (black light, white dark) and fg ink, no fill.
-          // Hover/press: the lit-hover overlay. Disabled: fg-3 ink, never a fade.
-          'inline-flex min-w-0 flex-1 items-center gap-2 rounded-full border text-md font-medium lit-hover group-disabled:text-fg-3',
+          // Hover/press: the lit-hover overlay. Disabled: CHIP_DISABLED, never a fade.
+          'inline-flex min-w-0 max-w-full flex-1 items-center gap-2 rounded-full border text-md font-medium lit-hover',
           sizes[size],
           // The add chip (a "+" with its label): the rest hairline, fg ink; no
           // dashed box (flat look). Selected never changes it.
@@ -143,11 +154,14 @@ export function Chip({
             : selected
               ? CHIP_PICKED_EDGE
               : CHIP_REST_EDGE,
+          CHIP_DISABLED,
           className,
         )}
       >
         {dot}
-        {trailing === undefined ? label : <span className="truncate">{label}</span>}
+        <span data-chip-label="" className={CHIP_LABEL}>
+          {label}
+        </span>
         {trailing}
         {count !== undefined && count > 0 ? (
           <>

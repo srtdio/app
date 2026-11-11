@@ -10,6 +10,7 @@ import type {
 import { linePrefix, type FormatRun, type FormatStyle } from '@srtdio/comments';
 import { useFormatKeys } from '@/components/ui/format-actions';
 import { cn } from '@/lib/cn';
+import { FIELD_DISABLED } from '@/components/ui/Input';
 import {
   decodeMarkers,
   deleteBesideHidden,
@@ -587,7 +588,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       data-live-format={live ? '' : undefined}
       className={cn(
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        'lit-well w-full px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3 py-field-y h-auto',
+        'lit-well w-full px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus py-field-y h-auto',
+        FIELD_DISABLED,
         compact ? 'min-h-11 max-h-32' : 'min-h-18',
         split !== null ? split.box : className,
         // Live styling: the mirror draws the glyphs; the box keeps the caret

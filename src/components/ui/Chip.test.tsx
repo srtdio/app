@@ -217,3 +217,30 @@ describe('Chip edges (8 Nov 2026): rest on the strong edge, picked on the ink li
     expect(sm).not.toContain('text-center');
   });
 });
+
+describe('Chip holds its shape (11 Nov 2026)', () => {
+  it('a long label stays on one line and cuts with an ellipsis; the chip is never wider than its row', () => {
+    const html = renderToStaticMarkup(<Chip label="A very long filter label that cannot fit" />);
+    expect(html).toContain(
+      '<span data-chip-label="" class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">A very long filter label that cannot fit</span>',
+    );
+    expect(html).toMatch(/<button[^>]*class="[^"]*\bmax-w-full\b/);
+    expect(html).toMatch(/data-chip-face=""[^>]*class="[^"]*\bmin-w-0\b/);
+  });
+
+  it('switched off: fg-3 ink and the grey edge, the pick included; never a fade', () => {
+    for (const selected of [false, true]) {
+      const html = renderToStaticMarkup(<Chip label="All" selected={selected} disabled />);
+      const face = (/<span data-chip-face=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? '').split(' ');
+      expect(face).toEqual(
+        expect.arrayContaining([
+          'group-disabled:border-border-strong',
+          'group-disabled:text-fg-3',
+          'group-aria-disabled:border-border-strong',
+          'group-aria-disabled:text-fg-3',
+        ]),
+      );
+      expect(face.some((c) => c.includes('opacity'))).toBe(false);
+    }
+  });
+});

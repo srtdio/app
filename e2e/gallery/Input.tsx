@@ -14,6 +14,7 @@ export const cells: readonly GalleryCell[] = [
   cell('disabled', () => (
     <div className="flex flex-wrap items-start gap-2">
       <Input aria-label="Name" defaultValue={NAME} disabled />
+      <Input aria-label="Title" placeholder="Title" disabled />
       <Input aria-label="Search" type="search" tone="search" placeholder="Search" disabled />
     </div>
   )),
