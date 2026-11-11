@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-// Activity's lead row (10 Nov 2026): Threads | Catch up, one identical box,
-// the pulse on a rise only, Catch up's long-press "Mark all as read".
+// Activity's solid rows (11 Nov 2026): Catch up, then Threads, as ui/ListCard
+// solid rows in the lead slot; a row only while its count is above 0, no lead
+// slot when both are 0; Catch up's long-press "Mark all as read". Guard: a
+// solid row never renders at count 0 and the lead-row buttons never come back.
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,24 +13,23 @@ vi.mock('@/lib/supabase', () => ({
   supabase: { rpc: async () => ({ data: [], error: null }) },
 }));
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
-  ACTIVITY_LEAD_ROW,
-  ACTIVITY_TOPBAR_BOX,
-  CatchUpButton,
+  ActivitySolidRows,
   MARK_ALL_AS_READ,
-  PULSE_CYCLE_MS,
-  PULSE_CYCLES,
-  PULSE_QUIET_MS,
-  ThreadsButton,
   TopbarActionsProvider,
   catchUpLabel,
-  useTopbarActions,
-  pulseRing,
-  shouldPulse,
+  catchUpLine,
   threadsLabel,
+  threadsLine,
+  useActivitySolidRows,
+  useTopbarActions,
 } from '@/components/shell/topbar-actions';
+import { ListScreen } from '@/components/shell/ListScreen';
 import { TopbarSlots } from '@/components/shell/Topbar';
-import { cn } from '@/lib/cn';
+import { LIST_CARD_GRID, LIST_CARD_SOLID_GROUP } from '@/components/ui/ListCard';
+import { ROW_HEIGHT } from '@/components/ui/layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,176 +75,145 @@ async function mount(node: ReactElement): Promise<void> {
   });
 }
 
-/** Moves played on the pulse ring itself (the count pill rolls its digits on its own). */
-const ringPulses = (): number =>
-  (animate.mock.contexts as unknown[]).filter(
-    (el) => el instanceof HTMLElement && el.hasAttribute('data-topbar-pulse'),
-  ).length;
 const threads = (): HTMLElement | null => document.querySelector('[data-topbar-threads]');
 const catchUp = (): HTMLElement | null => document.querySelector('[data-topbar-catch-up]');
+const solidRows = (): HTMLElement[] => [
+  ...document.querySelectorAll<HTMLElement>('[data-list-card-solid]'),
+];
+const noop = (): void => undefined;
 
-describe('shouldPulse: only a rise, while on screen', () => {
-  const base = { prev: 2, next: 3, armed: true, hidden: false, quiet: false };
-  it('a rise pulses', () => expect(shouldPulse(base)).toBe(true));
-  it('a fall or the same count never does', () => {
-    expect(shouldPulse({ ...base, next: 1 })).toBe(false);
-    expect(shouldPulse({ ...base, next: 2 })).toBe(false);
+function rows(over: Partial<Parameters<typeof ActivitySolidRows>[0]> = {}): ReactElement {
+  return (
+    <ActivitySolidRows
+      unread={0}
+      threads={0}
+      onCatchUp={noop}
+      onThreads={noop}
+      onMarkAllRead={noop}
+      {...over}
+    />
+  );
+}
+
+describe('a row shows only while its count is above 0', () => {
+  it('both 0: nothing renders at all', async () => {
+    await mount(rows());
+    expect(document.querySelector('[data-activity-solid-rows]')).toBeNull();
+    expect(solidRows()).toHaveLength(0);
+    expect(catchUp()).toBeNull();
+    expect(threads()).toBeNull();
   });
-  it('not on mount (no baseline yet), not unarmed, not hidden, not in the quiet window', () => {
-    expect(shouldPulse({ ...base, prev: null })).toBe(false);
-    expect(shouldPulse({ ...base, armed: false })).toBe(false);
-    expect(shouldPulse({ ...base, hidden: true })).toBe(false);
-    expect(shouldPulse({ ...base, quiet: true })).toBe(false);
+
+  it('only Catch up, only Threads: the other row is not in the DOM', async () => {
+    await mount(rows({ unread: 3 }));
+    expect(solidRows()).toHaveLength(1);
+    expect(catchUp()).not.toBeNull();
+    expect(threads()).toBeNull();
+    await mount(rows({ threads: 2 }));
+    expect(solidRows()).toHaveLength(1);
+    expect(catchUp()).toBeNull();
+    expect(threads()).not.toBeNull();
+  });
+
+  it.each([
+    [0, 0],
+    [0, 4],
+    [5, 0],
+    [1, 1],
+    [150, 150],
+  ])('guard: no solid row at count 0 (unread %i, threads %i)', async (unread, threadCount) => {
+    await mount(rows({ unread, threads: threadCount }));
+    const want = (unread > 0 ? 1 : 0) + (threadCount > 0 ? 1 : 0);
+    expect(solidRows()).toHaveLength(want);
+    for (const button of document.querySelectorAll('[data-topbar-catch-up], [data-topbar-threads]')) {
+      expect(Number(button.getAttribute('data-count'))).toBeGreaterThan(0);
+    }
+    expect(document.querySelector('[data-activity-solid-rows]') !== null).toBe(want > 0);
+  });
+
+  it('both: Catch up first, then Threads, in the solid group grid', async () => {
+    await mount(rows({ unread: 7, threads: 2 }));
+    const buttons = [...document.querySelectorAll('[data-list-card-solid] > button')];
+    expect(buttons.map((b) => b.hasAttribute('data-topbar-catch-up'))).toEqual([true, false]);
+    expect(buttons.map((b) => b.hasAttribute('data-topbar-threads'))).toEqual([false, true]);
+    const group = solidRows()[0]?.parentElement;
+    expect(group?.className).toBe(LIST_CARD_SOLID_GROUP);
+    for (const cls of LIST_CARD_GRID.split(' ')) expect(group?.className.split(' ')).toContain(cls);
+    expect(group?.parentElement?.hasAttribute('data-activity-solid-rows')).toBe(true);
   });
 });
 
-describe('the pulse ring', () => {
-  it('3 cycles of 1.4 s, scale only, ends on the rest pose', () => {
-    const el = document.createElement('span');
-    expect(pulseRing(el)).not.toBeNull();
-    expect(animate).toHaveBeenCalledTimes(1);
-    const [frames, options] = animate.mock.calls[0] as unknown as [
-      Keyframe[],
-      KeyframeAnimationOptions,
-    ];
-    expect(PULSE_CYCLE_MS).toBe(1400);
-    expect(options.duration).toBe(PULSE_CYCLE_MS * PULSE_CYCLES);
-    for (const frame of frames) expect(Object.keys(frame).sort()).toEqual(['offset', 'transform']);
-    expect(frames.filter((f) => f.transform === 'scale(1.15)')).toHaveLength(3);
-  });
-
-  it('reduced motion: nothing runs', () => {
-    reduce = true;
-    expect(pulseRing(document.createElement('span'))).toBeNull();
-    expect(animate).not.toHaveBeenCalled();
-  });
-
-  it('a rise on screen pulses once; mount, a fall and the quiet window do not', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-11-10T09:00:00Z'));
-    const open = vi.fn();
-    await mount(<ThreadsButton count={1} armed onOpen={open} />);
-    // Inside the quiet window after mount: a rise (a refresh landing) stays still.
-    await mount(<ThreadsButton count={2} armed onOpen={open} />);
-    expect(ringPulses()).toBe(0);
-    vi.setSystemTime(Date.now() + PULSE_QUIET_MS + 1);
-    await mount(<ThreadsButton count={1} armed onOpen={open} />);
-    expect(ringPulses()).toBe(0);
-    await mount(<ThreadsButton count={4} armed onOpen={open} />);
-    expect(ringPulses()).toBe(1);
-  });
-
-  it('reduced motion: a rise does not pulse', async () => {
-    reduce = true;
-    vi.useFakeTimers({ toFake: ['Date'] });
-    await mount(<ThreadsButton count={1} armed onOpen={() => undefined} />);
-    vi.setSystemTime(Date.now() + PULSE_QUIET_MS + 1);
-    await mount(<ThreadsButton count={5} armed onOpen={() => undefined} />);
-    expect(ringPulses()).toBe(0);
-  });
-});
-
-describe('one identical box', () => {
-  it.each([0, 1, 150])('Threads and Catch up share the fixed box at %i', async (n) => {
-    await mount(
-      <span>
-        <ThreadsButton count={n} armed={false} onOpen={() => undefined} />
-        <CatchUpButton
-          count={n}
-          armed={false}
-          onOpen={() => undefined}
-          onMarkAllRead={() => undefined}
-        />
-      </span>,
-    );
-    const box = cn(ACTIVITY_TOPBAR_BOX).split(' ');
-    for (const el of [threads(), catchUp()]) {
-      const cls = (el?.className ?? '').split(/\s+/);
-      for (const c of box) expect(cls).toContain(c);
-      // One width (the row's half: w-full in its grid column), never a second w-* class.
-      expect(cls.filter((c) => /^w-/.test(c))).toEqual(['w-full']);
-      // The 28 face (PAIR_BOX_HEIGHT); the 44 hit rides ::before.
-      expect(cls).toEqual(expect.arrayContaining(['h-7']));
-      expect(cls).toEqual(expect.arrayContaining(['before:h-11', 'before:inset-x-0']));
-      expect(cls).toContain('rounded-lg');
+describe('the rows are ui/ListCard solid rows', () => {
+  it('72 tall, ink fill, the words, the count pill on-fill at the right edge', async () => {
+    await mount(rows({ unread: 7, threads: 150 }));
+    const [catchUpRow, threadsRow] = solidRows();
+    for (const row of [catchUpRow, threadsRow]) {
+      const cls = (row?.className ?? '').split(/\s+/);
+      expect(cls).toContain(`h-${ROW_HEIGHT / 4}`);
+      expect(cls).toEqual(expect.arrayContaining(['bg-accent', 'text-accent-fg', '-mx-4', 'px-4']));
+      expect(cls).toContain('hover:bg-accent-hover');
+      expect(cls).toContain('select-none');
+      expect(row?.hasAttribute('data-list-card')).toBe(true);
+      expect(row?.querySelector('[data-list-card-time]')).toBeNull();
+      expect(row?.querySelector('[data-list-card-tag]')).toBeNull();
+      expect(row?.querySelector('[data-list-card-unread]')).toBeNull();
+      expect(row?.querySelector('[data-list-card-tick]')).toBeNull();
+      const pill = row?.querySelector('[data-list-card-count] [data-count-badge]');
+      expect(pill?.getAttribute('data-count-badge')).toBe('on-fill');
+      expect(row?.querySelector('[data-list-card-picture] svg')).not.toBeNull();
     }
-    const pill = document.querySelectorAll('[data-topbar-count]');
-    if (n === 0) {
-      expect(pill).toHaveLength(0);
-      expect(threads()?.className).toContain('border-border-strong');
-      expect(threads()?.className).not.toContain('bg-accent');
-    } else {
-      expect([...pill].map((p) => p.textContent)).toEqual([
-        n > 99 ? '99+' : String(n),
-        n > 99 ? '99+' : String(n),
-      ]);
-      expect(catchUp()?.className).toContain('bg-accent');
-    }
+    expect(catchUpRow?.querySelector('[data-list-card-title]')?.textContent).toBe('Catch up');
+    expect(catchUpRow?.querySelector('[data-list-card-preview]')?.textContent).toBe('7 unread');
+    expect(catchUpRow?.querySelector('[data-count-badge]')?.textContent).toBe('7');
+    expect(threadsRow?.querySelector('[data-list-card-title]')?.textContent).toBe('Threads');
+    expect(threadsRow?.querySelector('[data-list-card-preview]')?.textContent).toBe('150 new');
+    expect(threadsRow?.querySelector('[data-count-badge]')?.textContent).toBe('99+');
   });
 
-  it('aria: "Threads, N new" / "Threads"; "Catch up, N unread" / "Catch up"', () => {
+  it('the hooks: data-count and the accessible names on the row button', async () => {
+    await mount(rows({ unread: 7, threads: 3 }));
+    expect(catchUp()?.tagName).toBe('BUTTON');
+    expect(catchUp()?.getAttribute('data-count')).toBe('7');
+    expect(catchUp()?.getAttribute('aria-label')).toBe('Catch up, 7 unread');
+    expect(threads()?.getAttribute('data-count')).toBe('3');
+    expect(threads()?.getAttribute('aria-label')).toBe('Threads, 3 new');
+  });
+
+  it('words: "{n} unread", "{n} new"; aria "Threads, N new" / "Catch up, N unread"', () => {
+    expect(catchUpLine(7)).toBe('7 unread');
+    expect(threadsLine(3)).toBe('3 new');
     expect(threadsLabel(3)).toBe('Threads, 3 new');
     expect(threadsLabel(0)).toBe('Threads');
     expect(catchUpLabel(7)).toBe('Catch up, 7 unread');
     expect(catchUpLabel(0)).toBe('Catch up');
   });
+
+  it('no motion: nothing animates when a row appears, leaves or its count mounts', async () => {
+    await mount(rows({ unread: 1 }));
+    await mount(rows({ unread: 1, threads: 2 }));
+    await mount(rows({ threads: 2 }));
+    await mount(rows());
+    expect(animate).not.toHaveBeenCalled();
+  });
 });
 
 describe('taps and the long-press', () => {
-  it('a tap opens; at 0 it does nothing', async () => {
-    const open = vi.fn();
-    await mount(<ThreadsButton count={0} armed onOpen={open} />);
+  it('a tap on each row opens its place', async () => {
+    const onCatchUp = vi.fn();
+    const onThreads = vi.fn();
+    await mount(rows({ unread: 2, threads: 2, onCatchUp, onThreads }));
     act(() => threads()?.click());
-    expect(open).not.toHaveBeenCalled();
-    await mount(<ThreadsButton count={2} armed onOpen={open} />);
-    act(() => threads()?.click());
-    expect(open).toHaveBeenCalledTimes(1);
-  });
-
-  it('Catch up at 0: never greyed (same outline as Threads), no action; above 0 it opens', async () => {
-    const open = vi.fn();
-    await mount(<CatchUpButton count={0} armed onOpen={open} onMarkAllRead={() => undefined} />);
-    expect(catchUp()?.hasAttribute('aria-disabled')).toBe(false);
-    expect(catchUp()?.className).toContain('text-fg');
-    expect(catchUp()?.className).toContain('w-full');
+    expect(onThreads).toHaveBeenCalledTimes(1);
+    expect(onCatchUp).not.toHaveBeenCalled();
     act(() => catchUp()?.click());
-    expect(open).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="status"]')).toBeNull();
-    await mount(<CatchUpButton count={3} armed onOpen={open} onMarkAllRead={() => undefined} />);
-    expect(catchUp()?.hasAttribute('aria-disabled')).toBe(false);
-    act(() => catchUp()?.click());
-    expect(open).toHaveBeenCalledTimes(1);
-  });
-
-  it('the count pill is CountBadge tone on-fill, no placement class', async () => {
-    await mount(<ThreadsButton count={4} armed onOpen={() => undefined} />);
-    const pill = threads()?.querySelector('[data-count-badge]');
-    expect(pill?.getAttribute('data-count-badge')).toBe('on-fill');
-    expect(pill?.className).toContain('bg-accent-fg');
-    expect(pill?.className).toContain('text-accent');
-  });
-
-  it('the words at every width: no icon form, the label always shows', async () => {
-    await mount(<ThreadsButton count={4} armed onOpen={() => undefined} />);
-    expect(threads()?.className).not.toContain('max-sm:');
-    expect(threads()?.querySelector('svg')).toBeNull();
-    expect(threads()?.textContent).toContain('Threads');
-  });
-
-  it('Threads fills with its count when unread threads > 0; outline at 0', async () => {
-    await mount(<ThreadsButton count={0} armed onOpen={() => undefined} />);
-    expect(threads()?.className).not.toContain('bg-accent');
-    expect(threads()?.querySelector('[data-topbar-count]')).toBeNull();
-    await mount(<ThreadsButton count={2} armed onOpen={() => undefined} />);
-    expect(threads()?.className).toContain('bg-accent');
-    expect(threads()?.querySelector('[data-topbar-count]')?.textContent).toBe('2');
+    expect(onCatchUp).toHaveBeenCalledTimes(1);
   });
 
   it('long-press Catch up: one row, Mark all as read, which marks all (no open)', async () => {
     vi.useFakeTimers();
     const open = vi.fn();
     const markAll = vi.fn();
-    await mount(<CatchUpButton count={4} armed onOpen={open} onMarkAllRead={markAll} />);
+    await mount(rows({ unread: 4, onCatchUp: open, onMarkAllRead: markAll }));
     const button = catchUp();
     if (button === null) throw new Error('no button');
     act(() => {
@@ -259,21 +229,29 @@ describe('taps and the long-press', () => {
       button.click();
     });
     expect(open).not.toHaveBeenCalled();
-    const rows = [...document.querySelectorAll<HTMLElement>('[role="menuitem"], button')].filter(
-      (b) => b.textContent?.includes(MARK_ALL_AS_READ),
-    );
-    expect(rows).toHaveLength(1);
-    act(() => rows[0]?.click());
+    const menuRows = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"], button'),
+    ].filter((b) => b.textContent?.includes(MARK_ALL_AS_READ));
+    expect(menuRows).toHaveLength(1);
+    act(() => menuRows[0]?.click());
     expect(markAll).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="status"]')).toBeNull();
   });
 
   it('right-click (laptop) opens the same menu', async () => {
-    const markAll = vi.fn();
-    await mount(<CatchUpButton count={0} armed onOpen={() => undefined} onMarkAllRead={markAll} />);
+    await mount(rows({ unread: 1 }));
     act(() => {
       catchUp()?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     expect(document.body.textContent).toContain(MARK_ALL_AS_READ);
+  });
+
+  it('the Threads row has no menu', async () => {
+    await mount(rows({ threads: 1 }));
+    act(() => {
+      threads()?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(document.body.textContent).not.toContain(MARK_ALL_AS_READ);
   });
 });
 
@@ -298,8 +276,62 @@ describe('Topbar: the same two slots on every tab (Activity publishes none)', ()
   });
 });
 
-describe('useActivityLeadRow: Threads | Catch up as one row for the lead slot', () => {
-  it('two equal columns 8 apart, Threads then Catch up', () => {
-    expect(ACTIVITY_LEAD_ROW.split(' ')).toEqual(['grid', 'grid-cols-2', 'gap-2']);
+describe('useActivitySolidRows: the lead slot', () => {
+  function Screen({ unread }: { unread: number }) {
+    const lead = useActivitySolidRows({
+      workspaceId: null,
+      totalUnread: unread,
+      ready: true,
+      onCatchUp: noop,
+      onThreads: noop,
+      onMarkAllRead: noop,
+    });
+    return (
+      <ListScreen title="Activity" chips={<span />} lead={lead}>
+        <span />
+      </ListScreen>
+    );
+  }
+
+  it('both counts 0: null, so ListScreen renders no lead slot', async () => {
+    await mount(<Screen unread={0} />);
+    expect(document.querySelector('[data-shell="lead"]')).toBeNull();
+    expect(document.querySelector('[data-shell="content"]')).not.toBeNull();
+  });
+
+  it('unread above 0: the Catch up row inside the lead slot, at once', async () => {
+    await mount(<Screen unread={3} />);
+    const lead = document.querySelector('[data-shell="lead"]');
+    expect(lead?.querySelector('[data-activity-solid-rows] [data-topbar-catch-up]')).not.toBeNull();
+    expect(lead?.querySelector('[data-topbar-threads]')).toBeNull();
+    await mount(<Screen unread={0} />);
+    expect(document.querySelector('[data-shell="lead"]')).toBeNull();
+  });
+});
+
+describe('guard: the lead-row buttons never come back', () => {
+  const src = readFileSync(fileURLToPath(new URL('./topbar-actions.tsx', import.meta.url)), 'utf8');
+  it('no pair button, box, pill or pulse in topbar-actions', () => {
+    expect(src).not.toMatch(
+      /PairButton|ThreadsButton|CatchUpButton|ACTIVITY_TOPBAR_|ACTIVITY_LEAD_ROW|useActivityLeadRow/,
+    );
+    expect(src).not.toMatch(/PULSE_|shouldPulse|usePulseOnRise|pulseRing|data-topbar-pulse/);
+    expect(src).not.toMatch(/data-activity-lead-row|data-topbar-count|grid-cols-2/);
+  });
+  it('the rows are ListCard solid, never a Button', () => {
+    const from = src.indexOf('// --- Activity: Catch up and Threads');
+    expect(from).toBeGreaterThan(0);
+    const activity = src.slice(from);
+    expect(activity).not.toMatch(/<Button\b|<button\b/);
+    expect(activity.match(/<ListCard\b/g)).toHaveLength(2);
+    expect(activity.match(/\bsolid\b(?=\n)/g)).toHaveLength(2);
+  });
+  it('nothing mounts the old row', async () => {
+    await mount(rows({ unread: 2, threads: 2 }));
+    expect(
+      document.querySelector(
+        '[data-activity-lead-row], [data-topbar-pulse], [data-topbar-count], [data-topbar-catch-up-wrap]',
+      ),
+    ).toBeNull();
   });
 });

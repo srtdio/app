@@ -13,6 +13,7 @@ import { Bone, MOVE_CLASS } from '@/lib/motion';
 import { textRole } from '@/components/ui/Text';
 import { Tag, type TagDot } from '@/components/ui/Tag';
 import { Avatar } from '@/components/ui/Avatar';
+import { CountBadge } from '@/components/ui/CountBadge';
 import { PostPlaceholder, type PostPlaceholderKind } from '@/components/ui/PostPlaceholder';
 import { ICON_SIZE, type IconProps } from '@/components/ui/icons';
 import { SelectCheck } from '@/components/ui/SelectCheck';
@@ -116,6 +117,19 @@ export interface ListCardProps {
   selected?: boolean;
   /** The quieter row (a closed brief): the title greys to fg-3. */
   muted?: boolean;
+  /**
+   * The solid row (Activity's Catch up and Threads, 11 Nov 2026): the ink fill
+   * (bg-accent, text in accent-fg), the picture tile on bg-panel with an fg
+   * icon. Tokens only, so dark mode inverts by itself. Solid rows sit in
+   * LIST_CARD_SOLID_GROUP. Default off: every other row is unchanged.
+   */
+  solid?: boolean;
+  /**
+   * A count pill (ui/CountBadge) at the right edge, vertically centred, in
+   * place of the time, tag and unread dot (on-fill on a solid row). Nothing
+   * at 0 or absent.
+   */
+  count?: number;
   as?: 'div' | 'li' | 'article';
   rootRef?: Ref<HTMLElement> | undefined;
   surface?: ListCardSurface;
@@ -139,6 +153,23 @@ export function listCardFrame(selected = false): string {
  * hold (iOS long-press selects).
  */
 export const LIST_CARD_BODY = 'pointer-events-none relative flex min-w-0 flex-1 items-center gap-3';
+
+/**
+ * The solid row's look: ink fill, accent-fg text, the laptop hover step, the
+ * focus line in accent-fg (the ink line would not show on ink), no callout.
+ * The seam: a 1px line in the page background (border-bg) on a box one pixel
+ * up and left of the row, so it shows only where it lies over a neighbouring
+ * solid row (above it on phone, left of it in the laptop grid) and never on
+ * the page. Corners: a lone row rounds itself (md+); the rest is the group's.
+ */
+export const LIST_CARD_SOLID =
+  'bg-accent text-accent-fg hover:bg-accent-hover [--sel-edge:rgb(var(--accent-fg-rgb))] before:pointer-events-none before:absolute before:-left-px before:-top-px before:bottom-0 before:right-0 before:border-l before:border-t before:border-bg md:only:rounded-lg xl:last:rounded-r-lg';
+
+/** The solid row's picture tile: bg-panel with an fg icon (rounded-picture from the box). */
+export const LIST_CARD_SOLID_TILE = 'bg-panel text-fg';
+
+/** The count slot: the row's right edge, vertically centred by the body. */
+export const LIST_CARD_COUNT = 'flex shrink-0 items-center';
 
 /** The picture box: 48 (ROW_PICTURE), never shrinks. */
 export const LIST_CARD_PICTURE = 'relative flex h-12 w-12 shrink-0 items-center justify-center';
@@ -201,6 +232,14 @@ export const LIST_CARD_STACK = 'flex flex-col';
 export const LIST_CARD_GRID = 'grid grid-cols-1 md:grid-cols-list-cards md:gap-x-8';
 
 /**
+ * The group solid rows sit in (Activity's lead slot): LIST_CARD_GRID, so each
+ * row is one grid cell lined up with the cards under it. It bleeds like the
+ * rows (-mx-4 / px-4) and clips to its box: edge to edge on phone, the outer
+ * corners rounded-lg at md+ (the cells touch; their seam is LIST_CARD_SOLID's).
+ */
+export const LIST_CARD_SOLID_GROUP = `${LIST_CARD_GRID} -mx-4 overflow-hidden px-4 md:rounded-lg`;
+
+/**
  * The tap surface laid over the whole row: the hover / press fill edge to edge
  * and the focus line inside the edge. The row itself sinks (MOVE_CLASS.press
  * on the root), so the overlay carries no press of its own.
@@ -236,10 +275,12 @@ function Picture({
   picture,
   hooks,
   select,
+  solid,
 }: {
   picture: ListCardPicture;
   hooks: ListCardHooks | undefined;
   select: ListCardSelect | undefined;
+  solid: boolean;
 }): ReactElement {
   const kind = picture.kind;
   return (
@@ -267,7 +308,10 @@ function Picture({
         ) : picture.kind === 'icon' ? (
           <span
             aria-hidden="true"
-            className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2"
+            className={cn(
+              'flex h-full w-full items-center justify-center',
+              solid ? LIST_CARD_SOLID_TILE : 'bg-panel-2 text-fg-2',
+            )}
           >
             <picture.icon size={ICON_SIZE.control} />
           </span>
@@ -327,14 +371,19 @@ export function ListCard({
   disabled = false,
   selected = false,
   muted = false,
+  solid = false,
+  count,
   as: Root = 'div',
   rootRef,
   surface,
   ...rest
 }: ListCardProps) {
   const tapped = onPress !== undefined || cover !== undefined;
-  const hasTag = tag !== undefined && tag !== '';
-  const hasTime = time !== undefined && time !== '';
+  // A count takes the right edge: no time, tag or unread dot beside it.
+  const counted = count !== undefined;
+  const hasTag = !counted && tag !== undefined && tag !== '';
+  const hasTime = !counted && time !== undefined && time !== '';
+  const showUnread = unread && !counted;
   const hasPreview = preview !== undefined && preview !== null && preview !== '';
   const gesture = useSelectGesture(select);
   const chosen = select !== undefined && select.active && select.chosen;
@@ -347,7 +396,7 @@ export function ListCard({
   const labelledBy =
     press !== undefined && 'aria-label' in press && press['aria-label'] !== undefined
       ? undefined
-      : [titleId, hasPreview ? previewId : null, unread ? unreadId : null]
+      : [titleId, hasPreview ? previewId : null, showUnread ? unreadId : null]
           .filter(Boolean)
           .join(' ');
   const pressAttrs =
@@ -362,10 +411,12 @@ export function ListCard({
       data-list-card=""
       {...(previewLines === 2 ? { 'data-list-card-lines': '2' } : {})}
       {...(select !== undefined && select.active ? { 'data-list-card-selecting': '' } : {})}
+      {...(solid ? { 'data-list-card-solid': '' } : {})}
       className={cn(
         listCardFrame(selected || chosen),
         previewLines === 2 && LIST_CARD_FRAME_2,
-        select !== undefined && LIST_CARD_NO_CALLOUT,
+        (select !== undefined || solid) && LIST_CARD_NO_CALLOUT,
+        solid && LIST_CARD_SOLID,
         tapped && !disabled && MOVE_CLASS.press,
       )}
     >
@@ -384,7 +435,7 @@ export function ListCard({
         cover
       )}
       <div data-list-card-body="" className={LIST_CARD_BODY}>
-        <Picture picture={picture} hooks={pictureHooks} select={select} />
+        <Picture picture={picture} hooks={pictureHooks} select={select} solid={solid} />
         <div className={LIST_CARD_TEXT}>
           <div data-list-card-line="1" className={LIST_CARD_LINE1}>
             <span
@@ -397,6 +448,7 @@ export function ListCard({
                   'min-w-0 flex-1 truncate',
                   !unread && 'font-normal',
                   muted && 'text-fg-3',
+                  solid && 'text-accent-fg',
                   tapped && !disabled && 'pointer-events-auto',
                 ),
               )}
@@ -426,7 +478,10 @@ export function ListCard({
                 id={previewId}
                 data-list-card-preview=""
                 {...previewHooks}
-                className={previewLines === 2 ? LIST_CARD_PREVIEW_2 : LIST_CARD_PREVIEW}
+                className={cn(
+                  previewLines === 2 ? LIST_CARD_PREVIEW_2 : LIST_CARD_PREVIEW,
+                  solid && 'text-accent-fg',
+                )}
               >
                 {preview}
               </span>
@@ -444,7 +499,7 @@ export function ListCard({
                 />
               </span>
             ) : null}
-            {unread ? (
+            {showUnread ? (
               <span
                 id={unreadId}
                 data-list-card-unread=""
@@ -455,6 +510,11 @@ export function ListCard({
             ) : null}
           </div>
         </div>
+        {count !== undefined && count > 0 ? (
+          <span data-list-card-count="" aria-hidden="true" className={LIST_CARD_COUNT}>
+            <CountBadge count={count} {...(solid ? { tone: 'on-fill' as const } : {})} />
+          </span>
+        ) : null}
       </div>
     </Root>
   );

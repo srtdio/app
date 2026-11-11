@@ -579,6 +579,7 @@ Plans: a shared object in chat holding concepts and posts with Creator and Appro
 | Spacing steps | Padding, margin, gap and space are 4 / 8 / 12 / 16 / 24 only (plus 32 and up). 4 lines in one item, 8 tight group, 12 row padding, 16 heading to content, 24 between sections. |
 | Flat Plan | Plan days are flat sections split by hairlines (no card frame, today marked by its date tile and Today pill). New plan rows are hairline rows, no boxes. |
 | Densities removed | 10 Nov 2026: densities removed; one size (former Cozy). |
+| Activity solid rows | 11 Nov 2026: Catch up and Threads are solid list rows on top of the Activity list (Catch up first), replacing the two lead-row buttons. Ink fill, 72 tall, count at the right edge; a row shows only while its count is above 0, and with both at 0 the list starts right under the chips. Tap opens Catch up or the Threads list; long-press or right-click Catch up is Mark all as read. No pulse, no motion. |
 | Add from bank | New plan (creator only) adds bank ideas as items with a day ("No date" = first plan day from today). Create moves them out of the Bank in the same transaction. |
 
 ### One search, one top bar, fewer chips, one upload look (decided 7 Nov 2026)

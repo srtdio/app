@@ -20,8 +20,6 @@ describe('design tokens: type and radius scales', () => {
       '2xl': ['20px', '26px'],
       '3xl': ['28px', '34px'],
       input: ['16px', '22px'],
-      // Named exception: Threads/Catch up count pill only (10 Nov 2026).
-      'pair-pill': ['10px', '16px'],
     });
     expect(extend).not.toHaveProperty('fontSize');
   });

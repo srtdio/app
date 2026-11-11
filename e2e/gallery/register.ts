@@ -23,6 +23,7 @@ export const STATES = [
   'progress-100',
   'done',
   'failed',
+  'solid',
 ] as const;
 
 /** Awkward cases: the same list for every part. */
@@ -39,6 +40,7 @@ export const AWKWARD = [
   'narrow-320',
   'all-slots-on',
   'all-slots-off',
+  'solid-long-text',
 ] as const;
 
 /** Interaction moments the second gallery PR adds (pointer and focus states). */
@@ -65,6 +67,13 @@ export const LATER_SKIP: Readonly<Partial<Record<Moment, string>>> = {
   'keyboard-focus': 'second gallery PR',
 };
 
+/** The solid moments are ListCard's own (its ink row); every other part skips them. */
+export const PART_SKIP: Readonly<Partial<Record<Moment, string>>> = {
+  ...LATER_SKIP,
+  solid: 'ListCard only: the ink row',
+  'solid-long-text': 'ListCard only: the ink row',
+};
+
 export const PARTS: readonly PartEntry[] = [
   {
     name: 'Text',
@@ -80,7 +89,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no list: one text only',
@@ -118,7 +127,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no list: one action only',
@@ -143,7 +152,7 @@ export const PARTS: readonly PartEntry[] = [
     file: 'src/components/ui/IconButton.tsx',
     renders: ['default', 'disabled', 'narrow-320', 'all-slots-on', 'all-slots-off'],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no list: one action only',
@@ -187,7 +196,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no list: one chip only',
@@ -218,7 +227,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no list: one tag only',
@@ -253,7 +262,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no list: a count only (see one-item)',
@@ -292,7 +301,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no count',
@@ -332,6 +341,8 @@ export const PARTS: readonly PartEntry[] = [
       'narrow-320',
       'all-slots-on',
       'all-slots-off',
+      'solid',
+      'solid-long-text',
     ],
     skip: {
       ...LATER_SKIP,
@@ -363,7 +374,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'no count',
@@ -397,7 +408,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       loading: 'part has no such state',
       one: 'part has no such state',
@@ -425,7 +436,7 @@ export const PARTS: readonly PartEntry[] = [
     file: 'src/components/ui/LoadMore.tsx',
     renders: ['loading', 'default', 'narrow-320', 'all-slots-off'],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'part has no such state',
       one: 'no count',
       some: 'no count',
@@ -466,7 +477,7 @@ export const PARTS: readonly PartEntry[] = [
       'all-slots-off',
     ],
     skip: {
-      ...LATER_SKIP,
+      ...PART_SKIP,
       empty: 'an empty field is the no-text cell',
       loading: 'part has no such state',
       one: 'no count',

@@ -33,8 +33,6 @@ export default {
       '3xl': ['28px', '34px'],
       // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
       input: ['16px', '22px'],
-      // Threads/Catch up count pill text only (shell/topbar-actions).
-      'pair-pill': ['10px', '16px'],
     },
     // Spacing: the 4px grid (step N = 4N px) as used in src, plus px (hairline),
     // 0.5 (2px, inside badges and pills) and 1.5 (6px). 2.5 and 3.5 are gone.
@@ -321,12 +319,6 @@ export default {
         'plus-box': '22px',
         // A phone top bar key's hit strip: 36 wide, 44 tall, 36 apart (shell/Topbar).
         'topbar-key': '36px',
-        // Activity's Threads | Catch up boxes: 96 wide (shell/topbar-actions).
-        'topbar-pair': '96px',
-      },
-      gap: {
-        // Inside a Threads | Catch up box: the label to its count pill (shell/topbar-actions).
-        pair: '6px',
       },
       height: {
         // Catch up's centred window on laptop: at most 85vh (9 Nov 2026).

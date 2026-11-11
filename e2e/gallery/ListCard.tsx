@@ -1,6 +1,6 @@
 import { cell, type GalleryCell } from './frame';
-import { ListCard, ListCardBox } from '@/components/ui/ListCard';
-import { IconBriefs } from '@/components/ui/icons';
+import { LIST_CARD_SOLID_GROUP, ListCard, ListCardBox } from '@/components/ui/ListCard';
+import { IconActivity, IconBriefs, IconThreads } from '@/components/ui/icons';
 import {
   BROKEN_PHOTO,
   LONG_TEXT,
@@ -138,6 +138,38 @@ export const cells: readonly GalleryCell[] = [
       onPress={noop}
     />
   )),
+  cell('solid', () => (
+    <div className="flex flex-col gap-4">
+      <div className={LIST_CARD_SOLID_GROUP}>
+        <ListCard
+          solid
+          count={7}
+          picture={{ kind: 'icon', icon: IconActivity }}
+          title="Catch up"
+          preview="7 unread"
+          onPress={noop}
+        />
+        <ListCard
+          solid
+          count={150}
+          picture={{ kind: 'icon', icon: IconThreads }}
+          title="Threads"
+          preview="150 new"
+          onPress={noop}
+        />
+      </div>
+      <div className={LIST_CARD_SOLID_GROUP}>
+        <ListCard
+          solid
+          count={2}
+          picture={{ kind: 'icon', icon: IconThreads }}
+          title="Threads"
+          preview="2 new"
+          onPress={noop}
+        />
+      </div>
+    </div>
+  )),
   cell('long-text', () => (
     <div className="flex flex-col">
       <ListCard
@@ -227,5 +259,17 @@ export const cells: readonly GalleryCell[] = [
   )),
   cell('all-slots-off', () => (
     <ListCard picture={{ kind: 'placeholder', placeholder: 'text' }} title={SHORT} />
+  )),
+  cell('solid-long-text', () => (
+    <div className={LIST_CARD_SOLID_GROUP}>
+      <ListCard
+        solid
+        count={150}
+        picture={{ kind: 'icon', icon: IconActivity }}
+        title={LONG_TEXT}
+        preview={LONG_TEXT}
+        onPress={noop}
+      />
+    </div>
   )),
 ];

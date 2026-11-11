@@ -23,6 +23,7 @@ import {
   CalendarIcon,
   CalendarDaysIcon,
   CameraIcon,
+  ChatBubbleBottomCenterTextIcon,
   ChatBubbleOvalLeftIcon,
   CheckCircleIcon,
   CheckIcon,
@@ -224,6 +225,11 @@ export function IconPlan(props: IconProps) {
 
 export function IconChat(props: IconProps) {
   return <Hero icon={ChatBubbleOvalLeftIcon} {...props} />;
+}
+
+/** Threads (Activity's solid row): a chat bubble with lines inside. */
+export function IconThreads(props: IconProps) {
+  return <Hero icon={ChatBubbleBottomCenterTextIcon} {...props} />;
 }
 
 export function IconNotifications(props: IconProps) {
