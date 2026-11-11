@@ -12,6 +12,9 @@ import {
   assertActivityCounts,
   assertActivityPreviews,
   assertCommentTray,
+  assertCommentThreadEnd,
+  assertThreadFillsBeside,
+  readPostColumnRight,
   assertThreadHeader,
   assertListCards,
   assertNoUploadBar,
@@ -4791,7 +4794,11 @@ SCREENS.push(
     steps: async (page) => {
       await openDmMessageMenu(page);
       // L10: select-text sits on the More actions page.
-      await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
+      // Two or fewer hidden actions sit on the first page (no More actions).
+      {
+        const moreActions = page.locator('[data-menu-item="more-actions"]');
+        if ((await moreActions.count()) > 0) await moreActions.click();
+      }
       await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
       await waitFor([page.locator('[data-selecting-text]')], 'select mode');
       await page.mouse.move(0, 0);
@@ -4915,7 +4922,11 @@ async function openDmMenuOn(page: Page, text: string): Promise<void> {
 async function openDeleteSheetOn(page: Page, text: string): Promise<Locator> {
   await openDmMenuOn(page, text);
   // L10: delete sits on the More actions page.
-  await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
+  // Two or fewer hidden actions sit on the first page (no More actions).
+  {
+    const moreActions = page.locator('[data-menu-item="more-actions"]');
+    if ((await moreActions.count()) > 0) await moreActions.click();
+  }
   await tap([page.locator('[data-menu-item="delete"]')], 'menu Delete');
   return firstVisible([page.getByTestId('delete-sheet')], 'delete sheet');
 }
@@ -5771,6 +5782,100 @@ function seedCommentPdf(network: HarnessNetwork): void {
   );
 }
 
+/** Thread polish 1: a thread whose replies carry a picture, a PDF, an Excel file and a video. */
+const FILES_ROOT = '0190f300-0000-7000-8000-0000000000e0';
+const FILES_LAST_REPLY = '0190f300-0000-7000-8000-0000000000e5';
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const THREAD_FILES = [
+  { n: 1, mime: 'image/png', kind: 'image', name: 'Grid mock.png', w: 1200, h: 900 },
+  { n: 2, mime: 'application/pdf', kind: 'file', name: 'Launch deck.pdf', w: null, h: null },
+  { n: 3, mime: XLSX_MIME, kind: 'file', name: 'Budget.xlsx', w: null, h: null },
+  { n: 4, mime: 'video/mp4', kind: 'video', name: 'Teaser.mp4', w: 1080, h: 1920 },
+] as const;
+
+/**
+ * Priya's comment with five replies: a picture, a PDF, an Excel file, a video
+ * (each a stored version read through the !asset_id embed), then a line with
+ * reaction chips, the last row the thread must land on.
+ */
+function seedThreadFiles(network: HarnessNetwork): void {
+  const t = network.world.tables;
+  const reply = { parent_comment_id: FILES_ROOT };
+  const comments = (t.comments ??= []);
+  comments.push(
+    threadComment(
+      FILES_ROOT,
+      PEER,
+      'Everything for the launch, in one place.',
+      NOW - 5 * 3_600_000,
+    ),
+  );
+  for (const f of THREAD_FILES) {
+    const version = `0190e700-0000-7000-8000-0000000000b${f.n}`;
+    const asset = `0190e700-0000-7000-8000-0000000000a${f.n}`;
+    (t.asset_versions ??= []).push({
+      id: version,
+      asset_id: asset,
+      kind: f.kind,
+      mime_type: f.mime,
+      size_bytes: 1_200_000 + f.n * 100_000,
+      width: f.w,
+      height: f.h,
+      duration_ms: f.kind === 'video' ? 12_000 : null,
+      page_count: f.mime === 'application/pdf' ? FIXTURE_PDF_PAGES : null,
+      external_url: null,
+      r2_key: `${WORKSPACE_ID}/${asset}/v1`,
+      version_number: 1,
+      assets: { display_name: null, filename: f.name },
+    });
+    comments.push(
+      threadComment(
+        `0190f300-0000-7000-8000-0000000000e${f.n}`,
+        f.n % 2 === 0 ? COLLEAGUE_A : PEER,
+        '',
+        NOW - (5 * 60 - f.n * 20) * 60_000,
+        { ...reply, attachment_asset_ids: [version] },
+      ),
+    );
+  }
+  comments.push(
+    threadComment(FILES_LAST_REPLY, ME, 'All four are final.', NOW - 30 * 60_000, reply),
+  );
+  (t.comment_reactions ??= []).push(
+    ...reactionRows('comment_id', FILES_LAST_REPLY, [
+      [PEER, '👍'],
+      [COLLEAGUE_A, '👏'],
+    ]),
+  );
+}
+
+/** Thread polish 1, laptop: the post column keeps its width with the thread open and closed (1440). */
+async function assertPostColumnStill(page: Page, name: string): Promise<void> {
+  if (!isLaptop(page)) return;
+  const before = page.viewportSize();
+  await page.setViewportSize({ width: 1440, height: before?.height ?? 800 });
+  const width = (): Promise<number | null> =>
+    page.evaluate(() => {
+      const side = document.querySelector('[data-post-side]');
+      const head = side?.parentElement?.firstElementChild ?? null;
+      return head !== null ? head.getBoundingClientRect().width : null;
+    });
+  const open = await width();
+  const openRight = await readPostColumnRight(page);
+  await assertThreadFillsBeside(page, `${name}@1440`);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-side-panel]')).toHaveCount(0);
+  const closed = await width();
+  expect.soft(open, `${name}: post column width open vs closed at 1440`).not.toBeNull();
+  if (open !== null && closed !== null) {
+    expect
+      .soft(Math.abs(open - closed), `${name}: post column width open ${open} vs closed ${closed}`)
+      .toBeLessThanOrEqual(1);
+  }
+  expect.soft(openRight, `${name}: post column right`).not.toBeNull();
+  if (before !== null) await page.setViewportSize(before);
+}
+
 /** The post screen's checks after the shot: the pinned bar and the comment "+" tray. */
 async function postScreenChecks(page: Page): Promise<void> {
   const name = test.info().title.replace(/ @.*$/, '');
@@ -5836,7 +5941,40 @@ SCREENS.push(
         'Thread',
       );
     },
-    after: async (page) => assertThreadHeader(page, 'post-comment-thread'),
+    after: async (page) => {
+      await assertThreadHeader(page, 'post-comment-thread');
+      await assertCommentThreadEnd(page, 'post-comment-thread');
+      if (isLaptop(page)) {
+        await assertThreadFillsBeside(page, 'post-comment-thread');
+        await assertPostColumnStill(page, 'post-comment-thread');
+      }
+    },
+  },
+  {
+    // Thread polish 1: a thread with a picture, a PDF, an Excel file and a
+    // video, reaction chips on the last reply, opened (never scrolled by the
+    // test): it lands at the end, the last row 12 above the reply box.
+    name: 'post-comment-thread-files',
+    seed: creator,
+    extra: seedThreadFiles,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      await tap(
+        [page.locator('[data-comments-list] [data-thread-open="replies"]').first()],
+        'replies row',
+      );
+      const thread = page.locator(`[data-thread-view] [data-comment-thread="${FILES_ROOT}"]`);
+      await waitFor([thread], 'comment thread');
+      await waitFor(
+        [thread.locator(`[data-comment-id="${FILES_LAST_REPLY}"] [data-reaction-chips]`)],
+        'chips on the last reply',
+      );
+    },
+    after: async (page) => {
+      await assertCommentThreadEnd(page, 'post-comment-thread-files');
+      if (isLaptop(page)) await assertThreadFillsBeside(page, 'post-comment-thread-files');
+    },
   },
   {
     // Long-press (phone) / right-click (laptop) on a comment: chat's
@@ -5853,6 +5991,24 @@ SCREENS.push(
       await waitFor([menu], 'comment menu');
       await waitFor([menu.locator('[data-menu-item="add-task"]')], 'Add to Tasks');
       await expect(menu.locator('[data-menu-item="reply"]')).toHaveCount(0);
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Thread polish 1: ME's own comment: Edit and Delete sit on the first page
+    // as rows (Delete last, under the divider); no More actions.
+    name: 'post-comment-menu-own',
+    seed: creator,
+    extra: seedConversation,
+    hold: true,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postConversationReady(page);
+      await openMenuGesture(page, commentBubble(page, OWN_EDITED_ID));
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await waitFor([menu.locator('[data-menu-item="edit"]')], 'Edit row');
+      await expect(menu.locator('[data-menu-item="delete"]')).toHaveCount(1);
+      await expect(menu.locator('[data-menu-item="more-actions"]')).toHaveCount(0);
       await page.mouse.move(0, 0);
     },
   },
@@ -6614,7 +6770,11 @@ SCREENS.push(
       await waitFor([own.locator('[data-edited]')], 'edited');
       await openMenuGesture(page, own);
       const menu = page.getByRole('menu', { name: 'Message actions' });
-      await tap([menu.locator('[data-menu-item="more-actions"]')], 'More actions');
+      // Two or fewer hidden actions sit on the first page (no More actions).
+      {
+        const moreActions = menu.locator('[data-menu-item="more-actions"]');
+        if ((await moreActions.count()) > 0) await moreActions.click();
+      }
       await tap([menu.locator('[data-menu-item="edit"]')], 'Edit');
       const composer = page.locator('[data-comments-composer]');
       const bar = composer.getByText('Editing your message', { exact: true });

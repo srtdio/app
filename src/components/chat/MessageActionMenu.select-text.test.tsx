@@ -225,8 +225,8 @@ describe('menu style', () => {
       /<MenuPopover\s+open\s+onClose=\{onClose\}\s+align=\{mine \? 'right' : 'left'\}/,
     );
     expect(src).not.toContain(['Icon', 'More'].join(''));
-    // Six 44px reaction cells, the row's 10px sides and the 1px border each side.
-    expect(MENU_WIDTH_PX).toBeGreaterThanOrEqual(6 * 44 + 20 + 2);
+    // Seven 44px reaction circles, the row's 16px sides and the 1px border each side.
+    expect(MENU_WIDTH_PX).toBeGreaterThanOrEqual(7 * 44 + 32 + 2);
   });
 
   it('rows: full-bleed, >= 44px, 16px sides, 12px gap, base fg text', () => {
@@ -277,7 +277,7 @@ describe('menu style', () => {
     expect(html('save-notes')).toContain('M19.5 14.25v-2.625a3.375 3.375');
   });
 
-  it('reactions: six 44x44 cells, 8px 10px padding, one hairline under it', () => {
+  it('reactions: seven round 44 circles, no side padding on the sheet, one hairline under it', () => {
     const html = renderToStaticMarkup(
       <ReactionsRow
         currentReaction={null}
@@ -286,9 +286,10 @@ describe('menu style', () => {
         onMore={() => {}}
       />,
     );
-    // L10: six round cells, 48 visible (44 and up).
-    expect(html.match(/<button[^>]*class="[^"]*\bh-12\b[^"]*\brounded-full\b/g)?.length).toBe(6);
-    expect(html).toContain('px-2 py-2');
+    // Thread polish 1: seven round 44 circles, edge to edge on the sheet.
+    expect(html.match(/<button[^>]*class="[^"]*\bh-11\b[^"]*\brounded-full\b/g)?.length).toBe(7);
+    expect(html).toContain('justify-between py-2');
+    expect(html).not.toMatch(/data-menu-reactions[^>]*\bpx-/);
     expect(html).toContain('border-b border-border');
   });
 });

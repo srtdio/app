@@ -27,8 +27,16 @@
 // when a thread opens and when a reply lands while it is open. Notifications
 // are the server's (comment_create: every active member), untouched here.
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Composer } from '@/components/chat/Composer';
 import { MessageActionMenu } from '@/components/chat/MessageActionMenu';
@@ -71,6 +79,14 @@ import { setPrivateReplyDraft } from '@/lib/chat/drafts';
 import { isFormerMember, resolveMentionText, resolvePersonMentionText } from '@/lib/chat/mentions';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { repliesLabel } from '@/lib/chat/thread-signals';
+import {
+  distanceFromBottom,
+  intentAfterScroll,
+  newRowsAction,
+  openingIntent,
+  sizeChangeAction,
+  type ScrollSource,
+} from '@/lib/chat/stick-to-bottom';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -243,14 +259,14 @@ export function threadUnread(
   );
 }
 
-/** Up to 3 latest distinct repliers, newest first (chat's RepliesRow photos). Pure. */
+/** Up to 3 latest distinct repliers, the latest last (chat's RepliesRow photos, newest next to the count). Pure. */
 export function latestRepliers(replies: readonly Pick<CommentRow, 'author_user_id'>[]): string[] {
   const out: string[] = [];
   for (let i = replies.length - 1; i >= 0 && out.length < 3; i -= 1) {
     const id = replies[i]?.author_user_id;
     if (id !== undefined && !out.includes(id)) out.push(id);
   }
-  return out;
+  return out.reverse();
 }
 
 const NO_IDS: string[] = [];
@@ -572,6 +588,105 @@ interface OpenThread {
 
 let pendingSeq = 0;
 
+/**
+ * A comment thread opens at the latest reply (Thread polish 1, 11 Nov 2026):
+ * chat's stick-to-bottom decisions (src/lib/chat/stick-to-bottom.ts, no
+ * second scroll core) on the thread's scroller. On open it is set in a layout
+ * effect, before the first paint (a thread shorter than the pane stays at the
+ * top: there is nothing to scroll). While the viewer is at the end it stays
+ * there when a reply lands, they send, the reply box grows or the keyboard
+ * opens (visualViewport); once they scroll up it never moves them. A linked
+ * reply (focusId) owns the opening position. No await, timer or read.
+ */
+function useCommentThreadStick(input: {
+  scrollRef: RefObject<HTMLDivElement>;
+  rootId: string | null;
+  landing: boolean;
+  /** Changes when a reply lands (count and newest id). */
+  rowsKey: string;
+  /** This device's own sends still pending in the open thread. */
+  ownPending: number;
+}): void {
+  const { scrollRef, rootId, landing, rowsKey, ownPending } = input;
+  const intentRef = useRef(openingIntent());
+  const programRef = useRef(false);
+  const pin = useCallback((): void => {
+    const el = scrollRef.current;
+    if (el === null || distanceFromBottom(el) === 0) return;
+    programRef.current = true;
+    el.scrollTop = el.scrollHeight;
+  }, [scrollRef]);
+  // Open: at the end before the first paint.
+  useLayoutEffect(() => {
+    if (rootId === null) return;
+    intentRef.current = landing ? false : openingIntent();
+    if (intentRef.current) pin();
+    // Only a new thread re-opens; a landing change inside it does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rootId, pin]);
+  // A reply lands, or the viewer sends from this device (takes hold again).
+  const ownRef = useRef(ownPending);
+  useLayoutEffect(() => {
+    const ownLocalSend = ownPending > ownRef.current;
+    ownRef.current = ownPending;
+    if (rootId === null) return;
+    if (ownLocalSend) intentRef.current = true;
+    if (newRowsAction({ intent: intentRef.current, flicking: false, ownLocalSend }) === 'pin') {
+      pin();
+    }
+  }, [rowsKey, ownPending, rootId, pin]);
+  // Size: the rows grow (pictures, chips), the pane shrinks (reply box, keyboard).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (rootId === null || el === null) return;
+    const onSize = (): void => {
+      const action = sizeChangeAction({
+        intent: intentRef.current,
+        pendingJump: false,
+        olderPageRestore: false,
+        flicking: false,
+      });
+      if (action === 'pin') pin();
+    };
+    const onScroll = (): void => {
+      const source: ScrollSource = programRef.current ? 'program' : 'user';
+      programRef.current = false;
+      intentRef.current = intentAfterScroll({
+        intent: intentRef.current,
+        source,
+        distanceFromBottom: distanceFromBottom(el),
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onSize) : null;
+    observer?.observe(el);
+    const list = el.firstElementChild;
+    if (list !== null) observer?.observe(list);
+    const viewport = typeof window !== 'undefined' ? window.visualViewport : null;
+    viewport?.addEventListener('resize', onSize);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      observer?.disconnect();
+      viewport?.removeEventListener('resize', onSize);
+    };
+  }, [rootId, scrollRef, pin]);
+}
+
+/**
+ * Laptop, post page: the post column's right edge (px), read from the
+ * comments' side column and the page grid's column gap; null when the
+ * comments do not sit in a side column (brief page, embedded, one column),
+ * so the thread panel keeps its default 380. A layout read, no wait.
+ */
+export function postColumnRightOf(from: Element | null): number | null {
+  const side = from?.closest('[data-post-side]') ?? null;
+  const grid = side?.parentElement ?? null;
+  if (side === null || grid === null) return null;
+  const style = getComputedStyle(grid);
+  if (style.gridTemplateColumns.trim().split(/\s+/).length < 2) return null;
+  return side.getBoundingClientRect().left - (Number.parseFloat(style.columnGap) || 0);
+}
+
 export function Comments(props: CommentsProps): ReactElement {
   const { workspaceId, entityType, entityId } = props;
   const newTrace = useNewTrace();
@@ -788,6 +903,17 @@ export function Comments(props: CommentsProps): ReactElement {
   const openRootId = thread?.rootId ?? null;
   const openReplies = openRootId !== null ? (lists.replies.get(openRootId) ?? []) : [];
   const newestOpenReply = openReplies[openReplies.length - 1]?.id ?? null;
+  // The open thread lands at the latest reply and stays there (item 5).
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const openOwnPending =
+    openRootId !== null ? pending.filter((p) => p.parentId === openRootId).length : 0;
+  useCommentThreadStick({
+    scrollRef: threadScrollRef,
+    rootId: openRootId,
+    landing: (thread?.focusId ?? null) !== null,
+    rowsKey: `${openReplies.length}:${newestOpenReply ?? ''}:${openOwnPending}`,
+    ownPending: openOwnPending,
+  });
   // A reply landing while the thread is open moves the read point too.
   const seenNewest = useRef<string | null>(null);
   useEffect(() => {
@@ -856,6 +982,13 @@ export function Comments(props: CommentsProps): ReactElement {
     openThread(replyLink, false, focusId);
   }, [focusId, replyLink, props.focusRequestKey, openThread]);
   const listRef = useRef<HTMLDivElement>(null);
+  // Laptop, post page (item 6): the thread panel fills beside the post column
+  // and takes the comments' place; elsewhere it stays the default 380.
+  const postColumnRight = useCallback(() => postColumnRightOf(listRef.current), []);
+  const [besidePost, setBesidePost] = useState(false);
+  useLayoutEffect(() => {
+    setBesidePost(laptop && openRootId !== null && postColumnRight() !== null);
+  }, [laptop, openRootId, postColumnRight]);
   useFocusTarget({
     targetId: replyLink === null ? focusId : null,
     targetKey: props.focusRequestKey ?? null,
@@ -1257,6 +1390,10 @@ export function Comments(props: CommentsProps): ReactElement {
       ref={listRef}
       data-comments=""
       data-entity={entityType}
+      // Laptop, post page: the open thread takes the comments' place (they stay
+      // mounted and keep their scroll, hidden; the panel shows through).
+      data-comments-covered={besidePost ? '' : undefined}
+      className={besidePost ? 'invisible' : undefined}
       // The tour's "open the thread" step: its whole row is the target, so a
       // tap anywhere on it (the quote chip included) opens the thread. Only
       // while that step is up; otherwise the row is chat's.
@@ -1342,10 +1479,12 @@ export function Comments(props: CommentsProps): ReactElement {
                 }}
               >
                 <div
+                  ref={threadScrollRef}
                   data-comment-thread={threadRoot.id}
                   className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
                 >
-                  <ul className="flex flex-col pt-4">
+                  {/* pb-3: 12 between the last row (its chips included) and the reply box. */}
+                  <ul className="flex flex-col pb-3 pt-4">
                     {renderRow(
                       messageOf(threadRoot),
                       { head: true, tail: true, afterLabel: false, threadPlace: 'root' },
@@ -1420,7 +1559,13 @@ export function Comments(props: CommentsProps): ReactElement {
               </ThreadViewFrame>
             );
             return laptop ? (
-              <SidePanel open bare title={THREAD_TITLE} onClose={() => setThread(null)}>
+              <SidePanel
+                open
+                bare
+                title={THREAD_TITLE}
+                onClose={() => setThread(null)}
+                fillBeside={postColumnRight}
+              >
                 {frame}
               </SidePanel>
             ) : (

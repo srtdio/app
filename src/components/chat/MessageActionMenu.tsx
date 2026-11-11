@@ -1,9 +1,12 @@
 // The message action menu (L10, 8 Nov 2026). Phone: a ui/Sheet with a grab
-// handle and no title: a row of round quick reactions plus "+", three big
+// handle and no title: a row of six round quick reactions plus the smiley
+// key (Thread polish 1, 11 Nov 2026: seven 44 circles edge to edge), three big
 // tiles (Reply, Forward, Add to Tasks), the rows Mark unread, Copy link and
 // Copy text, a divider, then "More actions ›", which opens a second page
 // ("<" More actions): Reply privately (with "to <Name>"), Select text,
 // Transcribe, Save to notes, Edit, Remove file, a divider, Delete (danger).
+// Two or fewer of those: no "More actions" page, they sit on the first page
+// after the rows, a danger row last under the divider (moreActionsFolded).
 // Laptop (right-click): the same groups and order in a MenuPopover, the tiles
 // drawn as its first three rows. Each entry shows only when it applies (plan
 // and idea cards hide Forward, Add to Tasks, Save to notes and Edit as
@@ -22,10 +25,10 @@ import {
   IconForward,
   IconLink,
   IconMail,
-  IconPlus,
   IconReply,
   IconReplyPrivately,
   IconSelectText,
+  IconSmile,
   IconTaskSquare,
   IconText,
   IconTrash,
@@ -45,11 +48,12 @@ import { REPLY_PRIVATELY, replyPrivatelyTo } from '@/lib/chat/private-reply';
 import { personFirstName } from '@/lib/person-card';
 import { AddReactionSheet } from '@/components/ui/ReactionChips';
 
-/** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
+/** Quick-react row offered when a message's action menu is opened; the smiley key opens the picker after it. */
 // L9 (8 Nov 2026): ✅ replaces 👌. ✅ is a reaction only; it never means approval anywhere.
-export const QUICK_REACTIONS = ['👍', '✅', '❤️', '😂', '🙏'] as const;
+// Thread polish 1 (11 Nov 2026): six, 👏 last. PersonMessageInput reads the first three.
+export const QUICK_REACTIONS = ['👍', '✅', '❤️', '😂', '🙏', '👏'] as const;
 
-/** The "+" after the quick reactions: opens the full emoji picker. */
+/** The smiley key after the quick reactions: opens the full emoji picker. */
 export const MORE_REACTIONS_LABEL = 'More reactions';
 
 /** An own message can be edited this long after its server created_at. */
@@ -298,6 +302,32 @@ export const MARK_UNREAD_LABEL = 'Mark unread';
 export const COPY_LINK_LABEL = 'Copy link';
 export const COPY_TEXT_LABEL = 'Copy text';
 export const MORE_ACTIONS_LABEL = 'More actions';
+
+/** The "More actions" page shows only when it would hide at least this many actions. */
+export const MORE_ACTIONS_MIN = 3;
+
+/**
+ * Whether the 'more' entries sit on the first page instead of behind "More
+ * actions" (Thread polish 1): a page that hides two or fewer actions is a tap
+ * for nothing. Pure.
+ */
+export function moreActionsFolded(more: readonly MessageMenuItem[]): boolean {
+  return more.length > 0 && more.length < MORE_ACTIONS_MIN;
+}
+
+/**
+ * The first page's rows and the "More actions" page's rows. Folded: the rows,
+ * then the 'more' entries in their order (danger last, so dividerBefore puts
+ * the one hairline before it); the page is empty. Pure.
+ */
+export function menuPages(items: readonly MessageMenuItem[]): {
+  rows: MessageMenuItem[];
+  more: MessageMenuItem[];
+} {
+  const rows = itemsOfGroup(items, 'row');
+  const more = itemsOfGroup(items, 'more');
+  return moreActionsFolded(more) ? { rows: [...rows, ...more], more: [] } : { rows, more };
+}
 
 /** The menu row that copies a message into Personal notes. */
 export const SAVE_TO_NOTES_LABEL = 'Save to notes';
@@ -576,10 +606,11 @@ export function MenuTile(props: {
 }
 
 /**
- * The laptop popover's width. Six 44x44 reaction cells (the touch-target
- * floor), the row's 10px sides and the 1px border each side need 286px.
+ * The laptop popover's width. Seven 44x44 reaction circles (six quick
+ * reactions and the smiley key), the row's 16px sides (MENU_ROW's inset) and
+ * the 1px border each side need 342px.
  */
-export const MENU_WIDTH_PX = 286;
+export const MENU_WIDTH_PX = 342;
 
 /** The visible viewport's bottom in layout px: visualViewport (the iOS keyboard) when present. */
 export function visibleViewportHeight(win: {
@@ -599,26 +630,35 @@ export function menuMaxHeight(viewportHeight: number): number {
   return Math.max(0, viewportHeight - 16);
 }
 
+/** One reaction circle: round 44, the last key's bg-panel-2 fill. */
+export const REACTION_CIRCLE = 'h-11 w-11 shrink-0 rounded-full bg-panel-2';
+
 /**
- * The reactions row: the five quick reactions, then a "+" that opens the full
- * picker. Six 44x44 controls. Hook-free so the tests call it directly.
+ * The reactions row: the six quick reactions, then the smiley key that opens
+ * the full picker. Seven round 44 circles, justify-between. On the phone sheet
+ * the row has no side padding, so the first and last circle sit on the
+ * sheet's content edges; the laptop popover (no padding of its own) insets
+ * them 16 like its rows. Hook-free so the tests call it directly.
  */
 export function ReactionsRow(props: {
   currentReaction: string | null;
   /** The laptop smiley's row alone: its buttons are the menu's focus stops. */
   reactionsOnly: boolean;
+  /** Laptop popover: 16 sides (MENU_ROW's inset); phone sheet: none. */
+  inset?: boolean;
   onReact: (emoji: string) => void;
   onMore: () => void;
-  /** The "+": the picker hands focus back to it on close. */
+  /** The smiley key: the picker hands focus back to it on close. */
   moreRef?: RefObject<HTMLButtonElement>;
 }): ReactElement {
   const { currentReaction, reactionsOnly } = props;
   return (
     <div
       data-menu-reactions=""
-      // 8px around six 44x44 cells; one hairline under it (the menu's only divider).
+      // 8 above and below seven 44 circles; one hairline under it.
       className={cn(
-        'flex items-center justify-between px-2 py-2',
+        'flex items-center justify-between py-2',
+        props.inset === true && 'px-4',
         !reactionsOnly && 'border-b border-border',
       )}
     >
@@ -631,9 +671,10 @@ export function ReactionsRow(props: {
           {...(reactionsOnly ? { 'data-menu-item': `react-${emoji}` } : {})}
           onClick={() => props.onReact(emoji)}
           className={cn(
-            // L10: round reaction buttons, 44 and up.
-            'h-12 w-12 shrink-0 rounded-full text-2xl',
-            emoji === currentReaction && 'border bg-panel lit-selected',
+            // Round 44 circles, filled like the smiley key.
+            REACTION_CIRCLE,
+            'text-2xl',
+            emoji === currentReaction && 'border lit-selected',
           )}
         >
           <span aria-hidden="true">{emoji}</span>
@@ -647,9 +688,9 @@ export function ReactionsRow(props: {
         aria-haspopup="dialog"
         {...(reactionsOnly ? { 'data-menu-item': 'react-more' } : {})}
         onClick={props.onMore}
-        className="h-12 w-12 shrink-0 rounded-full bg-panel-2"
+        className={REACTION_CIRCLE}
       >
-        <IconPlus size={ICON_SIZE.control} />
+        <IconSmile size={ICON_SIZE.control} />
       </IconButton>
     </div>
   );
@@ -799,9 +840,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const size = MENU_ICON_SIZE;
   const items = !active || reactionsOnly ? [] : messageMenuItems(props, size);
   const tiles = itemsOfGroup(items, 'tile');
-  const rows = itemsOfGroup(items, 'row');
-  const more = itemsOfGroup(items, 'more');
+  // Two or fewer 'more' entries fold onto the first page (menuPages).
+  const { rows, more } = menuPages(items);
   const divider = dividerBefore(more);
+  const rowsDivider = dividerBefore(rows);
   // L10: the first page, or the "More actions" page.
   const [page, setPage] = useState<'main' | 'more'>('main');
   useEffect(() => {
@@ -863,6 +905,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
         <ReactionsRow
           currentReaction={currentReaction}
           reactionsOnly={reactionsOnly}
+          inset={isLaptop}
           onReact={(emoji) => {
             onReact(emoji);
             onClose();
@@ -883,7 +926,14 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
         )
       ) : null}
       {page === 'main'
-        ? rows.map((item) => <MenuRow key={item.key} item={item} onRun={run} />)
+        ? rows.map((item, index) => (
+            <Fragment key={item.key}>
+              {index === rowsDivider ? (
+                <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
+              ) : null}
+              <MenuRow item={item} onRun={run} />
+            </Fragment>
+          ))
         : null}
       {page === 'main' && moreRow !== null ? (
         <>
@@ -894,7 +944,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     </div>
   );
 
-  // "+": the one emoji drawer (ui/EmojiSheet) titled "Add reaction".
+  // The smiley key: the one emoji drawer (ui/EmojiSheet) titled "Add reaction".
   const picker = active ? (
     <AddReactionSheet
       open={picking}

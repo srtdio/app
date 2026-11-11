@@ -15,7 +15,11 @@
 // below is still ONE query for every id in view (the name rides in through
 // the asset_versions -> assets foreign key as an embedded select, no second
 // round trip, no N+1), off the paint path exactly like the mime read it
-// replaces.
+// replaces. The embed names the foreign key column (`assets!asset_id`):
+// asset_versions and assets have two foreign keys between them
+// (asset_versions_asset_id_fkey, assets_current_version_id_fkey), so a bare
+// `assets(...)` is ambiguous and PostgREST answers HTTP 300 with no rows,
+// which drew every comment file as "Attachment / File".
 
 import type { Client } from '@srtdio/comments';
 import { classifyAttachment, type MessageAttachment } from '@/lib/chat/attachments';
@@ -23,10 +27,11 @@ import { formatAgo } from '@/lib/time';
 
 /**
  * The batched read's column list: the version's own facts plus the asset's
- * name through the asset_versions_asset_id_fkey embed (one query).
+ * name through the asset_versions_asset_id_fkey embed (one query). The
+ * `!asset_id` hint is required: without it the embed is ambiguous (HTTP 300).
  */
 export const COMMENT_FILE_COLUMNS =
-  'id, mime_type, size_bytes, page_count, width, height, assets(display_name, filename)';
+  'id, mime_type, size_bytes, page_count, width, height, assets!asset_id(display_name, filename)';
 
 /** What a comment attachment's card and viewer need, by version id. */
 export interface CommentFile {

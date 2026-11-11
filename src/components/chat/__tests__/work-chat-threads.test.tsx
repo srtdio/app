@@ -282,8 +282,8 @@ describe('L8: a mention of me', () => {
 });
 
 describe('L9: quick reactions', () => {
-  it('👍 ✅ ❤️ 😂 🙏', () => {
-    expect([...QUICK_REACTIONS]).toEqual(['👍', '✅', '❤️', '😂', '🙏']);
+  it('👍 ✅ ❤️ 😂 🙏 👏', () => {
+    expect([...QUICK_REACTIONS]).toEqual(['👍', '✅', '❤️', '😂', '🙏', '👏']);
   });
 
   it('✅ never means approval: no approve path reads the reaction', () => {

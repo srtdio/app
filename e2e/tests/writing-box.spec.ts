@@ -295,7 +295,11 @@ test('S4 edit a sent list: the box shows the raw prefixes, Save edit renders a l
 
   await openMessageMenu(page, bubble.locator('[data-bubble]').first());
   // L10: edit sits on the More actions page.
-  await page.locator('[data-menu-item="more-actions"]').click();
+  // Two or fewer hidden actions sit on the first page (no More actions).
+  {
+    const moreActions = page.locator('[data-menu-item="more-actions"]');
+    if ((await moreActions.count()) > 0) await moreActions.click();
+  }
   await page.locator('[data-menu-item="edit"]').click();
   // Edit puts the stored text back: the raw prefixes, never the drawn list.
   await expectSaved(field, '1. Alpha\n2. Beta');

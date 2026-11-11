@@ -111,9 +111,9 @@ describe('unread (comment_thread_reads embedded in the one read)', () => {
 });
 
 describe('replies row, menu, seeds, links', () => {
-  it('up to 3 latest distinct repliers, newest first', () => {
+  it('up to 3 latest distinct repliers, the latest last', () => {
     const ids = ['a', 'b', 'a', 'c', 'd'].map((author_user_id) => ({ author_user_id }));
-    expect(latestRepliers(ids)).toEqual(['d', 'c', 'a']);
+    expect(latestRepliers(ids)).toEqual(['a', 'c', 'd']);
   });
 
   it('the menu hides what a person cannot do: Edit and Delete own only; To-do agency only, once', () => {

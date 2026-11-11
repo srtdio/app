@@ -133,9 +133,12 @@ test('personal notes: phone', async ({ page }) => {
   // Save to notes sit on the More actions page.
   const keys = await menuKeys();
   expect(keys).toContain('copy');
-  expect(keys).toContain('more-actions');
   const sends = rpcCalls(page, 'chat_message_send');
-  await menu.locator('[data-menu-item="more-actions"]').click();
+  // Two or fewer hidden actions sit on the first page (no More actions).
+  {
+    const moreActions = menu.locator('[data-menu-item="more-actions"]');
+    if ((await moreActions.count()) > 0) await moreActions.click();
+  }
   const moreKeys = await menuKeys();
   expect(moreKeys.indexOf('save-notes')).toBeGreaterThan(moreKeys.indexOf('select-text'));
   await menu.locator('[data-menu-item="save-notes"]').click();

@@ -126,7 +126,7 @@ describe('L3: every reply is a thread; the main chat holds top-level messages on
     expect(threadRootOf(pending)).toBe('root');
   });
 
-  it('the replies row: count, up to 3 latest repliers newest first, the latest reply', () => {
+  it('the replies row: count, up to 3 latest repliers with the latest last, the latest reply', () => {
     const rows = [
       msg({ id: 'root', senderUserId: 'me', mine: true }),
       msg({ id: 'r1', threadRootId: 'root', senderUserId: 'ana', ...at(40) }),
@@ -145,7 +145,7 @@ describe('L3: every reply is a thread; the main chat holds top-level messages on
     ];
     const info = repliesInfoByRoot(rows, (id) => id === 'root').get('root');
     expect(info?.count).toBe(4);
-    expect(info?.repliers).toEqual(['leo', 'cy', 'bo']);
+    expect(info?.repliers).toEqual(['bo', 'cy', 'leo']);
     expect(info?.last?.id).toBe('r4');
     expect(info?.unread).toBe(true);
     expect(repliesLabel(1)).toBe('1 reply');
