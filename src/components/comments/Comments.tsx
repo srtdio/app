@@ -167,6 +167,8 @@ export interface CommentsProps {
   onCaptionQuoteSent?: (commentId: string, quote: CaptionQuote) => void;
   /** The viewer may write top-level comments (an Approver on a draft may not). */
   canComment?: boolean;
+  /** The page already read the viewer's role: Creator side (To-do, task names). Absent: from the members. */
+  viewerIsAgency?: boolean;
 }
 
 /** The comment box's hint (unchanged). */
@@ -733,12 +735,14 @@ export function Comments(props: CommentsProps): ReactElement {
   );
   // My role from the members this session holds, else the @ picker's read
   // (already started after paint for mentions): no read of its own.
-  const viewerIsAgency = isAgencyRole(
-    me === null
-      ? null
-      : (held?.rows.find((r) => r.user_id === me && r.active === true)?.role ??
-          mentionMembers.members?.find((m) => m.userId === me)?.role),
-  );
+  const viewerIsAgency =
+    props.viewerIsAgency ??
+    isAgencyRole(
+      me === null
+        ? null
+        : (held?.rows.find((r) => r.user_id === me && r.active === true)?.role ??
+            mentionMembers.members?.find((m) => m.userId === me)?.role),
+    );
   // On a draft post the @ picker offers Creators only (Approvers can't see drafts).
   const draftPost = entityType === 'post' && props.postStage === 'draft';
   const pickerMembers = useMemo(() => {

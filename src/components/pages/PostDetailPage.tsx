@@ -1293,6 +1293,7 @@ export function PostDetailPage({
                   highlights,
                 )}
                 canComment={!(clientRole && detail?.post.stage === 'draft')}
+                {...(roleLoaded ? { viewerIsAgency: agencySide } : {})}
                 captionQuote={captionQuote}
                 onCaptionQuoteCancel={() => setCaptionQuote(null)}
                 onCaptionQuoteSent={(commentId) => {
