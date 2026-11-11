@@ -25,7 +25,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
 import { WritingBox } from '@/components/ui/WritingBox';
@@ -33,7 +32,6 @@ import { useOptionalToast } from '@/components/ui/toast';
 import { ApproveConfirm, APPROVE_CONFIRM_TITLE } from '@/components/ui/ApproveConfirm';
 import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
 import { IconBan, IconCheck, IconPause } from '@/components/ui/icons';
-import { runCreateCommentBatch } from '@/components/comments/Comments';
 import { runPostReadyNotify } from '@/components/pages/pcs/PostReadyNotice';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import {
@@ -125,17 +123,6 @@ export const APPROVE_ON_BEHALF_LABEL = 'Approve on their behalf';
 
 /** The Park row's line in the ⋯ menu. */
 const PARK_ROW_SUB = 'Keeps it aside. You can send it for review later.';
-
-/**
- * Flow B 33: the confirm before "Send for review again" while comments are
- * still open. Open comments never block the send; they only ask first.
- */
-export function sendAnywayTitle(openCount: number): string {
-  return openCount === 1
-    ? '1 comment is still open. Send anyway?'
-    : `${openCount} comments are still open. Send anyway?`;
-}
-export const SEND_ANYWAY_LABEL = 'Send anyway';
 
 /**
  * Flow B 40 / spec B6: the reject confirm's reason field label. The "optional,
@@ -397,29 +384,6 @@ export function postDecisionLabels(
   return { row, menu };
 }
 
-/**
- * Open top-level comments on a post (live, unresolved threads, checkpoints
- * included): the count the Post detail chip reads, for a surface without the
- * live comment list. A failed read counts 0 (the send never blocks).
- */
-async function countOpenThreads(workspaceId: string, postId: string): Promise<number> {
-  try {
-    const { count, error } = await supabase
-      .from('comments')
-      .select('id', { count: 'exact', head: true })
-      .eq('workspace_id', workspaceId)
-      .eq('entity_type', 'post')
-      .eq('entity_id', postId)
-      .is('parent_comment_id', null)
-      .is('resolved_at', null)
-      .is('deleted_at', null);
-    if (error !== null) return 0;
-    return count ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
 interface PostDecisionsInput {
   postId: string | undefined;
   /** The stage the server last reported; null until the post has loaded. */
@@ -438,11 +402,6 @@ interface PostDecisionsInput {
   mediaCount: number | null;
   /** The due day for the approve summary ("20 Jul"), or ''. */
   approveDay: string;
-  /**
-   * The live open comment count, or null on a surface without the live list
-   * (the hook reads it when "Send for review again" is tapped).
-   */
-  openCount: number | null;
   /**
    * Refresh after a landed move (the page's silent reload; the chat card
    * refetches). After an approve or another gated move it runs in the
@@ -494,7 +453,6 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
   // Flow B 33: "Send for review again" (post_ready_notify, or the open count
   // read before it) in flight, and the "Send anyway?" confirm's count.
   const [notifying, setNotifying] = useState(false);
-  const [sendAnywayCount, setSendAnywayCount] = useState<number | null>(null);
   // Spec D: the agency's "Approve on their behalf" sheet, its in-flight flag
   // and its one error line (shown inside the sheet only).
   const [onBehalfOpen, setOnBehalfOpen] = useState(false);
@@ -538,7 +496,6 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     setActionError(null);
     setApproveError(null);
     setNotifying(false);
-    setSendAnywayCount(null);
     setOnBehalfOpen(false);
     setOnBehalfBusy(false);
     setOnBehalfError(null);
@@ -559,22 +516,12 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     [],
   );
 
-  // The reason comment (and any comment this flow writes). A client's comment on
-  // a post is a checkpoint (comment_batch_create, one point); comment_create
-  // refuses a client's top-level comment (forbidden_role). Everyone else writes
-  // a plain comment. Both land on the move's trace.
+  // The reason comment (and any comment this flow writes): comment_create for
+  // everyone (an Approver may write top-level comments on a post in review),
+  // on the move's trace.
   async function postReason(id: string, body: string, traceId: string): Promise<{ ok: boolean }> {
     const ws = inputRef.current.workspaceId;
     if (ws === null) return { ok: false };
-    if (isClient(inputRef.current.role)) {
-      const batch = await runCreateCommentBatch(supabase, {
-        workspaceId: ws,
-        postId: id,
-        points: [{ body }],
-        traceId,
-      });
-      return { ok: batch.ok };
-    }
     const result = await createComment(supabase, {
       workspace_id: ws,
       entity_type: 'post',
@@ -769,32 +716,6 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     dispatchInductionRefresh();
   }
 
-  // With comments still open the tap asks first ("Send anyway?"); with none it
-  // sends straight away. Without a live count, one count read decides.
-  function requestSendForReviewAgain(): void {
-    if (notifying) return;
-    setActionError(null);
-    const known = inputRef.current.openCount;
-    if (known !== null) {
-      if (known > 0) setSendAnywayCount(known);
-      else void sendForReviewAgain();
-      return;
-    }
-    const id = postIdRef.current;
-    const ws = inputRef.current.workspaceId;
-    if (id === undefined || ws === null) {
-      void sendForReviewAgain();
-      return;
-    }
-    setNotifying(true);
-    void countOpenThreads(ws, id).then((open) => {
-      if (!stillHere(id)) return;
-      setNotifying(false);
-      if (open > 0) setSendAnywayCount(open);
-      else void sendForReviewAgain();
-    });
-  }
-
   // A stage pick. Any pick clears the last error (flow B 41: one error, where
   // it was tapped). FN10: while a reject / park Undo window runs the buttons
   // stay enabled, and a pick flushes that pending commit first.
@@ -830,7 +751,11 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
         role,
         sending: notifying,
         onPick: pick,
-        onSendAgain: requestSendForReviewAgain,
+        onSendAgain: () => {
+          if (notifying) return;
+          setActionError(null);
+          void sendForReviewAgain();
+        },
         landed,
       })
     : null;
@@ -851,18 +776,6 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
           ? { body: rejectConfirmBody(input.creatorName), destructive: true }
           : {})}
       />
-      {sendAnywayCount !== null ? (
-        <ConfirmDialog
-          title={sendAnywayTitle(sendAnywayCount)}
-          confirmLabel={SEND_ANYWAY_LABEL}
-          cancelLabel="Cancel"
-          onConfirm={() => {
-            setSendAnywayCount(null);
-            void sendForReviewAgain();
-          }}
-          onCancel={() => setSendAnywayCount(null)}
-        />
-      ) : null}
       <PcsApproveConfirm
         gate={approveGate}
         gateState={approveState}

@@ -11,7 +11,6 @@ import {
   namesByEmoji,
 } from '@/components/ui/ReactionChips';
 import EmojiSheet, { EMOJI_SHEET_TITLE } from '@/components/ui/EmojiSheet';
-import { CommentActionBar } from '@/components/comments/CommentActionBar';
 import { readRecents } from '@/lib/chat/emoji-list';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -136,27 +135,5 @@ describe('ReactionChips', () => {
       'me',
     );
     expect(names.get('👍')).toEqual(['You', 'Ana']);
-  });
-});
-
-describe('comment action bar', () => {
-  it('the smiley is the first key, before Reply', async () => {
-    const host = await mount(
-      <CommentActionBar
-        bar={{ reply: true, resolve: 'resolve', todo: false, edit: false, delete: false }}
-        resolveLabel="Resolve"
-        resolveHook="data-comment-resolve"
-        onReact={() => {}}
-        onReply={() => {}}
-        onResolve={() => {}}
-        onTodo={() => {}}
-        onEdit={() => {}}
-        onDelete={() => {}}
-      />,
-    );
-    const labels = [...host.querySelectorAll('[data-comment-bar] button')].map((b) =>
-      b.getAttribute('aria-label'),
-    );
-    expect(labels).toEqual(['Add reaction', 'Reply', 'Resolve']);
   });
 });

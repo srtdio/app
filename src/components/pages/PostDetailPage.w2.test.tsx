@@ -11,15 +11,9 @@ vi.mock('agora-chat', () => ({
 
 import {
   StageReasonConfirm,
-  captionDraftKey,
   captionSaveLabel,
   captionSaveNote,
-  pinDraftKey,
 } from '@/components/pages/PostDetailPage';
-import {
-  COMMENT_DISCARD,
-  COMMENT_POST_FAILED,
-} from '@/components/pages/pcs/CaptionAnnotationComposer';
 import { stageReasonConfirm } from '@/components/pages/pcs/stage-actions';
 import { WritingBox } from '@/components/ui/WritingBox';
 
@@ -157,44 +151,6 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
   });
 });
 
-describe('2. caption and pin comment sheets', () => {
-  const caption = read('./pcs/CaptionAnnotationComposer.tsx');
-  const pin = read('./pcs/PinAnnotationComposer.tsx');
-
-  it('both are dirty-guarded with the comment discard copy and busy while posting', () => {
-    expect(COMMENT_DISCARD).toEqual({
-      title: 'Discard this comment?',
-      message: 'Your text will be lost.',
-    });
-    for (const src of [caption, pin]) {
-      expect(src).toContain("dirty={body.trim() !== ''}");
-      expect(src).toContain('discard={COMMENT_DISCARD}');
-      expect(src).toContain('busy={submitting}');
-      // No reset on open: the page owns the draft per selection.
-      expect(src).not.toContain("if (open) setBody('')");
-    }
-  });
-
-  it('each selection keeps its own draft key', () => {
-    expect(captionDraftKey(2, 9)).not.toBe(captionDraftKey(2, 10));
-    expect(pinDraftKey(0, 0.1, 0.2)).not.toBe(pinDraftKey(1, 0.1, 0.2));
-  });
-
-  it('the sheet stays open until saved; a failure keeps the text and shows the retry copy', () => {
-    expect(COMMENT_POST_FAILED).toBe("Couldn't post your comment. Try again.");
-    const submit = PAGE.slice(PAGE.indexOf('async function submitAnnotation'));
-    const fail = submit.indexOf('setComposerError(COMMENT_POST_FAILED);');
-    const close = submit.indexOf('setComposer(null);');
-    expect(fail).toBeGreaterThan(-1);
-    // The close comes only after the failure branch returned.
-    expect(close).toBeGreaterThan(fail);
-    const pinSubmit = PAGE.slice(PAGE.indexOf('async function submitPinAnnotation'));
-    expect(pinSubmit.indexOf('setComposerError(COMMENT_POST_FAILED);')).toBeLessThan(
-      pinSubmit.indexOf('setPinComposer(null);'),
-    );
-  });
-});
-
 describe('4. gallery writes never overlap', () => {
   it('a second reorder or remove while a save is in flight is dropped', () => {
     expect(PAGE).toContain('if (postId === undefined || gallerySavingRef.current) return false;');
@@ -240,8 +196,6 @@ describe('7. small copy and hit areas', () => {
   it('no em-dashes in the touched files', () => {
     for (const rel of [
       './PostDetailPage.tsx',
-      './pcs/CaptionAnnotationComposer.tsx',
-      './pcs/PinAnnotationComposer.tsx',
       './pcs/SlideActionsSheet.tsx',
       './pcs/PostDetailsSheet.tsx',
       './pcs/stage-actions.ts',

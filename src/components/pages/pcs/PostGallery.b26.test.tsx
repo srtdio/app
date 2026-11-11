@@ -7,7 +7,6 @@ import {
   PostGallery,
   galleryToolsRow,
   galleryView,
-  pinButton,
   reorderView,
   REORDER_HELPER,
   type GalleryToolsModel,
@@ -20,6 +19,7 @@ import {
   replaceAt,
 } from '@/components/pages/pcs/gallery-transforms';
 import { Button } from '@/components/ui/Button';
+import { LEADING_PULL, TRAILING_PULL } from '@/components/ui/layout';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -101,28 +101,34 @@ function toolsModel(over: Partial<GalleryToolsModel> = {}): GalleryToolsModel {
 }
 
 describe('#26 gallery tools row', () => {
-  it('one row: Add, Replace, Reorder, Add pin on the left, v{n} on the right, all 44px', () => {
-    const pin = pinButton(0, null, vi.fn(), vi.fn());
-    const tree = galleryToolsRow(toolsModel({ pin }));
+  it('one row: Add, Replace, Reorder on the left, v{n} on the right, all 44px', () => {
+    const tree = galleryToolsRow(toolsModel());
     expect(tree).not.toBeNull();
     const html = renderToStaticMarkup(tree!);
-    const order = ['>Add<', '>Replace<', '>Reorder<', 'Add pin<', '>v4<'].map((t) =>
-      html.indexOf(t),
-    );
+    const order = ['>Add<', '>Replace<', '>Reorder<', '>v4<'].map((t) => html.indexOf(t));
     expect(order.every((at) => at > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html.match(/min-h-11/g)?.length).toBe(5);
-    // The left group wraps inside its own column; v{n} never wraps away from the right.
-    expect(html).toContain('min-w-0 flex-1 flex-wrap');
-    expect(html).toContain('shrink-0 tabular-nums');
+    expect(html.match(/min-h-11/g)?.length).toBe(4);
+    // One row: the left group never wraps; v{n} stays on the right.
+    expect(html).toContain('min-w-0 flex-1 items-center');
+    expect(html).not.toContain('flex-wrap');
     expect(html).not.toContain('ml-auto');
+    expect(html).not.toContain('Add pin');
   });
 
-  it('Add pin alone still gets the row (a viewer who can comment)', () => {
-    const pin = pinButton(0, null, vi.fn(), vi.fn());
-    const tree = galleryToolsRow(toolsModel({ canEdit: false, versionNumber: null, pin }));
-    expect(tree).not.toBeNull();
-    expect(renderToStaticMarkup(tree!)).toContain('Add pin');
+  it('Add sits on the leading page edge and v{n} on the trailing one (the pulls)', () => {
+    const tree = galleryToolsRow(toolsModel());
+    const add = byData(tree, 'data-gallery-add');
+    const versions = byData(tree, 'data-gallery-versions');
+    const cls = (el: ReactElement | undefined) => (el?.props as { className?: string }).className;
+    expect(cls(add)).toContain(LEADING_PULL);
+    expect(cls(add)).toContain('px-3');
+    expect(cls(versions)).toContain(TRAILING_PULL);
+    expect(cls(versions)).toContain('px-3');
+    expect(cls(byData(tree, 'data-gallery-replace'))).not.toContain(LEADING_PULL);
+  });
+
+  it('no row without edit tools, a lock or v{n}', () => {
     expect(galleryToolsRow(toolsModel({ canEdit: false, versionNumber: null }))).toBeNull();
   });
 
@@ -314,8 +320,7 @@ describe('#26 Reorder: hold and drag only, saved on drop', () => {
 
   it('the tools row rides under the strip with Reorder pressed (it leaves the mode)', () => {
     const onReorder = vi.fn();
-    const pin = pinButton(0, null, vi.fn(), vi.fn());
-    const toolbar = galleryToolsRow(toolsModel({ reordering: true, onReorder, pin }));
+    const toolbar = galleryToolsRow(toolsModel({ reordering: true, onReorder }));
     const tree = reorderView(reorderModel({ toolbar }));
     const reorder = byData(tree, 'data-gallery-reorder');
     expect((reorder?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(true);
@@ -323,7 +328,6 @@ describe('#26 Reorder: hold and drag only, saved on drop', () => {
     click(reorder);
     expect(onReorder).toHaveBeenCalledTimes(1);
     expect((byData(tree, 'data-gallery-add')?.props as { disabled?: boolean }).disabled).toBe(true);
-    expect(byData(tree, 'data-add-pin')).toBeUndefined();
   });
 
   it('drag math lands the tile by whole steps, clamped', () => {

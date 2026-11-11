@@ -299,13 +299,13 @@ The Approver writes the brief; it lands in the Briefs section and can be linked 
 | Layout | Header, caption editor, asset gallery, metadata sidebar, comments |
 | Caption editing | Creator edits the caption inside PCS. |
 | Versioning | Auto-version on every edit. post_versions immutable; never deleted. |
-| Annotations | Caption span + image pin. Immutable, version-locked. |
+| Annotations | Caption span only (11 Nov 2026): selecting caption text drops the quote into the comment box; fg underline in the caption, fg rail quote chip on the comment, no numbers. Stored image pins stay in the database and are not drawn. Immutable, version-locked. |
 | Annotations on outdated versions | Display greyed out / 'copy changed' indicator. Never hidden from DB. |
 | Decision Records | Boolean flag on comment. Filterable view. |
 | Rollback | Pre-approval edit history via versions; versions are immutable. |
 | Approve button | PCS only. Not on Pipeline cards. Approver must be logged in. |
-| Post screen (decided 7 Nov 2026) | Pinned "<" bar with the checkpoint progress row under it. Cut: Compare versions, caption on/off toggle, duplicate Delete image, reorder buttons (hold and drag only, saved on drop), Open in pipeline, resolution note, checkpoint Send back. Image removal is a 4 s undo. |
-| Checkpoints and pins (decided 7 Nov 2026) | Author once per group, numbered points; resolved points fold to one line at the bottom. A approver pin is a one-point checkpoint linked to the pin and shows "On photo {n}". Annotations draw in ink, not gold. |
+| Post screen (decided 7 Nov 2026; 11 Nov 2026) | Pinned "<" bar alone (no progress row). Cut: Compare versions, caption on/off toggle, duplicate Delete image, reorder buttons (hold and drag only, saved on drop), Open in pipeline, resolution note, checkpoint Send back. Image removal is a 4 s undo. |
+| Comments as chat (decided 11 Nov 2026; replaces checkpoints and pins of 7 Nov) | Post and brief comments are a chat: plain messages, each top-level comment the root of a thread, drawn by chat's own parts (rows, swipe, long-press / right-click menu, hover keys, RepliesRow, thread view, composer). Tap, swipe right or "N replies" opens the thread (phone over the post, laptop side panel); replies never show inline. Menu: reactions, To-do (comment_task_create), Edit, Copy text, Copy link, Reply privately, Delete last (own only). Removed: checkpoints, numbers, ticks (Resolve, Reopen, Confirm), the progress row, Open / All, the open count chip, the "Send anyway?" warning, photo pins. Approvers comment through comment_create like everyone (a draft post refuses them). Every comment and reply notifies every active member. Unread per thread from comment_thread_reads. |
 | Comment files (decided 7 Nov 2026) | Every comment photo and file opens in-app (lightbox or file viewer), never a new tab. |
 | Platform preview (decided 7 Nov 2026) | Placement from the post format; chips only for plain video on Instagram and Facebook. Each platform drawn in its own colours, no logos. One cut row with Show cut. No size picker, no Crop section. |
 
@@ -512,6 +512,7 @@ Two primitives, separate backends. Users don't know which is which.
 | Backend | Postgres | Postgres (chat_messages is the record). Agora for live delivery only. |
 | Real-time | Supabase Realtime | Agora SDK, live delivery only. Never read for history. |
 | Mirror | None | None. chat_messages is the record, not a mirror. |
+| Shape | A chat with threads (11 Nov 2026), chat's parts | Chat with threads |
 | Anchors to post version | Yes | No |
 | Decision Records | Yes | No |
 | @-mentions | inbox_entries + email | Agora native push (MENTION_ONLY) |
@@ -623,7 +624,7 @@ Not covered in MVP PRD. Defer to lawyer review pre-launch.
 
 ## Formatting and the writing box (decided 8 Nov 2026)
 
-- Every multi-line writing surface uses one Slack-style writing box (ui/WritingBox): chat, post comments and checkpoints, plan item / bank idea / brief comments, pin and caption notes, reject reason, stage-move note, person card message, brief fields, idea and plan item notes, post caption. Single-line fields, search, email, invites and sign-in stay plain inputs.
+- Every multi-line writing surface uses one Slack-style writing box (ui/WritingBox): chat, post comments, plan item / bank idea / brief comments, reject reason, stage-move note, person card message, brief fields, idea and plan item notes, post caption. Single-line fields, search, email, invites and sign-in stay plain inputs.
 - Chat on a phone rests as one pill (+, "Message", mic); focused or holding a draft it is a card: text on top, + Aa emoji @ on the left, send on the right (no mic). Laptop and iPad: the card always, mic while empty.
 - Aa replaces the row with the format row: Close, Bold, Italic, Underline, Strike, Link, Numbered list, Bullet list, Quote. Shortcuts Cmd/Ctrl+B/I/U, +Shift+X strike, +Shift+C mono, +Shift+7 numbered, +Shift+8 bullet, +Shift+9 quote, Cmd/Ctrl+K link.
 - Stored as plain text: "N. " numbered, "- " bullet, "> " quote, [text](url) link (http(s) only; a bare domain gets https://). Return continues a list or quote; Return on an empty item ends it. Rendered as lists, a quote bar and tappable link text; plain-text readers show display text.

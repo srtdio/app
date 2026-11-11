@@ -7,27 +7,19 @@ import {
   galleryFrameRatio,
   frameCut,
   frameKindNote,
-  framePins,
   intrinsicSize,
   nearestTileIndex,
   resolveRibbonTileStyle,
   ribbonTileStyle,
-  slideTapAction,
   soloTileStyle,
   viewerReplacesRibbon,
 } from '@/components/pages/pcs/PostGallery';
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
-import {
-  cutPercent,
-  frameMap,
-  IDENTITY_MAP,
-  type PinDot,
-} from '@/components/pages/pcs/pin-annotations';
+import { cutPercent, frameMap } from '@/components/pages/pcs/pin-annotations';
 import { IconButton } from '@/components/ui/IconButton';
 import { Button } from '@/components/ui/Button';
 import { DropZone } from '@/components/ui/DropZone';
 import { frameFor } from '@/lib/platform-specs';
-import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { LONG_PRESS_MS, createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -37,7 +29,7 @@ import type { GalleryItem } from '@srtdio/posts';
 // The unit environment is node (no DOM renderer), so these specs walk the JSX
 // tree returned by the hookless galleryView rather than mounting it. The
 // stateful thumbnail (GalleryThumb) stays an unexpanded element, so the mocked
-// cache is never actually called during the walk. IconButton (dots, pins) is
+// cache is never actually called during the walk. IconButton (the dots) is
 // hookless too, so it is expanded to the <button> it renders.
 
 function flatten(node: ReactNode, out: ReactElement[]): void {
@@ -364,95 +356,46 @@ describe('galleryView', () => {
   });
 });
 
-describe('pin placement on the inline slide (relocated F5 flow)', () => {
+describe('a carousel slide tap', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('long-press arms placement, then the next tap places via the existing onPlacePin path', () => {
+  it('opens that slide; the click trailing a long-press is swallowed', () => {
     vi.useFakeTimers();
-    const onPlacePin = vi.fn();
-    const onRequestPin = vi.fn();
-    // The component wires the shared long-press controller to arm the pressed
-    // slide at the one LONG_PRESS_MS; replicate that wiring exactly.
-    let armed: number | null = null;
-    const pressedIndex = 1;
-    const controller = createLongPressController({
-      onLongPress: () => {
-        armed = pressedIndex;
-        onRequestPin(pressedIndex);
-      },
+    const onOpen = vi.fn();
+    const controller = createLongPressController({ onLongPress: () => {} });
+    const tree = galleryView({
+      items: [item(0), item(1), item(2)],
+      cache,
+      presignEnabled: true,
+      onOpen,
+      consumeClickSuppression: controller.consumeClickSuppression,
     });
+    const slide = elements(tree).find((el) => label(el) === 'View image 2')!;
+    const tap = (): void => (slide.props as { onClick: () => void }).onClick();
 
     controller.handlers.onPointerDown({ clientX: 40, clientY: 40 });
     vi.advanceTimersByTime(LONG_PRESS_MS);
     controller.handlers.onPointerUp();
-    expect(armed).toBe(pressedIndex);
-    expect(onRequestPin).toHaveBeenCalledWith(pressedIndex);
+    tap();
+    expect(onOpen).not.toHaveBeenCalled();
 
-    // The click trailing the arming long-press is swallowed, not placed.
-    expect(slideTapAction(armed, pressedIndex, controller.consumeClickSuppression())).toBe(
-      'suppress',
-    );
-
-    // The next tap on the armed slide converts to percentage coordinates and
-    // calls the existing onPlacePin path.
-    expect(slideTapAction(armed, pressedIndex, controller.consumeClickSuppression())).toBe('place');
-    const slideRect = { left: 100, top: 50, width: 200, height: 100 };
-    const target = { getBoundingClientRect: () => slideRect };
-    const point = placePinFromEvent(target, 150, 75)!;
-    onPlacePin(pressedIndex, point.x, point.y);
-    expect(onPlacePin).toHaveBeenCalledWith(pressedIndex, 0.25, 0.25);
+    tap();
+    expect(onOpen).toHaveBeenCalledWith(1);
+    expect(className(slide)).not.toContain('cursor-crosshair');
   });
 
-  it('routes taps by arming state: place on the armed slide, disarm elsewhere, open otherwise', () => {
-    expect(slideTapAction(null, 0, false)).toBe('open');
-    expect(slideTapAction(2, 2, false)).toBe('place');
-    expect(slideTapAction(2, 0, false)).toBe('disarm');
-    expect(slideTapAction(2, 2, true)).toBe('suppress');
-  });
-
-  it('shows the hint pill and crosshair on the armed carousel slide, and taps route through onSlideTap', () => {
-    const onSlideTap = vi.fn();
-    const items = [item(0), item(1), item(2)];
-    const tree = galleryView({
-      items,
-      cache,
-      presignEnabled: true,
-      onOpen: () => {},
-      pinArmedIndex: 1,
-      onSlideTap,
-    });
-    const all = elements(tree);
-
-    const pill = all.find((el) => (el.props as { role?: string }).role === 'status');
-    expect(pill).toBeDefined();
-    const pillText = all
-      .map((el) => (el.props as { children?: ReactNode }).children)
-      .filter((child): child is string => typeof child === 'string');
-    expect(pillText).toContain('Tap the image to place a pin');
-
-    const armedSlide = all.find((el) => label(el) === 'View image 2')!;
-    expect(className(armedSlide)).toContain('cursor-crosshair');
-    const otherSlide = all.find((el) => label(el) === 'View image 1')!;
-    expect(className(otherSlide)).not.toContain('cursor-crosshair');
-
-    const event = { currentTarget: {}, clientX: 5, clientY: 5 };
-    (armedSlide.props as { onClick: (e: unknown) => void }).onClick(event);
-    expect(onSlideTap).toHaveBeenCalledWith(1, event);
-  });
-
-  it('renders no hint pill while unarmed', () => {
+  it('draws no hint pill and no pin over the slides', () => {
     const tree = galleryView({
       items: [item(0), item(1)],
       cache,
       presignEnabled: true,
       onOpen: () => {},
-      pinArmedIndex: null,
     });
-    expect(elements(tree).some((el) => (el.props as { role?: string }).role === 'status')).toBe(
-      false,
-    );
+    const all = elements(tree);
+    expect(all.some((el) => (el.props as { role?: string }).role === 'status')).toBe(false);
+    expect(all.some((el) => /^Pin /.test(label(el) ?? ''))).toBe(false);
   });
 });
 
@@ -822,39 +765,6 @@ describe('the post screen shows every picture whole', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it('pins render on the ribbon tiles at their stored positions, no frame mapping', () => {
-    const items = [tall(0), square(1)];
-    const pins: Record<string, PinDot[]> = {
-      'aa-0': [{ n: 1, state: 'open', annotationId: 'a1', commentId: 'c1', x: 0.1, y: 0.05 }],
-      'aa-1': [{ n: 2, state: 'open', annotationId: 'a2', commentId: 'c2', x: 0.75, y: 0.4 }],
-    };
-    const onPinClick = vi.fn();
-    const tree = galleryView({
-      items,
-      cache,
-      presignEnabled: true,
-      onOpen: () => {},
-      // A cropping frame must not move the pins: the picture is never cut.
-      frame: galleryFrame('linkedin', 'single_image', items, {}),
-      platformLabel: 'LinkedIn',
-      pinsFor: (g) => pins[g.assetAttachmentId] ?? [],
-      onPinClick,
-    });
-    const shown = elements(tree).filter((el) => /^Pin /.test(label(el) ?? ''));
-    expect(shown.map(label)).toEqual(['Pin 1', 'Pin 2']);
-    const style = (el: ReactElement) =>
-      (el.props as { style: { left: string; top: string } }).style;
-    expect(style(shown[0]!)).toEqual({ left: '10%', top: '5%' });
-    expect(style(shown[1]!)).toEqual({ left: '75%', top: '40%' });
-    expect((shown[0]!.props as Record<string, unknown>)['data-pin-edge']).toBeUndefined();
-    (shown[1]!.props as { onClick: () => void }).onClick();
-    expect(onPinClick).toHaveBeenCalledWith('c2');
-    // Each pin sits inside its own tile box.
-    const boxes = tileBoxes(tree);
-    expect(elements(boxes[0]).some((el) => label(el) === 'Pin 1')).toBe(true);
-    expect(elements(boxes[1]).some((el) => label(el) === 'Pin 2')).toBe(true);
-  });
-
   it('YouTube Shorts with an image shows the same note as the panel', () => {
     const items = [{ ...item(1), width: 1920, height: 1080 }];
     expect(frameKindNote('youtube_shorts', items)).toBe('Shorts are video only.');
@@ -913,19 +823,5 @@ describe('the post screen shows every picture whole', () => {
         'aa-1': { width: 1080, height: 1080 },
       }),
     ).toBe(1);
-  });
-
-  it('framePins with the identity map draws every pin at its stored spot', () => {
-    const tree = framePins(
-      [{ n: 1, state: 'open', annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0.25 }],
-      IDENTITY_MAP,
-      () => {},
-    );
-    const pin = elements(tree).find((el) => label(el) === 'Pin 1');
-    expect((pin?.props as { style: { left: string; top: string } }).style).toEqual({
-      left: '50%',
-      top: '25%',
-    });
-    expect(className(pin!)).toContain('h-11 w-11');
   });
 });

@@ -84,6 +84,12 @@ export interface CommentTaskEmbed {
  */
 export type CommentRow = Database['public']['Tables']['comments']['Row'] & {
   comment_tasks?: CommentTaskEmbed | null;
+  /**
+   * The viewer's own read point on this thread (comment_thread_reads, RLS:
+   * own rows only), embedded in the SAME read. Null: no row (never opened).
+   * Only a top-level comment carries one; absent on rows built locally.
+   */
+  thread_read_at?: string | null;
 };
 
 /**
@@ -91,7 +97,16 @@ export type CommentRow = Database['public']['Tables']['comments']['Row'] & {
  * (comment_tasks.comment_id is its primary key, so PostgREST embeds one object
  * or null). No extra request on the comment paint path.
  */
-export const COMMENT_SELECT = '*, comment_tasks(task_id, channel_id, assignee_user_id, group_name)';
+export const COMMENT_SELECT =
+  '*, comment_tasks(task_id, channel_id, assignee_user_id, group_name), comment_thread_reads(last_read_at)';
+
+/** The viewer's read point from the embed (one row or none, any shape). Pure. */
+export function threadReadAt(value: unknown): string | null {
+  const one: unknown = Array.isArray(value) ? value[0] : value;
+  if (one === null || typeof one !== 'object') return null;
+  const at = (one as Record<string, unknown>).last_read_at;
+  return typeof at === 'string' ? at : null;
+}
 
 /** The embed as one object or null, whatever shape the read gave (object, one-row array, none). Pure. */
 export function commentTaskEmbed(value: unknown): CommentTaskEmbed | null {
@@ -109,9 +124,38 @@ export function commentTaskEmbed(value: unknown): CommentTaskEmbed | null {
 
 /** Rows from a COMMENT_SELECT read with the embed normalized (object or null). Pure. */
 export function withTaskEmbeds(
-  rows: readonly (Database['public']['Tables']['comments']['Row'] & { comment_tasks?: unknown })[],
+  rows: readonly (Database['public']['Tables']['comments']['Row'] & {
+    comment_tasks?: unknown;
+    comment_thread_reads?: unknown;
+  })[],
 ): CommentRow[] {
-  return rows.map((row) => ({ ...row, comment_tasks: commentTaskEmbed(row.comment_tasks) }));
+  return rows.map((row) => {
+    const { comment_thread_reads: reads, ...rest } = row;
+    return {
+      ...rest,
+      comment_tasks: commentTaskEmbed(row.comment_tasks),
+      thread_read_at: threadReadAt(reads),
+    };
+  });
+}
+
+/**
+ * Move the viewer's read point on one thread to its newest reply
+ * (comment_thread_read_set; trace id as an explicit parameter). Never throws;
+ * fire and forget from the UI, never awaited on a paint or tap path.
+ */
+export async function setCommentThreadRead(
+  client: Client,
+  rootId: string,
+  traceId: string,
+): Promise<boolean> {
+  const args = { p_root_id: rootId, p_trace_id: traceId };
+  try {
+    const { error } = await client.rpc('comment_thread_read_set', args);
+    return error === null;
+  } catch {
+    return false;
+  }
 }
 
 /** The two entity kinds a comment may anchor to in the MVP. */

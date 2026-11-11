@@ -24,8 +24,6 @@ import {
   slideFromScroll,
   intrinsicSize,
   fitFrameStyle,
-  pinPointFromRect,
-  placePinFromEvent,
   createSwipeDismiss,
   slideViewerKind,
   markOpenFailed,
@@ -183,14 +181,6 @@ describe('pure helpers', () => {
 
   it('builds the fit frame as an aspect-ratio box', () => {
     expect(fitFrameStyle(1080, 1920)).toEqual({ aspectRatio: '1080 / 1920' });
-  });
-
-  it('keeps the pin geometry helpers pure and clamped (used by the gallery now)', () => {
-    const rect = { left: 100, top: 50, width: 200, height: 100 };
-    expect(pinPointFromRect(rect, 200, 100)).toEqual({ x: 0.5, y: 0.5 });
-    expect(pinPointFromRect(rect, 50, 100)).toBeNull();
-    const target = { getBoundingClientRect: vi.fn(() => rect) };
-    expect(placePinFromEvent(target, 150, 75)).toEqual({ x: 0.25, y: 0.25 });
   });
 });
 
@@ -476,23 +466,6 @@ describe('lightboxView', () => {
     expect((zoomedFrame!.props as { style: { transform: string } }).style.transform).toContain(
       'scale(2)',
     );
-  });
-
-  it('renders the pin overlay over the sharp image only when provided', () => {
-    const without = lightboxView(props());
-    expect(
-      elements(without).some(
-        (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'pins',
-      ),
-    ).toBe(false);
-    const withOverlay = lightboxView(
-      props({ pinOverlay: () => <span data-testid="pins">overlay</span> }),
-    );
-    expect(
-      elements(withOverlay).some(
-        (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'pins',
-      ),
-    ).toBe(true);
   });
 });
 

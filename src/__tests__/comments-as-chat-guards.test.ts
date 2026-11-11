@@ -1,0 +1,128 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+// Guards (11 Nov 2026, CLAUDE.md "Comments"): post and brief comments are a
+// chat with threads, drawn by chat's own parts. No comment-only composer,
+// row, menu, replies row or thread frame; no checkpoints, ticks or photo pins
+// on the post or brief screens.
+
+const SRC = fileURLToPath(new URL('../', import.meta.url));
+const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
+
+function files(dir: string): string[] {
+  return readdirSync(join(SRC, dir)).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(join(SRC, path)).isDirectory()) return files(path);
+    return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path.split(sep).join('/')] : [];
+  });
+}
+
+/** Source with comments removed (so prose may still say what was removed). */
+function code(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+}
+
+/** The screens the comments live on. */
+const SCREENS = [
+  'components/comments/Comments.tsx',
+  'components/pages/PostDetailPage.tsx',
+  'components/pages/BriefDetailPage.tsx',
+  ...files('components/pages/pcs'),
+  'components/preview/PlatformPreviewPanel.tsx',
+];
+
+/** Comment-only parts that predate this change and serve other surfaces (catch up, concept sheet, post sheet). */
+const LEGACY_OUTSIDE_SCREENS = new Set([
+  'components/comments/CommentComposer.tsx',
+  'components/comments/MentionInput.tsx',
+]);
+
+const CHAT_PART =
+  /\bfunction\s+(\w*(Composer|MessageRow|MessageBubble|ActionMenu|RepliesRow|ThreadView|ThreadFrame|ThreadRootHead)\w*)\s*\(/;
+
+describe('Guard 1: comments use chat parts, never their own', () => {
+  it('no comments file or comment screen defines a composer, row, menu, replies row or thread frame', () => {
+    const owners = [...files('components/comments'), ...SCREENS]
+      .filter((rel) => !LEGACY_OUTSIDE_SCREENS.has(rel))
+      .filter((rel) => CHAT_PART.test(code(read(rel))))
+      .map((rel) => `${rel}: ${CHAT_PART.exec(code(read(rel)))?.[1] ?? ''}`);
+    expect(owners).toEqual([]);
+  });
+
+  it('the comment screens import those parts from src/components/chat only', () => {
+    const bad = SCREENS.flatMap((rel) =>
+      [
+        ...code(read(rel)).matchAll(
+          /import\s+[^;]*?\b(\w*(Composer|ActionMenu|RepliesRow|ThreadView\w*|ThreadCommentRow)\w*)\b[^;]*?from\s+'([^']+)'/g,
+        ),
+      ]
+        .filter(
+          (m) =>
+            !(m[3] ?? '').startsWith('@/components/chat/') &&
+            !(m[3] ?? '').startsWith('@/components/ui/'),
+        )
+        .map((m) => `${rel}: ${m[1] ?? ''} from ${m[3] ?? ''}`),
+    );
+    expect(bad).toEqual([]);
+  });
+
+  it('Comments renders chat Composer, ThreadCommentRow, MessageActionMenu, RepliesRow and ThreadViewFrame', () => {
+    const src = read('components/comments/Comments.tsx');
+    for (const part of [
+      "from '@/components/chat/Composer'",
+      "from '@/components/chat/ThreadCommentRow'",
+      "from '@/components/chat/MessageActionMenu'",
+      "from '@/components/chat/ThreadRail'",
+      "from '@/components/chat/ThreadView'",
+      '<Composer',
+      '<ThreadCommentRow',
+      '<MessageActionMenu',
+      '<RepliesRow',
+      '<RepliesSeparatorRow',
+      '<ThreadViewFrame',
+      '<ThreadViewFill',
+    ]) {
+      expect(src, part).toContain(part);
+    }
+  });
+
+  it('plan threads and post / brief comments share the one row (a chat change reaches both)', () => {
+    expect(read('components/chat/PlanItemThread.tsx')).toContain('<ThreadCommentRow');
+    expect(read('components/chat/ThreadCommentRow.tsx')).toContain('<MessageBubble');
+    expect(read('components/chat/ThreadCommentRow.tsx')).toContain('createSwipeReplyController(');
+  });
+});
+
+describe('Guard 3: no checkpoints, ticks or pins on the post or brief screens', () => {
+  const visible =
+    /(['"`>])[^'"`<{}]*\b(checkpoints?|Add pin|On photo|open checkpoints?|Send anyway)\b/i;
+  it('no visible "checkpoint", pin or send-anyway words', () => {
+    const hits = SCREENS.filter((rel) => visible.test(code(read(rel)))).map(
+      (rel) => `${rel}: ${visible.exec(code(read(rel)))?.[0] ?? ''}`,
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it('no resolve, confirm-tick, pin or progress-row hooks', () => {
+    const hooks =
+      /data-(comment-resolve|checkpoint[\w-]*|add-pin|cancel-pin|pin-[\w-]+|open-comments-chip|comment-bar)\b|CheckpointCircle|PinOverlay|CheckpointProgress|comment_batch_create|resolveComment|checkpointAccept/;
+    const hits = SCREENS.filter((rel) => rel !== 'components/comments/Comments.tsx')
+      .filter((rel) => hooks.test(code(read(rel))))
+      .map((rel) => `${rel}: ${hooks.exec(code(read(rel)))?.[0] ?? ''}`);
+    expect(hits).toEqual([]);
+    // Comments keeps comment_batch_create only for the Pipeline's reason path, never renders it.
+    const comments = code(read('components/comments/Comments.tsx'));
+    expect(comments).not.toMatch(
+      /CheckpointCircle|data-comment-resolve|resolveComment|checkpointAccept/,
+    );
+    expect(comments).not.toMatch(/runCreateCommentBatch\(supabase/);
+  });
+
+  it('Send for review again sends with no warning', () => {
+    const decisions = code(read('components/pages/pcs/use-post-decisions.tsx'));
+    expect(decisions).not.toContain('countOpenThreads');
+    expect(decisions).not.toContain('sendAnywayTitle');
+  });
+});

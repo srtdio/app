@@ -62,12 +62,6 @@ const FORWARDERS: { file: string; renders: RegExp; caller: RegExp }[] = [
     caller: /\binduction=\{INDUCTION_KEYS\.(\w+)\}/g,
   },
   {
-    // The comment action bar's Reply: Comments hands the guide's key in per row.
-    file: 'components/comments/CommentActionBar.tsx',
-    renders: /'data-induction':\s*props\.replyInduction/,
-    caller: /\binduction:\s*[^,\n]*?INDUCTION_KEYS\.(\w+)/g,
-  },
-  {
     // The top bar's filled "+" (Pipeline, Briefs, Assets): the old create
     // button's key rides on it.
     file: 'components/shell/topbar-actions.tsx',

@@ -20,17 +20,17 @@ import { IconButton } from '@/components/ui/IconButton';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { Text, textRole } from '@/components/ui/Text';
-import { GUTTER } from '@/components/ui/layout';
+import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Textarea } from '@/components/ui/Textarea';
 import { WritingBox } from '@/components/ui/WritingBox';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { Comments, fetchCheckpoints, openCheckpointsLabel } from '@/components/comments/Comments';
-import type { CommentCounts, SharedCheckpoints } from '@/components/comments/Comments';
+import { Comments } from '@/components/comments/Comments';
+import type { CaptionQuote } from '@/components/comments/Comments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
+import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
@@ -38,13 +38,11 @@ import { useSearchJump } from '@/lib/search/jump';
 import { cn } from '@/lib/cn';
 import { Bone, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
-import { prefersReducedMotion, useIsLaptop } from '@/lib/use-is-laptop';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   ICON_SIZE,
   IconCalendar,
-  IconChat,
-  IconChevronDown,
   IconCopy,
   IconEdit,
   IconLock,
@@ -54,22 +52,6 @@ import { PlatformPreviewPanel, PreviewChip } from '@/components/preview/Platform
 import { galleryFrame, PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView, firstHighlightCommentId } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
-import {
-  CaptionAnnotationComposer,
-  COMMENT_POST_FAILED,
-} from '@/components/pages/pcs/CaptionAnnotationComposer';
-import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationComposer';
-import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
-import {
-  buildPinData,
-  checkpointMarks,
-  pinMark,
-  withFreshMarks,
-  type CheckpointMark,
-} from '@/components/pages/pcs/pin-annotations';
-import { createAnchoredComment, submitPin } from '@/components/pages/pcs/pin-annotations-submit';
-import type { PinDot } from '@/components/pages/pcs/pin-annotations';
-import { CheckpointProgress, type CheckpointCounts } from '@/components/pages/pcs/CheckpointStrip';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
 import {
@@ -135,7 +117,6 @@ import {
 } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { errorText } from '@/lib/error-copy';
-import type { CommentRow } from '@srtdio/comments';
 // Title only (no linked-posts count, which this page never shows); not on the
 // package index, so it is imported from the read module itself.
 import { getBriefTitle } from '../../../packages/briefs/src/read';
@@ -156,13 +137,11 @@ export {
   CLIENT_REVIEW_NOTE,
   PcsApproveConfirm,
   REJECT_REASON_LABEL,
-  SEND_ANYWAY_LABEL,
   SENT_AGAIN_TOAST,
   StageReasonConfirm,
   postActionErrorCopy,
   rejectConfirmBody,
   sendAgainErrorCopy,
-  sendAnywayTitle,
 } from '@/components/pages/pcs/use-post-decisions';
 
 /** Spec B4: the approved banner beside the lock. */
@@ -199,27 +178,12 @@ function snapshotCaption(snapshot: Json | null): string | null {
 /** The comments section's id: the open-comments chip scrolls here. */
 export const COMMENTS_SECTION_ID = 'post-comments';
 
-/** Flow B 29: the pill under the title, "1 open checkpoint" / "{n} open checkpoints". */
-export function openCommentsLabel(count: number): string {
-  return openCheckpointsLabel(count);
-}
-
-/**
- * Flow B 29: scroll the comments section into view, smooth unless the viewer
- * asked for reduced motion. Best-effort: a missing node is a no-op.
- */
-export function scrollToCommentsSection(doc: Document = document): void {
-  const node = doc.getElementById(COMMENTS_SECTION_ID);
-  if (node === null) return;
-  node.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
-}
-
 /**
  * Flow B 34: the page grid, shared by the skeleton and the loaded page so the
  * first paint never jumps. Below lg (phone, tablet portrait) one column: head
- * (title, details, pills), media, body (caption), side (checkpoints). lg and
+ * (title, details, pills), media, body (caption), side (comments). lg and
  * up, two columns: head, picture and caption on the left (at most 560px), the
- * checkpoints on the right as their own column from the top, sticky and
+ * comments on the right as their own column from the top, sticky and
  * scrolling on their own within the viewport so neither side sits blank; page
  * at most 1120px, centred. Embedded (inside another screen) stays one column.
  */
@@ -251,22 +215,17 @@ export function postPageGrid(embedded: boolean): {
 }
 
 /**
- * The pinned exit block's height as --pin-h on the page grid: the bar (56px
- * plus the status bar strip it covers in phone page mode) and, while the post
- * has checkpoints, the 48px progress row under it. The checkpoints column
- * sticks below it and a section scrolled into view clears it. Pure.
+ * The pinned exit block's height as --pin-h on the page grid: ui/HeaderBar
+ * alone (56px plus the status bar strip it covers in phone page mode). The
+ * comments column sticks below it and a section scrolled into view clears it.
  */
-export function pinBlockStyle(hasCheckpointRow: boolean): CSSProperties {
-  return {
-    ['--pin-h' as string]: hasCheckpointRow
-      ? 'calc(6.5rem + var(--shell-safe-top, 0px))'
-      : 'calc(3.5rem + var(--shell-safe-top, 0px))',
-  };
-}
+export const PIN_BLOCK_STYLE: CSSProperties = {
+  ['--pin-h' as string]: 'calc(3.5rem + var(--shell-safe-top, 0px))',
+};
 
 /**
  * The comment composers' "+" tray opens above its composer (absolutely placed).
- * On laptop the checkpoints column is its own scroller and clips at its edge,
+ * On laptop the comments column is its own scroller and clips at its edge,
  * so a tray opening near the column's top is brought into view (nearest: when
  * it already shows, nothing moves). Runs after the tap's commit (a microtask:
  * React flushes the click's update before it); no wait, no read.
@@ -294,12 +253,9 @@ export function captionSaveNote(currentVersionNumber: number | null): string | n
     : `Comments on v${currentVersionNumber} stay with it.`;
 }
 
-/** Per-selection draft keys, so each caption span and each pin keeps its own text. */
+/** A caption selection's key, so the comment box knows a new one. */
 export function captionDraftKey(start: number, end: number): string {
   return `caption:${start}:${end}`;
-}
-export function pinDraftKey(index: number, x: number, y: number): string {
-  return `pin:${index}:${x}:${y}`;
 }
 
 export function PostDetailPage({
@@ -439,93 +395,14 @@ export function PostDetailPage({
     [push, pushError],
   );
 
-  // Caption annotation state: the pending selection drives the composer, and a
-  // bump of commentsRefresh re-fetches the comments list after a post.
-  const [composer, setComposer] = useState<{ start: number; end: number; quote: string } | null>(
-    null,
-  );
-  const [annotating, setAnnotating] = useState(false);
+  // A caption selection waiting in the comment box (its quote chip), and a
+  // bump of commentsRefresh re-reads the comments after an anchor lands.
+  const [captionQuote, setCaptionQuote] = useState<
+    (CaptionQuote & { start: number; end: number }) | null
+  >(null);
   const [annotateError, setAnnotateError] = useState<string | null>(null);
   const [commentsRefresh, setCommentsRefresh] = useState(0);
-
-  // The post's checkpoints: ONE read the page owns, handed to both Comments
-  // (merged into its list) and the CheckpointStrip (its chips), so neither
-  // reads them itself. It starts on the first render, alongside Comments' own
-  // list read (never after it), and re-runs on every commentsRefresh bump (pin
-  // or caption comment, a decision, live events) and whenever Comments asks
-  // after its own writes. A read that lands after a newer one started is dropped.
-  const [checkpointRows, setCheckpointRows] = useState<CommentRow[] | null>(null);
-  const checkpointSeq = useRef(0);
-  const loadCheckpoints = useCallback(async (): Promise<void> => {
-    if (commentsWorkspaceId === null || postId === undefined) return;
-    const seq = ++checkpointSeq.current;
-    const rows = await fetchCheckpoints(supabase, commentsWorkspaceId, postId);
-    if (seq !== checkpointSeq.current) return;
-    setCheckpointRows(rows);
-  }, [commentsWorkspaceId, postId]);
-  useEffect(() => {
-    // Switching posts drops the prior rows so nothing bleeds across.
-    setCheckpointRows(null);
-    void loadCheckpoints();
-  }, [loadCheckpoints]);
-  const lastCheckpointRefresh = useRef(commentsRefresh);
-  useEffect(() => {
-    if (lastCheckpointRefresh.current === commentsRefresh) return;
-    lastCheckpointRefresh.current = commentsRefresh;
-    void loadCheckpoints();
-  }, [commentsRefresh, loadCheckpoints]);
-  const sharedCheckpoints = useMemo<SharedCheckpoints>(
-    () => ({ rows: checkpointRows, reload: loadCheckpoints }),
-    [checkpointRows, loadCheckpoints],
-  );
-  // Comment drafts keyed per selection (caption span or pin), kept while the
-  // page is open so a Cancel and a reselect bring the text back.
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
-  const setDraft = useCallback((key: string, body: string): void => {
-    setCommentDrafts((prev) => ({ ...prev, [key]: body }));
-  }, []);
-  const dropDraft = useCallback((key: string): void => {
-    setCommentDrafts((prev) => {
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }, []);
-  // The failure shown inside the open composer sheet (text kept).
-  const [composerError, setComposerError] = useState<string | null>(null);
-
-  // The pinned block under the exit bar: the slot the checkpoint progress row
-  // draws into (a callback ref, so the row appears in the same commit), and
-  // whether the post has checkpoints (the block's height, --pin-h).
-  const [pinSlot, setPinSlot] = useState<HTMLDivElement | null>(null);
-  const [checkpointTotal, setCheckpointTotal] = useState(0);
-  const handleCheckpointCounts = useCallback(
-    (counts: CheckpointCounts) => setCheckpointTotal(counts.total),
-    [],
-  );
-  const pinStyle = embedded ? undefined : pinBlockStyle(checkpointTotal > 0);
-
-  // Flow B 33: the live thread counts lifted from Comments (every open
-  // top-level thread, checkpoints included, optimistic resolves too).
-  const [commentCounts, setCommentCounts] = useState<CommentCounts>({ open: 0, resolved: 0 });
-  const handleCommentCounts = useCallback((counts: CommentCounts) => setCommentCounts(counts), []);
-  // The page's ONE open-comment count: the open-comments chip under the title
-  // (flow B 29), the Comments header, and the creator's "Send for review
-  // again" confirm ("{n} comments are still open. Send anyway?") all read
-  // this value. Open comments never disable the send.
-  const openCount = Math.max(0, commentCounts.open);
-
-  // Pin annotation state (F5): the placed point drives the pin composer, sibling
-  // to the caption composer above. Posting mirrors the caption write path.
-  const [pinComposer, setPinComposer] = useState<{ index: number; x: number; y: number } | null>(
-    null,
-  );
-  const [pinSubmitting, setPinSubmitting] = useState(false);
-  // A client pin's checkpoint number from comment_batch_create's reply, held
-  // until the checkpoint read carries the row (that read wins).
-  const [freshMarks, setFreshMarks] = useState<Record<string, CheckpointMark>>({});
-  const [pinError, setPinError] = useState<string | null>(null);
+  const pinStyle = embedded ? undefined : PIN_BLOCK_STYLE;
 
   // F7 editing state. The viewer's role gates every editing surface; it loads
   // once from the membership and an unknown role stays fully read-only.
@@ -629,13 +506,10 @@ export function PostDetailPage({
     resetForPost.current = postId;
     setHistoryOpen(false);
     setViewingVersionId(null);
-    // A stale open count never bleeds across posts; Comments re-lifts the
-    // real counts once its fetch for the new post lands.
-    setCommentCounts({ open: 0, resolved: 0 });
     // A pending delete or image removal commits for its own post (flush). The
     // decisions hook resets its own state per post.
     flushUndoable();
-    setCommentDrafts({});
+    setCaptionQuote(null);
   }, [postId, flushUndoable]);
 
   // The caption tip shows until this user taps Got it (storage permitting).
@@ -936,7 +810,6 @@ export function PostDetailPage({
         : null,
     mediaCount: gallery.length > 0 ? gallery.length : null,
     approveDay: detail === null ? '' : approveTargetDate(detail.post.target_date, approveTimeZone),
-    openCount,
     reload: () => load(true),
     onCommentsChanged: () => setCommentsRefresh((n) => n + 1),
   });
@@ -957,25 +830,15 @@ export function PostDetailPage({
   );
 
   // From the embedded annotations, build (a) the in-bounds current-version
-  // caption_span highlights for CaptionView and (b) a per-comment map covering
-  // every caption_span (stale included) for the comment chips. Live highlights
-  // are numbered in caption order; stale ones carry their original quote sliced
-  // from their own version snapshot. Out-of-bounds or inverted ranges are
-  // skipped rather than mis-sliced. A highlight or pin whose comment is a
-  // checkpoint takes that checkpoint's ledger_seq and circle state from the
-  // page's one checkpoint read (no read of its own), so the caption circle, the
-  // photo pin and the list never disagree.
-  const marks = useMemo(
-    () => withFreshMarks(checkpointMarks(checkpointRows), freshMarks),
-    [checkpointRows, freshMarks],
-  );
-  const { highlights, annotationsByCommentId, pinsByAttachment } = useMemo(() => {
+  // caption_span highlights for CaptionView (an fg underline, no number) and
+  // (b) a per-comment map covering every caption_span (stale included) for
+  // the quote chips. Stale ones carry their quote sliced from their own
+  // version snapshot. Out-of-bounds or inverted ranges are skipped rather than
+  // mis-sliced. Stored image_pin annotations are not drawn.
+  const { highlights, annotationsByCommentId } = useMemo(() => {
     const list: CaptionAnnotationView[] = [];
     const byComment: Record<string, CommentAnnotation> = {};
-    const noPins: Record<string, PinDot[]> = {};
-    if (detail === null)
-      return { highlights: list, annotationsByCommentId: byComment, pinsByAttachment: noPins };
-
+    if (detail === null) return { highlights: list, annotationsByCommentId: byComment };
     const liveCaption = detail.post.caption ?? '';
     const versionById = new Map(detail.versions.map((v) => [v.id, v]));
     const spans = detail.annotations
@@ -986,8 +849,6 @@ export function PostDetailPage({
         if (sa !== sb) return sa - sb;
         return a.created_at.localeCompare(b.created_at);
       });
-
-    let liveN = 0;
     for (const a of spans) {
       const start = a.caption_start;
       const end = a.caption_end;
@@ -995,116 +856,48 @@ export function PostDetailPage({
       const versionNumber = versionById.get(a.post_version_id)?.version_number ?? 0;
       const inRange = (cap: string): boolean =>
         start !== null && end !== null && start >= 0 && end <= cap.length && start < end;
-
       if (!stale) {
         if (start !== null && end !== null && inRange(liveCaption)) {
-          const checkpoint = marks.get(a.comment_id);
-          const circle = pinMark(checkpoint);
-          let n: number;
-          if (circle.n !== null) n = circle.n;
-          else {
-            liveN += 1;
-            n = liveN;
-          }
-          list.push({
-            id: a.id,
-            n,
-            ...(circle.state !== 'pin' ? { state: circle.state } : {}),
-            captionStart: start,
-            captionEnd: end,
-            commentId: a.comment_id,
-          });
+          list.push({ id: a.id, captionStart: start, captionEnd: end, commentId: a.comment_id });
           byComment[a.comment_id] = {
-            n,
             quote: liveCaption.slice(start, end),
             stale: false,
             versionNumber,
           };
         }
-        // Out-of-bounds current-version annotation: no highlight, no chip.
         continue;
       }
-
       const snapCaption = snapshotCaption(versionById.get(a.post_version_id)?.snapshot ?? null);
       const quote =
         snapCaption !== null && start !== null && end !== null && inRange(snapCaption)
           ? snapCaption.slice(start, end)
           : '';
-      byComment[a.comment_id] = { n: 0, quote, stale: true, versionNumber };
+      byComment[a.comment_id] = { quote, stale: true, versionNumber };
     }
+    return { highlights: list, annotationsByCommentId: byComment };
+  }, [detail, currentVersionId]);
 
-    // Second pass: the image pins, matched to their slides for the overlay
-    // ("On photo {n}" in the row) and numbered by their checkpoint (an agency
-    // pin is an ink dot with no number).
-    const pinData = buildPinData(
-      detail.annotations,
-      currentVersionId,
-      detail.versions,
-      gallery,
-      marks,
-    );
-    Object.assign(byComment, pinData.pinChipsByCommentId);
-
-    return {
-      highlights: list,
-      annotationsByCommentId: byComment,
-      pinsByAttachment: pinData.pinsByAttachment,
-    };
-  }, [detail, currentVersionId, gallery, marks]);
-
-  // Open the composer for a captured caption selection.
+  // A caption selection drops its quote into the comment box (the chip).
   const handleAnnotate = useCallback((start: number, end: number, quote: string): void => {
     setAnnotateError(null);
-    setComposerError(null);
-    setComposer({ start, end, quote });
+    setCaptionQuote({ key: captionDraftKey(start, end), quote, start, end });
   }, []);
 
   // Scroll to (and briefly flash) a DOM node by id. Every section is on the one
-  // page, so a pin, highlight or chip tap never touches the URL and never adds
-  // a browser history entry.
+  // page, so a highlight or chip tap never touches the URL and never adds a
+  // browser history entry.
   function flashTo(elementId: string): void {
     flashNode(elementId);
   }
 
-  // Comment-first, annotation-second on one shared trace. If the annotation
-  // fails after the comment lands, the comment simply stays a plain comment; we
-  // surface an error and refresh the list, with no retry loop.
-  async function submitAnnotation(body: string): Promise<void> {
-    if (composer === null || detail === null || currentVersionId === null) return;
-    // The sheet stays open (busy) until the comment is saved; a failure keeps
-    // the text in it with a retry message.
-    const span = composer;
-    const draftKey = captionDraftKey(span.start, span.end);
-    setAnnotating(true);
-    setAnnotateError(null);
-    setComposerError(null);
-    const traceId = newTrace();
-
-    // A client's comment is a checkpoint (one point); everyone else's is plain.
-    const commentResult = await createAnchoredComment(supabase, {
-      asCheckpoint: clientRole,
-      workspaceId: detail.post.workspace_id,
-      postId: detail.post.id,
-      body,
-      traceId,
-    });
-    if (!commentResult.ok) {
-      logger.warn('post page: caption comment failed', { error: commentResult.message });
-      setAnnotating(false);
-      setComposerError(COMMENT_POST_FAILED);
-      return;
-    }
-    // The comment is saved: close the sheet and drop its draft.
-    setComposer(null);
-    dropDraft(draftKey);
-    const { commentId, seq } = commentResult;
-    if (seq !== null) {
-      setFreshMarks((prev) => ({
-        ...prev,
-        [commentId]: { seq, resolved_at: null, accepted_at: null },
-      }));
-    }
-
+  // The comment carrying the caption quote landed (Comments wrote it through
+  // comment_create): anchor it to the caption on its own trace. If the anchor
+  // fails the comment simply stays a plain comment; one note, no retry loop.
+  async function anchorCaptionComment(
+    commentId: string,
+    span: { start: number; end: number },
+  ): Promise<void> {
+    if (detail === null || currentVersionId === null) return;
     const annotationResult = await annotationCreate(supabase, {
       kind: 'caption_span',
       postId: detail.post.id,
@@ -1112,91 +905,14 @@ export function PostDetailPage({
       commentId,
       captionStart: span.start,
       captionEnd: span.end,
-      traceId,
+      traceId: newTrace(),
     });
     if (!annotationResult.ok) {
-      setAnnotating(false);
-      setComposer(null);
       setAnnotateError(
         "Couldn't anchor the comment to the caption. It was posted as a plain comment.",
       );
-      dispatchInductionDid(INDUCTION_KEYS.postCommentPost);
-      setCommentsRefresh((n) => n + 1);
       return;
     }
-
-    // The comment is on the post: the guide moves on even if a phone lost the tap.
-    dispatchInductionDid(INDUCTION_KEYS.postCommentPost);
-    await load(true);
-    setCommentsRefresh((n) => n + 1);
-    setAnnotating(false);
-    dispatchInductionRefresh();
-  }
-
-  // Pin placement (F5): the lightbox owns the armed state; arming just clears any
-  // prior error, and a valid tap opens the pin composer at the captured point.
-  const handleRequestPin = useCallback((): void => {
-    setPinError(null);
-  }, []);
-
-  const handlePlacePin = useCallback((index: number, x: number, y: number): void => {
-    setPinError(null);
-    setComposerError(null);
-    setPinComposer({ index, x, y });
-  }, []);
-
-  // Comment-first, image_pin-second on one shared trace (submitPin). A
-  // client's pin is a checkpoint: comment_batch_create with one point, then
-  // annotation_create on the new comment id; its ledger_seq numbers the pin at
-  // once (freshMarks) until the checkpoint read brings the row. An annotation
-  // failure after the comment lands leaves a plain comment with an error
-  // notice and no retry.
-  async function submitPinAnnotation(body: string): Promise<void> {
-    if (pinComposer === null || detail === null || currentVersionId === null) return;
-    const item = gallery[pinComposer.index];
-    if (item === undefined) return;
-    const draftKey = pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y);
-    setPinSubmitting(true);
-    setPinError(null);
-    setComposerError(null);
-
-    const result = await submitPin(supabase, {
-      asCheckpoint: clientRole,
-      workspaceId: detail.post.workspace_id,
-      postId: detail.post.id,
-      postVersionId: currentVersionId,
-      assetAttachmentId: item.assetAttachmentId,
-      x: pinComposer.x,
-      y: pinComposer.y,
-      body,
-      traceId: newTrace(),
-    });
-    if (result.status === 'comment_failed') {
-      logger.warn('post page: pin comment failed', { error: result.message });
-      setPinSubmitting(false);
-      setComposerError(COMMENT_POST_FAILED);
-      return;
-    }
-    // The comment is saved: the draft goes; the sheet closes below.
-    dropDraft(draftKey);
-    const { commentId, seq } = result;
-    if (seq !== null) {
-      setFreshMarks((prev) => ({
-        ...prev,
-        [commentId]: { seq, resolved_at: null, accepted_at: null },
-      }));
-    }
-
-    if (result.status === 'annotation_failed') {
-      setPinSubmitting(false);
-      setPinComposer(null);
-      setPinError("Couldn't anchor the comment to the image. It was posted as a plain comment.");
-      setCommentsRefresh((n) => n + 1);
-      return;
-    }
-
-    setPinSubmitting(false);
-    setPinComposer(null);
     await load(true);
     setCommentsRefresh((n) => n + 1);
     dispatchInductionRefresh();
@@ -1508,8 +1224,7 @@ export function PostDetailPage({
   // pull, the stage line in the title slot, the ⋯ last). The post title is
   // the page's one h1 (Display, below), so the bar's title is never an h1.
   // It opens over the app, so it is pinned while the page scrolls; the slot
-  // under it pins with it and holds the checkpoint progress row (portalled in
-  // from the comments list, where the live checkpoint state lives).
+  // The pinned block is the bar alone.
   const topBar = (title: ReactNode, actions?: ReactNode): ReactElement => (
     <HeaderBar
       barRef={pageAnchorRef}
@@ -1520,7 +1235,6 @@ export function PostDetailPage({
       titleSlot={<span className={textRole('title', 'truncate')}>{title}</span>}
       {...(actions !== undefined ? { actions } : {})}
       className={SAFE_TOP_BAR_CLASS}
-      below={<div data-checkpoint-pin-slot="" ref={setPinSlot} />}
     />
   );
 
@@ -1528,12 +1242,9 @@ export function PostDetailPage({
   // when the content paints.
   const grid = postPageGrid(embedded);
 
-  // The checkpoints column (spec D1: its own column at lg, sticky and scrolling
-  // within the viewport; below lg it follows the caption). Comments own their
-  // header row ("Checkpoints", Open / All). The checkpoint progress row mounts
-  // under it (belowHeader, inside the list's live checkpoint state) and draws
-  // in the pinned slot under the exit bar, only when there are checkpoints and
-  // the section is shown; embedded (no bar) it stays in place.
+  // The comments column (spec D1: its own column at lg, sticky and scrolling
+  // within the viewport; below lg it follows the caption): chat's list and
+  // chat's composer (comments/Comments).
   //
   // It is the SAME element in the skeleton and the loaded page (same place in
   // the tree), so Comments and the strip mount on the first render and their
@@ -1575,26 +1286,19 @@ export function PostDetailPage({
                   pending ? null : embedded ? (focusCommentIdProp ?? null) : focusCommentId
                 }
                 focusRequestKey={embedded ? null : focusRequestKey}
-                viewerIsClient={clientRole}
                 {...(detail !== null ? { postStage: detail.post.stage } : {})}
                 whereLabel={detail?.post.title ?? ''}
                 guideReplyCommentId={firstHighlightCommentId(
                   detail?.post.caption ?? '',
                   highlights,
                 )}
-                showHeader
-                onCountsChange={handleCommentCounts}
-                sharedCheckpoints={sharedCheckpoints}
-                belowHeader={
-                  <CheckpointProgress
-                    workspaceId={commentsWorkspaceId}
-                    postId={postId}
-                    refreshSignal={commentsRefresh}
-                    checkpoints={checkpointRows}
-                    onCounts={handleCheckpointCounts}
-                    {...(embedded ? {} : { target: pending ? null : pinSlot })}
-                  />
-                }
+                canComment={!(clientRole && detail?.post.stage === 'draft')}
+                captionQuote={captionQuote}
+                onCaptionQuoteCancel={() => setCaptionQuote(null)}
+                onCaptionQuoteSent={(commentId) => {
+                  const span = captionQuote;
+                  if (span !== null) void anchorCaptionComment(commentId, span);
+                }}
               />
             </div>
           ) : (
@@ -1692,9 +1396,6 @@ export function PostDetailPage({
   };
   const ownerInfo = resolveOwner(post.owner_user_id, post.legacy_author_name);
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
-  const composerKey = composer !== null ? captionDraftKey(composer.start, composer.end) : null;
-  const pinKey =
-    pinComposer !== null ? pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y) : null;
 
   // Spec A1: one meta line under the title. Owner · "Due 20 Jul" · "From
   // brief: {title}" (a link), each only when it has a value; one line that
@@ -1793,7 +1494,12 @@ export function PostDetailPage({
     metaHead.length > 0 || briefLink !== null ? (
       <div
         data-post-details=""
-        className="flex min-h-11 min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-sm text-fg-3"
+        // The 44 tap height comes from the row's box, held inside the line
+        // (CONTROL_IN_LINE), so the line reads 12 under the title, not 26.
+        className={cn(
+          'flex min-h-11 min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-sm text-fg-3',
+          CONTROL_IN_LINE,
+        )}
       >
         {metaHead.length > 0 ? (
           detailsEditable ? (
@@ -1824,22 +1530,6 @@ export function PostDetailPage({
       >
         <IconCalendar size={ICON_SIZE.control} />
       </IconButton>
-    ) : null;
-
-  // Flow B 29: "{n} open comments" under the title while in review; a tap
-  // scrolls to the comments. Hidden at 0.
-  const openCommentsChip =
-    currentStage === 'review' && openCount > 0 && !readOnly ? (
-      <Button
-        type="button"
-        variant="secondary"
-        data-open-comments-chip=""
-        onClick={() => scrollToCommentsSection()}
-      >
-        <IconChat size={ICON_SIZE.inline} />
-        {openCommentsLabel(openCount)}
-        <IconChevronDown size={ICON_SIZE.inline} />
-      </Button>
     ) : null;
 
   // The decision row, rendered ONCE per breakpoint (usePostDecisions builds
@@ -2096,11 +1786,9 @@ export function PostDetailPage({
             {/* Spec A1: one meta line (owner, due, brief); agency roles tap
               it to open the details sheet while the post is not approved. */}
             {metaLine}
-            {/* Spec A2: the preview pill and the open checkpoints pill share
-              one row. */}
+            {/* Spec A2: the preview pill. */}
             <div data-post-pills="" className="flex flex-wrap items-center gap-x-2">
               <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
-              {openCommentsChip}
             </div>
             {/* Flow B 37: the approved lock, under the title and details. */}
             {approvedBanner}
@@ -2129,23 +1817,12 @@ export function PostDetailPage({
                   cache={cache}
                   deps={deps}
                   presignEnabled={presignEnabled}
-                  pinOverlay={(item) => (
-                    <PinOverlay
-                      pins={pinsByAttachment[item.assetAttachmentId] ?? []}
-                      onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
-                    />
-                  )}
                   frame={{
                     platform: post.platform,
                     format: post.format,
                     platformLabel: platformLabel(post.platform),
                   }}
                   onSeePreview={() => setPreviewOpen(true)}
-                  pinsFor={(item) => pinsByAttachment[item.assetAttachmentId] ?? []}
-                  onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
-                  onRequestPin={handleRequestPin}
-                  onPlacePin={handlePlacePin}
-                  pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
                   onSlideActions={
                     canEditContent ? (index: number) => setSlideIndex(index) : undefined
                   }
@@ -2162,8 +1839,6 @@ export function PostDetailPage({
                     // rejected only; an approved post is locked.
                     canEdit: canEditContent,
                     locked: agencySide && approvedLocked,
-                    // A client's row is Add pin only.
-                    pinOnly: clientRole,
                     versionNumber: currentVersionNumber,
                     error: galleryError,
                     onVersions: () => setHistoryOpen(true),
@@ -2178,7 +1853,6 @@ export function PostDetailPage({
                   Saving…
                 </p>
               ) : null}
-              {pinError !== null ? <ErrorNote className="mt-3">{pinError}</ErrorNote> : null}
             </section>
           </div>
 
@@ -2317,7 +1991,7 @@ export function PostDetailPage({
             {phoneLayout ? phoneStageNotes : null}
           </div>
 
-          {/* Spec D1: the checkpoints column, the same element the skeleton
+          {/* Spec D1: the comments column, the same element the skeleton
             mounted (see sidePanel). */}
           {sidePanel(false, decisionBarShown ? decisionBarHeight : undefined)}
         </div>
@@ -2329,50 +2003,6 @@ export function PostDetailPage({
         <div aria-hidden data-decision-bar-space="" style={{ height: decisionBarHeight }} />
       ) : null}
       {decisionBar}
-
-      <CaptionAnnotationComposer
-        open={composer !== null}
-        quote={composer?.quote ?? ''}
-        body={composerKey !== null ? (commentDrafts[composerKey] ?? '') : ''}
-        onBodyChange={(body) => {
-          if (composerKey !== null) setDraft(composerKey, body);
-        }}
-        submitting={annotating}
-        error={composerError}
-        onCancel={() => {
-          if (!annotating) setComposer(null);
-        }}
-        onDiscard={() => {
-          if (annotating) return;
-          if (composerKey !== null) dropDraft(composerKey);
-          setComposer(null);
-        }}
-        onSubmit={submitAnnotation}
-      />
-
-      <PinAnnotationComposer
-        open={pinComposer !== null}
-        context={
-          pinComposer !== null
-            ? (gallery[pinComposer.index]?.filename ?? `Slide ${pinComposer.index + 1}`)
-            : ''
-        }
-        body={pinKey !== null ? (commentDrafts[pinKey] ?? '') : ''}
-        onBodyChange={(body) => {
-          if (pinKey !== null) setDraft(pinKey, body);
-        }}
-        submitting={pinSubmitting}
-        error={composerError}
-        onCancel={() => {
-          if (!pinSubmitting) setPinComposer(null);
-        }}
-        onDiscard={() => {
-          if (pinSubmitting) return;
-          if (pinKey !== null) dropDraft(pinKey);
-          setPinComposer(null);
-        }}
-        onSubmit={submitPinAnnotation}
-      />
 
       {decisions.confirms}
 

@@ -68,11 +68,6 @@ const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
     'the file image under its swap (media, not text)',
   ],
   [
-    'pages/pcs/checkpoint-controls.tsx',
-    "'opacity-100' : 'opacity-60'",
-    'the tick glyph inside the checkpoint box (an icon, not copy), full when marked',
-  ],
-  [
     'chat/VoiceNote.tsx',
     "'opacity-[.45]'",
     'the play glyph of a voice note that cannot play yet (an icon, not copy); the thread shows Not sent per message',

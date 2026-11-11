@@ -7,7 +7,7 @@
 // with the approver picker, Reject, Park) sit in the ⋯ menu. Placement is Post
 // detail's too: phone, the row is the sheet's bottom bar (its footer); laptop,
 // it sits at the right of the title row beside the ⋯. Approvers in review may
-// also leave checkpoint points through the same SlotComposer the post page uses.
+// also leave a comment (comment_create), as on the post page.
 // The post itself is never refetched: the card's PR 2 row carries every value
 // shown. Only the gallery is read, once per open, and the strip paints a
 // same-height skeleton until it lands, so the sheet never shortens after first
@@ -33,9 +33,8 @@ import {
   PlatformFrame,
 } from '@/components/media/PlatformFrame';
 import { frameFor, type Frame } from '@/lib/platform-specs';
-import { SlotComposer } from '@/components/comments/SlotComposer';
-import type { CheckpointPoint } from '@/components/comments/SlotComposer';
-import { runCreateCommentBatch } from '@/components/comments/Comments';
+import { CommentComposer } from '@/components/comments/CommentComposer';
+import { createComment } from '@srtdio/comments';
 import { PostLightbox, slideFromScroll } from '@/components/pages/pcs/PostLightbox';
 import { postHref, type SharedPostView } from '@/components/chat/post-card';
 import {
@@ -590,8 +589,6 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     creatorName: view.creatorName ?? null,
     mediaCount: post.mediaCount > 0 ? post.mediaCount : null,
     approveDay: targetDate,
-    // No live comment list here: the hook reads the open count on the tap.
-    openCount: null,
     reload: () => dispatchPostChanged(window, view.postId),
   });
   const stage = decisions.stage ?? post.stage;
@@ -618,15 +615,18 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     });
   };
 
-  const onSubmitPoints = async (
-    points: CheckpointPoint[],
+  // One plain comment through comment_create (an Approver may comment on a
+  // post in review); it notifies every active member, as on the post page.
+  const onSubmitComment = async (
+    body: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> => {
     if (workspaceId === null) return { ok: false, error: friendlyCommentError('unknown') };
-    const result = await runCreateCommentBatch(supabase, {
-      workspaceId,
-      postId: view.postId,
-      points,
-      traceId: newTrace(),
+    const result = await createComment(supabase, {
+      workspace_id: workspaceId,
+      entity_type: 'post',
+      entity_id: view.postId,
+      body,
+      trace_id: newTrace(),
     });
     if (!result.ok) return { ok: false, error: friendlyCommentError(result.error.code) };
     onClose();
@@ -701,7 +701,12 @@ export function PostSheet(props: PostSheetProps): ReactElement {
           {commenting ? (
             <div data-sheet-composer="" className="flex flex-col gap-3">
               <h3 className="text-lg font-semibold text-fg">Comment on {subject}</h3>
-              <SlotComposer onSubmit={onSubmitPoints} canAttach={false} />
+              <CommentComposer
+                onSubmit={(body) => onSubmitComment(body)}
+                members={[]}
+                canAttach={false}
+                placeholder="Write a comment"
+              />
             </div>
           ) : (
             <>

@@ -77,8 +77,6 @@ describe('busy sheets render a busy primary Button', () => {
     ['chat/IdeaShareFlow.tsx', /data-idea-share-show=""[^>]*?busy=\{busy\}/s],
     ['chat/NewChatSheet.tsx', /busy=\{busy\}\s+onClick=\{\(\) => void submitDm\(\)\}/],
     ['chat/NewChatSheet.tsx', /busy=\{busy\}\s+onClick=\{\(\) => void submitGroup\(\)\}/],
-    ['pages/pcs/PinAnnotationComposer.tsx', /busy=\{submitting\}\s+disabled=\{!canPost\}/],
-    ['pages/pcs/CaptionAnnotationComposer.tsx', /busy=\{submitting\}\s+disabled=\{!canPost\}/],
     ['pages/plan-tab/BankAddSheet.tsx', /data-bank-add-go=""\s+busy=\{busy\}/],
     ['pages/plan-tab/BankList.tsx', /data-bank-plan-it-go=""\s+busy=\{props\.busy\}/],
     ['pages/plan-tab/BankList.tsx', /data-bank-make-plan=""\s+busy=\{props\.busy\}/],
@@ -97,8 +95,6 @@ describe('busy sheets render a busy primary Button', () => {
 
   it('no busy-label swaps left on these primaries', () => {
     expect(read('components/chat/NewChatSheet.tsx')).not.toMatch(/'Starting'|'Creating'/);
-    expect(read('components/pages/pcs/PinAnnotationComposer.tsx')).not.toContain('Posting…');
-    expect(read('components/pages/pcs/CaptionAnnotationComposer.tsx')).not.toContain('Posting…');
     expect(read('components/pages/pcs/PostDetailsSheet.tsx')).not.toContain("'Creating…'");
   });
 

@@ -12,13 +12,12 @@ import {
   IconHistory,
   IconImagePlus,
   IconLock,
-  IconPin,
   IconPlus,
   IconSwitch,
 } from '@/components/ui/icons';
 import { dropIndex, moveTo } from '@/components/pages/pcs/gallery-transforms';
 import { useLongPress } from '@/components/ui/useLongPress';
-import { PostLightbox, placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
+import { PostLightbox } from '@/components/pages/pcs/PostLightbox';
 import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
@@ -35,12 +34,9 @@ import {
   cutPercent,
   frameMap,
   IDENTITY_MAP,
-  originalToFrame,
-  pinName,
   type FrameMap,
-  type PinDot,
 } from '@/components/pages/pcs/pin-annotations';
-import { pinMarker } from '@/components/pages/pcs/PinOverlay';
+import { LEADING_PULL, TRAILING_PULL } from '@/components/ui/layout';
 import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
 /** The gesture handlers a tile spreads for long-press + right-click. */
@@ -492,68 +488,6 @@ export function frameCut(
   return cutPercent(slideMap(item, measured, frame));
 }
 
-const EDGE_SHIFT: Record<string, string> = {
-  left: 'translate-x-0 -translate-y-1/2',
-  right: '-translate-x-full -translate-y-1/2',
-  top: '-translate-x-1/2 translate-y-0',
-  bottom: '-translate-x-1/2 -translate-y-full',
-};
-
-/**
- * Pins over a slide. Stored points are relative to the original; each is mapped
- * through the shown window (the post ribbon shows the whole original, so it
- * passes {@link IDENTITY_MAP}). Inside: the checkpoint circle (or the agency
- * pin's ink dot) at its exact spot. Outside: the small inline circle on the
- * nearest frame edge, still a 44px button.
- */
-export function framePins(
-  pins: readonly PinDot[],
-  map: FrameMap,
-  onPinClick: ((commentId: string) => void) | undefined,
-): ReactElement {
-  return (
-    <div className="pointer-events-none absolute inset-0">
-      {pins.map((pin) => {
-        const at = originalToFrame(pin, map);
-        return (
-          <IconButton
-            key={pin.annotationId}
-            type="button"
-            data-pin-edge={at.edge ?? undefined}
-            data-pin-state={pin.state}
-            label={at.edge === null ? pinName(pin) : `${pinName(pin)}, outside the frame`}
-            onClick={() => onPinClick?.(pin.commentId)}
-            style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
-            className={cn(
-              'pointer-events-auto absolute focus-visible:lit-focus',
-              at.edge === null ? '-translate-x-1/2 -translate-y-1/2' : EDGE_SHIFT[at.edge],
-            )}
-          >
-            {pinMarker(pin, at.edge === null ? 'marker' : 'inline')}
-          </IconButton>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * What a slide tap does given the pin-arming state: the click trailing the
- * arming long-press is swallowed, a tap on the armed slide places the pin, a
- * tap anywhere else while armed just disarms, and an unarmed tap opens the
- * lightbox. Pure so the relocated placement flow is unit-testable without a DOM.
- */
-export function slideTapAction(
-  armedIndex: number | null,
-  index: number,
-  suppressed: boolean,
-): 'suppress' | 'place' | 'disarm' | 'open' {
-  if (suppressed) return 'suppress';
-  if (armedIndex === index) return 'place';
-  if (armedIndex !== null) return 'disarm';
-  return 'open';
-}
-
 /**
  * Whether the in-place viewer takes the ribbon's slot: a tile is open (openIndex
  * set) and the gallery has images. Empty and upload states carry no open index,
@@ -586,8 +520,6 @@ interface GalleryViewProps {
   slideGestures?: ((index: number) => TileGestures) | undefined;
   /** Swallow the click that trails a long-press. */
   consumeClickSuppression?: (() => boolean) | undefined;
-  /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
-  pinCountFor?: ((item: GalleryItem) => number) | undefined;
   /** F7: agency-only append flow, wired to the zero-asset empty-state upload zone. */
   onAddSlide?: (() => void) | undefined;
   /** Carousel: the slide the counter and dots highlight. Defaults to the first. */
@@ -598,10 +530,6 @@ interface GalleryViewProps {
   onScroll?: ((event: ReactUIEvent<HTMLDivElement>) => void) | undefined;
   /** Carousel: a dot tap requests a native smooth scroll to that slide. */
   onDotClick?: ((index: number) => void) | undefined;
-  /** F5 relocation: the slide index armed for pin placement, or null. */
-  pinArmedIndex?: number | null;
-  /** F5 relocation: an armed tap on a slide, with the click event for the rect. */
-  onSlideTap?: ((index: number, event: ReactMouseEvent<HTMLButtonElement>) => void) | undefined;
   /** Ribbon: dimensions measured from decoded images, keyed by attachment id. */
   measuredDimensions?: MeasuredDimensions;
   /** Ribbon: report a tile's intrinsic size once its image decodes. */
@@ -617,62 +545,11 @@ interface GalleryViewProps {
   platformLabel?: string;
   /** The warning line's "See preview": opens the platform Preview panel. */
   onSeePreview?: (() => void) | undefined;
-  /** Current-version pins per slide (relative to the original). */
-  pinsFor?: ((item: GalleryItem) => PinDot[]) | undefined;
-  onPinClick?: ((commentId: string) => void) | undefined;
   /**
-   * H2: the visible "Add pin" button under the carousel arms placement on the
-   * current slide (the long-press still works); absent for viewers who cannot
-   * comment and on the brief grid.
-   */
-  onArmPin?: ((index: number) => void) | undefined;
-  /** H2: the Cancel shown while armed. */
-  onDisarmPin?: (() => void) | undefined;
-  /**
-   * The post gallery's one toolbar row (Add, Replace, Reorder, Add pin, v{n}),
-   * rendered under the dots in place of the standalone pin row. Absent keeps the
-   * standalone pin row.
+   * The post gallery's one toolbar row (Add, Replace, Reorder, v{n}), rendered
+   * under the dots. Absent on the brief grid.
    */
   toolbar?: ReactNode;
-}
-
-/**
- * The pin toolbar button: "Add pin" (pin icon + text, 44px) for anyone who can
- * comment, or Cancel while a slide is armed. Nothing when pins are not on
- * offer. Pure.
- */
-export function pinButton(
-  active: number,
-  pinArmedIndex: number | null,
-  onArmPin: ((index: number) => void) | undefined,
-  onDisarmPin: (() => void) | undefined,
-): ReactElement | null {
-  if (onArmPin === undefined) return null;
-  return pinArmedIndex === null ? (
-    <Button type="button" variant="ghost" data-add-pin="" onClick={() => onArmPin(active)}>
-      <IconPin size={ICON_SIZE.inline} />
-      Add pin
-    </Button>
-  ) : (
-    <Button type="button" variant="ghost" data-cancel-pin="" onClick={() => onDisarmPin?.()}>
-      Cancel
-    </Button>
-  );
-}
-
-/**
- * The standalone pin row under the carousel, used only when the gallery has no
- * toolbar row (the toolbar otherwise carries the pin button). Pure.
- */
-export function pinControls(
-  active: number,
-  pinArmedIndex: number | null,
-  onArmPin: ((index: number) => void) | undefined,
-  onDisarmPin: (() => void) | undefined,
-): ReactElement | null {
-  const button = pinButton(active, pinArmedIndex, onArmPin, onDisarmPin);
-  if (button === null) return null;
-  return <div className="mt-2 flex items-center gap-2">{button}</div>;
 }
 
 /** What the gallery tools row under the picture needs. */
@@ -691,46 +568,39 @@ export interface GalleryToolsModel {
   onReplace: () => void;
   onReorder: () => void;
   onVersions: () => void;
-  /** The Add pin (or Cancel while armed) button, from {@link pinButton}. */
-  pin?: ReactElement | null;
-  /**
-   * A client: the row is Add pin only (no edit tools, no lock, no v{n}). The
-   * agency row is Add, Replace, Reorder, Add pin and v{n}.
-   */
-  pinOnly?: boolean;
   /**
    * Reorder mode is on: Reorder shows pressed and leaves it (each drop already
-   * saved); Add, Replace and the pin wait until it is off.
+   * saved); Add and Replace wait until it is off.
    */
   reordering?: boolean;
 }
 
 /**
  * #26: the one toolbar row under the dots. Left: Add, Replace, Reorder (creators
- * on an editable stage), then Add pin (anyone who can comment); a creator on an
- * approved post sees one 14px lock in place of the edit tools. Right: the v{n}
- * button that opens the versions sheet. A client's row (pinOnly) is Add pin
- * alone. The left group wraps inside its own column so v{n} stays on the right
- * at 360px. Nothing when there is nothing to show. Pure.
+ * on an editable stage), the first glyph on the page edge (LEADING_PULL over
+ * the Tool's 12 padding); a creator on an approved post sees one 14px lock in
+ * place of the edit tools. Right: the v{n} button that opens the versions
+ * sheet, its text on the page edge (TRAILING_PULL). One row, never wrapping:
+ * the tools touch, their own 12 padding keeping 24 between labels. Nothing
+ * when there is nothing to show. Pure.
  */
 export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
-  const { itemCount, saving, error } = model;
-  const pinOnly = model.pinOnly === true;
-  const canEdit = model.canEdit && !pinOnly;
-  const versionNumber = pinOnly ? null : model.versionNumber;
+  const { canEdit, itemCount, saving, error, versionNumber } = model;
   const reordering = model.reordering === true;
-  const pin = reordering ? null : (model.pin ?? null);
-  const locked = !canEdit && !pinOnly && model.locked === true;
-  if (!canEdit && !locked && versionNumber === null && pin === null) return null;
+  const locked = !canEdit && model.locked === true;
+  if (!canEdit && !locked && versionNumber === null) return null;
   return (
     <div data-gallery-tools="" className="mt-2 flex flex-col gap-1">
-      <div className="flex items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center">
           {locked ? (
             <span
               aria-hidden
               data-gallery-lock=""
-              className="inline-flex h-11 w-11 items-center justify-center text-fg-3"
+              className={cn(
+                'inline-flex h-11 w-11 items-center justify-center text-fg-3',
+                LEADING_PULL,
+              )}
             >
               <IconLock size={ICON_SIZE.inline} />
             </span>
@@ -743,6 +613,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 disabled={saving || reordering}
                 onClick={model.onAdd}
                 variant="ghost"
+                className={cn('px-3', LEADING_PULL)}
               >
                 <IconPlus size={ICON_SIZE.inline} />
                 Add
@@ -753,6 +624,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 disabled={saving || reordering || itemCount === 0}
                 onClick={model.onReplace}
                 variant="ghost"
+                className="px-3"
               >
                 <IconSwitch size={ICON_SIZE.inline} />
                 Replace
@@ -764,13 +636,13 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 disabled={saving || (!reordering && itemCount < 2)}
                 onClick={model.onReorder}
                 variant="ghost"
+                className="px-3"
               >
                 <IconGrip size={ICON_SIZE.inline} />
                 Reorder
               </Button>
             </>
           ) : null}
-          {pin}
         </div>
         {versionNumber !== null ? (
           <Button
@@ -780,7 +652,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
             aria-label={`Versions, current version ${versionNumber}`}
             aria-haspopup="dialog"
             variant="ghost"
-            className="shrink-0 tabular-nums"
+            className={cn('shrink-0 px-3 tabular-nums', TRAILING_PULL)}
           >
             <IconHistory size={ICON_SIZE.inline} />
             {`v${versionNumber}`}
@@ -979,9 +851,7 @@ function slideEdge(selected: boolean): string {
  * empty state carries the only add affordance. No JS-driven animation; all motion
  * is native scrolling on the X axis. The brief gallery overrides columns / aspect
  * / showIndex and keeps its
- * cropped overview grid; the empty and upload states are unchanged. Pin
- * placement is armed by a long-press on a ribbon tile (pinArmedIndex shows the
- * hint pill) and the next tap routes through onSlideTap.
+ * cropped overview grid; the empty and upload states are unchanged.
  */
 export function galleryView({
   items,
@@ -993,24 +863,17 @@ export function galleryView({
   showIndex = true,
   slideGestures,
   consumeClickSuppression,
-  pinCountFor,
   onAddSlide,
   activeIndex = 0,
   scrollerRef,
   onScroll,
   onDotClick,
-  pinArmedIndex = null,
-  onSlideTap,
   measuredDimensions = {},
   onMeasure,
   frame = null,
   frameNote = null,
   platformLabel = '',
   onSeePreview,
-  pinsFor,
-  onPinClick,
-  onArmPin,
-  onDisarmPin,
   toolbar,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
@@ -1054,35 +917,26 @@ export function galleryView({
   if (columns !== 4) {
     return (
       <div className={gridClass(columns)}>
-        {items.map((item, index) => {
-          const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
-          return (
-            <PressableRow
-              key={item.assetAttachmentId}
-              type="button"
-              aria-label={`View image ${index + 1}`}
-              {...(slideGestures !== undefined ? slideGestures(index) : {})}
-              onClick={() => {
-                if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
-                onOpen(index);
-              }}
-              className={`group relative ${aspectClass(aspect)} overflow-hidden border border-border bg-panel-2 mv-tint hover:border-border-strong`}
-            >
-              <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
-              {showIndex ? (
-                <span className="absolute left-2 bottom-2 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
-                  {index + 1}/{items.length}
-                </span>
-              ) : null}
-              {pinCount > 0 ? (
-                <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
-                  <IconPin size={ICON_SIZE.inline} />
-                  {pinCount}
-                </span>
-              ) : null}
-            </PressableRow>
-          );
-        })}
+        {items.map((item, index) => (
+          <PressableRow
+            key={item.assetAttachmentId}
+            type="button"
+            aria-label={`View image ${index + 1}`}
+            {...(slideGestures !== undefined ? slideGestures(index) : {})}
+            onClick={() => {
+              if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
+              onOpen(index);
+            }}
+            className={`group relative ${aspectClass(aspect)} overflow-hidden border border-border bg-panel-2 mv-tint hover:border-border-strong`}
+          >
+            <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
+            {showIndex ? (
+              <span className="absolute left-2 bottom-2 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
+                {index + 1}/{items.length}
+              </span>
+            ) : null}
+          </PressableRow>
+        ))}
       </div>
     );
   }
@@ -1123,14 +977,6 @@ export function galleryView({
   return (
     <div>
       <div className="relative">
-        {pinArmedIndex !== null ? (
-          <div
-            role="status"
-            className="pointer-events-none absolute left-1/2 top-3 z-raised -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-2 text-sm font-medium text-overlay-fg lit-media"
-          >
-            Tap the image to place a pin
-          </div>
-        ) : null}
         <div
           ref={scrollerRef}
           onScroll={onScroll}
@@ -1138,7 +984,6 @@ export function galleryView({
           className="flex snap-x snap-mandatory items-center gap-3 overflow-x-auto overscroll-x-contain rounded-xl"
         >
           {items.map((item, index) => {
-            const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
             // The tile box carries the reserved size; everything inside it is
             // absolutely placed, so the image can never size the box.
             const tile = (
@@ -1153,18 +998,13 @@ export function galleryView({
                   type="button"
                   aria-label={`View image ${index + 1}`}
                   {...(slideGestures !== undefined ? slideGestures(index) : {})}
-                  onClick={(event) => {
-                    if (onSlideTap !== undefined) {
-                      onSlideTap(index, event);
-                      return;
-                    }
+                  onClick={() => {
                     if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
                     onOpen(index);
                   }}
                   className={cn(
                     'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 mv-tint hover:border-border-strong',
                     SLIDE_PRESS_CLASS,
-                    pinArmedIndex === index && 'cursor-crosshair',
                   )}
                 >
                   <GalleryThumb
@@ -1183,13 +1023,6 @@ export function galleryView({
                     }
                   />
                 </PressableRow>
-                {pinsFor !== undefined ? framePins(pinsFor(item), IDENTITY_MAP, onPinClick) : null}
-                {pinsFor === undefined && pinCount > 0 ? (
-                  <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
-                    <IconPin size={ICON_SIZE.inline} />
-                    {pinCount}
-                  </span>
-                ) : null}
               </div>
             );
             // A lone tile sits in a full-width snap slot (a definite width for
@@ -1232,7 +1065,7 @@ export function galleryView({
           {frameNote}
         </p>
       ) : null}
-      {toolbar ?? pinControls(active, pinArmedIndex, onArmPin, onDisarmPin)}
+      {toolbar}
     </div>
   );
 }
@@ -1250,14 +1083,6 @@ interface PostGalleryProps {
   aspect?: string;
   /** Per-tile index badge. Defaults to on, as the post gallery shows it. */
   showIndex?: boolean;
-  /** F5: overlay rendered over the open slide (numbered pins); none when omitted. */
-  pinOverlay?: (item: GalleryItem, index: number) => ReactNode;
-  /** F5: fired when a long-press arms placement (clears any stale pin error). */
-  onRequestPin?: (index: number) => void;
-  /** F5: a placed pin reports the slide index + normalised point. */
-  onPlacePin?: (index: number, x: number, y: number) => void;
-  /** F7: pin-count badge per tile; the badge renders only when this returns > 0. */
-  pinCountFor?: ((item: GalleryItem) => number) | undefined;
   /**
    * F7 (agency-side): open the slide-actions sheet (replace / remove) for a
    * slide. Reached by right-click on a slide; the lightbox no longer links here.
@@ -1283,9 +1108,6 @@ interface PostGalleryProps {
   frame?: { platform: string; format: string; platformLabel: string } | undefined;
   /** The warning line's "See preview": opens the platform Preview panel. */
   onSeePreview?: (() => void) | undefined;
-  /** Current-version pins per slide, at their stored original-relative spots. */
-  pinsFor?: ((item: GalleryItem) => PinDot[]) | undefined;
-  onPinClick?: ((commentId: string) => void) | undefined;
   /**
    * #26: the tools row under the picture (post gallery only). Absent on briefs.
    * canEdit false (approvers, approved posts) leaves only the v{n} button and
@@ -1316,8 +1138,6 @@ interface GalleryTools {
   canEdit: boolean;
   /** Spec B4: an approved post, seen by a creator: the tools row shows a lock. */
   locked?: boolean;
-  /** A client: the tools row is Add pin only. */
-  pinOnly?: boolean;
   versionNumber: number | null;
   /** The inline line from the last failed gallery write, or null. */
   error: string | null;
@@ -1332,10 +1152,8 @@ interface GalleryTools {
 /**
  * A post's images as an uncropped horizontal snap ribbon (or a brief's as its
  * overview grid, via the columns override). Tapping a tile opens the PCS
- * {@link PostLightbox} at that index. Pin placement lives here now: a ~500ms
- * long-press on a tile arms it (hint pill), and the next tap on that tile
- * converts to percentage coordinates and calls the existing onPlacePin path.
- * The slide-actions sheet stays reachable by right-click on a tile.
+ * {@link PostLightbox} at that index. The slide-actions sheet is reachable by
+ * long-press or right-click on a tile.
  */
 export function PostGallery({
   items,
@@ -1346,15 +1164,9 @@ export function PostGallery({
   columns = 4,
   aspect = '4/5',
   showIndex = true,
-  pinOverlay,
-  onRequestPin,
-  onPlacePin,
-  pinCountFor,
   saving = false,
   frame,
   onSeePreview,
-  pinsFor,
-  onPinClick,
   tools,
   onActiveIndexChange,
   ...editProps
@@ -1467,26 +1279,16 @@ export function PostGallery({
     );
   };
 
-  // F5 relocation: the slide currently armed for pin placement, or null.
-  const [pinArmedIndex, setPinArmedIndex] = useState<number | null>(null);
-  const canPlacePins = columns === 4 && onPlacePin !== undefined;
-
   // One long-press controller for the whole gallery: the pressed tile records
-  // its index on pointer-down. In the carousel a fired long-press (the one
-  // LONG_PRESS_MS) arms pin placement; in the grid (briefs) it keeps opening
-  // the slide actions.
+  // its index on pointer-down, and a fired long-press (the one LONG_PRESS_MS)
+  // opens the slide actions.
   const pressIndexRef = useRef(0);
   const pressPointerTypeRef = useRef('');
   const { handlers, consumeClickSuppression } = useLongPress(() => {
-    if (canPlacePins) {
-      setPinArmedIndex(pressIndexRef.current);
-      onRequestPin?.(pressIndexRef.current);
-      return;
-    }
     if (onSlideActions !== undefined) onSlideActions(pressIndexRef.current);
   });
 
-  const wantsGestures = canPlacePins || onSlideActions !== undefined;
+  const wantsGestures = onSlideActions !== undefined;
   const slideGestures = wantsGestures
     ? (index: number): TileGestures => ({
         onPointerDown: (event) => {
@@ -1501,7 +1303,7 @@ export function PostGallery({
           event.preventDefault();
           // Right-click keeps the slide-actions sheet reachable. Touch
           // long-presses also emit contextmenu in some browsers; those already
-          // armed pin placement above, so only a real mouse opens the sheet.
+          // opened the sheet above, so only a real mouse opens it here.
           if (onSlideActions !== undefined && pressPointerTypeRef.current !== 'touch') {
             onSlideActions(index);
           }
@@ -1514,27 +1316,6 @@ export function PostGallery({
     frame !== undefined && columns === 4
       ? galleryFrame(frame.platform, frame.format, items, measuredDimensions)
       : null;
-
-  // A carousel slide tap routes through the arming state: place on the armed
-  // slide (existing onPlacePin path, percentage coords), disarm elsewhere,
-  // otherwise open the lightbox.
-  const handleSlideTap = (index: number, event: ReactMouseEvent<HTMLButtonElement>): void => {
-    const action = slideTapAction(pinArmedIndex, index, consumeClickSuppression());
-    if (action === 'suppress') return;
-    if (action === 'place') {
-      const point = placePinFromEvent(event.currentTarget, event.clientX, event.clientY);
-      setPinArmedIndex(null);
-      // The tile shows the whole original at its own ratio, so the tap point is
-      // already original-relative: the stored image_x / image_y.
-      if (point !== null) onPlacePin?.(index, point.x, point.y);
-      return;
-    }
-    if (action === 'disarm') {
-      setPinArmedIndex(null);
-      return;
-    }
-    setOpenIndex(index);
-  };
 
   const manage = onAddAfter !== undefined ? { onAddAfter } : undefined;
 
@@ -1573,20 +1354,11 @@ export function PostGallery({
     focusAfterMove.current = id;
     saveOrder(moveTo(reorderIds, from, to));
   };
-  // The pin button: the visible Add pin arms the same state the long-press does.
-  const armPin = canPlacePins
-    ? (index: number) => {
-        setPinArmedIndex(index);
-        onRequestPin?.(index);
-      }
-    : undefined;
-  const disarmPin = canPlacePins ? () => setPinArmedIndex(null) : undefined;
   const toolsRow =
     tools !== undefined && columns === 4
       ? galleryToolsRow({
           canEdit: tools.canEdit,
           locked: tools.locked === true,
-          pinOnly: tools.pinOnly === true,
           itemCount: items.length,
           versionNumber: tools.versionNumber,
           saving,
@@ -1607,11 +1379,9 @@ export function PostGallery({
               return;
             }
             setOpenIndex(null);
-            setPinArmedIndex(null);
             setReorderIds(items.map((item) => item.assetAttachmentId));
           },
           onVersions: tools.onVersions,
-          pin: pinButton(shownIndex, canPlacePins ? pinArmedIndex : null, armPin, disarmPin),
           reordering: reorderIds !== null,
         })
       : null;
@@ -1687,7 +1457,6 @@ export function PostGallery({
       deps={deps}
       onIndexChange={setOpenIndex}
       onClose={() => setOpenIndex(null)}
-      pinOverlay={pinOverlay}
       manage={manage}
       saving={saving}
     />
@@ -1703,14 +1472,11 @@ export function PostGallery({
         showIndex,
         slideGestures,
         consumeClickSuppression: wantsGestures ? consumeClickSuppression : undefined,
-        pinCountFor,
         onAddSlide,
         activeIndex,
         scrollerRef,
         onScroll: handleScroll,
         onDotClick: scrollToSlide,
-        pinArmedIndex: canPlacePins ? pinArmedIndex : null,
-        onSlideTap: columns === 4 ? handleSlideTap : undefined,
         measuredDimensions,
         onMeasure: columns === 4 ? handleMeasure : undefined,
         frame: postFrame,
@@ -1718,10 +1484,6 @@ export function PostGallery({
           postFrame !== null && frame !== undefined ? frameKindNote(frame.platform, items) : null,
         platformLabel: frame?.platformLabel ?? '',
         onSeePreview,
-        pinsFor,
-        onPinClick,
-        onArmPin: armPin,
-        onDisarmPin: disarmPin,
         // One toolbar row under the dots; no ⋮ on the picture.
         toolbar: toolsRow ?? undefined,
       })}

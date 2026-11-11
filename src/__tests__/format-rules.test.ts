@@ -49,11 +49,7 @@ describe('format rules', () => {
     'components/chat/Composer.tsx',
     'components/chat/PlanItemScreen.tsx',
     'components/chat/ConceptSheet.tsx',
-    'components/comments/SlotComposer.tsx',
-    'components/comments/Comments.tsx',
     'components/pages/pcs/use-post-decisions.tsx',
-    'components/pages/pcs/PinAnnotationComposer.tsx',
-    'components/pages/pcs/CaptionAnnotationComposer.tsx',
     'components/pages/CreateBriefSheet.tsx',
     'components/pages/pipeline/StageMoveConfirm.tsx',
     'components/pages/plan-tab/BankAddSheet.tsx',
@@ -93,9 +89,11 @@ describe('format rules', () => {
     const thread =
       read('components/chat/MessageThread.tsx') + read('components/chat/MessageBubble.tsx');
     expect(thread).toContain('renderRich(body');
-    // Plan comments are drawn by chat's own bubble (MessageThread's renderRich above).
-    expect(read('components/chat/PlanItemThread.tsx')).toContain('<MessageBubble');
-    expect(read('components/comments/Comments.tsx')).toMatch(/renderRich\(\s*body/);
+    // Plan, post and brief comments are drawn by chat's own bubble (MessageThread's
+    // renderRich above) through the one shared row.
+    expect(read('components/chat/ThreadCommentRow.tsx')).toContain('<MessageBubble');
+    expect(read('components/chat/PlanItemThread.tsx')).toContain('<ThreadCommentRow');
+    expect(read('components/comments/Comments.tsx')).toContain('<ThreadCommentRow');
     expect(read('components/pages/BriefDetailPage.tsx')).toMatch(/renderRich\(\s*brief\.objective/);
     expect(read('components/pages/BriefDetailPage.tsx')).toMatch(
       /renderRich\(\s*brief\.brand_requirements/,

@@ -1399,6 +1399,11 @@ export function MessageBubble(props: {
    * "Creators only"). Absent: none (chat passes none).
    */
   topLine?: ReactNode;
+  /**
+   * One line at the end inside the bubble, under the body (a comment's task
+   * tag). Absent: none (chat passes none).
+   */
+  bottomLine?: ReactNode;
   press?: {
     handlers: BubblePointerHandlers;
     onContextMenu: (event: MouseEvent) => void;
@@ -1933,6 +1938,7 @@ export function MessageBubble(props: {
                 )}
               </div>
             </ChatCardOwn>
+            {props.bottomLine ?? null}
             {voiceOnly || cardOnly || metaEmpty ? null : (
               <BubbleMetaView
                 meta={meta}

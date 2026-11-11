@@ -432,8 +432,10 @@ describe('Remove from plan: only in the More menu', () => {
   });
 
   it('the concept body has no red button; the screen never imports the chat thread or composer', () => {
-    // The thread file draws with chat's MessageBubble; the screen itself stays clear of it.
-    expect(read('src/components/chat/PlanItemThread.tsx')).toContain('<MessageBubble');
+    // The thread file draws with chat's MessageBubble (through the shared
+    // ThreadCommentRow); the screen itself stays clear of it.
+    expect(read('src/components/chat/PlanItemThread.tsx')).toContain('<ThreadCommentRow');
+    expect(read('src/components/chat/ThreadCommentRow.tsx')).toContain('<MessageBubble');
     const src = read('src/components/chat/PlanItemScreen.tsx');
     const concept = src.slice(
       src.indexOf('data-plan-description-card'),

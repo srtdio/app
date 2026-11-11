@@ -196,10 +196,6 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
     },
   };
 });
-vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
-  return { ...actual, CheckpointProgress: () => null };
-});
 vi.mock('@/components/pages/pcs/PostActionSheet', () => ({
   PostActionSheet: (props: { moveRows?: MoveRowLike[] }) => {
     h.actionSheetProps = props;
@@ -226,11 +222,9 @@ import {
   MOVE_TO_PARKED_LABEL,
   PostDetailPage,
   REJECT_REASON_LABEL,
-  SENT_AGAIN_TOAST,
   postActionErrorCopy,
   rejectConfirmBody,
   sendAgainErrorCopy,
-  sendAnywayTitle,
 } from '@/components/pages/PostDetailPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -436,7 +430,7 @@ describe('31. creators never get a primary Approve', () => {
   });
 });
 
-describe("33. the creator's one main button and the single open count", () => {
+describe("33. the creator's one main button: Send for review again never warns", () => {
   it('open comments never disable it or add a helper line; the chip reads the same count', async () => {
     h.counts = { open: 2, resolved: 1 };
     await render();
@@ -445,51 +439,14 @@ describe("33. the creator's one main button and the single open count", () => {
     expect(main?.disabled).toBe(false);
     expect(document.querySelector('[data-decision-helper]')).toBeNull();
     expect(text()).not.toContain('Resolve');
-    // The chip reads the same count.
-    expect(document.querySelector('[data-open-comments-chip]')?.textContent).toContain(
-      '2 open checkpoints',
-    );
+    // No open-comments chip (checkpoints are gone, 11 Nov 2026).
+    expect(document.querySelector('[data-open-comments-chip]')).toBeNull();
     // The separate bottom notice is gone.
     expect(text()).not.toContain("Tell approvers it's ready");
   });
 
-  it('with open comments a tap asks first: plural title, Cancel sends nothing', async () => {
-    h.counts = { open: 2, resolved: 0 };
-    await render();
-    await click(document.querySelector('[data-decision-main]'));
-    const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.querySelector('h2')?.textContent).toBe(
-      '2 comments are still open. Send anyway?',
-    );
-    expect(byText('Send anyway', dialog!)).toBeDefined();
-    await click(byText('Cancel', dialog!));
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 250));
-    });
-    await settle();
-    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-    expect(runPostReadyNotify).not.toHaveBeenCalled();
-  });
-
-  it('singular title; "Send anyway" calls post_ready_notify once and shows the success copy', async () => {
-    h.counts = { open: 1, resolved: 0 };
-    await render(true);
-    await click(document.querySelector('[data-decision-main]'));
-    const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.querySelector('h2')?.textContent).toBe('1 comment is still open. Send anyway?');
-    expect(runPostReadyNotify).not.toHaveBeenCalled();
-    await click(byText('Send anyway', dialog!));
-    expect(runPostReadyNotify).toHaveBeenCalledOnce();
-    expect(runPostReadyNotify.mock.calls[0]?.[1]).toEqual({ postId: 'p1', traceId: 'trace-1' });
-    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-    expect(text()).toContain('Sent for review again');
-    expect(SENT_AGAIN_TOAST).toBe('Sent for review again');
-    expect(sendAnywayTitle(1)).toBe('1 comment is still open. Send anyway?');
-    expect(sendAnywayTitle(3)).toBe('3 comments are still open. Send anyway?');
-  });
-
-  it('with 0 open it sends straight away, no confirm', async () => {
-    h.counts = { open: 0, resolved: 3 };
+  it('with comments on the post it sends straight away, no confirm', async () => {
+    h.counts = { open: 2, resolved: 3 };
     await render();
     const live = document.querySelector<HTMLButtonElement>('[data-decision-main]');
     expect(live?.disabled).toBe(false);

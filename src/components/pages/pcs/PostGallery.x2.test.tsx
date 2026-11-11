@@ -1,12 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { galleryView, pinControls } from '@/components/pages/pcs/PostGallery';
+import { galleryView } from '@/components/pages/pcs/PostGallery';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
-// H2 / T13: the visible Add pin (with Cancel while armed), no ⋮ circle on the
-// picture, and the no-callout / no-select slides. Hookless trees, walked.
+// T13: no ⋮ circle on the picture, and the no-callout / no-select slides. Hookless trees, walked.
 
 function flatten(node: ReactNode, out: ReactElement[]): void {
   if (Array.isArray(node)) {
@@ -31,13 +29,6 @@ function label(el: ReactElement): string | undefined {
 
 function className(el: ReactElement): string {
   return (el.props as { className?: string }).className ?? '';
-}
-
-function text(node: ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(text).join('');
-  if (node === null || typeof node !== 'object' || !('props' in node)) return '';
-  return text((node as ReactElement<{ children?: ReactNode }>).props.children);
 }
 
 const cache = {
@@ -65,56 +56,6 @@ function item(n: number): GalleryItem {
 }
 
 const items = [item(0), item(1), item(2)];
-
-describe('Add pin (H2)', () => {
-  it('shows a 44px Add pin for anyone who can comment, arming the current slide', () => {
-    const onArmPin = vi.fn();
-    const tree = galleryView({
-      items,
-      cache,
-      presignEnabled: true,
-      onOpen: () => {},
-      activeIndex: 1,
-      onArmPin,
-    });
-    const all = elements(tree);
-    const add = all.find((el) => 'data-add-pin' in (el.props as object))!;
-    expect(add).toBeDefined();
-    expect(text(add)).toContain('Add pin');
-    const addHtml = renderToStaticMarkup(add);
-    expect(addHtml).toContain('h-11');
-    expect(addHtml).toContain('rounded-lg');
-    (add.props as { onClick: () => void }).onClick();
-    expect(onArmPin).toHaveBeenCalledWith(1);
-    expect(all.some((el) => 'data-cancel-pin' in (el.props as object))).toBe(false);
-  });
-
-  it('while armed: the hint pill, a Cancel that disarms, and no Add pin', () => {
-    const onDisarmPin = vi.fn();
-    const tree = galleryView({
-      items,
-      cache,
-      presignEnabled: true,
-      onOpen: () => {},
-      pinArmedIndex: 0,
-      onArmPin: () => {},
-      onDisarmPin,
-    });
-    const all = elements(tree);
-    expect(all.some((el) => (el.props as { role?: string }).role === 'status')).toBe(true);
-    const cancel = all.find((el) => 'data-cancel-pin' in (el.props as object))!;
-    expect(text(cancel)).toBe('Cancel');
-    (cancel.props as { onClick: () => void }).onClick();
-    expect(onDisarmPin).toHaveBeenCalledTimes(1);
-    expect(all.some((el) => 'data-add-pin' in (el.props as object))).toBe(false);
-  });
-
-  it('nothing is offered to a viewer who cannot comment', () => {
-    expect(pinControls(0, null, undefined, undefined)).toBeNull();
-    const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
-    expect(elements(tree).some((el) => 'data-add-pin' in (el.props as object))).toBe(false);
-  });
-});
 
 describe('no ⋮ circle on the picture', () => {
   it('no slide carries an actions button or a dialog opener', () => {
