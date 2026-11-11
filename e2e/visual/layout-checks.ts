@@ -3406,9 +3406,10 @@ export function reportListScreenAxis(project: string, rows: readonly ListScreenA
 
 /**
  * Nothing moves when you switch tabs (10 Nov 2026): the top bar's name,
- * search and avatar x, the phone bottom bar's tab and Chat centres and its
- * width, and the filter row's non-chip controls, read on the tab as it stands
- * (at the top, dock at rest). For assertTabFrameStill across the six tabs.
+ * search and avatar x and the filter row's non-chip controls, read on the tab
+ * as it stands (at the top, dock at rest), for assertTabFrameStill across the
+ * six tabs. The phone bottom bar is measured here per tab (11 Nov 2026: the
+ * open tab shows its name, so its width follows the tab).
  */
 export async function readTabFrame(page: Page, screen: string): Promise<TabFrameAt> {
   const at = await page.evaluate(() => {
@@ -3418,10 +3419,6 @@ export async function readTabFrame(page: Page, screen: string): Promise<TabFrame
       return r.width > 0 && r.height > 0 ? r : null;
     };
     const x = (el: Element | null): number | null => shown(el)?.x ?? null;
-    const centre = (el: Element | null): number | null => {
-      const r = shown(el);
-      return r === null ? null : r.x + r.width / 2;
-    };
     const header = document.querySelector('header');
     const search =
       [...(header?.querySelectorAll('button') ?? [])].find(
@@ -3431,9 +3428,63 @@ export async function readTabFrame(page: Page, screen: string): Promise<TabFrame
             (b.getAttribute('aria-label') === null && /^\s*Search/.test(b.textContent ?? ''))),
       ) ?? null;
     const nav = document.querySelector('nav[aria-label="Primary"]');
-    const tabs = [...document.querySelectorAll('nav[aria-label="Primary"] [data-tab-pill] > a')]
-      .map((a) => centre(a))
-      .filter((c): c is number => c !== null);
+    // Phone nav (11 Nov 2026): the open tab shows its name, so tab centres and
+    // the bar's width change with the tab and are no longer compared across
+    // tabs. Measured on each tab instead: every icon on the bar's vertical
+    // centre (+-1), the open tab's icon + name inside its fill with equal
+    // sides (12 in the pill, 12 or more on Chat), the bar centred with 16 or
+    // more on each side here and still inside a 360 wide screen.
+    const navFindings: string[] = [];
+    const bar = shown(nav);
+    if (bar !== null) {
+      const barCy = bar.y + bar.height / 2;
+      const links = [
+        ...document.querySelectorAll('nav[aria-label="Primary"] [data-tab-pill] > a'),
+        ...document.querySelectorAll('nav[aria-label="Primary"] [data-chat-tab]'),
+      ];
+      for (const a of links) {
+        const what = a.hasAttribute('data-chat-tab') ? 'Chat' : (a.getAttribute('href') ?? 'tab');
+        const icon = shown(a.querySelector('svg'));
+        if (icon === null) {
+          navFindings.push(`phone nav ${what}: no icon`);
+          continue;
+        }
+        const off = icon.y + icon.height / 2 - barCy;
+        if (Math.abs(off) > 1) {
+          navFindings.push(`phone nav ${what}: icon centre ${off.toFixed(1)} off the bar centre`);
+        }
+      }
+      const names = [...document.querySelectorAll('nav[aria-label="Primary"] [data-tab-name]')];
+      if (names.length !== 1) navFindings.push(`phone nav: ${names.length} names show, expected 1`);
+      for (const el of names) {
+        const a = el.closest('a');
+        const fill = shown(a);
+        const name = shown(el);
+        const icon = shown(a?.querySelector('svg') ?? null);
+        if (a === null || fill === null || name === null || icon === null) continue;
+        const left = icon.x - fill.x;
+        const right = fill.right - name.right;
+        const chat = a.hasAttribute('data-chat-tab');
+        const ok = chat
+          ? left >= 12 && right >= 12 && Math.abs(left - right) <= 1
+          : Math.abs(left - 12) <= 1 && Math.abs(right - 12) <= 1;
+        if (!ok || name.x < icon.right) {
+          navFindings.push(
+            `phone nav name "${el.textContent ?? ''}": ${left.toFixed(1)} before the icon, ${right.toFixed(1)} after the name (12 each side)`,
+          );
+        }
+      }
+      const leftGap = bar.x;
+      const rightGap = window.innerWidth - bar.right;
+      if (leftGap < 16 || rightGap < 16 || Math.abs(leftGap - rightGap) > 1) {
+        navFindings.push(
+          `phone nav bar: ${leftGap.toFixed(1)} left, ${rightGap.toFixed(1)} right (centred, 16 or more each side)`,
+        );
+      }
+      if (bar.width > 360) {
+        navFindings.push(`phone nav bar: ${bar.width.toFixed(1)} wide, past a 360 wide screen`);
+      }
+    }
     const nonChips = [
       ...document.querySelectorAll(
         '[data-shell="chips"] :is(button, a, input, select, [role="button"])',
@@ -3450,13 +3501,19 @@ export async function readTabFrame(page: Page, screen: string): Promise<TabFrame
       nameX: x(header?.querySelector('[data-topbar-workspace-name]') ?? null),
       searchX: x(search),
       avatarX: x(header?.querySelector('[aria-label="Account menu"]') ?? null),
-      tabCentres: tabs,
-      chatCentre: centre(document.querySelector('nav[aria-label="Primary"] [data-chat-tab]')),
-      barWidth: shown(nav)?.width ?? null,
+      tabCentres: [],
+      chatCentre: null,
+      barWidth: null,
       nonChips,
+      navFindings,
     };
   });
-  return { screen, ...at };
+  const { navFindings, ...frame } = at;
+  settleFindings(
+    `${screen} phone nav`,
+    navFindings.map((message) => ({ check: 'alignment' as const, message })),
+  );
+  return { screen, ...frame };
 }
 
 /** Nothing moves when you switch tabs: each tab's frame against the first (+-1). */

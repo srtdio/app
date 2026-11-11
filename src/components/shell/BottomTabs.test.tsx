@@ -173,7 +173,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(chat.some((c) => c.startsWith('shadow'))).toBe(false);
   });
 
-  it('every tab is icon only with an aria-label; the active one is the fill, no word', () => {
+  it('only the open tab shows its name: panel-3 fill, icon + name; the others are 44 icon slots', () => {
     const container = render('/briefs');
     const links = pillLinks(container);
     expect(links.map((a) => a.getAttribute('aria-label'))).toEqual([
@@ -183,51 +183,111 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
       'Plan',
       'Activity',
     ]);
-    expect(links.map((a) => a.textContent)).toEqual(['', '', '', '', '']);
+    expect(links.map((a) => a.textContent)).toEqual(['', 'Briefs', '', '', '']);
     const active = links[1];
     if (active === undefined) throw new Error('no Briefs tab');
     expect(classes(active)).toEqual(
-      expect.arrayContaining(['bg-panel-3', 'text-fg', 'h-11', 'w-11', MOVE_CLASS.dock]),
+      expect.arrayContaining([
+        'h-11',
+        'min-w-11',
+        'gap-2',
+        'px-3',
+        'bg-panel-3',
+        'text-fg',
+        MOVE_CLASS.dock,
+      ]),
     );
-    expect(classes(active)).not.toContain('px-3');
+    expect(classes(active)).not.toContain('w-11');
     expect(active.getAttribute('data-selected')).toBe('true');
+    expect(active.querySelector('svg')).not.toBeNull();
+    expect(classes(active.querySelector('[data-tab-name]') ?? active)).toEqual(
+      expect.arrayContaining(['shrink-0', 'whitespace-nowrap', 'text-md', 'font-medium']),
+    );
     for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill', 'bg-accent-soft']) {
       expect(classes(active)).not.toContain(c);
     }
     for (const idle of [links[0], links[2], links[3], links[4]]) {
-      expect(classes(idle ?? active)).toContain('text-fg-2');
-      expect(classes(idle ?? active)).toContain('w-11');
+      expect(classes(idle ?? active)).toEqual(
+        expect.arrayContaining(['h-11', 'w-11', 'text-fg-2']),
+      );
       expect(classes(idle ?? active)).not.toContain('text-fg');
       expect(classes(idle ?? active)).not.toContain('bg-panel-3');
-      expect(classes(idle ?? active)).not.toContain('lit-active');
+      expect(classes(idle ?? active)).not.toContain('px-3');
+      expect((idle ?? active).querySelector('[data-tab-name]')).toBeNull();
     }
   });
 
-  it('Activity is active on /notifications: the fill and aria-current, no word', () => {
+  it('Activity is active on /notifications: the fill, aria-current and its name; the icon centres', () => {
     const container = render('/notifications');
     const activity = container.querySelector('[data-activity-tab]');
-    expect(activity?.textContent).toBe('');
+    expect(activity?.textContent).toBe('Activity');
     expect(activity?.getAttribute('aria-label')).toBe('Activity');
     expect(activity?.getAttribute('aria-current')).toBe('page');
-    expect(classes(activity ?? container)).toContain('bg-panel-3');
+    expect(classes(activity ?? container)).toEqual(
+      expect.arrayContaining(['bg-panel-3', 'min-w-11', 'gap-2', 'px-3']),
+    );
+    // The icon wrapper is inline-flex, so the icon centres like the other four.
+    const wrapper = activity?.firstElementChild;
+    expect(classes(wrapper ?? container)).toEqual(
+      expect.arrayContaining(['relative', 'inline-flex']),
+    );
+    expect(wrapper?.querySelector('svg')).not.toBeNull();
   });
 
-  it('every tab is one fixed 44x44 slot on every route; Chat 52x52 at rest', () => {
-    for (const route of ['/pipeline', '/briefs', '/assets', '/plan', '/notifications', '/chat']) {
+  it('one name in the pill at a time on every route, each from the nav; Chat names itself on /chat', () => {
+    const names: Record<string, string> = {
+      '/pipeline': 'Pipeline',
+      '/briefs': 'Briefs',
+      '/assets': 'Assets',
+      '/plan': 'Plan',
+      '/notifications': 'Activity',
+    };
+    for (const [route, name] of Object.entries(names)) {
       const container = render(route);
-      for (const a of pillLinks(container)) {
-        const cls = classes(a);
-        expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11']));
-        expect(cls).not.toContain('min-w-11');
-        expect(cls).not.toContain('px-3');
-      }
+      const shown = Array.from(container.querySelectorAll('[data-tab-pill] [data-tab-name]'));
+      expect(shown.map((n) => n.textContent)).toEqual([name]);
+      expect(shown[0]?.closest('a')?.getAttribute('data-selected')).toBe('true');
+      // Chat away from /chat: the 52 circle, icon only.
+      const chat = chatLink(container);
+      expect(classes(chat)).toEqual(expect.arrayContaining(['h-13', 'w-13', 'rounded-full']));
+      expect(chat.querySelector('[data-tab-name]')).toBeNull();
       act(() => root?.unmount());
       container.remove();
     }
-    const container = render('/pipeline');
-    const chat = classes(chatLink(container));
-    expect(chat).toEqual(expect.arrayContaining(['h-13', 'w-13', 'rounded-full']));
-    expect(chat).not.toContain('h-15');
+    const container = render('/chat');
+    expect(container.querySelectorAll('[data-tab-pill] [data-tab-name]')).toHaveLength(0);
+    for (const a of pillLinks(container)) expect(classes(a)).toContain('w-11');
+    const chat = chatLink(container);
+    expect(chat.textContent).toBe(PRIMARY_NAV.find((i) => i.showChatBadge === true)?.label);
+    expect(classes(chat)).toEqual(
+      expect.arrayContaining(['h-13', 'gap-2', 'px-4', 'bg-accent', 'text-accent-fg']),
+    );
+    expect(classes(chat)).not.toContain('w-13');
+    expect(classes(chat)).not.toContain('h-15');
+    expect(classes(chat.querySelector('[data-tab-name]') ?? chat)).toEqual(
+      expect.arrayContaining(['whitespace-nowrap', 'text-md', 'font-medium']),
+    );
+    expect(chat.querySelector('svg')).not.toBeNull();
+  });
+
+  it('badge ring: panel-3 on the open tab (its fill), surface-top on the others', () => {
+    counts.plan = 3;
+    const onPlan = render('/plan', 0, 4);
+    const ring = (view: HTMLElement, sel: string): string[] =>
+      classes(view.querySelector(`${sel} [data-count-badge]`) ?? view);
+    expect(ring(onPlan, '[data-selected="true"]')).toEqual(
+      expect.arrayContaining(['border-2', 'border-panel-3']),
+    );
+    expect(ring(onPlan, '[data-selected="true"]')).not.toContain('border-surface-top');
+    expect(ring(onPlan, '[data-activity-tab]')).toContain('border-surface-top');
+    act(() => root?.unmount());
+    onPlan.remove();
+    const onActivity = render('/notifications', 0, 4);
+    expect(ring(onActivity, '[data-activity-tab]')).toEqual(
+      expect.arrayContaining(['border-2', 'border-panel-3']),
+    );
+    expect(ring(onActivity, '[data-activity-tab]')).not.toContain('border-surface-top');
+    expect(ring(onActivity, 'a[href="/plan"]')).toContain('border-surface-top');
   });
 
   it('Activity badge: the inbox unread count with the lit surface-top ring and the "Activity, N unread" name', () => {
@@ -359,32 +419,39 @@ describe('Plan tab unread comments badge', () => {
   });
 });
 
-describe('tabClass: the flat pill tab, one fixed 44 slot', () => {
-  it('active: the panel-3 fill in fg ink in the same 44 box; never the ink fill, no label room', () => {
+describe('tabClass: the flat pill tab', () => {
+  it('active at rest: the panel-3 fill in fg ink with room for the name; never the ink fill', () => {
     const cls = tabClass(true).split(' ');
     expect(cls).toEqual(
-      expect.arrayContaining(['h-11', 'w-11', 'rounded-full', 'bg-panel-3', 'text-fg']),
+      expect.arrayContaining([
+        'h-11',
+        'min-w-11',
+        'gap-2',
+        'px-3',
+        'rounded-full',
+        'bg-panel-3',
+        'text-fg',
+      ]),
     );
-    for (const c of ['min-w-11', 'gap-2', 'px-3', 'bg-accent', 'text-accent-fg', 'lit-pill']) {
+    for (const c of ['w-11', 'bg-accent', 'text-accent-fg', 'lit-pill']) {
       expect(cls).not.toContain(c);
     }
   });
 
-  it('inactive: the icon alone in fg-2 in the same 44 box', () => {
-    const cls = tabClass(false).split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'text-fg-2']));
-    expect(cls).not.toContain('bg-panel-3');
-    expect(cls).not.toContain('bg-accent');
-    expect(cls).not.toContain('lit-pill');
+  it('active while shrunk: the fill in the 44 box, no name room', () => {
+    const cls = tabClass(true, true).split(' ');
+    expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'bg-panel-3', 'text-fg']));
+    expect(cls).not.toContain('px-3');
+    expect(cls).not.toContain('gap-2');
   });
 
-  it('active and inactive differ only in fill and ink (no width change)', () => {
-    const strip = (c: string) =>
-      c
-        .split(' ')
-        .filter((x) => !['bg-panel-3', 'text-fg', 'text-fg-2'].includes(x))
-        .sort();
-    expect(strip(tabClass(true))).toEqual(strip(tabClass(false)));
+  it('inactive: the icon alone in fg-2 in the 44 box, shrunk or not', () => {
+    for (const cls of [tabClass(false).split(' '), tabClass(false, true).split(' ')]) {
+      expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'text-fg-2']));
+      for (const c of ['px-3', 'gap-2', 'bg-panel-3', 'bg-accent', 'lit-pill']) {
+        expect(cls).not.toContain(c);
+      }
+    }
   });
 });
 
@@ -486,7 +553,7 @@ describe('useDockShrunk: one passive capture scroll listener on document', () =>
 });
 
 describe('BottomTabs: the dock shrinks on scroll down', () => {
-  it('rest: data-dock="rest", 52 pill and Chat circle, icons only', () => {
+  it('rest: data-dock="rest", 52 pill and Chat circle, the open tab named', () => {
     const container = render('/briefs');
     const bar = nav(container);
     expect(bar.getAttribute('data-dock')).toBe('rest');
@@ -494,10 +561,10 @@ describe('BottomTabs: the dock shrinks on scroll down', () => {
     const pill = container.querySelector('[data-tab-pill]');
     expect(classes(pill ?? bar)).toEqual(expect.arrayContaining(['h-13', 'px-1']));
     expect(classes(chatLink(container))).toEqual(expect.arrayContaining(['h-13', 'w-13']));
-    expect(pillLinks(container).map((a) => a.textContent)).toEqual(['', '', '', '', '']);
+    expect(pillLinks(container).map((a) => a.textContent)).toEqual(['', 'Briefs', '', '', '']);
   });
 
-  it('shrunk: data-dock="shrunk", 44 pill and Chat circle, nudged down, icons stay', () => {
+  it('shrunk: data-dock="shrunk", 44 pill, every tab and Chat 44, no name anywhere, icons stay', () => {
     const container = render('/briefs');
     const scroller = document.createElement('div');
     document.body.appendChild(scroller);
@@ -512,9 +579,28 @@ describe('BottomTabs: the dock shrinks on scroll down', () => {
     const chat = classes(chatLink(container));
     expect(chat).toEqual(expect.arrayContaining(['h-11', 'w-11']));
     expect(chat).not.toContain('h-13');
-    expect(pillLinks(container).map((a) => a.textContent)).toEqual(['', '', '', '', '']);
-    // The icon stays on the active tab.
+    expect(container.querySelectorAll('[data-tab-name]')).toHaveLength(0);
+    for (const a of pillLinks(container)) {
+      expect(classes(a)).toEqual(expect.arrayContaining(['h-11', 'w-11']));
+      expect(classes(a)).not.toContain('px-3');
+    }
+    // The icon and the fill stay on the active tab.
     expect(pillLinks(container)[1]?.querySelector('svg')).not.toBeNull();
+    expect(classes(pillLinks(container)[1] ?? bar)).toContain('bg-panel-3');
+    scroller.remove();
+  });
+
+  it('shrunk on /chat: Chat is the 44 ink circle, its name hidden', () => {
+    const container = render('/chat');
+    const scroller = document.createElement('div');
+    document.body.appendChild(scroller);
+    scrollTo(scroller, 100);
+    scrollTo(scroller, 300);
+    const chat = chatLink(container);
+    expect(classes(chat)).toEqual(expect.arrayContaining(['h-11', 'w-11', 'bg-accent']));
+    expect(classes(chat)).not.toContain('px-4');
+    expect(container.querySelectorAll('[data-tab-name]')).toHaveLength(0);
+    expect(chat.querySelector('svg')).not.toBeNull();
     scroller.remove();
   });
 });
