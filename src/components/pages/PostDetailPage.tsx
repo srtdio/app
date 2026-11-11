@@ -210,8 +210,10 @@ export function postPageGrid(embedded: boolean): {
     media: 'min-w-0 lg:col-start-1 lg:row-start-2',
     body: 'min-w-0 lg:col-start-1 lg:row-start-3 lg:self-start',
     // --pin-h: the pinned exit block's height (pinBlockStyle), so the column
-    // sticks clear of it; unset (embedded) it is 0, the old top-4.
-    side: 'min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-[calc(var(--pin-h,0px)+1rem)] lg:self-start lg:max-h-[calc(100dvh-6rem-var(--pin-h,0px))] lg:overflow-y-auto lg:overscroll-contain',
+    // sticks clear of it; unset (embedded) it is 0, the old top-4. While a
+    // comment thread fills beside the post (data-comments-covered) the whole
+    // column is hidden, its scrollbar included; only the panel shows.
+    side: 'min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-[calc(var(--pin-h,0px)+1rem)] lg:self-start lg:max-h-[calc(100dvh-6rem-var(--pin-h,0px))] lg:overflow-y-auto lg:overscroll-contain has-[[data-comments-covered]]:invisible',
   };
 }
 
@@ -1235,7 +1237,10 @@ export function PostDetailPage({
       title={title}
       titleSlot={<span className={textRole('title', 'truncate')}>{title}</span>}
       {...(actions !== undefined ? { actions } : {})}
-      className={SAFE_TOP_BAR_CLASS}
+      // A comment thread filling beside the post (laptop): the bar ends at the
+      // panel's left edge (--side-panel-cover, set only by ui/SidePanel while
+      // it fills; else 0), so the panel's own "<" and title are never covered.
+      className={`${SAFE_TOP_BAR_CLASS} mr-[var(--side-panel-cover,0px)]`}
     />
   );
 

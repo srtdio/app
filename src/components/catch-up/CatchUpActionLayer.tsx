@@ -18,9 +18,14 @@ import { ForwardPicker, type ForwardSendResult } from '@/components/chat/Forward
 import { TaskSheet } from '@/components/chat/tasks/TaskSheet';
 import { useChatTasks } from '@/components/chat/tasks/useChatTasks';
 import { CommentTaskSheet } from '@/components/comments/CommentTaskSheet';
+import {
+  commentForwardFiles,
+  fetchCommentAttachmentIds,
+} from '@/components/comments/comment-files';
 import type { RootActions } from '@/components/chat/ThreadRail';
 import { forwardMessagesByIds } from '@/lib/chat/forward-by-ids';
 import { forwardRecordInput, runForward } from '@/lib/chat/forward';
+import { forwardComment } from '@/lib/chat/forward-comment';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { newMessageId } from '@/lib/chat/message-id';
 import { targetFromSummary } from '@/lib/chat/thread';
@@ -60,7 +65,7 @@ export function actionKeysOf(
   return { tasks: text && (item.kind === 'post' || item.kind === 'brief'), forward: text };
 }
 
-/** One forwarded copy per chat: the chat message itself (by id), or a comment's text. */
+/** One forwarded copy per chat: the chat message itself (by id), or a comment's text and files. */
 async function forwardTarget(
   target: CatchUpActionTarget,
   currentUserId: string,
@@ -96,18 +101,23 @@ async function forwardTarget(
       },
     });
   }
-  for (const chat of chats) {
-    const res = await sendMessageRecord({
-      client: supabase,
-      id: newMessageId(),
-      channelId: chat.channelId,
-      traceId: generateTraceId(),
-      body: target.row.text,
-      attachmentAssetIds: [],
-    });
-    if (!res.ok) return { ok: false, failed: chat };
-  }
-  return { ok: true };
+  // A comment: the one shared helper (forward-comment), so its files go too.
+  // Post and brief comments read their stored file ids here, after Send; plan
+  // and idea comments carry text only, as before.
+  const stored = target.item.kind === 'post' || target.item.kind === 'brief';
+  return forwardComment({
+    targets: chats,
+    load: async () => {
+      if (!stored) return { body: target.row.text, attachments: [] };
+      const ids = await fetchCommentAttachmentIds(supabase, target.row.id);
+      if (ids === null) return null;
+      const attachments = await commentForwardFiles(supabase, ids, new Map());
+      return attachments === null ? null : { body: target.row.text, attachments };
+    },
+    send: (record) => sendMessageRecord({ client: supabase, ...record }),
+    newId: newMessageId,
+    newTrace: generateTraceId,
+  });
 }
 
 /** Chat's Add to Tasks: the chat's own TaskSheet holding the message text (mounted while open). */

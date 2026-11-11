@@ -1438,6 +1438,12 @@ export function MessageBubble(props: {
   const rootPlace = props.threadPlace === 'root' && head;
   const replyPlace = props.threadPlace === 'reply';
   const hasReactions = message.reactions.length > 0;
+  // The chips take a reaction: a recorded row, wired, not in selection mode.
+  const canReactChips =
+    props.reactionChips !== undefined && props.selection === undefined && message.state === 'sent';
+  // Thread polish 2: a thread's main message always shows the add-reaction
+  // key, even with no reactions (a deleted root is a tombstone: none).
+  const rootAddKey = rootPlace && canReactChips && message.deleted !== true;
   const failed = message.state === 'failed';
   const selection = props.selection;
   const voiceOnly = isVoiceOnly(message);
@@ -1563,7 +1569,11 @@ export function MessageBubble(props: {
   ) : null;
   // The rail is never drawn while selecting: the row keeps today's place.
   const rail = selecting ? undefined : props.rail;
-  const railEdge = { head, afterLabel: props.afterLabel === true, hasReactions };
+  const railEdge = {
+    head,
+    afterLabel: props.afterLabel === true,
+    hasReactions: hasReactions || rootAddKey,
+  };
   const threadMember = props.threadMember === true;
   const rowClass = cn(
     'group flex items-start gap-2',
@@ -2010,20 +2020,18 @@ export function MessageBubble(props: {
         ) : fullMeta.status === 'failed' || fullMeta.status === 'files-missing' ? (
           <FailedLine status={fullMeta.status} />
         ) : null}
-        {hasReactions ? (
+        {hasReactions || rootAddKey ? (
           // On the text column, 8 under the message (the column's 4 + 4) and
           // 8 over the next row, so the pills' 44 taps never meet its first
           // line's (a mention's); the thread root's ends on the strip's 12.
+          // A thread's main message always carries the smiley key (rootAddKey).
           <ReactionChips
             className={rootPlace ? 'mt-1' : 'mb-2 mt-1'}
             reactions={message.reactions}
             onToggle={(emoji) => props.reactionChips?.onToggle(emoji)}
             onPick={(emoji) => props.reactionChips?.onPick(emoji)}
-            canReact={
-              props.reactionChips !== undefined &&
-              selection === undefined &&
-              message.state === 'sent'
-            }
+            canReact={canReactChips}
+            addWhenEmpty={rootAddKey}
             who={props.reactionChips?.who}
             {...(props.reactionChips?.onWho !== undefined && selection === undefined
               ? { onWho: props.reactionChips.onWho }

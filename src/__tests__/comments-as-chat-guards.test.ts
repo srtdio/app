@@ -131,6 +131,30 @@ describe('Guard 3: no checkpoints, ticks or pins on the post or brief screens', 
 // keys between them, so the comment files embed must name its column or
 // PostgREST answers HTTP 300 and every file draws as "Attachment / File".
 describe('Thread polish 1: comment files embed and thread scroll', () => {
+  it('a comment forward goes through the one helper and never drops its attachment ids', async () => {
+    const { commentForwardRecord } = await import('@/lib/chat/forward-comment');
+    const record = commentForwardRecord(
+      {
+        body: '',
+        attachments: [
+          { assetId: 'v1', name: 'Deck.pdf', mime: 'application/pdf' },
+          { assetId: 'v2', name: '', mime: '' },
+        ],
+      },
+      { id: 'm1', channelId: 'ch1', traceId: 't1' },
+    );
+    expect(record.attachmentAssetIds).toEqual(['v1', 'v2']);
+    expect(Object.keys(record.attachmentMeta ?? {})).toEqual(['v1', 'v2']);
+    expect(record.forwardedFromMessageId).toBeNull();
+    // Both callers send a comment through forwardComment; neither builds its own send.
+    const screen = code(read('components/comments/Comments.tsx'));
+    const catchUp = code(read('components/catch-up/CatchUpActionLayer.tsx'));
+    expect(screen).toContain('forwardComment({');
+    expect(catchUp).toContain('forwardComment({');
+    expect(catchUp).not.toContain('attachmentAssetIds: []');
+    expect(screen).toContain('row.attachment_asset_ids ?? []');
+  });
+
   it('the comment-file select keeps the !asset_id hint', () => {
     const files = code(read('components/comments/comment-files.ts'));
     expect(files).toContain('assets!asset_id(display_name, filename)');

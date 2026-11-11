@@ -1,24 +1,23 @@
-// The message action menu (L10, 8 Nov 2026). Phone: a ui/Sheet with a grab
-// handle and no title: a row of six round quick reactions plus the smiley
-// key (Thread polish 1, 11 Nov 2026: seven 44 circles edge to edge), three big
-// tiles (Reply, Forward, Add to Tasks), the rows Mark unread, Copy link and
-// Copy text, a divider, then "More actions ›", which opens a second page
-// ("<" More actions): Reply privately (with "to <Name>"), Select text,
-// Transcribe, Save to notes, Edit, Remove file, a divider, Delete (danger).
-// Two or fewer of those: no "More actions" page, they sit on the first page
-// after the rows, a danger row last under the divider (moreActionsFolded).
-// Laptop (right-click): the same groups and order in a MenuPopover, the tiles
-// drawn as its first three rows. Each entry shows only when it applies (plan
-// and idea cards hide Forward, Add to Tasks, Save to notes and Edit as
-// before); Edit and Delete keep their "15 min" / "30 min" hints. Remind,
-// Star and Mark as stay removed.
+// The message action menu (L10, 8 Nov 2026; order locked in Thread polish 2,
+// 11 Nov 2026). Phone: a ui/Sheet with a grab handle and no title. Top to
+// bottom, each entry only where it applies: a row of six round quick
+// reactions plus the smiley key (seven 44 circles edge to edge); three big
+// tiles (Reply, Forward, Add to Tasks); the rows Mark unread and Edit; a
+// divider; Copy link, Copy text, Select text, Save to notes, Reply privately
+// (with "to <Name>"), Transcribe; a divider; the danger rows Remove file, then
+// Delete, always last. One page: no "More actions" row, no second page. A
+// divider sits only between two groups that both show (menuEntries). A list
+// taller than the sheet scrolls inside it; the reactions row stays put.
+// Laptop (right-click): the same entries, order and dividers in a MenuPopover,
+// the tiles drawn as its first rows. Plan and idea cards hide Forward, Add to
+// Tasks, Save to notes and Edit as before; Edit and Delete keep their
+// "15 min" / "30 min" hints. Remind, Star and Mark as stay removed.
 
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ICON_SIZE,
-  IconChevronRight,
   IconCopy,
   IconEdit,
   IconFile,
@@ -33,7 +32,6 @@ import {
   IconText,
   IconTrash,
 } from '@/components/ui/icons';
-import { HeaderBar } from '@/components/ui/HeaderBar';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
@@ -244,8 +242,11 @@ interface MessageActionMenuProps {
   onCopyLink?: () => void;
 }
 
-/** Where an entry sits (L10): a big tile, a row on the first page, or under More actions. */
-export type MenuGroup = 'tile' | 'row' | 'more';
+/**
+ * Where an entry sits: a big tile, a lead row under the tiles (Mark unread,
+ * Edit), a tools row (the copy group), or a danger row (last).
+ */
+export type MenuGroup = 'tile' | 'row' | 'tools' | 'danger';
 
 /** One entry of the message action menu. */
 export interface MessageMenuItem {
@@ -254,7 +255,7 @@ export interface MessageMenuItem {
   label: string;
   icon: ReactNode;
   run: () => void;
-  /** The entry's group; absent reads as 'more'. */
+  /** The entry's group; absent reads as 'tools'. */
   group?: MenuGroup;
   /** Text in the bad token (Delete). */
   danger?: boolean;
@@ -301,33 +302,8 @@ export const ADD_TO_TASKS_LABEL = 'Add to Tasks';
 export const MARK_UNREAD_LABEL = 'Mark unread';
 export const COPY_LINK_LABEL = 'Copy link';
 export const COPY_TEXT_LABEL = 'Copy text';
+/** The replies bar's three-dot key (ThreadRail); the sheet itself has no such row or page. */
 export const MORE_ACTIONS_LABEL = 'More actions';
-
-/** The "More actions" page shows only when it would hide at least this many actions. */
-export const MORE_ACTIONS_MIN = 3;
-
-/**
- * Whether the 'more' entries sit on the first page instead of behind "More
- * actions" (Thread polish 1): a page that hides two or fewer actions is a tap
- * for nothing. Pure.
- */
-export function moreActionsFolded(more: readonly MessageMenuItem[]): boolean {
-  return more.length > 0 && more.length < MORE_ACTIONS_MIN;
-}
-
-/**
- * The first page's rows and the "More actions" page's rows. Folded: the rows,
- * then the 'more' entries in their order (danger last, so dividerBefore puts
- * the one hairline before it); the page is empty. Pure.
- */
-export function menuPages(items: readonly MessageMenuItem[]): {
-  rows: MessageMenuItem[];
-  more: MessageMenuItem[];
-} {
-  const rows = itemsOfGroup(items, 'row');
-  const more = itemsOfGroup(items, 'more');
-  return moreActionsFolded(more) ? { rows: [...rows, ...more], more: [] } : { rows, more };
-}
 
 /** The menu row that copies a message into Personal notes. */
 export const SAVE_TO_NOTES_LABEL = 'Save to notes';
@@ -349,12 +325,12 @@ export const MENU_ICON_SIZE = ICON_SIZE.tray;
 export const SELECT_TEXT_LABEL = 'Select text';
 
 /**
- * The entries in display order (L10). Tiles: Reply, Forward, Add to Tasks.
- * Rows: Mark unread, Copy link, Copy text. More actions: Reply privately,
- * Select text, Transcribe, Save to notes, Edit, then the danger rows Remove
- * file and Delete (last). Entries that do not apply are not returned; the
- * divider before the danger rows is the renderer's (dividerBefore). Pure (no
- * hooks) so the set is unit-tested without a DOM.
+ * The entries in display order (Thread polish 2, locked). Tiles: Reply,
+ * Forward, Add to Tasks. Rows: Mark unread, Edit. Tools: Copy link, Copy text,
+ * Select text, Save to notes, Reply privately, Transcribe. Danger: Remove
+ * file, then Delete (always the last entry). Entries that do not apply are
+ * not returned; the dividers are menuEntries'. Pure (no hooks) so the set is
+ * unit-tested without a DOM.
  */
 export function messageMenuItems(
   props: MenuItemProps,
@@ -401,13 +377,24 @@ export function messageMenuItems(
       run: () => props.onMarkUnread?.(),
     });
   }
+  if (props.canEdit === true) {
+    items.push({
+      kind: 'action',
+      key: 'edit',
+      label: 'Edit',
+      icon: <IconEdit size={size} />,
+      ...(props.notes === true ? {} : { hint: '15 min' }),
+      group: 'row',
+      run: () => props.onEdit?.(),
+    });
+  }
   if (props.canCopyLink === true) {
     items.push({
       kind: 'action',
       key: 'copy-link',
       label: COPY_LINK_LABEL,
       icon: <IconLink size={size} />,
-      group: 'row',
+      group: 'tools',
       run: () => props.onCopyLink?.(),
     });
   }
@@ -417,8 +404,28 @@ export function messageMenuItems(
       key: 'copy',
       label: COPY_TEXT_LABEL,
       icon: <IconCopy size={size} />,
-      group: 'row',
+      group: 'tools',
       run: props.onCopy,
+    });
+  }
+  if (props.canSelectText === true) {
+    items.push({
+      kind: 'action',
+      key: 'select-text',
+      label: SELECT_TEXT_LABEL,
+      icon: <IconSelectText size={size} />,
+      group: 'tools',
+      run: () => props.onSelectText?.(),
+    });
+  }
+  if (props.canSaveToNotes === true) {
+    items.push({
+      kind: 'action',
+      key: 'save-notes',
+      label: SAVE_TO_NOTES_LABEL,
+      icon: <IconFile size={size} />,
+      group: 'tools',
+      run: () => props.onSaveToNotes?.(),
     });
   }
   if (props.canReplyPrivately === true) {
@@ -429,18 +436,8 @@ export function messageMenuItems(
       label: REPLY_PRIVATELY,
       icon: <IconReplyPrivately size={size} />,
       ...(first !== '' ? { hint: replyPrivatelyTo(first) } : {}),
-      group: 'more',
+      group: 'tools',
       run: () => props.onReplyPrivately?.(),
-    });
-  }
-  if (props.canSelectText === true) {
-    items.push({
-      kind: 'action',
-      key: 'select-text',
-      label: SELECT_TEXT_LABEL,
-      icon: <IconSelectText size={size} />,
-      group: 'more',
-      run: () => props.onSelectText?.(),
     });
   }
   if (props.canTranscribe === true) {
@@ -449,29 +446,8 @@ export function messageMenuItems(
       key: 'transcribe',
       label: 'Transcribe',
       icon: <IconText size={size} />,
-      group: 'more',
+      group: 'tools',
       run: () => props.onTranscribe?.(),
-    });
-  }
-  if (props.canSaveToNotes === true) {
-    items.push({
-      kind: 'action',
-      key: 'save-notes',
-      label: SAVE_TO_NOTES_LABEL,
-      icon: <IconFile size={size} />,
-      group: 'more',
-      run: () => props.onSaveToNotes?.(),
-    });
-  }
-  if (props.canEdit === true) {
-    items.push({
-      kind: 'action',
-      key: 'edit',
-      label: 'Edit',
-      icon: <IconEdit size={size} />,
-      ...(props.notes === true ? {} : { hint: '15 min' }),
-      group: 'more',
-      run: () => props.onEdit?.(),
     });
   }
   if (props.canRemoveFile === true) {
@@ -481,7 +457,7 @@ export function messageMenuItems(
       label: REMOVE_FILE_MENU_LABEL,
       icon: <IconTrash size={size} />,
       danger: true,
-      group: 'more',
+      group: 'danger',
       run: () => props.onRemoveFile?.(),
     });
   }
@@ -495,7 +471,7 @@ export function messageMenuItems(
         ? {}
         : { hint: '30 min' }),
       danger: true,
-      group: 'more',
+      group: 'danger',
       run: () => props.onDelete?.(),
     });
   }
@@ -507,16 +483,34 @@ export function itemsOfGroup(
   items: readonly MessageMenuItem[],
   group: MenuGroup,
 ): MessageMenuItem[] {
-  return items.filter((item) => (item.group ?? 'more') === group);
+  return items.filter((item) => (item.group ?? 'tools') === group);
 }
 
+/** A hairline between two groups of the menu. */
+export const MENU_DIVIDER = 'divider' as const;
+
+/** What the menu draws under the reactions row, in order: an entry or a divider. */
+export type MenuEntry = MessageMenuItem | typeof MENU_DIVIDER;
+
+/** The row groups under the tiles, in display order. */
+const ROW_GROUPS = ['row', 'tools', 'danger'] as const;
+
 /**
- * Where the one divider goes: before the first danger row, when one follows
- * another row; null when no danger row shows (or a danger row is alone). Pure.
+ * The one list the sheet and the laptop popover draw (no second page): the
+ * tiles, the lead rows (they continue the tiles' block, no divider), then the
+ * tools and the danger rows, each behind a divider when anything shows above
+ * it. So a divider only ever sits between two groups that both show: never
+ * first, never last, never doubled. Pure.
  */
-export function dividerBefore(items: readonly MessageMenuItem[]): number | null {
-  const at = items.findIndex((item) => item.danger === true);
-  return at > 0 ? at : null;
+export function menuEntries(items: readonly MessageMenuItem[]): MenuEntry[] {
+  const out: MenuEntry[] = [...itemsOfGroup(items, 'tile')];
+  for (const group of ROW_GROUPS) {
+    const rows = itemsOfGroup(items, group);
+    if (rows.length === 0) continue;
+    if (group !== 'row' && out.length > 0) out.push(MENU_DIVIDER);
+    out.push(...rows);
+  }
+  return out;
 }
 
 /** Whether a keydown while the menu is open closes it. */
@@ -630,6 +624,39 @@ export function menuMaxHeight(viewportHeight: number): number {
   return Math.max(0, viewportHeight - 16);
 }
 
+/** ui/Sheet's tallest box as a share of the visible viewport (84svh from sm, 90 on a phone: the smaller). */
+const SHEET_MAX_SHARE = 0.84;
+/** ui/Sheet's own rows around the menu: the 20 grab handle, 8 above and 16 below the body. */
+const SHEET_CHROME_PX = 44;
+
+/**
+ * The phone sheet's menu max height: what ui/Sheet leaves its body, so a long
+ * list scrolls inside the menu (under the reactions row, which stays put)
+ * instead of the whole sheet body scrolling. A layout number, no read. Pure.
+ */
+export function sheetMenuMaxHeight(viewportHeight: number): number {
+  return Math.max(0, Math.floor(viewportHeight * SHEET_MAX_SHARE) - SHEET_CHROME_PX);
+}
+
+/** The laptop popover keeps this far from the window's side edges. */
+const MENU_EDGE_PX = 8;
+
+/**
+ * The laptop popover's anchor x: the bubble's side edge (its right for an own
+ * message, the popover hangs left of it; else its left, the popover hangs
+ * right), clamped so the whole box stays inside the window (the replies
+ * bar's three-dot key sits on the right edge). Pure.
+ */
+export function menuAnchorX(
+  anchor: { left: number; right: number },
+  mine: boolean,
+  viewportWidth: number,
+): number {
+  const min = MENU_EDGE_PX + (mine ? MENU_WIDTH_PX : 0);
+  const max = viewportWidth - MENU_EDGE_PX - (mine ? 0 : MENU_WIDTH_PX);
+  return Math.max(min, Math.min(mine ? anchor.right : anchor.left, max));
+}
+
 /** One reaction circle: round 44, the last key's bg-panel-2 fill. */
 export const REACTION_CIRCLE = 'h-11 w-11 shrink-0 rounded-full bg-panel-2';
 
@@ -657,7 +684,7 @@ export function ReactionsRow(props: {
       data-menu-reactions=""
       // 8 above and below seven 44 circles; one hairline under it.
       className={cn(
-        'flex items-center justify-between py-2',
+        'flex shrink-0 items-center justify-between py-2',
         props.inset === true && 'px-4',
         !reactionsOnly && 'border-b border-border',
       )}
@@ -748,7 +775,7 @@ export function menuClosesOnViewport(
  * one ⋯ container rule (ui/ActionMenu): phone (useIsLaptop false) a ui/Sheet,
  * laptop a shell/MenuPopover anchored under the bubble on its side (lifted to
  * stay on screen). The quick reactions sit on top (hairline under them), then
- * the rows, one level, a hairline before the danger rows. It focuses the first row on open and hands focus back on close.
+ * the rows, one page, a hairline between the groups that show (menuEntries). It focuses the first row on open and hands focus back on close.
  * The laptop popover also closes on scroll or resize (never while the emoji
  * picker is open). Tokens only, so light and dark stay at parity.
  */
@@ -840,36 +867,12 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const size = MENU_ICON_SIZE;
   const items = !active || reactionsOnly ? [] : messageMenuItems(props, size);
   const tiles = itemsOfGroup(items, 'tile');
-  // Two or fewer 'more' entries fold onto the first page (menuPages).
-  const { rows, more } = menuPages(items);
-  const divider = dividerBefore(more);
-  const rowsDivider = dividerBefore(rows);
-  // L10: the first page, or the "More actions" page.
-  const [page, setPage] = useState<'main' | 'more'>('main');
-  useEffect(() => {
-    if (!open) setPage('main');
-  }, [open]);
-  useEffect(() => {
-    if (open) focusFirstMenuItem(containerRef.current);
-  }, [open, page]);
+  // One page: the rows and their dividers after the tiles (menuEntries).
+  const rest = menuEntries(items).slice(tiles.length);
   const run = (item: MessageMenuItem): void => {
     runMenuItem(item, { close: onClose });
   };
-  const moreRow =
-    more.length > 0 ? (
-      <PressableRow
-        flat
-        type="button"
-        role="menuitem"
-        data-menu-item="more-actions"
-        aria-haspopup="menu"
-        onClick={() => setPage('more')}
-        className={cn(MENU_ROW, 'text-base mv-tint focus-visible:bg-panel-2 text-fg')}
-      >
-        <span className="min-w-0 flex-1 truncate">{MORE_ACTIONS_LABEL}</span>
-        <IconChevronRight size={ICON_SIZE.control} className="shrink-0 text-fg-3" />
-      </PressableRow>
-    ) : null;
+  const viewport = active ? visibleViewportHeight(window) : 0;
 
   const body = (
     <div
@@ -881,27 +884,15 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
         // FB2: arrow keys move between items.
         if (moveMenuFocus(containerRef.current, event.key)) event.preventDefault();
       }}
-      className={cn('flex flex-col', isLaptop && '-m-2 overflow-y-auto overscroll-contain')}
+      // The reactions row stays put; a long list scrolls under it (data-menu-list).
+      className={cn('flex min-h-0 flex-col', isLaptop && '-m-2')}
       style={
         isLaptop
-          ? { width: MENU_WIDTH_PX, maxHeight: menuMaxHeight(visibleViewportHeight(window)) }
-          : undefined
+          ? { width: MENU_WIDTH_PX, maxHeight: menuMaxHeight(viewport) }
+          : { maxHeight: sheetMenuMaxHeight(viewport) }
       }
     >
-      {page === 'more' ? (
-        <div data-menu-page="more" className="flex flex-col">
-          <HeaderBar compact title={MORE_ACTIONS_LABEL} onBack={() => setPage('main')} />
-          {more.map((item, index) => (
-            <Fragment key={item.key}>
-              {index === divider ? (
-                <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
-              ) : null}
-              <MenuRow item={item} onRun={run} />
-            </Fragment>
-          ))}
-        </div>
-      ) : null}
-      {page === 'main' && props.canReact !== false ? (
+      {props.canReact !== false ? (
         <ReactionsRow
           currentReaction={currentReaction}
           reactionsOnly={reactionsOnly}
@@ -914,32 +905,30 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           moreRef={moreRef}
         />
       ) : null}
-      {page === 'main' && tiles.length > 0 ? (
-        isLaptop ? (
-          tiles.map((item) => <MenuRow key={item.key} item={item} onRun={run} />)
-        ) : (
-          <div data-menu-tiles="" className="flex gap-2 py-2">
-            {tiles.map((item) => (
-              <MenuTile key={item.key} item={item} onRun={run} />
-            ))}
-          </div>
-        )
-      ) : null}
-      {page === 'main'
-        ? rows.map((item, index) => (
-            <Fragment key={item.key}>
-              {index === rowsDivider ? (
-                <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
-              ) : null}
-              <MenuRow item={item} onRun={run} />
-            </Fragment>
-          ))
-        : null}
-      {page === 'main' && moreRow !== null ? (
-        <>
-          <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
-          {moreRow}
-        </>
+      {items.length > 0 ? (
+        <div data-menu-list="" className="flex min-h-0 flex-col overflow-y-auto overscroll-contain">
+          {tiles.length === 0 ? null : isLaptop ? (
+            tiles.map((item) => <MenuRow key={item.key} item={item} onRun={run} />)
+          ) : (
+            <div data-menu-tiles="" className="flex shrink-0 gap-2 py-2">
+              {tiles.map((item) => (
+                <MenuTile key={item.key} item={item} onRun={run} />
+              ))}
+            </div>
+          )}
+          {rest.map((entry, index) =>
+            entry === MENU_DIVIDER ? (
+              <div
+                key={`divider-${index}`}
+                aria-hidden="true"
+                data-menu-divider=""
+                className="shrink-0 border-t border-border"
+              />
+            ) : (
+              <MenuRow key={entry.key} item={entry} onRun={run} />
+            ),
+          )}
+        </div>
       ) : null}
     </div>
   );
@@ -975,7 +964,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
       <span
         data-menu-anchor=""
         className="fixed z-sheet"
-        style={{ top: anchor.bottom - lift, left: mine ? anchor.right : anchor.left }}
+        style={{
+          top: anchor.bottom - lift,
+          left: menuAnchorX(anchor, mine, document.documentElement.clientWidth),
+        }}
       >
         <span className="relative block">
           <MenuPopover

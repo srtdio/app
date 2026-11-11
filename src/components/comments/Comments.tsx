@@ -57,11 +57,13 @@ import { CommentTaskSheet } from '@/components/comments/CommentTaskSheet';
 import { CommentTaskTag } from '@/components/comments/CommentTaskTag';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
 import {
+  commentForwardFiles,
   fetchCommentFiles,
   idsToRead,
   toCommentFileAttachments,
   type CommentFile,
 } from '@/components/comments/comment-files';
+import { ForwardPicker } from '@/components/chat/ForwardPicker';
 import { LoadError } from '@/components/ui/LoadError';
 import { ClearButton } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -72,12 +74,15 @@ import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { SidePanel } from '@/components/ui/SidePanel';
 import { Bone } from '@/lib/motion';
 import { useOptionalToast, useToast } from '@/components/ui/toast';
-import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
+import { useOpenPersonDm, useRosterSafe } from '@/components/ui/use-open-person-dm';
 import { cn } from '@/lib/cn';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { setPrivateReplyDraft } from '@/lib/chat/drafts';
+import { canForwardComment, forwardComment } from '@/lib/chat/forward-comment';
 import { isFormerMember, resolveMentionText, resolvePersonMentionText } from '@/lib/chat/mentions';
+import { newMessageId } from '@/lib/chat/message-id';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
+import { sendMessageRecord } from '@/lib/chat/record';
 import { repliesLabel } from '@/lib/chat/thread-signals';
 import {
   distanceFromBottom,
@@ -340,7 +345,12 @@ export function pendingMessage(p: PendingComment, me: string | null): ThreadMess
 export function commentMenuOffer(input: {
   row: Pick<
     CommentRow,
-    'author_user_id' | 'legacy_author_name' | 'deleted_at' | 'task_state' | 'body'
+    | 'author_user_id'
+    | 'legacy_author_name'
+    | 'deleted_at'
+    | 'task_state'
+    | 'body'
+    | 'attachment_asset_ids'
   >;
   me: string | null;
   viewerIsAgency: boolean;
@@ -351,6 +361,8 @@ export function commentMenuOffer(input: {
   copy: boolean;
   copyLink: boolean;
   delete: boolean;
+  /** Forward to chats: a live comment with text or at least one file. */
+  forward: boolean;
 } {
   const live = input.row.deleted_at === null;
   const own =
@@ -365,6 +377,12 @@ export function commentMenuOffer(input: {
     copy: live && input.row.body.trim() !== '',
     copyLink: live,
     delete: own,
+    forward: canForwardComment({
+      sent: true,
+      deleted: !live,
+      body: input.row.body,
+      fileCount: input.row.attachment_asset_ids?.length ?? 0,
+    }),
   };
 }
 
@@ -1189,6 +1207,8 @@ export function Comments(props: CommentsProps): ReactElement {
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const rootInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [taskFor, setTaskFor] = useState<{ commentId: string; title: string } | null>(null);
+  // Forward (the replies bar's key, the sheet's tile): chat's picker, mounted while open.
+  const [forwardFor, setForwardFor] = useState<CommentRow | null>(null);
 
   const personSource = useCallback(
     (message: ThreadMessage): PrivateReplyDraft | null => {
@@ -1506,6 +1526,7 @@ export function Comments(props: CommentsProps): ReactElement {
                                 }),
                             }
                           : {}),
+                        ...(offer.forward ? { onForward: () => setForwardFor(threadRoot) } : {}),
                         onMore: (el: HTMLElement) =>
                           setMenu({
                             message: messageOf(threadRoot),
@@ -1607,6 +1628,17 @@ export function Comments(props: CommentsProps): ReactElement {
           }
           onDelete={(row) => remove(row.id)}
           onDiscard={discard}
+          onForward={setForwardFor}
+        />
+      ) : null}
+
+      {forwardFor !== null ? (
+        <CommentForwardLayer
+          row={forwardFor}
+          files={files}
+          nameOf={nameOf}
+          newTrace={newTrace}
+          onClose={() => setForwardFor(null)}
         />
       ) : null}
 
@@ -1631,9 +1663,10 @@ export function Comments(props: CommentsProps): ReactElement {
 
 /**
  * The open comment's long-press menu: chat's MessageActionMenu with what a
- * comment stores (reactions, Add to Tasks = To-do, Edit, Copy text, Copy link,
- * Reply privately, Delete last; a failed own send's Delete). No Reply (a tap
- * opens the thread), no Forward, no Mark unread, no Save to notes. Mounted
+ * comment stores (reactions, Forward = one chat message with the comment's
+ * text and files, Add to Tasks = To-do, Edit, Copy link, Copy text, Reply
+ * privately, Delete last; a failed own send's Delete). No Reply (a tap opens
+ * the thread), no Mark unread, no Save to notes. Mounted
  * only while open, so its hooks never run on paint.
  */
 function CommentMenu(props: {
@@ -1652,6 +1685,7 @@ function CommentMenu(props: {
   onEdit: (row: CommentRow) => void;
   onDelete: (row: CommentRow) => void;
   onDiscard: (localId: string) => void;
+  onForward: (row: CommentRow) => void;
 }): ReactElement {
   const toast = useToast();
   const openDm = useOpenPersonDm();
@@ -1668,6 +1702,7 @@ function CommentMenu(props: {
           copy: m.body.trim() !== '',
           copyLink: false,
           delete: false,
+          forward: false,
         };
   const draft = row !== null ? props.personSource(m) : null;
   return (
@@ -1689,6 +1724,10 @@ function CommentMenu(props: {
       }}
       onReact={(emoji) => {
         if (offer.react) props.reactions.toggle(m.id, emoji);
+      }}
+      canForward={offer.forward}
+      onForward={() => {
+        if (row !== null) props.onForward(row);
       }}
       canAddToTasks={offer.todo}
       onAddToTasks={() => {
@@ -1719,6 +1758,50 @@ function CommentMenu(props: {
         if (failedSend) props.onDiscard(m.id);
         else if (row !== null) props.onDelete(row);
       }}
+    />
+  );
+}
+
+/**
+ * Forward a comment (Thread polish 2): chat's ForwardPicker, then one chat
+ * message per picked chat with the comment's text and its files as stored
+ * (forwardComment, shared with catch up). Mounted only while open; file
+ * details the screen does not hold yet are read after Send, never on the tap.
+ * Success and failure feedback are the picker's own.
+ */
+function CommentForwardLayer(props: {
+  row: CommentRow;
+  files: ReadonlyMap<string, CommentFile>;
+  nameOf: ReturnType<typeof profileNameOf>;
+  newTrace: () => string;
+  onClose: () => void;
+}): ReactElement {
+  const roster = useRosterSafe();
+  const { row } = props;
+  return (
+    <ForwardPicker
+      historyStep
+      open
+      onClose={props.onClose}
+      channels={roster}
+      onSend={(chats) =>
+        forwardComment({
+          targets: chats,
+          load: async () => {
+            const attachments = await commentForwardFiles(
+              supabase,
+              row.attachment_asset_ids ?? [],
+              props.files,
+            );
+            if (attachments === null) return null;
+            return { body: resolveMentionText(row.body, props.nameOf), attachments };
+          },
+          send: (record) => sendMessageRecord({ client: supabase, ...record }),
+          newId: newMessageId,
+          newTrace: props.newTrace,
+        })
+      }
+      onSent={props.onClose}
     />
   );
 }

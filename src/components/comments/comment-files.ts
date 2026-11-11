@@ -156,6 +156,46 @@ export function toCommentFileAttachments(
 }
 
 /**
+ * A comment's files for a forward (Thread polish 2): one attachment per stored
+ * version id, in order, never dropped. Details the screen already holds are
+ * used as they are; any it does not hold are read here in one batch. Called
+ * after the Forward picker's Send, never on a tap. Null when that read failed.
+ */
+export async function commentForwardFiles(
+  client: Client,
+  versionIds: readonly string[],
+  known: ReadonlyMap<string, CommentFile>,
+): Promise<MessageAttachment[] | null> {
+  const missing = idsToRead(versionIds, new Set(known.keys()));
+  if (missing.length === 0) return toCommentFileAttachments(versionIds, known);
+  const fetched = await fetchCommentFiles(client, missing);
+  if (fetched === null) return null;
+  return toCommentFileAttachments(versionIds, new Map([...known, ...fetched]));
+}
+
+/**
+ * One comment's stored attachment ids by its id (catch up holds a comment's
+ * text only). RLS-scoped; read after the Forward picker's Send. Null when the
+ * read failed or the comment is gone or deleted. Never throws.
+ */
+export async function fetchCommentAttachmentIds(
+  client: Client,
+  commentId: string,
+): Promise<string[] | null> {
+  try {
+    const { data, error } = await client
+      .from('comments')
+      .select('attachment_asset_ids, deleted_at')
+      .eq('id', commentId)
+      .maybeSingle();
+    if (error || data === null || data.deleted_at !== null) return null;
+    return [...(data.attachment_asset_ids ?? [])];
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The photo viewer's bar title for a comment: "{Name} · {formatAgo}". A name
  * not known yet leaves the time alone. Pure.
  */

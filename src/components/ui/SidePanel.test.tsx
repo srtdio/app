@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fillBesidePlan, SidePanel } from '@/components/ui/SidePanel';
+import { fillBesideCover, fillBesidePlan, SidePanel } from '@/components/ui/SidePanel';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -110,5 +110,39 @@ describe('SidePanel fill beside (Thread polish 1)', () => {
     expect(panel?.style.width).toBe('676px');
     expect(panel?.className).not.toContain('w-side-panel');
     expect(document.documentElement.style.getPropertyValue('--side-panel-w')).toBe('');
+  });
+
+  it('Thread polish 2: the page under the panel is published, so a pinned bar ends at its left edge', async () => {
+    // The page's right content edge less the panel's left; never negative.
+    expect(fillBesideCover(1425, 848)).toBe(577);
+    expect(fillBesideCover(800, 848)).toBe(0);
+    const html = document.documentElement;
+    expect(html.style.getPropertyValue('--side-panel-cover')).toBe('');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const edge = (): number => html.clientWidth - 700;
+    await act(async () => {
+      root?.render(
+        <SidePanel open bare onClose={() => {}} title="Thread" fillBeside={edge}>
+          <p>body</p>
+        </SidePanel>,
+      );
+    });
+    // No <main> here: the window edge stands in, so the cover is the panel's width.
+    expect(html.style.getPropertyValue('--side-panel-cover')).toBe('676px');
+    await act(async () => {
+      root?.render(
+        <SidePanel open={false} bare onClose={() => {}} title="Thread" fillBeside={edge}>
+          <p>body</p>
+        </SidePanel>,
+      );
+    });
+    expect(html.style.getPropertyValue('--side-panel-cover')).toBe('');
+  });
+
+  it('default (Cockpit) never sets the cover', async () => {
+    await mount();
+    expect(document.documentElement.style.getPropertyValue('--side-panel-cover')).toBe('');
   });
 });
