@@ -197,7 +197,6 @@ describe('notes_channel_ensure', () => {
           active: true,
           selectedIds: new Set(),
           onEnter: () => {},
-          onStart: () => {},
           onCancel: () => {},
           onToggle: () => {},
           onDelete: () => {},

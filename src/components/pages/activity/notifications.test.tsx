@@ -232,7 +232,7 @@ describe('Mark all read', () => {
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // The top bar is Threads | Catch up (useActivityTopbar); Catch up's
+    // The lead row is Threads | Catch up (useActivityLeadRow); Catch up's
     // long-press "Mark all as read" is the whole-inbox write.
     expect(page).not.toContain('MARK_ALL_READ_LABEL');
     expect(page).not.toContain('IconTickDouble');

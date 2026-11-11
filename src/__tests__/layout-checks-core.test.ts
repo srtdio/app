@@ -700,23 +700,6 @@ describe('top bar, chip-row Select and upload checks', () => {
     expect(topbarDriftViolations([])).toEqual([]);
   });
 
-  it('chipRowViolations: Select pinned at the content edge, chips end before it', async () => {
-    const { chipRowViolations } = await import('../../e2e/visual/layout-checks-core');
-    const ok = {
-      label: 'pipeline',
-      row: box(0, 100, 390, 44),
-      paddingRight: 4,
-      scroll: box(16, 106, 270, 32),
-      select: box(290, 100, 96, 44),
-      button: box(290, 100, 96, 44),
-    };
-    expect(chipRowViolations([ok])).toEqual([]);
-    expect(chipRowViolations([{ ...ok, select: box(280, 100, 96, 44) }])).not.toEqual([]);
-    expect(chipRowViolations([{ ...ok, scroll: box(16, 106, 330, 32) }])).not.toEqual([]);
-    expect(chipRowViolations([{ ...ok, button: box(290, 100, 96, 32) }])).not.toEqual([]);
-    expect(chipRowViolations([{ ...ok, select: null, button: null }])).toEqual([]);
-  });
-
   it('uploadBarViolations: no visible bar and no % figure', async () => {
     const { uploadBarViolations } = await import('../../e2e/visual/layout-checks-core');
     expect(
@@ -868,6 +851,7 @@ describe('list-screen axis (shell/ListScreen)', () => {
     chipsTop: 12,
     chipX: 16,
     contentTop: 16,
+    rowTop: 16,
     textX: 76,
     rightInset: 16,
   };
@@ -878,6 +862,7 @@ describe('list-screen axis (shell/ListScreen)', () => {
       chipsTop: 12,
       chipX: 16,
       contentTop: 16,
+      rowTop: 16,
       textX: 76,
       rightInset: 16,
     });
@@ -885,6 +870,7 @@ describe('list-screen axis (shell/ListScreen)', () => {
       chipsTop: 12,
       chipX: 24,
       contentTop: 16,
+      rowTop: 16,
       textX: 84,
       rightInset: 24,
     });
@@ -904,14 +890,98 @@ describe('list-screen axis (shell/ListScreen)', () => {
     expect(listScreenAxisViolations(pipelinePhone, listScreenAxisExpected(true))).toHaveLength(3);
   });
 
+  it('measures the first real row, not the content wrapper: Briefs +12 fails', async () => {
+    const { listScreenAxisExpected, listScreenAxisViolations } = await load();
+    const phone = listScreenAxisExpected(false);
+    // Briefs before the fix: the flat grid kept the day grid's pt-3, so its
+    // first row sat 28 under the chips while the content wrapper sat at 16.
+    const briefsBefore = { ...pipelinePhone, screen: 'briefs', contentTop: 28, rowTop: 28 };
+    expect(listScreenAxisViolations(briefsBefore, phone)).toEqual([
+      'briefs: contentTop is 28px, not 16',
+      'briefs: rowTop is 28px, not 16',
+    ]);
+    // A heading at 16 does not hide a row pushed 12 under it (heading to rows is 16).
+    const headed = { ...pipelinePhone, screen: 'plan', contentTop: 16, rowTop: 28 };
+    expect(listScreenAxisViolations(headed, phone)).toEqual(['plan: rowTop is 28px, not 16']);
+    expect(listScreenAxisViolations({ ...pipelinePhone, rowTop: Number.NaN }, phone)).toEqual([
+      'pipeline: rowTop not found',
+    ]);
+  });
+
   it('reports each tab with its delta from the base, n/a where missing', async () => {
     const { listScreenAxisReport } = await load();
     const plan = { ...pipelinePhone, screen: 'plan', contentTop: 20, rightInset: Number.NaN };
     const text = listScreenAxisReport([pipelinePhone, plan], pipelinePhone);
     expect(text.split('\n')).toEqual([
-      'screen | chipsTop | chipX | contentTop | textX | rightInset',
-      'pipeline | 12 (0) | 16 (0) | 16 (0) | 76 (0) | 16 (0)',
-      'plan | 12 (0) | 16 (0) | 20 (+4) | 76 (0) | n/a (n/a)',
+      'screen | chipsTop | chipX | contentTop | rowTop | textX | rightInset',
+      'pipeline | 12 (0) | 16 (0) | 16 (0) | 16 (0) | 76 (0) | 16 (0)',
+      'plan | 12 (0) | 16 (0) | 20 (+4) | 16 (0) | 76 (0) | n/a (n/a)',
     ]);
+  });
+});
+
+describe('tabFrameViolations: nothing moves when you switch tabs', () => {
+  const frame = (screen: string, over: Record<string, unknown> = {}) => ({
+    screen,
+    nameX: 16,
+    searchX: 266,
+    avatarX: 342,
+    tabCentres: [59, 103, 147, 191, 235],
+    chatCentre: 305,
+    barWidth: 302,
+    nonChips: [] as string[],
+    ...over,
+  });
+
+  it('the same frame on every tab passes; 1px is inside the tolerance', async () => {
+    const { tabFrameViolations } = await import('../../e2e/visual/layout-checks-core');
+    expect(tabFrameViolations([])).toEqual([]);
+    expect(
+      tabFrameViolations([frame('pipeline'), frame('activity', { searchX: 267, barWidth: 301 })]),
+    ).toEqual([]);
+  });
+
+  it('flags a top bar key that moves (the old Activity pair and short name)', async () => {
+    const { tabFrameViolations } = await import('../../e2e/visual/layout-checks-core');
+    const out = tabFrameViolations([frame('pipeline'), frame('activity', { searchX: 138 })]);
+    expect(out).toEqual(['activity: top bar search x at 138, pipeline at 266']);
+    expect(
+      tabFrameViolations([frame('pipeline'), frame('activity', { nameX: null })]),
+    ).toHaveLength(1);
+  });
+
+  it('flags a bottom bar that changes width or slides its icons (the old active label)', async () => {
+    const { tabFrameViolations } = await import('../../e2e/visual/layout-checks-core');
+    const out = tabFrameViolations([
+      frame('pipeline'),
+      frame('briefs', {
+        tabCentres: [59, 125, 191, 235, 279],
+        chatCentre: 349,
+        barWidth: 390,
+      }),
+    ]);
+    expect(out).toEqual(
+      expect.arrayContaining([
+        'briefs: Chat circle centre x at 349, pipeline at 305',
+        'briefs: bottom bar width at 390, pipeline at 302',
+        'briefs: bottom bar tab 2 centre x at 125, pipeline at 103',
+      ]),
+    );
+    expect(
+      tabFrameViolations([frame('pipeline'), frame('assets', { tabCentres: [59, 103] })]),
+    ).toEqual(['assets: 2 bottom bar tabs, pipeline has 5']);
+  });
+
+  it('flags a non-chip control in the filter row (the old Select key)', async () => {
+    const { tabFrameViolations } = await import('../../e2e/visual/layout-checks-core');
+    expect(tabFrameViolations([frame('assets', { nonChips: ['Select'] })])).toEqual([
+      'assets: filter row holds a non-chip (Select)',
+    ]);
+  });
+
+  it('laptop: no phone name and no bottom bar on any tab passes', async () => {
+    const { tabFrameViolations } = await import('../../e2e/visual/layout-checks-core');
+    const laptop = { nameX: null, tabCentres: [], chatCentre: null, barWidth: null };
+    expect(tabFrameViolations([frame('pipeline', laptop), frame('chat-list', laptop)])).toEqual([]);
   });
 });

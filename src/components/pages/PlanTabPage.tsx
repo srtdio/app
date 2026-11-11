@@ -35,7 +35,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ScreenFailed } from '@/components/chat/PlanScreen';
 import { useInduction } from '@/components/induction/InductionProvider';
-import { ListScreen, SectionSelect } from '@/components/shell/ListScreen';
+import { ListScreen } from '@/components/shell/ListScreen';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SortMenu } from '@/components/ui/SortMenu';
@@ -312,13 +312,6 @@ export function PlanTabPage(): ReactElement {
   );
 
   const chipRow = <PlanWeekChips chip={chip} onChip={setChip} showBank={showBank} />;
-  // Decision E: the Bank's visible Select at the chip row's end, where the
-  // person can select (creators; a client reads only). The plan list has no
-  // select mode, so its head shows none (hide what a person can't do).
-  const headSelect =
-    onBank && creator ? (
-      <SectionSelect active={bankSelect.active} onToggle={bankSelect.toggleMode} />
-    ) : undefined;
 
   if (data !== null && !zero) mark('plan-tab:paint');
   // A borrowed read with nothing in the picked chip is not this chip's answer
@@ -410,11 +403,7 @@ export function PlanTabPage(): ReactElement {
 
   return (
     <>
-      <ListScreen
-        title="Plan"
-        chips={chipRow}
-        {...(headSelect !== undefined ? { select: headSelect } : {})}
-      >
+      <ListScreen title="Plan" chips={chipRow}>
         <div ref={landedRef} className="contents">
           {body}
         </div>

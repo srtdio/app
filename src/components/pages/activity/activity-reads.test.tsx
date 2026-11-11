@@ -143,14 +143,13 @@ function item(over: Partial<ActivityItem>): ActivityItem {
 
 let root: Root | null = null;
 
-/** The app top bar's two slots and Activity's pair, as Topbar reads them. */
+/** The app top bar's two slots, as Topbar reads them (Activity publishes none). */
 function TopbarProbe(): ReactElement {
-  const { sort, primary, pair } = useTopbarActionsValue();
+  const { sort, primary } = useTopbarActionsValue();
   return (
     <div data-probe-topbar="">
       <div data-probe-sort="">{sort}</div>
       <div data-probe-primary="">{primary}</div>
-      <div data-probe-pair="">{pair}</div>
     </div>
   );
 }
@@ -458,13 +457,13 @@ describe('Activity: the bell press prefetch', () => {
   });
 });
 
-describe('Activity: the top bar', () => {
+describe('Activity: the lead row under the pills', () => {
   const catchUp = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('[data-probe-pair] [data-topbar-catch-up]');
+    document.querySelector<HTMLElement>('[data-shell="lead"] [data-topbar-catch-up]');
   const threads = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('[data-probe-pair] [data-topbar-threads]');
+    document.querySelector<HTMLElement>('[data-shell="lead"] [data-topbar-threads]');
 
-  it('Threads then Catch up in place of the slots; no sort, no Mark all read double tick', async () => {
+  it('Threads then Catch up in the lead row; empty top bar slots, no Mark all read double tick', async () => {
     // Catch up's count is the inbox store's server count (Part 6), not the rows'.
     inboxUnread.count = 20;
     render();
@@ -475,12 +474,13 @@ describe('Activity: the top bar', () => {
     expect(catchUp()).not.toBeNull();
     expect(catchUp()?.getAttribute('aria-label')).toMatch(/^Catch up, \d+ unread$/);
     // Threads first, then Catch up; nothing in the sort and "+" slots.
-    const order = [...document.querySelectorAll('[data-probe-pair] button')].map((b) =>
+    const order = [...document.querySelectorAll('[data-shell="lead"] button')].map((b) =>
       b.hasAttribute('data-topbar-threads') ? 'threads' : 'catch-up',
     );
     expect(order).toEqual(['threads', 'catch-up']);
     expect(document.querySelector('[data-probe-sort]')?.childElementCount).toBe(0);
     expect(document.querySelector('[data-probe-primary]')?.childElementCount).toBe(0);
+    expect(document.querySelector('[data-probe-topbar] [data-topbar-threads]')).toBeNull();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
     expect(document.querySelector('[data-activity-bucket-head] button')).toBeNull();
   });

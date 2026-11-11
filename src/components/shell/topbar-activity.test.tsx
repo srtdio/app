@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Activity's top bar (10 Nov 2026): Threads | Catch up, one identical box,
+// Activity's lead row (10 Nov 2026): Threads | Catch up, one identical box,
 // the pulse on a rise only, Catch up's long-press "Mark all as read".
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import {
+  ACTIVITY_LEAD_ROW,
   ACTIVITY_TOPBAR_BOX,
   CatchUpButton,
   MARK_ALL_AS_READ,
@@ -159,8 +160,8 @@ describe('one identical box', () => {
     for (const el of [threads(), catchUp()]) {
       const cls = (el?.className ?? '').split(/\s+/);
       for (const c of box) expect(cls).toContain(c);
-      // One width (96), never a second w-* class.
-      expect(cls.filter((c) => /^w-/.test(c))).toEqual(['w-topbar-pair']);
+      // One width (the row's half: w-full in its grid column), never a second w-* class.
+      expect(cls.filter((c) => /^w-/.test(c))).toEqual(['w-full']);
       // The 28 face (PAIR_BOX_HEIGHT); the 44 hit rides ::before.
       expect(cls).toEqual(expect.arrayContaining(['h-7']));
       expect(cls).toEqual(expect.arrayContaining(['before:h-11', 'before:inset-x-0']));
@@ -204,7 +205,7 @@ describe('taps and the long-press', () => {
     await mount(<CatchUpButton count={0} armed onOpen={open} onMarkAllRead={() => undefined} />);
     expect(catchUp()?.hasAttribute('aria-disabled')).toBe(false);
     expect(catchUp()?.className).toContain('text-fg');
-    expect(catchUp()?.className).toContain('w-topbar-pair');
+    expect(catchUp()?.className).toContain('w-full');
     act(() => catchUp()?.click());
     expect(open).not.toHaveBeenCalled();
     expect(document.querySelector('[role="status"]')).toBeNull();
@@ -276,24 +277,12 @@ describe('taps and the long-press', () => {
   });
 });
 
-describe('Topbar: the pair stands in place of the slots, on Activity only', () => {
-  function Publish(props: { pair?: boolean }) {
-    useTopbarActions(props.pair === true ? { pair: <i data-pair-probe="" /> } : { sort: null });
+describe('Topbar: the same two slots on every tab (Activity publishes none)', () => {
+  function Publish() {
+    useTopbarActions({});
     return null;
   }
-  it('a pair: no 44 slots, the pair 8 apart', async () => {
-    await mount(
-      <TopbarActionsProvider>
-        <TopbarSlots />
-        <Publish pair />
-      </TopbarActionsProvider>,
-    );
-    expect(document.querySelectorAll('[data-topbar-slot]')).toHaveLength(0);
-    const pair = document.querySelector('[data-topbar-pair]');
-    expect(pair?.querySelector('[data-pair-probe]')).not.toBeNull();
-    expect(pair?.className).toContain('gap-2');
-  });
-  it('no pair (every other screen): the two fixed slots, unchanged', async () => {
+  it('nothing published: the two fixed slots stay as empty boxes, no pair', async () => {
     await mount(
       <TopbarActionsProvider>
         <TopbarSlots />
@@ -306,5 +295,11 @@ describe('Topbar: the pair stands in place of the slots, on Activity only', () =
       ),
     ).toEqual(['sort', 'primary']);
     expect(document.querySelector('[data-topbar-pair]')).toBeNull();
+  });
+});
+
+describe('useActivityLeadRow: Threads | Catch up as one row for the lead slot', () => {
+  it('two equal columns 8 apart, Threads then Catch up', () => {
+    expect(ACTIVITY_LEAD_ROW.split(' ')).toEqual(['grid', 'grid-cols-2', 'gap-2']);
   });
 });

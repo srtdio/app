@@ -73,6 +73,17 @@ describe('top bar keys: the 36 strip stays in the top bar, below md only', () =>
     expect(keyStrips('shell/Topbar.tsx', "className='h-11 w-topbar-key'")).toEqual([]);
   });
 
+  it('one top bar on every tab: no Activity pair, no short name (10 Nov 2026)', () => {
+    const bar = read('shell/Topbar.tsx');
+    const actions = read('shell/topbar-actions.tsx');
+    expect(bar).not.toMatch(/\bpair\b|data-topbar-pair|shortWorkspaceName|workspace-short/);
+    expect(actions).not.toMatch(/\bpair\?:/);
+    // Activity publishes no sort and no "+": both slots stay empty boxes.
+    const activity = read('pages/NotificationsPage.tsx');
+    expect(activity).not.toMatch(/\buseTopbarActions\(/);
+    expect(activity).toContain('lead={leadRow}');
+  });
+
   it('CLAUDE.md records the exception', () => {
     const doc = readFileSync(fileURLToPath(new URL('../../CLAUDE.md', import.meta.url)), 'utf8');
     expect(doc).toContain('topbar-keys.test.ts');

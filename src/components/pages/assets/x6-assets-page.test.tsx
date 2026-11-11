@@ -360,7 +360,7 @@ describe('Assets has no list search', () => {
   });
 });
 
-describe('Assets chip row Select (SectionSelect)', () => {
+describe('Assets: no Select key (10 Nov 2026)', () => {
   const two = () =>
     listAssets.mockResolvedValue({
       ok: true,
@@ -369,41 +369,20 @@ describe('Assets chip row Select (SectionSelect)', () => {
         asset({ id: 'a2', filename: 'two.png', folderId: null }),
       ],
     });
-  const select = () =>
-    document.querySelector<HTMLButtonElement>('[data-chip-row-select] [data-section-select]');
 
-  it('sits at the end of the chip row, off until tapped', async () => {
+  it('the chip row holds no Select key', async () => {
     two();
     await mount();
-    expect(select()).not.toBeNull();
-    expect(select()?.textContent).toContain('Select');
-    expect(select()?.getAttribute('aria-pressed')).toBe('false');
+    expect(document.querySelector('[data-chip-row-select]')).toBeNull();
+    expect(document.querySelector('[data-section-select]')).toBeNull();
     expect(document.querySelector('[data-select-bar]')).toBeNull();
   });
 
-  it('a tap starts select mode with nothing ticked; a card tap ticks; a second tap leaves', async () => {
-    two();
-    await mount();
-    await act(async () => select()?.click());
-    await flush();
-    expect(select()?.getAttribute('aria-pressed')).toBe('true');
-    expect(document.querySelector('[data-select-bar]')).not.toBeNull();
-    expect(document.querySelector('[data-list-card-tick="on"]')).toBeNull();
-
-    await tapCard('one.png');
-    expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('1 selected');
-
-    await act(async () => select()?.click());
-    await flush();
-    expect(select()?.getAttribute('aria-pressed')).toBe('false');
-    expect(document.querySelector('[data-select-bar]')).toBeNull();
-  });
-
-  it('a right-click still starts it, and the Select shows pressed', async () => {
+  it('a right-click starts select mode with that card ticked', async () => {
     two();
     await mount();
     await rightClick('a2');
-    expect(select()?.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-select-bar]')).not.toBeNull();
     expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('1 selected');
   });
 });

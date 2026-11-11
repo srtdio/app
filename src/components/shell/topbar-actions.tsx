@@ -47,12 +47,6 @@ export interface TopbarActions {
    * between tabs.
    */
   primary?: ReactNode;
-  /**
-   * Activity only (10 Nov 2026): Threads | Catch up, two wide buttons drawn
-   * IN PLACE of the two 44 slots (Activity has no sort and no "+"). Every
-   * other screen leaves it unset, so its slots never move.
-   */
-  pair?: ReactNode;
 }
 
 type SetActions = (owner: symbol, actions: TopbarActions | null) => void;
@@ -98,10 +92,10 @@ export function useTopbarActionsValue(): TopbarActions {
 export function useTopbarActions(actions: TopbarActions): void {
   const set = useContext(SetContext);
   const [owner] = useState(() => Symbol('topbar-actions'));
-  const { sort, primary, pair } = actions;
+  const { sort, primary } = actions;
   useLayoutEffect(() => {
-    set?.(owner, pair !== undefined ? { sort, primary, pair } : { sort, primary });
-  }, [set, owner, sort, primary, pair]);
+    set?.(owner, { sort, primary });
+  }, [set, owner, sort, primary]);
   useLayoutEffect(() => () => set?.(owner, null), [set, owner]);
 }
 
@@ -184,20 +178,23 @@ const TOPBAR_PLUS_PHONE_FACE =
 const TOPBAR_PLUS_LAPTOP_FACE =
   'hidden h-8 w-28 items-center justify-center gap-2 rounded-lg px-2 text-accent-fg md:inline-flex';
 
-// --- Activity: Threads | Catch up (10 Nov 2026) ------------------------------
+// --- Activity: Threads | Catch up (lead row, 10 Nov 2026) --------------------
 //
-// Activity's top bar has no sort and no "+": Threads then Catch up stand in
-// place of the two slots (TopbarActions.pair, 8 apart). The words at every
-// width (approved on renders 10 Nov 2026), one identical box each: face 28
-// tall (PAIR_BOX_HEIGHT), text 12 (500), 96 wide, padding-x 8, gap 6, radius 8,
-// a 1px border; the hit is 44 tall through a ::before, so the face
-// never grows. Each button on its own: a count > 0 is the Main level (primary,
-// ink fill) with the count pill; 0 is the outline (Tool level with a
-// border-strong hairline), no pill. Only Activity publishes them.
+// The top bar is the same on every tab; Activity's Threads and Catch up sit in
+// ListScreen's lead slot under the filter pills: two equal buttons filling the
+// row, 8 apart (ActivityLeadRow). One identical box each: face 28 tall
+// (PAIR_BOX_HEIGHT), text 12 (500), padding-x 8, gap 6, radius 8, a 1px
+// border; the hit is 44 tall through a ::before, so the face never grows.
+// Each button on its own: a count > 0 is the Main level (primary, ink fill)
+// with the count pill; 0 is the outline (Tool level with a border-strong
+// hairline), no pill.
 
-/** Threads' and Catch up's one box: the 28 face, 96 wide, the 44 hit on ::before. */
+/** Threads' and Catch up's one box: the 28 face, the row's half, the 44 hit on ::before. */
 export const ACTIVITY_TOPBAR_BOX =
-  'relative h-7 min-h-0 w-topbar-pair min-w-0 shrink-0 gap-pair border px-2 text-sm before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2';
+  'relative h-7 min-h-0 w-full min-w-0 gap-pair border px-2 text-sm before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2';
+
+/** The lead row: two equal columns, 8 apart, filling the content width. */
+export const ACTIVITY_LEAD_ROW = 'grid grid-cols-2 gap-2';
 
 /**
  * The pill's text, 10 (the named pair-pill size, the pill only): set on
@@ -384,7 +381,7 @@ export function CatchUpButton(props: {
     },
   ];
   return (
-    <span data-topbar-catch-up-wrap="" className="relative inline-flex shrink-0">
+    <span data-topbar-catch-up-wrap="" className="relative flex min-w-0">
       <PairButton
         label={CATCH_UP}
         ariaLabel={catchUpLabel(props.count)}
@@ -411,29 +408,30 @@ export function CatchUpButton(props: {
 }
 
 /**
- * Activity publishes Threads and Catch up. The threads read starts after the
- * first paint (useWorkspaceThreads' effect), never awaited by it; the buttons
- * paint at once from what the device holds (0 before the first read).
- * `ready`: the list has landed (Catch up's pulse arms then). Handlers ride a
- * ref so the published nodes change only with the counts.
+ * Activity's lead row: Threads and Catch up, for ListScreen's `lead` slot.
+ * The threads read starts after the first paint (useWorkspaceThreads'
+ * effect), never awaited by it; the buttons paint at once from what the
+ * device holds (0 before the first read). `ready`: the list has landed (Catch
+ * up's pulse arms then). Handlers ride a ref so the row changes only with the
+ * counts.
  */
-export function useActivityTopbar(input: {
+export function useActivityLeadRow(input: {
   workspaceId: string | null;
   totalUnread: number;
   ready: boolean;
   onCatchUp: () => void;
   onThreads: () => void;
   onMarkAllRead: () => void;
-}): void {
+}): ReactElement {
   const threads = useWorkspaceThreads(input.workspaceId);
   const threadCount = unreadThreadCount(threads);
   const handlers = useRef(input);
   handlers.current = input;
   const { totalUnread, ready } = input;
   const threadsArmed = threads !== null;
-  const pair = useMemo(
+  return useMemo(
     () => (
-      <>
+      <div data-activity-lead-row="" className={ACTIVITY_LEAD_ROW}>
         <ThreadsButton
           count={threadCount}
           armed={threadsArmed}
@@ -445,9 +443,8 @@ export function useActivityTopbar(input: {
           onOpen={() => handlers.current.onCatchUp()}
           onMarkAllRead={() => handlers.current.onMarkAllRead()}
         />
-      </>
+      </div>
     ),
     [threadCount, threadsArmed, totalUnread, ready],
   );
-  useTopbarActions({ pair });
 }

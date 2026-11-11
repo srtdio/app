@@ -92,7 +92,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { parsePipelineQuery } from '@/components/pages/pipeline/pipeline-query';
 import type { UndoableAction } from '@/lib/use-undoable-action';
 import { NoResults } from '@/components/ui/NoResults';
-import { SectionSelect } from '@/components/shell/SectionHeader';
 import { TopbarPlus } from '@/components/shell/topbar-actions';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
@@ -231,14 +230,12 @@ function texts(tree: ReactNode): string[] {
   return out;
 }
 
-function header(selectMode = false, onSelectToggle: () => void = () => {}): ReactElement {
+function header(): ReactElement {
   return listScreenChipRow(
     pipelineHeader({
       stage: 'all',
       onStageChange: () => {},
       counts: { all: 3, draft: 2, review: 1 },
-      selectMode,
-      onSelectToggle,
     }),
   );
 }
@@ -259,7 +256,7 @@ function topbar(
   });
 }
 
-describe('pipelineHeader (decisions A, B, E: chips + Select only)', () => {
+describe('pipelineHeader (decisions A, B: chips only, no Select key)', () => {
   it('is the shared SectionHeader with no search, no sort and no New post in the row', () => {
     const tree = header();
     const headers = findAll(tree, (el) => el.type === SectionHeader);
@@ -284,19 +281,17 @@ describe('pipelineHeader (decisions A, B, E: chips + Select only)', () => {
     expect(props.className).toBeUndefined();
   });
 
-  it('puts the visible Select in the select slot, wired to select mode', () => {
-    const toggle = vi.fn();
-    const off = findAll(header(false, toggle), (el) => el.type === SectionHeader)[0]!;
-    const select = (off.props as { select: ReactElement }).select;
-    expect(select.type).toBe(SectionSelect);
-    const props = select.props as { active: boolean; onToggle: () => void };
-    expect(props.active).toBe(false);
-    props.onToggle();
-    expect(toggle).toHaveBeenCalledTimes(1);
-    const on = findAll(header(true), (el) => el.type === SectionHeader)[0]!;
+  it('has no Select key: the chip row holds only chips (long-press or right-click selects)', () => {
+    const tree = header();
+    const row = findAll(tree, (el) => el.type === SectionHeader)[0]!;
+    expect(row.props as object).not.toHaveProperty('select');
     expect(
-      ((on.props as { select: ReactElement }).select.props as { active: boolean }).active,
-    ).toBe(true);
+      findAll(
+        tree,
+        (el) => (el.props as Record<string, unknown>)['data-section-select'] !== undefined,
+      ),
+    ).toHaveLength(0);
+    expect(texts(tree)).not.toContain('Select');
   });
 
   it('keeps the stage chip bar in the chip slot', () => {
@@ -407,8 +402,6 @@ describe('opens on the Review chip by default', () => {
           stage: initial,
           onStageChange: () => {},
           counts: { all: 3, draft: 2, review: 1 },
-          selectMode: false,
-          onSelectToggle: () => {},
         }),
       ),
       (el) => el.type === StageChips,

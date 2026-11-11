@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react';
 // The unit env is `node` with no DOM, so Topbar is invoked as a plain function
 // and its element tree walked (the SectionHeader/SortMenu test style in this
 // codebase). Topbar holds no hooks, so no renderer is needed.
-import { WorkspaceNameText, Topbar, shortWorkspaceName } from '@/components/shell/Topbar';
+import { WorkspaceNameText, Topbar } from '@/components/shell/Topbar';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Button } from '@/components/ui/Button';
 
@@ -85,7 +85,7 @@ describe('Topbar mobile workspace switcher', () => {
     expect(className(button)).toContain('md:hidden');
     // Touch target invariant: the tap area is at least 44px tall.
     expect(className(button)).toContain('min-h-11');
-    // The name rides WorkspaceNameText (one line beside Activity's pair).
+    // The name rides WorkspaceNameText: the full name on every tab.
     const name = findAll(button, (el) => el.type === WorkspaceNameText)[0];
     expect((name?.props as { name?: string } | undefined)?.name).toBe('Acme');
     // The name is bounded so search / avatar stay on a 375px screen.
@@ -149,21 +149,13 @@ describe('Activity is not in the top bar (10 Nov 2026: laptop Sidebar after Chat
   });
 });
 
-describe('shortWorkspaceName (Activity phone)', () => {
-  it('2+ words: the first letter or digit of each word, uppercase, "-" skipped', () => {
-    expect(shortWorkspaceName('GBL - LinkedIn')).toBe('GL');
-    expect(shortWorkspaceName('College Vidya - LinkedIn')).toBe('CVL');
-    expect(shortWorkspaceName('GBL - Instagram')).toBe('GI');
-  });
-
-  it('1 word: its first 5 characters', () => {
-    expect(shortWorkspaceName('Acmecorp')).toBe('Acmec');
-    expect(shortWorkspaceName('Acme')).toBe('Acme');
-  });
-
-  it('empty or emoji only: the full name', () => {
-    expect(shortWorkspaceName('')).toBe('');
-    expect(shortWorkspaceName('🚀 ✨')).toBe('🚀 ✨');
+describe('WorkspaceNameText: the same full name on every tab', () => {
+  it('the full name, two lines at most then an ellipsis, never a short form', () => {
+    const el = WorkspaceNameText({ name: 'College Vidya - LinkedIn' });
+    const props = el.props as { className: string; children: string };
+    expect(props.children).toBe('College Vidya - LinkedIn');
+    expect(props.className).toContain('line-clamp-2');
+    expect(props.className).not.toContain('whitespace-nowrap');
   });
 });
 

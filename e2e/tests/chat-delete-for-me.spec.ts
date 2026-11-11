@@ -3,6 +3,7 @@ import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-
 import { DM_CHANNEL, GROUP_NAME, ME, PEER_NAME, WORKSPACE_ID } from '../fixtures/chat-data';
 import { installLinkPreviewStub } from '../fixtures/link-previews';
 import { installMediaSearch, MEDIA_MSG } from '../fixtures/search-data';
+import { selectGesture } from '../helpers/select-mode';
 import { undoStrip } from '../helpers/undo-strip';
 import { stubVoiceRecorder } from '../helpers/voice-recorder';
 
@@ -99,19 +100,6 @@ async function openDeleteSheet(page: Page, messageId: string): Promise<Locator> 
   const sheet = page.getByTestId('delete-sheet');
   await expect(sheet).toBeVisible();
   return sheet;
-}
-
-/**
- * Pick the album in select mode: its first tile's check (a 44 box over the
- * tile's top right; on a laptop grid it covers most of the tile). The check
- * and the tile toggle the same message.
- */
-async function tickAlbum(results: Locator): Promise<void> {
-  await results
-    .locator(`[data-media-select-item="${MEDIA_MSG.photoAlbum}"]`)
-    .first()
-    .locator('[data-select-circle]')
-    .click();
 }
 
 test('Delete for me on a message: gone at once, Undo restores, recorded after the window @theme @desktop', async ({
@@ -248,16 +236,15 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
   const results = await openPhotos(page);
   await expect(albumTiles(results)).toHaveCount(3);
 
-  await page.locator('[data-chip-row-select] [data-section-select]').click();
+  // No Select key (10 Nov 2026): a long-press (touch) or right-click on one
+  // photo enters select mode with its message picked.
+  await selectGesture(page, albumTiles(results).first());
   const bar = page.getByTestId('media-select-bar');
   await expect(bar).toBeVisible();
-  // Nothing picked: Forward and Delete for me wait, disabled.
-  await expect(bar.locator('[data-selection-delete]')).toBeDisabled();
   await expect(bar.locator('[data-selection-delete]')).toHaveAccessibleName('Delete for me');
   await expect(bar.getByText('Hide', { exact: true })).toHaveCount(0);
 
-  // One tap on one photo picks its message: every tile of the album is checked.
-  await tickAlbum(results);
+  // The pick is the whole message: every tile of the album is checked.
   for (let i = 0; i < 3; i += 1) {
     await expect(albumTiles(results).nth(i)).toHaveAttribute('aria-pressed', 'true');
   }
@@ -278,8 +265,7 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
   await expect(albumTiles(results)).toHaveCount(3);
 
   // Again, and let the window end.
-  await page.locator('[data-chip-row-select] [data-section-select]').click();
-  await tickAlbum(results);
+  await selectGesture(page, albumTiles(results).first());
   await page.getByTestId('media-select-bar').locator('[data-selection-delete]').click();
   // The Undo strip rises where the bar was and holds its window while hovered:
   // move the desktop pointer off it so the window can end.

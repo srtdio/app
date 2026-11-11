@@ -15,7 +15,6 @@ import {
   layoutMode,
   movedSideways,
   lineHeightPx,
-  chipRowViolations,
   chipViolations,
   commentBarViolations,
   listCardViolations,
@@ -37,7 +36,6 @@ import {
   type AlignFamily,
   type Box,
   type ChipGeom,
-  type ChipRowGeom,
   type CommentBarGeom,
   type EdgeItem,
   type LayoutViolation,
@@ -45,6 +43,8 @@ import {
   type TapTarget,
   type TopbarGeom,
   type TopbarSlotsAt,
+  type TabFrameAt,
+  tabFrameViolations,
   type UploadBarItem,
   type WritingBoxGeom,
 } from './layout-checks-core';
@@ -156,7 +156,6 @@ interface RawPage {
   listCards: ListCardGeom[];
   chips: ChipGeom[];
   topbar: TopbarGeom;
-  chipRows: ChipRowGeom[];
 }
 
 /** Reads every box the checks need in one pass over the page. */
@@ -562,20 +561,6 @@ async function readPage(page: Page): Promise<RawPage> {
             })(),
           };
 
-    // 9 Chip rows with the pinned Select.
-    const chipRows: ChipRowGeom[] = [];
-    for (const row of Array.from(document.querySelectorAll('[data-chip-row]'))) {
-      if (!shown(row)) continue;
-      chipRows.push({
-        label: nameOf(row).slice(0, 60),
-        row: toBox(row.getBoundingClientRect()),
-        paddingRight: parseFloat(getComputedStyle(row).paddingRight) || 0,
-        scroll: boxOf(row.querySelector('[data-chip-scroll]')),
-        select: boxOf(row.querySelector('[data-chip-row-select]')),
-        button: boxOf(row.querySelector('[data-section-select]')),
-      });
-    }
-
     return {
       viewportWidth: vw,
       lines,
@@ -585,7 +570,6 @@ async function readPage(page: Page): Promise<RawPage> {
       listCards,
       chips,
       topbar,
-      chipRows,
     };
   }, rules);
 }
@@ -651,10 +635,6 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
 
   for (const message of topbarViolations(raw.topbar)) {
     violations.push({ check: 'topbar', message });
-  }
-
-  for (const message of chipRowViolations(raw.chipRows)) {
-    violations.push({ check: 'chip-row', message });
   }
 
   settleFindings(screenName, violations);
@@ -2090,21 +2070,17 @@ export function assertActivityTwinsPlan(
   );
 }
 
-// Check 15, the top bar part (Activity, approved on renders 10 Nov 2026):
-// Threads and Catch up are ONE box at every width, in words (no icon form):
-// 96 wide, the face 28 tall (PAIR_BOX_HEIGHT) and the text 12 (500),
-// padding-x 8, radius 8, a 44 tall hit (::before); the count pill 16
-// (PAIR_PILL_HEIGHT), its text 10; each filled (accent) with its pill when its count
-// is > 0, outlined with no pill at 0; Threads first, 8 to Catch up; no slots
-// beside them. Phone: the short workspace name from the 16 gutter, never
-// clipped; Catch up's face 8 from the avatar's face. Laptop: no Activity in
+// Check 15, the lead row (Activity, 10 Nov 2026): Threads and Catch up sit in
+// ListScreen's lead slot under the filter pills, two equal boxes filling the
+// row 8 apart (Threads first, from the gutter to the content's right edge), in
+// words: the face 28 tall (PAIR_BOX_HEIGHT) and the text 12 (500), padding-x 8,
+// radius 8, a 44 tall hit (::before); the count pill 16 (PAIR_PILL_HEIGHT), its
+// text 10; each filled (accent) with its pill when its count is > 0, outlined
+// with no pill at 0. Nothing of them in the top bar. Laptop: no Activity in
 // the top bar; the Sidebar's last item is Activity, after Chat, filled on
 // /notifications, with the count when there is one.
-export const ACTIVITY_PAIR_W_PX = 96;
 export const ACTIVITY_PAIR_HIT_PX = 44;
 export const ACTIVITY_PAIR_GAP_PX = 8;
-/** Catch up's face to the avatar's face, phone (10 Nov 2026). */
-export const ACTIVITY_PAIR_AVATAR_GAP_PX = 8;
 /** Face height, text size and pill height (ui/layout named sizes). */
 export const ACTIVITY_PAIR = {
   face: PAIR_BOX_HEIGHT,
@@ -2113,10 +2089,10 @@ export const ACTIVITY_PAIR = {
   pillText: 10,
 } as const;
 
-export async function assertActivityTopbarPair(page: Page, screenName: string): Promise<void> {
+export async function assertActivityLeadRow(page: Page, screenName: string): Promise<void> {
   const got = await page.evaluate(() => {
     const read = (sel: string) => {
-      const el = document.querySelector(`header [data-topbar-pair] ${sel}`);
+      const el = document.querySelector(`[data-shell="lead"] ${sel}`);
       if (el === null) return null;
       const r = el.getBoundingClientRect();
       const s = getComputedStyle(el);
@@ -2154,10 +2130,9 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
     document.body.appendChild(probe);
     const accent = getComputedStyle(probe).backgroundColor;
     probe.remove();
-    const header = document.querySelector('header');
-    const avatar = header?.querySelector('button[aria-label="Account menu"] > *:first-child');
-    const name = header?.querySelector('[data-topbar-workspace-name]') ?? null;
-    const nameBox = name?.getBoundingClientRect() ?? null;
+    const lead = document.querySelector('[data-shell="lead"]');
+    const leadBox = lead?.getBoundingClientRect() ?? null;
+    const leadPad = lead === null ? 0 : parseFloat(getComputedStyle(lead).paddingLeft);
     const nav = document.querySelector('nav[aria-label="Primary"]');
     const items = nav === null ? [] : Array.from(nav.children);
     const side = document.querySelector('[data-sidebar-activity]');
@@ -2168,18 +2143,13 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
       threads: read('[data-topbar-threads]'),
       catchUp: read('[data-topbar-catch-up]'),
       accent,
-      slots: document.querySelectorAll('header [data-topbar-slot]').length,
+      inTopbar: document.querySelectorAll(
+        'header :is([data-topbar-threads], [data-topbar-catch-up])',
+      ).length,
       viewport: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
-      avatarLeft: avatar?.getBoundingClientRect().left ?? null,
-      name:
-        name === null || nameBox === null
-          ? null
-          : {
-              left: nameBox.left,
-              clipped: name.scrollWidth > name.clientWidth + 0.5,
-              short: name.hasAttribute('data-topbar-workspace-short'),
-            },
+      row:
+        leadBox === null ? null : { left: leadBox.left + leadPad, right: leadBox.right - leadPad },
       topbarActivity: document.querySelectorAll('[data-topbar-activity]').length,
       side: sideShown
         ? {
@@ -2196,7 +2166,7 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
   const want = ACTIVITY_PAIR;
   const { threads, catchUp } = got;
   if (threads === null || catchUp === null) {
-    out.push('no Threads | Catch up pair in the top bar ([data-topbar-pair])');
+    out.push('no Threads | Catch up in the lead row ([data-shell="lead"])');
   } else {
     const label = `Threads (${threads.count}) / Catch up (${catchUp.count})`;
     if (threads.width !== catchUp.width || threads.height !== catchUp.height) {
@@ -2208,8 +2178,8 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
       ['Threads', threads, 'Threads'],
       ['Catch up', catchUp, 'Catch up'],
     ] as const) {
-      if (Math.abs(b.width - ACTIVITY_PAIR_W_PX) > 0.5 || Math.abs(b.height - want.face) > 0.5) {
-        out.push(`${name} is ${b.width}x${b.height}, not ${ACTIVITY_PAIR_W_PX}x${want.face}`);
+      if (Math.abs(b.height - want.face) > 0.5) {
+        out.push(`${name}'s face is ${b.height} tall, not ${want.face}`);
       }
       if (Math.abs(b.fontSize - want.text) > 0.1 || b.weight !== '500') {
         out.push(`${name} text is ${b.fontSize}/${b.weight}, not ${want.text}/500`);
@@ -2246,24 +2216,17 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
     if (Math.abs(gap - ACTIVITY_PAIR_GAP_PX) > 0.5) {
       out.push(`Threads to Catch up is ${gap}px, not ${ACTIVITY_PAIR_GAP_PX} (Threads first)`);
     }
-    if (got.viewport < 768) {
-      if (got.avatarLeft !== null) {
-        const toAvatar = got.avatarLeft - (catchUp.x + catchUp.width);
-        if (Math.abs(toAvatar - ACTIVITY_PAIR_AVATAR_GAP_PX) > 1) {
-          out.push(`Catch up's face to the avatar's face is ${toAvatar}px, not 8`);
-        }
+    if (got.row !== null) {
+      if (Math.abs(threads.x - got.row.left) > 1) {
+        out.push(`Threads starts at ${threads.x}, not the row's left ${got.row.left}`);
       }
-      if (got.name === null) out.push('no workspace name in the phone top bar');
-      else {
-        if (Math.abs(got.name.left - 16) > 1)
-          out.push(`the name starts at ${got.name.left}, not 16`);
-        if (got.name.clipped) out.push('the workspace name is clipped');
-        if (!got.name.short) out.push('the phone shows the full name, not the short form');
+      const end = catchUp.x + catchUp.width;
+      if (Math.abs(end - got.row.right) > 1) {
+        out.push(`Catch up ends at ${end}, not the row's right ${got.row.right}`);
       }
     }
   }
-  if (got.slots !== 0)
-    out.push(`${got.slots} sort / "+" slots beside the pair (Activity has none)`);
+  if (got.inTopbar !== 0) out.push('Threads or Catch up in the top bar (one top bar on every tab)');
   if (got.scrollWidth > got.viewport) {
     out.push(`the page scrolls sideways (${got.scrollWidth} > ${got.viewport})`);
   }
@@ -2288,52 +2251,38 @@ export async function assertActivityTopbarPair(page: Page, screenName: string): 
 }
 
 /**
- * Check 15, narrow phones: at 390 and 375 wide, Activity's top bar fits: the
- * short workspace name from the 16 gutter, never clipped; Threads and Catch up
- * in words, inside the viewport, not overlapping the name; nothing scrolls
+ * Check 15, narrow phones: at 390 and 375 wide, Activity's lead row fits:
+ * Threads and Catch up in words, inside the viewport; nothing scrolls
  * sideways. Restores the viewport it found.
  */
-export async function assertActivityTopbarNarrow(page: Page, screenName: string): Promise<void> {
+export async function assertActivityLeadRowNarrow(page: Page, screenName: string): Promise<void> {
   const before = page.viewportSize();
   const out: string[] = [];
   for (const width of [390, 375]) {
     await page.setViewportSize({ width, height: before?.height ?? 844 });
     await page.waitForTimeout(100);
     const got = await page.evaluate(() => {
-      const name = document.querySelector('header [data-topbar-workspace-name]');
-      const box = name?.getBoundingClientRect() ?? null;
-      const threads = document
-        .querySelector('header [data-topbar-threads]')
-        ?.getBoundingClientRect();
-      const catchUp = document
-        .querySelector('header [data-topbar-catch-up]')
-        ?.getBoundingClientRect();
+      const read = (sel: string) => {
+        const el = document.querySelector(`[data-shell="lead"] ${sel}`);
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, text: (el.textContent ?? '').trim() };
+      };
       return {
-        name:
-          name === null || box === null
-            ? null
-            : {
-                left: box.left,
-                right: box.right,
-                clipped: name.scrollWidth > name.clientWidth + 0.5,
-              },
-        threadsLeft: threads?.left ?? null,
-        catchUpRight: catchUp?.right ?? null,
+        threads: read('[data-topbar-threads]'),
+        catchUp: read('[data-topbar-catch-up]'),
         viewport: window.innerWidth,
         scrollWidth: document.documentElement.scrollWidth,
       };
     });
     const at = `${width} wide`;
-    if (got.name === null) out.push(`${at}: no workspace name`);
-    else {
-      if (Math.abs(got.name.left - 16) > 1) out.push(`${at}: the name starts at ${got.name.left}`);
-      if (got.name.clipped) out.push(`${at}: the name is clipped`);
-      if (got.threadsLeft !== null && got.name.right > got.threadsLeft) {
-        out.push(`${at}: the name runs under Threads`);
-      }
-    }
-    if (got.catchUpRight === null || got.catchUpRight > got.viewport) {
-      out.push(`${at}: Catch up is missing or past the viewport`);
+    for (const [name, b] of [
+      ['Threads', got.threads],
+      ['Catch up', got.catchUp],
+    ] as const) {
+      if (b === null || b.left < 0 || b.right > got.viewport) {
+        out.push(`${at}: ${name} is missing or past the viewport`);
+      } else if (!b.text.startsWith(name)) out.push(`${at}: ${name} shows "${b.text}"`);
     }
     if (got.scrollWidth > got.viewport) out.push(`${at}: the page scrolls sideways`);
   }
@@ -2533,7 +2482,9 @@ export async function assertActivityCounts(page: Page, screenName: string): Prom
     return {
       chip: num(chip?.textContent),
       catchUp: num(
-        document.querySelector('header [data-topbar-catch-up]')?.getAttribute('data-count'),
+        document
+          .querySelector('[data-shell="lead"] [data-topbar-catch-up]')
+          ?.getAttribute('data-count'),
       ),
       badge: num((badge ?? side)?.textContent),
       side: side === undefined ? null : num(side.textContent),
@@ -2580,14 +2531,17 @@ async function settleRows(page: Page): Promise<void> {
 }
 
 /**
- * The list-screen axis (shell/ListScreen, 10 Nov 2026): the five positions a
+ * The list-screen axis (shell/ListScreen, 10 Nov 2026): the six positions a
  * list tab's shell owns, read on the page as it stands. (a) top bar bottom to
- * the chip row, (b) the chip row's left to the first chip, (c) chip row bottom
- * to the first content (a row, or a section heading above the rows), (d) the
- * chip row's left to the first row's text, (e) the first line's right-most row
- * content edge to the chip row's right. The chip row spans its column (the
- * page, or the chat list's pane beside a thread on laptop). NaN where the tab
- * has none.
+ * the chip row, (b) the chip row's left to the first chip, (c) the block above
+ * the content (the chip row, or the lead strip when one shows) to the first
+ * content (a row, or the section heading that opens the list), (c2) the first
+ * REAL ROW's top from what sits right above it (its section heading, else the
+ * lead strip, else the chip row): rows are measured, never the content
+ * wrapper, (d) the chip row's left to the first row's text, (e) the first
+ * line's right-most row content edge to the chip row's right. The chip row
+ * spans its column (the page, or the chat list's pane beside a thread on
+ * laptop). NaN where the tab has none.
  */
 export async function readListScreenAxis(page: Page, screen: string): Promise<ListScreenAxis> {
   const at = await page.evaluate(() => {
@@ -2612,9 +2566,16 @@ export async function readListScreenAxis(page: Page, screen: string): Promise<Li
       row === undefined
         ? undefined
         : Array.from(row.querySelectorAll('[data-chip-face]')).find(shown);
-    const cards = Array.from(document.querySelectorAll('main [data-list-card]')).filter(
-      (c) => shown(c) && (chips === undefined || c.getBoundingClientRect().y >= chips.bottom - 1),
+    // The shell's lead strip (a count line, Activity's Threads | Catch up) sits
+    // between the chips and the content: the content's 16 is measured from it.
+    const lead = Array.from(document.querySelectorAll('main [data-shell="lead"]')).find(
+      (el) =>
+        shown(el) && (chips === undefined || el.getBoundingClientRect().y >= chips.bottom - 1),
     );
+    const aboveBottom = lead?.getBoundingClientRect().bottom ?? chips?.bottom;
+    const below = (el: Element): boolean =>
+      shown(el) && (aboveBottom === undefined || el.getBoundingClientRect().y >= aboveBottom - 1);
+    const cards = Array.from(document.querySelectorAll('main [data-list-card]')).filter(below);
     const first = cards[0];
     const firstTop = first?.getBoundingClientRect().y;
     const lineRights = cards
@@ -2626,22 +2587,23 @@ export async function readListScreenAxis(page: Page, screen: string): Promise<Li
     const title = first?.querySelector('[data-list-card-title]')?.getBoundingClientRect();
     // The first content: the top-most row or section heading in the shell's
     // content (Plan and Activity open on a heading); else the first row.
-    const contentTops = Array.from(
-      document.querySelectorAll(
-        'main [data-shell="content"] [data-list-card], main [data-shell="content"] h2, main [data-shell="content"] h3',
-      ),
-    )
-      .filter(
-        (el) =>
-          shown(el) && (chips === undefined || el.getBoundingClientRect().y >= chips.bottom - 1),
-      )
-      .map((el) => el.getBoundingClientRect().y);
+    const headings = Array.from(
+      document.querySelectorAll('main [data-shell="content"] h2, main [data-shell="content"] h3'),
+    ).filter(below);
+    const contentTops = [...cards, ...headings].map((el) => el.getBoundingClientRect().y);
     const contentY = contentTops.length > 0 ? Math.min(...contentTops) : firstTop;
+    // The first real row's own step: from the heading right above it (the
+    // last one that ends at or above it), else from the lead or the chips.
+    const headAbove = headings
+      .map((h) => h.getBoundingClientRect().bottom)
+      .filter((b) => firstTop !== undefined && b <= firstTop + 1);
+    const rowFrom = headAbove.length > 0 ? Math.max(...headAbove) : aboveBottom;
     return {
       chipsTop: chips === undefined ? Number.NaN : chips.y - barBottom,
       chipX: chip === undefined ? Number.NaN : chip.getBoundingClientRect().x - colLeft,
       contentTop:
-        chips === undefined || contentY === undefined ? Number.NaN : contentY - chips.bottom,
+        aboveBottom === undefined || contentY === undefined ? Number.NaN : contentY - aboveBottom,
+      rowTop: rowFrom === undefined || firstTop === undefined ? Number.NaN : firstTop - rowFrom,
       textX: title === undefined ? Number.NaN : title.x - colLeft,
       rightInset: lineRights.length === 0 ? Number.NaN : colRight - Math.max(...lineRights),
     };
@@ -2649,7 +2611,7 @@ export async function readListScreenAxis(page: Page, screen: string): Promise<Li
   return { screen, ...at };
 }
 
-/** A list tab on the shell: the five positions equal the SCREEN_* constants, +-1. */
+/** A list tab on the shell: the six positions equal the SCREEN_* constants, +-1. */
 export function assertListScreenAxis(axis: ListScreenAxis, laptop: boolean): void {
   settleFindings(
     `list-screen axis ${axis.screen}`,
@@ -2661,7 +2623,7 @@ export function assertListScreenAxis(axis: ListScreenAxis, laptop: boolean): voi
 }
 
 /**
- * The report beside the asserts: log each tab's five numbers and the delta
+ * The report beside the asserts: log each tab's six numbers and the delta
  * from Pipeline under "list-screen axis" in the Visual CI log, and annotate
  * the test. Never fails (assertListScreenAxis does).
  */
@@ -2671,4 +2633,67 @@ export function reportListScreenAxis(project: string, rows: readonly ListScreenA
   const text = `list-screen axis (${project}, delta from ${base.screen}):\n${listScreenAxisReport(rows, base)}`;
   test.info().annotations.push({ type: 'list-screen axis', description: text });
   console.log(text);
+}
+
+/**
+ * Nothing moves when you switch tabs (10 Nov 2026): the top bar's name,
+ * search and avatar x, the phone bottom bar's tab and Chat centres and its
+ * width, and the filter row's non-chip controls, read on the tab as it stands
+ * (at the top, dock at rest). For assertTabFrameStill across the six tabs.
+ */
+export async function readTabFrame(page: Page, screen: string): Promise<TabFrameAt> {
+  const at = await page.evaluate(() => {
+    const shown = (el: Element | null): DOMRect | null => {
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 ? r : null;
+    };
+    const x = (el: Element | null): number | null => shown(el)?.x ?? null;
+    const centre = (el: Element | null): number | null => {
+      const r = shown(el);
+      return r === null ? null : r.x + r.width / 2;
+    };
+    const header = document.querySelector('header');
+    const search =
+      [...(header?.querySelectorAll('button') ?? [])].find(
+        (b) =>
+          shown(b) !== null &&
+          (b.getAttribute('aria-label') === 'Search' ||
+            (b.getAttribute('aria-label') === null && /^\s*Search/.test(b.textContent ?? ''))),
+      ) ?? null;
+    const nav = document.querySelector('nav[aria-label="Primary"]');
+    const tabs = [...document.querySelectorAll('nav[aria-label="Primary"] [data-tab-pill] > a')]
+      .map((a) => centre(a))
+      .filter((c): c is number => c !== null);
+    const nonChips = [
+      ...document.querySelectorAll(
+        '[data-shell="chips"] :is(button, a, input, select, [role="button"])',
+      ),
+    ]
+      .filter((el) => shown(el) !== null)
+      .filter((el) => el.querySelector('[data-chip-face]') === null)
+      .filter((el) => !el.hasAttribute('data-chip-clear'))
+      .map((el) => {
+        const text = (el.textContent ?? '').trim();
+        return el.getAttribute('aria-label') ?? (text !== '' ? text : el.tagName.toLowerCase());
+      });
+    return {
+      nameX: x(header?.querySelector('[data-topbar-workspace-name]') ?? null),
+      searchX: x(search),
+      avatarX: x(header?.querySelector('[aria-label="Account menu"]') ?? null),
+      tabCentres: tabs,
+      chatCentre: centre(document.querySelector('nav[aria-label="Primary"] [data-chat-tab]')),
+      barWidth: shown(nav)?.width ?? null,
+      nonChips,
+    };
+  });
+  return { screen, ...at };
+}
+
+/** Nothing moves when you switch tabs: each tab's frame against the first (+-1). */
+export function assertTabFrameStill(name: string, rows: readonly TabFrameAt[]): void {
+  settleFindings(
+    name,
+    tabFrameViolations(rows).map((message) => ({ check: 'topbar' as const, message })),
+  );
 }
