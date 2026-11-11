@@ -136,7 +136,8 @@ async function expectMenuStyle(page: Page): Promise<void> {
     expect(icon.width).toBe(iconWidth);
     expectMinTouchTarget({ height: icon.height }, { dimension: 'height' });
   }
-  expect(style.cells).toHaveLength(6);
+  // Six quick reactions and the smiley key (Thread polish 1).
+  expect(style.cells).toHaveLength(7);
   for (const cell of style.cells) expectMinTouchTarget(cell);
 }
 
