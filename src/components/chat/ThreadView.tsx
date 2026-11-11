@@ -18,7 +18,12 @@ import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { useCoarsePointer, useIsLaptop } from '@/lib/use-is-laptop';
-import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import {
+  MESSAGE_PHOTO_BOX,
+  NO_TOUCH_SELECT,
+  sized,
+  useChatLayout,
+} from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { textRole } from '@/components/ui/Text';
@@ -238,7 +243,7 @@ export function ThreadViewFrame(props: {
   );
 }
 
-/** Placeholder rows (photo, name, line) sized like message rows. */
+/** Placeholder rows (photo, name, line) sized like the reply rows: the family's photo box, 12 to the text. */
 export const THREAD_FILL_ROWS = ['w-48', 'w-36', 'w-56'];
 export const THREAD_LOAD_FAILED = "Couldn't load this thread.";
 
@@ -248,6 +253,7 @@ export function ThreadViewFill(props: {
   failed: boolean;
   onRetry: () => void;
 }): ReactElement | null {
+  const layout = useChatLayout();
   if (props.failed) {
     return (
       <div
@@ -268,7 +274,11 @@ export function ThreadViewFill(props: {
       <li className="sr-only">Loading replies</li>
       {THREAD_FILL_ROWS.map((width) => (
         <li key={width} className="flex gap-3" aria-hidden="true">
-          <Bone lit="lit-avatar" as="span" className="h-8 w-8 shrink-0 rounded-lg" />
+          <Bone
+            lit="lit-avatar"
+            as="span"
+            className={cn('shrink-0 rounded-lg', sized(MESSAGE_PHOTO_BOX, layout))}
+          />
           <span className="flex min-w-0 flex-1 flex-col gap-2">
             <Bone lit="flat" className="h-3 w-24 rounded" />
             <Bone lit="flat" className={cn('h-4 rounded', width)} />

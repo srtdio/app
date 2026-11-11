@@ -28,7 +28,7 @@ import {
   FailedLine,
   bubbleStatus,
   bubbleTimeLabel,
-  DayPill,
+  DateLine,
   dmHeaderLine,
   ForwardedLabel,
   hasAlbum,
@@ -120,7 +120,7 @@ import { ReplyQuoteBox } from '@/components/chat/ReplyQuote';
 import {
   BUBBLE_BODY_TYPE,
   BUBBLE_META_TYPE,
-  DATE_PILL_TYPE,
+  DATE_LINE_TYPE,
   QUOTE_AUTHOR_TYPE,
   QUOTE_TEXT_TYPE,
   sized,
@@ -1178,7 +1178,7 @@ describe('dmHeaderLine', () => {
 });
 
 describe('label spacing', () => {
-  it('a head directly under a day pill gets no top padding', () => {
+  it('a head directly under a date line gets no top padding', () => {
     const flush = rootClass(renderBubble(makeMessage({}), { head: true, afterLabel: true }));
     expect(flush).toContain('pt-0');
     expect(flush).not.toContain('pt-3');
@@ -1186,13 +1186,19 @@ describe('label spacing', () => {
     expect(rootClass(renderBubble(makeMessage({}), { head: true }))).toContain('pt-3');
   });
 
-  it('the day pill carries the 6px gap below it', () => {
-    let pill = '';
-    walk(DayPill({ label: 'Today', layout: 'touch' }), (el) => {
-      const cls = (el.props as { className?: string }).className ?? '';
-      if (cls.includes('rounded-full')) pill = cls;
+  it('the date line carries its own spacing: 16 above (0 first), 8 to the hairline, 12 below', () => {
+    const line = DateLine({ label: 'Today', layout: 'touch' });
+    const li = (line.props as { className?: string }).className ?? '';
+    expect(li.split(' ')).toEqual(expect.arrayContaining(['pt-4', 'first:pt-0', 'pb-3']));
+    let rule = '';
+    walk(line, (el) => {
+      if ((el.props as Record<string, unknown>)['data-date-rule'] !== undefined) {
+        rule = (el.props as { className?: string }).className ?? '';
+      }
     });
-    expect(pill).toContain('mb-2');
+    expect(rule.split(' ')).toEqual(
+      expect.arrayContaining(['border-b', 'border-border', 'px-4', 'pb-2']),
+    );
   });
 
   it('threadListItems flags the message after a day pill only', () => {
@@ -1483,8 +1489,8 @@ describe('swipe to reply', () => {
     expect(find(root, 'data-swipe-reply')).toHaveLength(1);
   });
 
-  it('day pills are never swipeable', () => {
-    for (const root of [DayPill({ label: 'Today', layout: 'touch' })]) {
+  it('date lines are never swipeable', () => {
+    for (const root of [DateLine({ label: 'Today', layout: 'touch' })]) {
       expect(find(root, 'onPointerDown')).toHaveLength(0);
       expect(find(root, 'data-swipe-reply')).toHaveLength(0);
     }
@@ -1529,10 +1535,10 @@ describe('swipe to reply', () => {
 });
 
 describe('bubble text sizes', () => {
-  it('body text comes from chat-type: 17/22 touch, 14/20 laptop', () => {
+  it('body text comes from chat-type: 17/20 touch (msg), 14/20 laptop', () => {
     expect(bodyText('touch')).toContain(BUBBLE_BODY_TYPE.touch);
     expect(bodyText('laptop')).toContain(BUBBLE_BODY_TYPE.laptop);
-    expect(BUBBLE_BODY_TYPE.touch).toContain('text-xl');
+    expect(BUBBLE_BODY_TYPE.touch).toContain('text-msg');
     expect(BUBBLE_BODY_TYPE.laptop).toContain('text-base');
   });
 
@@ -1568,22 +1574,29 @@ describe('bubble text sizes', () => {
     expect(renderStrip(renderBubble(makeMessage({}), { layout: 'laptop' }))).not.toContain('md:');
   });
 
-  it('meta, day pill and typing row sizes come from chat-type', () => {
+  it('meta, date line and typing row sizes come from chat-type', () => {
     // L1: the body meta shows on a continuation row (here, "edited").
     expect(renderStrip(renderBubble(makeMessage({ editedAt: 'x' }), { head: false }))).toContain(
       BUBBLE_META_TYPE,
     );
     expect(BUBBLE_META_TYPE).toContain('text-xs');
-    let pill = '';
-    walk(DayPill({ label: 'Today', layout: 'touch' }), (el) => {
-      const c = (el.props as { className?: string }).className ?? '';
-      if (c.includes('rounded-full')) pill = c;
-    });
-    expect(pill).toContain(DATE_PILL_TYPE.touch);
-    // Times and dates in chat are mono, like the Seen and unread digits.
-    expect(pill).toContain('font-mono');
-    expect(DATE_PILL_TYPE.touch).toContain('tabular-nums');
-    expect(DATE_PILL_TYPE.laptop).toContain('uppercase');
+    for (const layout of ['touch', 'laptop'] as const) {
+      let label = '';
+      let all = '';
+      walk(DateLine({ label: 'Today', layout }), (el) => {
+        const c = (el.props as { className?: string }).className ?? '';
+        all += ` ${c}`;
+        if ((el.props as Record<string, unknown>)['data-date-label'] !== undefined) label = c;
+      });
+      expect(label).toContain(DATE_LINE_TYPE[layout]);
+      expect(label).toContain('text-fg');
+      // The pill is gone: no outline, no fill, no centring, no mono.
+      expect(all).not.toMatch(
+        /rounded-full|border-border-strong|lit-pill|justify-center|font-mono/,
+      );
+    }
+    expect(DATE_LINE_TYPE.touch).toBe('text-xl font-bold');
+    expect(DATE_LINE_TYPE.laptop).toBe('text-lg font-bold');
   });
 });
 

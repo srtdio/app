@@ -366,7 +366,7 @@ import {
   threadRows,
   type RowHold,
   createRowHold,
-  DayPill,
+  DateLine,
 } from '@/components/chat/MessageBubble';
 
 // MessageBubble and its pieces live in MessageBubble.tsx; re-exported here so
@@ -488,7 +488,7 @@ export {
   threadRows,
   type RowHold,
   createRowHold,
-  DayPill,
+  DateLine,
 } from '@/components/chat/MessageBubble';
 
 interface MessageThreadProps {
@@ -1430,7 +1430,7 @@ export function threadListItems(
   }
   rows.forEach((row, i) => {
     if (row.kind === 'day') {
-      items.push(<DayPill key={row.key} label={row.label} layout={layout} />);
+      items.push(<DateLine key={row.key} label={row.label} layout={layout} />);
     } else if (row.kind === 'task') {
       if (renderTask !== undefined) items.push(renderTask(row));
     } else items.push(renderMessage(row, i > 0 && rows[i - 1]?.kind !== 'message'));

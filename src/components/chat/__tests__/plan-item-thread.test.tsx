@@ -230,7 +230,7 @@ describe('the thread is drawn by chat', () => {
     expect(el.innerHTML).not.toContain('text-white');
   });
 
-  it("chat's grouping: one author within 5 min shares one head; a day pill sits above", () => {
+  it("chat's grouping: one author within 5 min shares one head; a date line sits above", () => {
     const el = host(
       renderToStaticMarkup(
         <PlanItemThread
@@ -249,6 +249,9 @@ describe('the thread is drawn by chat', () => {
     expect(a?.hasAttribute('data-plan-run-head')).toBe(true);
     expect(b?.hasAttribute('data-plan-run-head')).toBe(false);
     expect(el.querySelector('li[role="separator"]')).not.toBeNull();
+    // The shared date line (chat's DateLine), never a pill.
+    expect(el.querySelector('li[role="separator"][data-date-line]')).not.toBeNull();
+    expect(el.innerHTML).not.toContain('border-border-strong bg-panel px-3 py-1');
   });
 
   it('a creators-only note carries the lock and "Creators only" inside its bubble', () => {

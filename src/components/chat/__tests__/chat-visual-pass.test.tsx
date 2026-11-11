@@ -15,7 +15,7 @@ import { TEXT_ROLE } from '@/components/ui/Text';
 import { QUICK_REACTIONS } from '@/components/chat/MessageActionMenu';
 import { mentionClass } from '@/components/chat/MessageThread';
 import { holdTipView } from '@/components/chat/ThreadHoldTip';
-import { DATE_PILL_TYPE } from '@/components/chat/chat-type';
+import { DATE_LINE_TYPE } from '@/components/chat/chat-type';
 import { SEARCH_MARK_CLASS } from '@/components/ui/SearchHighlight';
 import { HOLD_TIP_TEXT, HOLD_TIP_TEXT_LAPTOP } from '@/lib/chat/thread-tip';
 
@@ -23,12 +23,13 @@ const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
 describe('chat visual pass', () => {
-  it('times and dates are mono: bubble time, day pill, list time', () => {
+  it('times are mono: bubble time, list time; the date line is bold sans words', () => {
     expect(read('../MessageThread.tsx') + read('../MessageBubble.tsx')).toMatch(
       /<span aria-hidden="true" className="font-mono">\s*\{meta\.time\}/,
     );
-    expect(DATE_PILL_TYPE.touch).toContain('font-mono');
-    expect(DATE_PILL_TYPE.laptop).toContain('font-mono');
+    // The date line (11 Nov 2026) is words, not digits: bold sans, never mono.
+    expect(DATE_LINE_TYPE.touch).toBe('text-xl font-bold');
+    expect(DATE_LINE_TYPE.laptop).toBe('text-lg font-bold');
     // The list time is the Row meta role.
     expect(TEXT_ROLE.meta).toContain('font-mono');
     expect(TEXT_ROLE.meta).not.toContain('font-sans');

@@ -60,13 +60,14 @@ describe('RepliesSeparatorRow: the one strip', () => {
     expect(out).toContain('data-thread-strip="replies"');
   });
 
-  it('none: the bubble icon (w-8) then "Reply in thread"', () => {
+  it('none: the bubble icon (the photo column) then "Reply in thread"', () => {
     const out = renderToStaticMarkup(
       <ul>
         <RepliesSeparatorRow label={null} through={false} />
       </ul>,
     );
-    expect(out).toMatch(/data-thread-strip-icon[^>]*class="[^"]*w-8/);
+    // The photo column: 36 on touch (the message family), 32 on laptop.
+    expect(out).toMatch(/data-thread-strip-icon[^>]*class="[^"]*w-9/);
     expect(out).toContain('Reply in thread');
   });
 

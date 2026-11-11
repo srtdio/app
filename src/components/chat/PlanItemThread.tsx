@@ -30,7 +30,7 @@ import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
 import { MessageActionMenu } from '@/components/chat/MessageActionMenu';
 import {
-  DayPill,
+  DateLine,
   profileNameOf,
   threadRows,
   type BubbleMentions,
@@ -660,7 +660,7 @@ export function PlanItemThread(props: {
         {rows.map((row) => {
           if (row.kind === 'day') {
             afterLabel = true;
-            return <DayPill key={row.key} label={row.label} layout={layout} />;
+            return <DateLine key={row.key} label={row.label} layout={layout} />;
           }
           const comment = row.comment;
           const under = afterLabel;

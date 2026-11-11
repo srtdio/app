@@ -69,7 +69,10 @@ import {
   SENDER_NAME_TYPE,
   SENDER_TIME_TYPE,
   BUBBLE_SHAPE,
-  DATE_PILL_TYPE,
+  DATE_LINE_TYPE,
+  MESSAGE_AVATAR_ROLE,
+  MESSAGE_PHOTO_COL,
+  MESSAGE_PHOTO_GAP,
   NO_TOUCH_SELECT,
   sized,
   TICK_ICON_BOX,
@@ -1320,7 +1323,7 @@ export function MessageBubble(props: {
   head: boolean;
   /** Last bubble of its run: the touch tail corner. */
   tail: boolean;
-  /** Directly under a DayPill, which carries the gap: no top padding. */
+  /** Directly under a DateLine, which carries the gap: no top padding. */
   afterLabel?: boolean;
   /** For tests: the zone the meta time renders in (the app passes none: device zone). */
   timeZone?: string | undefined;
@@ -1546,7 +1549,7 @@ export function MessageBubble(props: {
     // whole line truncates.
     <span data-sender-line="" className="block min-w-0 max-w-full truncate">
       {asPerson(
-        <span data-sender-name="" className={cn('text-fg', SENDER_NAME_TYPE)}>
+        <span data-sender-name="" className={cn('text-fg', sized(SENDER_NAME_TYPE, layout))}>
           {headerName(message, profiles)}
         </span>,
         'inline',
@@ -1576,12 +1579,15 @@ export function MessageBubble(props: {
   };
   const threadMember = props.threadMember === true;
   const rowClass = cn(
-    'group flex items-start gap-2',
+    'group flex items-start',
+    // Photo to text: 12 touch, 8 laptop (the message family).
+    sized(MESSAGE_PHOTO_GAP, layout),
     railRowClass(rail, false),
     NO_TOUCH_SELECT,
     head ? (props.afterLabel === true ? 'pt-0' : replyPlace ? 'pt-4' : 'pt-3') : 'pt-1',
     // Thread view: the root stacks its head over the full-width text; replies sit 12 from the photo.
-    rootPlace ? 'relative flex-col items-stretch' : 'flex-row',
+    // The root's head-to-text step stays 8 on both layouts (not part of the family change).
+    rootPlace ? 'relative flex-col items-stretch gap-2' : 'flex-row',
     replyPlace && 'gap-3',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
@@ -1596,7 +1602,7 @@ export function MessageBubble(props: {
       <span className="flex min-w-0 flex-col">
         <span data-sender-line="" className="block min-w-0 max-w-full truncate">
           {asPerson(
-            <span data-sender-name="" className={cn('text-fg', SENDER_NAME_TYPE)}>
+            <span data-sender-name="" className={cn('text-fg', sized(SENDER_NAME_TYPE, layout))}>
               {headerName(message, profiles)}
             </span>,
             'inline',
@@ -1621,7 +1627,12 @@ export function MessageBubble(props: {
   ) : showMeta ? (
     withRailPhoto(
       asPerson(
-        <Avatar name={headerName(message, profiles)} {...senderAvatar} role="header" decorative />,
+        <Avatar
+          name={headerName(message, profiles)}
+          {...senderAvatar}
+          role={MESSAGE_AVATAR_ROLE[layout]}
+          decorative
+        />,
         'block',
       ),
       rail,
@@ -1648,7 +1659,13 @@ export function MessageBubble(props: {
       >
         {rail?.role === 'middle' ? <RailThrough /> : null}
         {photo}
-        {gutter ? <span className="w-8 shrink-0" aria-hidden="true" /> : null}
+        {gutter ? (
+          <span
+            data-photo-spacer=""
+            className={cn(sized(MESSAGE_PHOTO_COL, layout), 'shrink-0')}
+            aria-hidden="true"
+          />
+        ) : null}
         <div className={column}>
           {senderLine}
           {withRailBox(
@@ -1762,7 +1779,13 @@ export function MessageBubble(props: {
       ) : null}
       {rail?.role === 'middle' ? <RailThrough /> : null}
       {photo}
-      {gutter ? <span className="w-8 shrink-0" aria-hidden="true" /> : null}
+      {gutter ? (
+        <span
+          data-photo-spacer=""
+          className={cn(sized(MESSAGE_PHOTO_COL, layout), 'shrink-0')}
+          aria-hidden="true"
+        />
+      ) : null}
       <div className={cn('relative', column)}>
         {senderLine}
         {swipe !== undefined ? <SwipeReplyIcon iconRef={swipe.iconRef} /> : null}
@@ -2281,17 +2304,28 @@ export function createRowHold(deps: {
   };
 }
 
-/** One day pill between messages ("Today", "Yesterday", "D MMM"). No motion. */
-export function DayPill({ label, layout }: { label: string; layout: ChatLayout }): ReactElement {
+/**
+ * One date line between messages ("Today", "Yesterday", "Fri 9 Oct"): the words
+ * bold in fg ink on the photo column (the row's own 16 left pad) over a 1px
+ * hairline that runs the list's full width. 16 above the words (0 as the first
+ * row), 8 to the hairline, 12 to the next row (which keeps afterLabel, pt-0).
+ * No pill, no centring, no motion.
+ */
+export function DateLine({ label, layout }: { label: string; layout: ChatLayout }): ReactElement {
   return (
-    <li role="separator" aria-label={label} className="flex justify-center">
-      <span
-        className={cn(
-          'self-center mb-2 mt-2 rounded-full border border-border-strong bg-panel px-3 py-1 text-fg-3 lit-pill',
-          sized(DATE_PILL_TYPE, layout),
-        )}
-      >
-        {label}
+    <li
+      role="separator"
+      aria-label={label}
+      data-date-line=""
+      className="flex flex-col pb-3 pt-4 first:pt-0"
+    >
+      <span data-date-rule="" className="block border-b border-border px-4 pb-2">
+        <span
+          data-date-label=""
+          className={cn('block truncate text-fg', sized(DATE_LINE_TYPE, layout))}
+        >
+          {label}
+        </span>
       </span>
     </li>
   );

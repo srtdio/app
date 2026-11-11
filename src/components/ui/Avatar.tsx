@@ -4,12 +4,12 @@ import { IconUser } from '@/components/ui/icons';
 
 /**
  * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
- * name in a meta line; 'stack' (32, Slack-legible, 8 Nov 2026) in a chat replies row's repliers (L3); 'header' (32) in a thread or detail header; 'row' (40)
+ * name in a meta line; 'stack' (32, Slack-legible, 8 Nov 2026) in a chat replies row's repliers (L3); 'message' (36) a message row's photo on phone and tablet (11 Nov 2026); 'header' (32) in a thread or detail header; 'row' (40)
  * in a list row (members, search, pickers); 'card' (48, ROW_PICTURE) as
  * a list row's picture (ui/ListCard); 'profile' (72) on a profile or group info screen.
  * No other sizes.
  */
-export type AvatarRole = 'inline' | 'stack' | 'header' | 'row' | 'card' | 'profile';
+export type AvatarRole = 'inline' | 'stack' | 'message' | 'header' | 'row' | 'card' | 'profile';
 
 /** Who the avatar stands for: people, groups and personal notes all draw the same rounded square. */
 type AvatarKind = 'person' | 'group' | 'note';
@@ -39,6 +39,7 @@ export function avatarLabel(name: string | undefined, online: boolean): string {
 export const AVATAR_PX: Record<AvatarRole, number> = {
   inline: 20,
   stack: 32,
+  message: 36,
   header: 32,
   row: 40,
   // ROW_PICTURE (ui/layout), drawn by the CARD_SIZE classes.
@@ -49,6 +50,7 @@ export const AVATAR_PX: Record<AvatarRole, number> = {
 const INITIALS_TYPE: Record<AvatarRole, string> = {
   inline: 'text-xs',
   stack: 'text-sm',
+  message: 'text-sm',
   header: 'text-sm',
   row: 'text-base',
   card: 'text-base',

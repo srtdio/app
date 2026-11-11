@@ -6,6 +6,7 @@
 // surfaces use only these; no other size literals. 12px / 16px is Tailwind's
 // text-sm.
 
+import type { AvatarRole } from '@/components/ui/Avatar';
 import { isLaptopNow, LAPTOP_MIN_WIDTH_PX, useIsLaptop } from '@/lib/use-is-laptop';
 
 /** Which size table a chat surface renders with. */
@@ -43,9 +44,9 @@ export function sized(size: ChatSize, layout: ChatLayout): string {
   return size[layout];
 }
 
-/** Message body in a bubble: 17/22 touch (xl), 14/20 laptop (base), 400. */
+/** Message text: 17/20 touch (msg, Slack's measured row), 14/20 laptop (base), 400. */
 export const BUBBLE_BODY_TYPE: ChatSize = {
-  touch: 'text-xl font-normal',
+  touch: 'text-msg font-normal',
   laptop: 'text-base font-normal',
 };
 
@@ -61,8 +62,50 @@ export const GROUP_SENDER_TYPE: ChatSize = {
   laptop: 'text-md font-medium',
 };
 
-/** L1: a message group's name line: 13/18 (md), 600 on both, fg. */
-export const SENDER_NAME_TYPE = 'text-md font-semibold';
+/** L1: a message group's name line: 17/22 (xl) bold touch, 13/18 (md) 600 laptop, fg. */
+export const SENDER_NAME_TYPE: ChatSize = {
+  touch: 'text-xl font-bold',
+  laptop: 'text-md font-semibold',
+};
+
+/**
+ * The message family (11 Nov 2026): one photo box, one photo-to-text gap and
+ * one text column for every surface that draws message rows AND for their
+ * loading placeholders, so a row lands exactly where its placeholder was.
+ * Touch: 36 photo + 12 gap (text column 16 + 36 + 12 = 64). Laptop: 32 + 8.
+ * Guard: src/__tests__/message-family-guard.test.ts.
+ */
+export const MESSAGE_AVATAR_ROLE: Record<ChatLayout, AvatarRole> = {
+  touch: 'message',
+  laptop: 'header',
+};
+
+/** The photo's square box (a placeholder bone, a thumbnail): 36 touch, 32 laptop. */
+export const MESSAGE_PHOTO_BOX: ChatSize = {
+  touch: 'h-9 w-9',
+  laptop: 'h-8 w-8',
+};
+
+/** The photo column (a follow-on row's spacer, a lead column): 36 touch, 32 laptop. */
+export const MESSAGE_PHOTO_COL: ChatSize = {
+  touch: 'w-9',
+  laptop: 'w-8',
+};
+
+/** Photo to text in the main chat: 12 touch, 8 laptop. */
+export const MESSAGE_PHOTO_GAP: ChatSize = {
+  touch: 'gap-3',
+  laptop: 'gap-2',
+};
+
+/**
+ * The replies row's left pad, so its 8 inner pad lands on the row's text
+ * column: 56 + 8 = 64 touch, 48 + 8 = 56 laptop.
+ */
+export const REPLIES_ROW_PAD: ChatSize = {
+  touch: 'pl-14',
+  laptop: 'pl-12',
+};
 
 /** L1: the clock time beside the name: 12/16 (sm), 400, mono tabular (the time rule). */
 export const SENDER_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
@@ -101,12 +144,13 @@ export const HEADER_LINE_TYPE: ChatSize = {
 };
 
 /**
- * Composer input and placeholder: 17/22 (xl) touch (never under 16px, so iOS
+ * Composer input and placeholder: 17/20 (msg) touch, the message text's own
+ * token so typed and sent text share size and line (never under 16px, so iOS
  * never zooms), 15/20 (lg) laptop, 400. Important, so it wins over the compact
  * Textarea's inline 16px default.
  */
 export const COMPOSER_INPUT_TYPE: ChatSize = {
-  touch: '!text-xl font-normal',
+  touch: '!text-msg font-normal',
   laptop: '!text-lg font-normal',
 };
 
@@ -134,10 +178,10 @@ export const HEADER_PAD: ChatSize = {
   laptop: 'px-4',
 };
 
-/** Date separator pill: 12/16/500 touch, 12/16/400 uppercase laptop; sans, tabular. */
-export const DATE_PILL_TYPE: ChatSize = {
-  touch: 'font-mono text-sm font-medium tabular-nums',
-  laptop: 'font-mono text-sm font-normal tabular-nums uppercase',
+/** The date line's words: 17/22 (xl) bold touch, 15/20 (lg) bold laptop; fg ink. */
+export const DATE_LINE_TYPE: ChatSize = {
+  touch: 'text-xl font-bold',
+  laptop: 'text-lg font-bold',
 };
 
 /** The typing row above the composer: 13/18 (md), 400. */
