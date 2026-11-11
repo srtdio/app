@@ -32,7 +32,7 @@ import {
   useAudioRecorder,
   type RecordingResult,
 } from '@/lib/chat/use-audio-recorder';
-import { ComposerTray, draftTileEnabled } from '@/components/chat/ComposerTray';
+import { ComposerTray, draftTileEnabled, type TrayTileId } from '@/components/chat/ComposerTray';
 import { planTileEnabled } from '@/components/chat/plan-card';
 import { AssetPicker } from '@/components/chat/AssetPicker';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
@@ -255,6 +255,21 @@ export interface ComposerProps {
   placeholder?: string | undefined;
   /** Personal notes: the tray's disabled Plan says why. */
   notes?: boolean | undefined;
+  /**
+   * A thread whose store keeps only some content (post and brief comments):
+   * the tray offers only these tiles, under its own tray id. Absent: chat's
+   * full tray, unchanged (every chat caller passes none).
+   */
+  tray?: { tiles: readonly TrayTileId[]; trayId: string } | undefined;
+  /** False: no voice note key (a store with nowhere to keep a note's length). Absent: chat's mic. */
+  voice?: boolean | undefined;
+  /**
+   * One line above the box, under chat's own bars (a comment's caption quote
+   * chip). Absent: none (every chat caller passes none).
+   */
+  quoteStrip?: ReactNode;
+  /** A tour key on the send key (post comments); absent: none (every chat caller). */
+  sendAnchor?: string | undefined;
 }
 
 /** The draft link card appears once typing has paused this long. */
@@ -1714,7 +1729,7 @@ export function Composer(props: ComposerProps): ReactElement {
   });
 
   const showMic = shouldShowMic({
-    hasUpload: props.uploadFile !== undefined && editing === undefined,
+    hasUpload: props.uploadFile !== undefined && editing === undefined && props.voice !== false,
     disabled: props.disabled,
     text,
     attachmentCount: pending.length + library.length,
@@ -1950,6 +1965,7 @@ export function Composer(props: ComposerProps): ReactElement {
                   }}
                 />
               ) : null}
+              {props.quoteStrip ?? null}
             </>
           }
           state={
@@ -1977,6 +1993,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 notes={props.notes === true}
                 draft={draftEnabled}
                 {...(props.tasks !== undefined ? { tasks: { unseen: props.tasks.unseen } } : {})}
+                {...(props.tray !== undefined ? { only: props.tray } : {})}
                 plan={planEnabled}
                 onPick={(id) => {
                   // A voice note on its way: the tray opens nothing.
@@ -2061,6 +2078,7 @@ export function Composer(props: ComposerProps): ReactElement {
             ) : (
               <RowSend
                 label={editing !== undefined ? 'Save edit' : 'Send'}
+                {...(props.sendAnchor !== undefined ? { 'data-induction': props.sendAnchor } : {})}
                 // Saving an edit: the spinner in the send slot.
                 busy={editBusy}
                 disabled={!canSend}

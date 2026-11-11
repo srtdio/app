@@ -13,6 +13,11 @@ interface SidePanelProps {
   /** Beside the title (a status pill, a stamp). */
   headerExtra?: ReactNode;
   children: ReactNode;
+  /**
+   * The child brings its own header with the one "<" exit (a thread view's
+   * HeaderBar): the panel draws no header of its own, the child fills it.
+   */
+  bare?: boolean;
 }
 
 /** The laptop side panel's one width. */
@@ -28,7 +33,14 @@ const SIDE_PANEL_WIDTH_PX = '380px';
  * at once (docs/motion.md, laptop: pane switches are instant); it renders at
  * its final place from the first frame. Phone uses Sheet (rise).
  */
-export function SidePanel({ open, onClose, title, headerExtra, children }: SidePanelProps) {
+export function SidePanel({
+  open,
+  onClose,
+  title,
+  headerExtra,
+  children,
+  bare = false,
+}: SidePanelProps) {
   const rendered = open;
   const panelRef = useRef<HTMLElement>(null);
   const returnRef = useRef<HTMLElement | null>(null);
@@ -78,18 +90,24 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
         SIDE_PANEL_WIDTH_CLASS,
       )}
     >
-      <div className="flex h-full flex-col">
-        {/* Header 56 on the 16 edge; the one exit is the "<" back leading,
-            pulled out by 12 (LEADING_PULL) so its glyph sits on the edge. */}
-        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-          <IconButton label="Back" onClick={onClose} className={LEADING_PULL}>
-            <IconChevronLeft size={ICON_SIZE.control} />
-          </IconButton>
-          <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>
-          {headerExtra}
+      {bare ? (
+        <div data-side-panel-bare="" className="relative h-full">
+          {children}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-      </div>
+      ) : (
+        <div className="flex h-full flex-col">
+          {/* Header 56 on the 16 edge; the one exit is the "<" back leading,
+            pulled out by 12 (LEADING_PULL) so its glyph sits on the edge. */}
+          <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+            <IconButton label="Back" onClick={onClose} className={LEADING_PULL}>
+              <IconChevronLeft size={ICON_SIZE.control} />
+            </IconButton>
+            <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>
+            {headerExtra}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        </div>
+      )}
     </aside>
   );
 }

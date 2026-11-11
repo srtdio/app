@@ -15,6 +15,10 @@ vi.mock('agora-chat', () => ({
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'w1', workspaceKey: 'GBL', workspaces: [] }),
 }));
+vi.mock('@/components/comments/Comments', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/comments/Comments')>()),
+  Comments: () => <div data-comments-stub="" />,
+}));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't1' }));
 vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
@@ -246,20 +250,16 @@ describe('PostDetailPage embedded', () => {
   it('non-embedded keeps the 56px header (plus the page-mode safe area) with Back, pinned', () => {
     const html = paint(false);
     expect(html).toContain('Loading post');
-    // ui/HeaderBar pinned with its slot under it: one sticky block (lit-header
-    // on the block), top 0 on a phone (the shell drops the Topbar here), below
-    // the Topbar var from md up.
+    // ui/HeaderBar alone is the pinned block (11 Nov 2026: no progress row
+    // under it): the bar itself is sticky, gutter 16/24 with the page-mode safe area.
     expect(html).toMatch(
-      /data-header-pin="" class="sticky z-sticky flex flex-col bg-panel lit-header top-0 md:top-\[var\(--shell-sticky-top,0px\)\]"/,
+      /data-header-bar="" data-header-pinned="" class="[^"]*border-b lit-header[^"]*px-4 md:px-6[^"]*sticky z-sticky[^"]*"/,
     );
-    // The bar inside it: gutter 16/24 with the page-mode safe area.
     expect(html).toMatch(
-      /data-header-bar="" data-header-pinned="" class="[^"]*px-4 md:px-6[^"]*h-\[calc\(3\.5rem\+var\(--shell-safe-top,0px\)\)\] pt-\[var\(--shell-safe-top,0px\)\]/,
+      /data-header-bar="" data-header-pinned="" class="[^"]*h-\[calc\(3\.5rem\+var\(--shell-safe-top,0px\)\)\] pt-\[var\(--shell-safe-top,0px\)\]/,
     );
-    // The checkpoint progress row's slot pins with the bar, right after it.
-    expect(html.indexOf('data-checkpoint-pin-slot')).toBeGreaterThan(
-      html.indexOf('data-header-bar'),
-    );
+    expect(html).not.toContain('data-header-pin=""');
+    expect(html).not.toContain('data-checkpoint-pin-slot');
     expect(html).toContain('aria-label="Back"');
   });
 

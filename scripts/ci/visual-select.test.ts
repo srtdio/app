@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AREAS } from './e2e-areas.ts';
 import {
+  missingBaselines,
   AREA_SCREENS,
   areaOfScreen,
   ciPlan,
@@ -330,6 +331,38 @@ describe('visual-select: per screen (screen-files.json) and the PR cap', () => {
       true,
     );
     expect(few).toEqual({ mode: 'some', names: ['briefs'], radius: 1 });
+  });
+
+  it('(c2) screens with a missing baseline run first on a PR, even past the cap', () => {
+    const many = Array.from(
+      { length: 50 },
+      (_, i) => `  { name: 'chat-${100 + i}', url: '/chat/${i}' },`,
+    );
+    const big = parseScreens(
+      ['const SCREENS = [', ...many, ...SPEC.split('\n').slice(3, 27), '];'].join('\n'),
+    );
+    const names = big.map((s) => s.name).filter((n) => /^chat-1\d\d$/.test(n));
+    const map = Object.fromEntries(names.slice(0, 40).map((n) => [n, ['src/x.ts']]));
+    const images = new Set(
+      names.filter((n) => n !== 'chat-149' && n !== 'chat-148').map((n) => `iphone-light/${n}.png`),
+    );
+    images.add('iphone-light/chat-147.png');
+    const missing = missingBaselines(big, images, new Set(['chat-147']));
+    expect([...missing].filter((n) => n.startsWith('chat-1')).sort()).toEqual([
+      'chat-147',
+      'chat-148',
+      'chat-149',
+    ]);
+    const plan = ciPlan(
+      { all: false, names, targeted: names, reasons: [] },
+      big,
+      map,
+      true,
+      ONE_SHARD_MAX,
+      new Set(['chat-147', 'chat-148', 'chat-149']),
+    );
+    expect(plan.names).toHaveLength(ONE_SHARD_MAX);
+    expect(plan.names.slice(0, 3)).toEqual(['chat-147', 'chat-148', 'chat-149']);
   });
 
   it('(d) a new file (in no map entry) falls back to its area', () => {

@@ -4,7 +4,6 @@ import {
   galleryFrame,
   galleryToolsRow,
   galleryView,
-  pinButton,
   reorderView,
   type ReorderModel,
 } from '@/components/pages/pcs/PostGallery';
@@ -22,7 +21,11 @@ function classOf(tag: string): string {
   return /class="([^"]*)"/.exec(tag)?.[1] ?? '';
 }
 
-function expectShared(tag: string): void {
+/**
+ * The shared Button's 44 / 8-radius face. `edgeTool`: a tools-row Tool takes
+ * ClearButton's 12 padding (px-3) so the pulls put its glyph on the page edge.
+ */
+function expectShared(tag: string, edgeTool = false): void {
   const cls = classOf(tag).split(/\s+/);
   expect(cls).toContain('h-11');
   expect(cls).toContain('rounded-lg');
@@ -35,7 +38,7 @@ function expectShared(tag: string): void {
     'rounded-xl',
     'font-semibold',
     'text-sm',
-    'px-3',
+    ...(edgeTool ? [] : ['px-3']),
   ]) {
     expect(cls).not.toContain(old);
   }
@@ -66,7 +69,7 @@ function item(n: number): GalleryItem {
 }
 
 describe('PostGallery buttons', () => {
-  it('tools row: Add, Replace, Reorder, Add pin and v{n} are shared buttons', () => {
+  it('tools row: Add, Replace, Reorder and v{n} are shared buttons', () => {
     const tree = galleryToolsRow({
       canEdit: true,
       itemCount: 3,
@@ -77,13 +80,12 @@ describe('PostGallery buttons', () => {
       onReplace: vi.fn(),
       onReorder: vi.fn(),
       onVersions: vi.fn(),
-      pin: pinButton(0, null, vi.fn(), vi.fn()),
     });
     if (tree === null) throw new Error('no tools row');
     const tags = buttonTags(renderToStaticMarkup(tree));
-    expect(tags).toHaveLength(5);
+    expect(tags).toHaveLength(4);
     for (const tag of tags) {
-      expectShared(tag);
+      expectShared(tag, true);
       // A row of 3+ actions is the Tool level: no fill, no border, no lighting.
       expect(classOf(tag)).toContain('lit-hover');
       expect(classOf(tag)).not.toContain('bg-fg/10');
@@ -111,14 +113,6 @@ describe('PostGallery buttons', () => {
     expectShared(tag!);
     expect(classOf(tag!)).toContain('text-fg');
     expect(html).not.toContain('Tap to see full image');
-  });
-
-  it('armed pin: Cancel is a shared secondary button', () => {
-    const cancel = pinButton(0, 0, vi.fn(), vi.fn());
-    if (cancel === null) throw new Error('no cancel');
-    const tags = buttonTags(renderToStaticMarkup(cancel));
-    expect(tags).toHaveLength(1);
-    expectShared(tags[0]!);
   });
 
   it('reorder: no button bar, only the photo tiles (hold and drag, saved on drop)', () => {

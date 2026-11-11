@@ -8,7 +8,7 @@ import type { MentionCandidate } from '@/lib/workspace-members';
 // The post detail page hands its post's stage to Comments, so the comment
 // @-mention picker on a draft post offers no client (clients cannot see
 // drafts), and on a Review post it offers the client. The Comments stub runs
-// the real picker scope (commentMentionCandidates) over the props it is given.
+// Comments' picker rule over the props it is given.
 
 const AGENT = '11111111-1111-4111-8111-111111111111';
 const CLIENT = '33333333-3333-4333-8333-333333333333';
@@ -127,15 +127,15 @@ vi.mock('@/components/pages/pcs/PostGallery', async (importOriginal) => {
 });
 vi.mock('@/components/comments/Comments', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/comments/Comments')>();
-  const { commentMentionCandidates } = await import('@/components/comments/mention-scope');
   return {
     ...actual,
     Comments: (props: { entityType: 'post' | 'brief'; postStage?: string }) => {
       h.stages.push(props.postStage);
-      const offered = commentMentionCandidates(MEMBERS, {
-        entityType: props.entityType,
-        postStage: props.postStage,
-      });
+      // Comments' own rule: on a draft post the @ picker offers Creators only.
+      const offered =
+        props.entityType === 'post' && props.postStage === 'draft'
+          ? MEMBERS.filter((m) => m.role !== 'client')
+          : MEMBERS;
       return (
         <ul data-comments-stub="">
           {offered.map((m) => (
@@ -146,10 +146,6 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
     },
   };
 });
-vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>()),
-  CheckpointProgress: () => null,
-}));
 vi.mock('@/components/pages/pcs/PostDecisionBar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/PostDecisionBar')>();
   return { ...actual, PostDecisionBar: () => null, DECISION_BAR_SPACE_PX: 0 };

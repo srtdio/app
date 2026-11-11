@@ -5,14 +5,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The post page's reads start together: the post, the gallery, the role, the
-// members and the comments section (Comments + the checkpoint strip) are all
+// members and the comments section (Comments) are all
 // asked for on the first render, before any of them answers. The brief is the
 // one read that waits, for the post's brief_id. The page never reads the
 // buckets itself (the details sheet does, when it opens). The comments section
 // mounts once, hidden behind the skeleton, and is the same instance after the
-// first paint (no second comments read). The checkpoints are read ONCE, by the
-// page, and handed to both Comments (sharedCheckpoints) and the strip
-// (checkpoints): neither reads them itself.
+// first paint (no second comments read). The page reads no comments itself
+// (11 Nov 2026: no checkpoint read; Comments' one read carries the thread reads).
 
 type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void };
 function deferred<T>(): Deferred<T> {
@@ -186,21 +185,6 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
     },
   };
 });
-vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
-  const { useEffect } = await import('react');
-  return {
-    ...actual,
-    CheckpointProgress: (props: { checkpoints?: unknown }) => {
-      h.stripRows.push(props.checkpoints === undefined ? 'absent' : props.checkpoints);
-      useEffect(() => {
-        h.stripMounts += 1;
-        h.calls.push('checkpoints');
-      }, []);
-      return null;
-    },
-  };
-});
 vi.mock('@/components/pages/pcs/PostDecisionBar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/PostDecisionBar')>();
   return { ...actual, PostDecisionBar: () => null, DECISION_BAR_SPACE_PX: 0 };
@@ -282,13 +266,16 @@ afterEach(() => {
 });
 
 describe('post page reads start concurrently', () => {
-  it('asks for the post, gallery, role, members, comments and checkpoints before any answers', async () => {
+  it('asks for the post, gallery, role, members and comments before any answers', async () => {
     await render();
     // Nothing has resolved yet: the skeleton is up.
     expect(skeleton()).not.toBeNull();
-    for (const read of ['post', 'gallery', 'role', 'members:w1', 'comments', 'checkpoints']) {
+    for (const read of ['post', 'gallery', 'role', 'members:w1', 'comments']) {
       expect(h.calls).toContain(read);
     }
+    // No page-owned comments read (the old checkpoint read is gone).
+    expect(h.calls).not.toContain('checkpoints');
+    expect(h.tables.filter((t) => t === 'comments')).toHaveLength(0);
     // The brief needs the post's brief_id, so it is the one read that waits.
     expect(h.calls).not.toContain('brief');
     // The page never reads the buckets (the details sheet does, on open).
@@ -317,7 +304,6 @@ describe('post page reads start concurrently', () => {
   it('paints once every first-paint read lands, with the same comments instance (no second read)', async () => {
     await render('/posts/p1?comment=c1');
     expect(h.commentsMounts).toBe(1);
-    expect(h.stripMounts).toBe(1);
     await landAll();
     expect(skeleton()).toBeNull();
     expect(document.querySelector('h1')?.textContent).toContain('Monsoon drop');
@@ -326,27 +312,8 @@ describe('post page reads start concurrently', () => {
     expect(document.querySelector('[data-post-side]')?.contains(section ?? null)).toBe(true);
     // Mounted on the first render and kept across the paint: one comments read.
     expect(h.commentsMounts).toBe(1);
-    expect(h.stripMounts).toBe(1);
     expect(h.calls.filter((c) => c === 'comments')).toHaveLength(1);
     // Revealed: the deep-linked comment is handed over now.
     expect(h.focusIds.at(-1)).toBe('c1');
-  });
-});
-
-describe('post page reads the checkpoints once', () => {
-  it('issues exactly one checkpoint read, on the first render, shared by Comments and the strip', async () => {
-    await render();
-    // The page's one read went out before anything answered (the skeleton holds).
-    expect(skeleton()).not.toBeNull();
-    expect(h.tables.filter((t) => t === 'comments')).toHaveLength(1);
-    await landAll();
-    // Still one: the paint, the members flip and the brief never re-read them.
-    expect(h.tables.filter((t) => t === 'comments')).toHaveLength(1);
-    // Both consumers are handed the page's read (never left to read their own).
-    expect(h.sharedRows).not.toContain('absent');
-    expect(h.stripRows).not.toContain('absent');
-    // Once landed, both get the same rows.
-    expect(h.sharedRows.at(-1)).toEqual([]);
-    expect(h.stripRows.at(-1)).toBe(h.sharedRows.at(-1));
   });
 });

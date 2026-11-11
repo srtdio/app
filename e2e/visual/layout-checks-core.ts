@@ -548,7 +548,12 @@ export function pinnedBarViolations(geom: PinnedBarGeom): string[] {
   return [];
 }
 
-/** The checkpoint progress row and the bar it pins under. */
+/**
+ * The checkpoint progress row and the bar it pins under. Retired on screen
+ * (11 Nov 2026, comments as a chat: no progress row); no e2e check calls
+ * underBarViolations, kept only while src/__tests__/layout-checks-core.test.ts
+ * still covers it.
+ */
 export interface UnderBarGeom {
   /** The bar's box ([data-header-bar]); null when there is none. */
   bar: Box | null;
@@ -893,8 +898,10 @@ export function writingBoxViolations(boxes: readonly WritingBoxGeom[]): string[]
 
 /**
  * A comment's action bar as measured (8 Nov 2026): the pill, the row it rides
- * on ([data-comment-row]), its buttons' hit boxes, and the times, names and
- * titles of everything around it (other rows, the section title).
+ * on, its buttons' hit boxes, and the times, names and titles of everything
+ * around it (other rows, the section title). Retired on screen (11 Nov 2026,
+ * comments as a chat: no action bar); no e2e check calls commentBarViolations,
+ * kept only while src/__tests__/layout-checks-core.test.ts still covers it.
  */
 export interface CommentBarGeom {
   label: string;

@@ -154,12 +154,9 @@ const CONFIRM_DIALOG_ALLOWLIST: Record<string, string> = {
   'settings/ProfileSettingsPanel.tsx': 'Discard name and designation edits (Back while dirty)',
   'chat/PlanComposeScreen.tsx': 'Discard a new plan',
   'chat/ConceptSheet.tsx': 'Discard a concept',
-  'comments/Comments.tsx': 'Discard reply',
   'chat/Composer.tsx': 'Delete or replace the saved voice draft',
   'shell/WorkspaceSwitcher.tsx': 'Switch to the approver workspace; discard a new workspace',
   'pages/assets/AssetUploadSheet.tsx': 'Stop an upload in progress',
-  // Send for review again with open comments: warns, never blocks.
-  'pages/pcs/use-post-decisions.tsx': 'Send anyway (open comments warning)',
 };
 
 describe('ui rules: one delete rule', () => {
@@ -328,7 +325,6 @@ const FIELD_ALLOWLIST = [
   'pages/PostDetailPage.tsx',
   'shell/CommandPalette.tsx',
   'comments/CommentComposer.tsx',
-  'comments/SlotComposer.tsx',
   'pages/create/AttachmentsField.tsx',
   'pages/assets/AssetUploadSheet.tsx',
   'chat/PaintLog.tsx',

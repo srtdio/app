@@ -11,13 +11,11 @@ import {
   assertActivityLoadMoreBand,
   assertActivityCounts,
   assertActivityPreviews,
-  assertCommentBars,
   assertCommentTray,
   assertThreadHeader,
   assertListCards,
   assertNoUploadBar,
   assertPinnedBarOnScroll,
-  assertProgressRowUnderBar,
   assertSameWidth,
   assertTopbarSlotsStill,
   assertTabFrameStill,
@@ -3038,17 +3036,22 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // The post in review for the Creator, its comments a chat (11 Nov 2026):
+    // chat's rows, a "3 replies" row, the comment box at the end.
     name: 'post-detail',
     seed: creator,
+    extra: (network) => seedConversation(network),
     url: `/posts/${POST}`,
-    steps: postDetailReady,
+    steps: (page) => postConversationReady(page),
     after: postScreenChecks,
   },
   {
+    // The same post for the Approver.
     name: 'post-detail-approver',
     seed: approver,
+    extra: (network) => seedConversation(network),
     url: `/posts/${POST}`,
-    steps: postDetailReady,
+    steps: (page) => postConversationReady(page),
     after: postScreenChecks,
   },
   { name: 'post-more-menu', seed: creator, url: `/posts/${POST}`, steps: openPostMenu },
@@ -4227,7 +4230,9 @@ async function openCommentAuthorCard(page: Page): Promise<void> {
   const text = page.getByText(PEER_COMMENT_BODY, { exact: true });
   await text.scrollIntoViewIfNeeded();
   const author = await lastVisible(
-    page.locator(`[data-person-trigger="${PEER}"]`, { has: page.locator('[data-comment-author]') }),
+    page.locator(
+      `[data-comment-id="${PEER_COMMENT_ID}"] [data-sender-line] [data-person-trigger="${PEER}"]`,
+    ),
     'comment author',
   );
   await author.click();
@@ -5561,16 +5566,19 @@ SCREENS.push(
 );
 
 // ---------------------------------------------------------------------------
-// Post screen redo (7 Nov 2026): the post screen for the agency, the client
-// and an approved post (the pinned exit bar, the checkpoint progress row under
-// it), a thread folded (resolved points on one line at the bottom, replies
-// folded to the latest behind "View {n} earlier replies"), a PDF opened in the
-// in-app file viewer from a comment, and the platform preview for each of the
-// seven platforms (its own feed card or full screen, placed by the format).
-// Phone light/dark and laptop light come from the projects; LAPTOP_DARK_SCREENS
-// adds laptop dark. After the shot (never in it): the bar stays pinned when
-// the page scrolls, the progress row sits directly under it, and the comment
-// "+" tray holds exactly Photos, File and Assets (layout-checks.ts check 7).
+// Post screen redo (7 Nov 2026) and comments as a chat (11 Nov 2026): the post
+// screen for the agency, the client and an approved post (the pinned exit bar
+// alone, no progress row), a comment's thread open (chat's ThreadViewFrame:
+// over the post on a phone, the side panel on a laptop), the long-press menu
+// on a comment (chat's MessageActionMenu), no comments, the edit through
+// chat's Composer editing bar, a PDF opened in the in-app file viewer from a
+// comment, and the platform preview for each of the seven platforms (its own
+// feed card or full screen, placed by the format). Phone light/dark and laptop
+// light come from the projects; LAPTOP_DARK_SCREENS adds laptop dark. After the
+// shot (never in it): the bar stays pinned when the page scrolls and the
+// comment "+" tray holds exactly Photos, File and Assets (layout-checks.ts
+// check 7); ALIGN_SCREENS measures the post screen (one text column, one right
+// edge, text off the comments hairline) and the thread view.
 
 const POST_PHOTOS = [
   {
@@ -5634,7 +5642,7 @@ function seedPostPhotos(network: HarnessNetwork): void {
   });
 }
 
-/** A post comment with its checkpoint, resolve and reply columns set. */
+/** A post comment with any column set (a reply's parent_comment_id, edited_at). */
 function threadComment(
   id: string,
   author: string,
@@ -5645,90 +5653,86 @@ function threadComment(
   return { ...postComment(id, author, body, at), ...extra };
 }
 
-const CHECKPOINT_BATCH = '0190f300-0000-7000-8000-0000000000e1';
+/** Priya's comment that carries the thread (three replies, chat's RepliesRow). */
 const THREAD_ROOT = '0190f300-0000-7000-8000-0000000000a1';
+const THREAD_ROOT_BODY = 'Can we see the carousel on the grid before it goes?';
+/** ME's own comment, edited (chat's "edited" in the bubble). */
+const OWN_EDITED_ID = '0190f300-0000-7000-8000-0000000000b1';
+const OWN_EDITED_BODY = 'Swapped the cover for the morning shot.';
+const THREAD_REPLIES = 3;
 
 /**
- * Priya's three checkpoints (one open, one resolved and confirmed, one
- * resolved waiting for her Confirm) and Leo's plain comment with three
- * replies: the resolved points fold to one line each at the bottom, the
- * replies fold to the latest behind "View 2 earlier replies".
+ * A comments conversation on the post (or the brief): Priya's comment with
+ * three replies (Leo, ME, Priya: chat's RepliesRow "3 replies"), ME's own
+ * edited comment, then Leo's comment. Every row through chat's MessageBubble.
  */
-function seedFoldedThread(network: HarnessNetwork): void {
-  const resolved = new Date(NOW - 90 * 60_000).toISOString();
-  const point = (n: number, body: string, extra: Partial<Row> = {}): Row =>
-    threadComment(
-      `0190f300-0000-7000-8000-0000000000d${n}`,
-      PEER,
-      body,
-      NOW - 4 * 3_600_000 + n * 1_000,
-      { ledger_seq: n, ledger_batch_id: CHECKPOINT_BATCH, ...extra },
-    );
+function seedConversation(network: HarnessNetwork, on: 'post' | 'brief' = 'post'): void {
+  const where: Partial<Row> =
+    on === 'brief' ? { entity_type: 'brief', entity_id: AUDIT_BRIEF_ID } : {};
+  const row = (id: string, author: string, body: string, at: number, extra: Partial<Row> = {}) =>
+    threadComment(id, author, body, at, { ...where, ...extra });
+  const reply = { parent_comment_id: THREAD_ROOT };
   (network.world.tables.comments ??= []).push(
-    point(1, 'Swap the cover for the morning shot.'),
-    point(2, 'The logo is too small on the second slide.', {
-      resolved_at: resolved,
-      resolved_by: ME,
-      accepted_at: resolved,
-      accepted_by: PEER,
-    }),
-    point(3, 'Tighten the second line of the caption.', {
-      resolved_at: resolved,
-      resolved_by: ME,
-    }),
-    threadComment(THREAD_ROOT, COLLEAGUE_A, 'Draft two is in the folder.', NOW - 3 * 3_600_000),
-    threadComment(
+    row(THREAD_ROOT, PEER, THREAD_ROOT_BODY, NOW - 4 * 3_600_000),
+    row(
       '0190f300-0000-7000-8000-0000000000a2',
-      PEER,
-      'Can we see it on the grid?',
-      NOW - 150 * 60_000,
-      { parent_comment_id: THREAD_ROOT },
+      COLLEAGUE_A,
+      'Mocked it up, two rows.',
+      NOW - 230 * 60_000,
+      reply,
     ),
-    threadComment(
+    row(
       '0190f300-0000-7000-8000-0000000000a3',
       ME,
       'Added it as the first slide.',
-      NOW - 120 * 60_000,
-      { parent_comment_id: THREAD_ROOT },
+      NOW - 200 * 60_000,
+      reply,
     ),
-    threadComment(
+    row(
       '0190f300-0000-7000-8000-0000000000a4',
       PEER,
       'Perfect, that works.',
-      NOW - 60 * 60_000,
-      { parent_comment_id: THREAD_ROOT },
+      NOW - 150 * 60_000,
+      reply,
+    ),
+    row(OWN_EDITED_ID, ME, OWN_EDITED_BODY, NOW - 2 * 3_600_000, {
+      edited_at: new Date(NOW - 100 * 60_000).toISOString(),
+    }),
+    row(
+      '0190f300-0000-7000-8000-0000000000c1',
+      COLLEAGUE_A,
+      'Caption reads well now.',
+      NOW - 30 * 60_000,
     ),
   );
 }
 
-/**
- * Comments never page (10 Nov 2026): 8 checkpoints on POST, 3 replies each
- * (32 rows, more than one screen), on top of the creator seed.
- */
-function seedAllComments(network: HarnessNetwork): void {
-  const start = NOW - 6 * 3_600_000;
-  const rows: Row[] = [];
-  for (let n = 1; n <= 8; n += 1) {
-    const root = `0190f310-0000-7000-8000-0000000c${n}000`;
-    rows.push(
-      threadComment(root, PEER, `Checkpoint ${n}: tighten this part.`, start + n * 60_000, {
-        ledger_seq: n,
-        ledger_batch_id: CHECKPOINT_BATCH,
-      }),
-    );
-    for (let r = 1; r <= 3; r += 1) {
-      rows.push(
-        threadComment(
-          `0190f310-0000-7000-8000-0000000c${n}${r}00`,
-          r % 2 === 1 ? ME : PEER,
-          `Reply ${r} on checkpoint ${n}.`,
-          start + 3_600_000 + n * 60_000 + r * 1_000,
-          { parent_comment_id: root },
-        ),
-      );
-    }
-  }
-  (network.world.tables.comments ??= []).push(...rows);
+/** The comment's chat bubble on the page (never one inside an open thread). */
+function commentBubble(page: Page, id: string): Locator {
+  return page.locator(`[data-comments-list] [data-comment-id="${id}"] [data-bubble]`).first();
+}
+
+/** The post with the conversation painted: its rows and the replies row. */
+async function postConversationReady(page: Page): Promise<void> {
+  await postDetailReady(page);
+  await waitFor([commentBubble(page, THREAD_ROOT)], 'comment row');
+  await waitFor([page.locator('[data-comments-list] [data-replies-row]')], 'replies row');
+}
+
+/** "3 replies" under Priya's comment opens its thread (chat's ThreadViewFrame). */
+async function openCommentThread(page: Page): Promise<Locator> {
+  const replies = page.locator('[data-comments-list] [data-thread-open="replies"]').first();
+  await tap([replies], 'replies row');
+  const thread = page.locator(`[data-thread-view] [data-comment-thread="${THREAD_ROOT}"]`);
+  await waitFor([thread], 'comment thread');
+  await expect(page.locator('[data-thread-view] [data-thread-separator]')).toHaveText(
+    `${THREAD_REPLIES} replies`,
+  );
+  await waitFor(
+    [page.locator('[data-comment-thread-composer]').getByPlaceholder('Reply', { exact: true })],
+    'thread reply box',
+  );
+  return thread;
 }
 
 const COMMENT_PDF_NAME = 'Launch deck.pdf';
@@ -5767,11 +5771,10 @@ function seedCommentPdf(network: HarnessNetwork): void {
   );
 }
 
-/** The post screen's checks after the shot: pinned bar, comment bars, and the comment "+" tray. */
+/** The post screen's checks after the shot: the pinned bar and the comment "+" tray. */
 async function postScreenChecks(page: Page): Promise<void> {
   const name = test.info().title.replace(/ @.*$/, '');
   await assertPinnedBarOnScroll(page, name);
-  await assertCommentBars(page, name);
   await assertCommentTray(page, name);
 }
 
@@ -5819,44 +5822,66 @@ SCREENS.push(
     after: async (page) => assertPinnedBarOnScroll(page, 'post-detail-approved'),
   },
   {
-    // Checkpoints and a thread folded: open point on top, the resolved ones
-    // one line each at the bottom; the replies show only the latest.
-    name: 'post-thread-folded',
+    // A comment's thread open (11 Nov 2026): chat's ThreadViewFrame ("<",
+    // "Thread" over the post's title), the root, chat's "3 replies" strip, the
+    // replies, the docked "Reply" box. Phone: over the post; laptop: the side panel.
+    name: 'post-comment-thread',
     seed: creator,
-    extra: seedFoldedThread,
+    extra: seedConversation,
     url: `/posts/${POST}`,
     steps: async (page) => {
-      await postDetailReady(page);
-      await waitFor([page.locator('[data-checkpoint-progress-row]')], 'progress row');
-      await waitFor([page.locator('[data-point-fold]')], 'resolved point folded');
-      const more = await firstVisible([page.locator('[data-replies-more]')], 'earlier replies');
-      await expect(more).toHaveText('View 2 earlier replies');
-      await more.scrollIntoViewIfNeeded();
+      await postConversationReady(page);
+      await openCommentThread(page);
+      await expect(page.locator('[data-thread-view] [data-thread-view-title]')).toHaveText(
+        'Thread',
+      );
     },
-    after: async (page) => {
-      await assertProgressRowUnderBar(page, 'post-thread-folded');
-      await assertPinnedBarOnScroll(page, 'post-thread-folded');
+    after: async (page) => assertThreadHeader(page, 'post-comment-thread'),
+  },
+  {
+    // Long-press (phone) / right-click (laptop) on a comment: chat's
+    // MessageActionMenu (reactions, Add to Tasks, Copy text, Copy link, More).
+    name: 'post-comment-menu',
+    seed: creator,
+    extra: seedConversation,
+    hold: true,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postConversationReady(page);
+      await openMenuGesture(page, commentBubble(page, THREAD_ROOT));
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await waitFor([menu], 'comment menu');
+      await waitFor([menu.locator('[data-menu-item="add-task"]')], 'Add to Tasks');
+      await expect(menu.locator('[data-menu-item="reply"]')).toHaveCount(0);
+      await page.mouse.move(0, 0);
     },
   },
   {
-    // Comments never page (10 Nov 2026): all 8 checkpoints load at once, each
-    // folded to its latest reply behind "View 2 earlier replies"; no Load more.
-    // The shot is the bottom of the comment scroll.
-    name: 'post-comments-all',
+    // No comments yet: the zero line over the comment box.
+    name: 'post-comments-empty',
     seed: creator,
-    extra: seedAllComments,
     url: `/posts/${POST}`,
     steps: async (page) => {
       await postDetailReady(page);
-      for (let n = 1; n <= 8; n += 1) {
-        await expect(
-          page.getByText(`Checkpoint ${n}: tighten this part.`, { exact: true }),
-        ).toHaveCount(1);
-      }
-      await expect(page.locator('[data-comments-load-more]')).toHaveCount(0);
-      const more = page.locator('[data-replies-more]', { hasText: 'View 2 earlier replies' });
-      expect(await more.count()).toBeGreaterThanOrEqual(8);
-      await page.locator('[data-comments-composer]').first().scrollIntoViewIfNeeded();
+      const empty = page.locator('[data-comments-empty]');
+      await waitFor([empty], 'no comments');
+      await expect(empty).toHaveText('Comments show up here.');
+      await expect(page.locator('[data-comments-list]')).toHaveCount(0);
+      await empty.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // A brief's comments: the same chat (rows, "3 replies", the comment box).
+    name: 'brief-comments',
+    seed: creator,
+    extra: (network) => seedConversation(network, 'brief'),
+    url: `/briefs/${AUDIT_BRIEF_ID}`,
+    steps: async (page) => {
+      await briefReady(page);
+      const list = page.locator('[data-comments][data-entity="brief"] [data-comments-list]');
+      await waitFor([list.locator(`[data-comment-id="${THREAD_ROOT}"] [data-bubble]`)], 'row');
+      await waitFor([list.locator('[data-replies-row]')], 'replies row');
+      await list.scrollIntoViewIfNeeded();
     },
   },
   {
@@ -6564,7 +6589,7 @@ SCREENS.push(
     url: `/posts/${POST}`,
     steps: async (page) => {
       await postDetailReady(page);
-      const box = page.locator('[data-writing-box][data-mode="comment"]').first();
+      const box = page.locator('[data-comments-composer] [data-writing-box]').first();
       await box.scrollIntoViewIfNeeded();
       const field = box.locator('[contenteditable="true"], textarea').first();
       await field.click();
@@ -6575,37 +6600,27 @@ SCREENS.push(
     },
   },
   {
-    // ME's own edited comment (flat finish, 8 Nov 2026): the action bar rides
-    // the row's top hairline, the name keeps one line, " (edited)" ends the body.
-    name: 'post-comment-edited',
-    seed: creator,
-    extra: seedOwnEditedComment,
-    url: `/posts/${POST}`,
-    steps: async (page) => {
-      await postDetailReady(page);
-      const row = page.locator(`#comment-${ME_COMMENT_ID} [data-comment-row="root"]`);
-      await waitFor([row.locator('[data-comment-edited]')], '(edited)');
-      await expect(row.locator('[data-comment-bar]')).toHaveCSS('position', 'absolute');
-      await row.scrollIntoViewIfNeeded();
-    },
-  },
-  {
-    // The same comment in its inline editor: Save and Cancel sit in view,
-    // above the post screen's bottom bar on phone.
+    // ME's own edited comment (its bubble says "edited") taken back into the
+    // comment box through chat's menu (More actions, Edit): chat's Composer
+    // editing bar "Editing your message" over the text, Clear to cancel, in view.
     name: 'post-comment-editing',
     seed: creator,
-    extra: seedOwnEditedComment,
+    extra: seedConversation,
     hold: true,
     url: `/posts/${POST}`,
     steps: async (page) => {
-      await postDetailReady(page);
-      const comment = page.locator(`#comment-${ME_COMMENT_ID}`);
-      const row = comment.locator('[data-comment-row="root"]');
-      await row.scrollIntoViewIfNeeded();
-      await tap([row.locator('[data-comment-bar] [data-bar-action="edit"]')], 'Edit');
-      const save = comment.locator('[data-comment-editor]').getByRole('button', { name: 'Save' });
-      await waitFor([save], 'Save');
-      await expect(save).toBeInViewport({ ratio: 1 });
+      await postConversationReady(page);
+      const own = commentBubble(page, OWN_EDITED_ID);
+      await waitFor([own.locator('[data-edited]')], 'edited');
+      await openMenuGesture(page, own);
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await tap([menu.locator('[data-menu-item="more-actions"]')], 'More actions');
+      await tap([menu.locator('[data-menu-item="edit"]')], 'Edit');
+      const composer = page.locator('[data-comments-composer]');
+      const bar = composer.getByText('Editing your message', { exact: true });
+      await waitFor([bar], 'editing bar');
+      const cancel = composer.getByRole('button', { name: 'Cancel editing' });
+      await expect(cancel).toBeInViewport({ ratio: 1 });
       await page.mouse.move(0, 0);
     },
   },
@@ -6770,27 +6785,11 @@ SCREENS.push(
     url: `/posts/${POST}`,
     steps: async (page) => {
       await postDetailReady(page);
-      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
+      const comment = page.locator(`[data-comments-list] [data-comment-id="${PEER_COMMENT_ID}"]`);
       await waitFor([comment.locator('[data-reaction-chips]')], 'comment chips');
       await comment.scrollIntoViewIfNeeded();
     },
     after: checkReactions('comment-reactions', 2),
-  },
-  {
-    // No reactions: no chip row; the bar's smiley is its first key.
-    name: 'comment-no-reactions',
-    seed: creator,
-    extra: seedPeerComment,
-    url: `/posts/${POST}`,
-    steps: async (page) => {
-      await postDetailReady(page);
-      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
-      await waitFor([comment.locator('[data-bar-action="react"]')], 'bar smiley');
-      await comment.scrollIntoViewIfNeeded();
-      const first = comment.locator('[data-comment-bar] button').first();
-      await expect(first).toHaveAttribute('data-bar-action', 'react');
-    },
-    after: checkReactions('comment-no-reactions', 0),
   },
   {
     // Plan comments draw with chat's parts: chips under the text.
@@ -6913,17 +6912,18 @@ SCREENS.push(
     after: checkReactions('catch-up-thread-reactions', 2),
   },
   {
-    // The one emoji drawer (ui/EmojiSheet) opened from a comment's smiley:
-    // titled "Add reaction"; the composer's keeps "Emoji".
+    // The one emoji drawer (ui/EmojiSheet) opened from a comment's menu "+"
+    // (chat's MessageActionMenu): titled "Add reaction"; the composer's keeps "Emoji".
     name: 'emoji-sheet-add-reaction',
     seed: creator,
     extra: seedPeerComment,
     url: `/posts/${POST}`,
     steps: async (page) => {
       await postDetailReady(page);
-      const comment = page.locator(`#comment-${PEER_COMMENT_ID}`);
-      await comment.scrollIntoViewIfNeeded();
-      await tap([comment.locator('[data-bar-action="react"]')], 'Add reaction');
+      await openMenuGesture(page, commentBubble(page, PEER_COMMENT_ID));
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await waitFor([menu], 'comment menu');
+      await tap([page.locator('[data-menu-reactions] [data-react-more]')], 'Add reaction');
       await waitFor([page.locator('[data-emoji-sheet]')], 'emoji sheet');
       await expect(page.getByRole('dialog', { name: 'Add reaction' })).toBeVisible();
     },
@@ -7048,6 +7048,13 @@ const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
   'chat-replies-row': 'chat-replies-row',
   'chat-replies-row-today': 'chat-replies-row',
   'chat-replies-row-older': 'chat-replies-row',
+  // Comments as a chat (11 Nov 2026): the comment thread is chat's thread view
+  // (same frame, strip and rows), so chat's measure; the post and brief screens
+  // carry their own (one text column, one right edge, text off the hairline).
+  'post-comment-thread': 'chat-thread',
+  'post-detail': 'post-screen',
+  'post-detail-approver': 'post-screen',
+  'brief-comments': 'brief-screen',
 };
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
@@ -7138,7 +7145,10 @@ const LAPTOP_DARK_SCREENS = new Set([
   // Post screen redo: phone and laptop, light and dark.
   'post-detail-approver',
   'post-detail-approved',
-  'post-thread-folded',
+  'post-comment-thread',
+  'post-comment-menu',
+  'post-comment-editing',
+  'brief-comments',
   'post-comment-file-viewer',
   'post-preview-instagram',
   'post-preview-facebook',

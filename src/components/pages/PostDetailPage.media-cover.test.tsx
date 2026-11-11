@@ -179,10 +179,6 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/comments/Comments')>();
   return { ...actual, Comments: () => <div data-comments-stub="">comments</div> };
 });
-vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
-  return { ...actual, CheckpointProgress: () => null };
-});
 vi.mock('@/components/pages/pcs/PostDecisionBar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/PostDecisionBar')>();
   return { ...actual, PostDecisionBar: () => null, DECISION_BAR_SPACE_PX: 0 };

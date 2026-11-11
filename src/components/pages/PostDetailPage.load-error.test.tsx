@@ -25,6 +25,10 @@ vi.mock('@/lib/workspace-context', () => ({
     workspaceName: 'Zomato',
   }),
 }));
+vi.mock('@/components/comments/Comments', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/comments/Comments')>()),
+  Comments: () => <div data-comments-stub="" />,
+}));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({

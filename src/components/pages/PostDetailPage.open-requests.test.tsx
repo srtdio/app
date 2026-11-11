@@ -187,21 +187,6 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
     },
   };
 });
-vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
-  const { useEffect } = await import('react');
-  return {
-    ...actual,
-    CheckpointProgress: (props: { checkpoints?: unknown }) => {
-      h.stripRows.push(props.checkpoints === undefined ? 'absent' : props.checkpoints);
-      useEffect(() => {
-        h.stripMounts += 1;
-        h.calls.push('checkpoints');
-      }, []);
-      return null;
-    },
-  };
-});
 vi.mock('@/components/pages/pcs/PostDecisionBar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/PostDecisionBar')>();
   return { ...actual, PostDecisionBar: () => null, DECISION_BAR_SPACE_PX: 0 };

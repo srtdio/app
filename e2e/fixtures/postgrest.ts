@@ -160,9 +160,20 @@ const RESERVED = new Set(['select', 'order', 'limit', 'offset', 'on_conflict', '
 // plain (non-inner) embed.
 const TO_MANY_EMBED = /(\w+)!(\w+)_fkey\(/g;
 
+// To-many embeds named without their foreign key whose child column is known:
+// the comments read's own read point (`comment_thread_reads(last_read_at)`,
+// RLS: the viewer's rows only; the fixture holds only the harness viewer's).
+// No fixture table: an empty list, as PostgREST answers with no rows.
+const NAMED_EMBEDS: Readonly<Record<string, string>> = {
+  comment_thread_reads: 'root_comment_id',
+};
+
 function toManyEmbeds(select: string | null): Map<string, string> {
   const embeds = new Map<string, string>();
   if (select === null) return embeds;
+  for (const [name, column] of Object.entries(NAMED_EMBEDS)) {
+    if (new RegExp(`(^|[,\\s])${name}\\(`).test(select)) embeds.set(name, column);
+  }
   for (const match of select.matchAll(TO_MANY_EMBED)) {
     const [, name = '', fk = ''] = match;
     if (!fk.startsWith(`${name}_`)) continue;

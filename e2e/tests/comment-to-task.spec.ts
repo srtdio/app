@@ -2,14 +2,15 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { COLLEAGUE_A, ME, POST_IDS, WORKSPACE_ID } from '../fixtures/chat-data';
 
-// Comment to task (8 Nov 2026). Every comment carries its action bar on its
-// top edge (Reply, Resolve, To-do, Edit, | Delete), always shown. An agency
-// member taps To-do: the "New task" sheet opens with the comment's plain text,
-// one pick (Me here: the viewer's Personal notes), Add writes
-// comment_task_create, and the comment paints "Task · You" at once with To-do
-// gone. The tag opens that chat's Tasks on the task. A client never sees To-do
-// and reads the bare state ("Task assigned"). The real app tree runs against
-// fixture data; Linux WebKit approximates iOS WebKit, it is not iOS.
+// Comment to task (8 Nov 2026; comments as a chat, 11 Nov 2026). A comment is
+// chat's row: no action bar. Its long-press (touch) or right-click (laptop)
+// opens chat's MessageActionMenu, whose Add to Tasks is the comment's To-do:
+// the "New task" sheet opens with the comment's plain text, one pick (Me here:
+// the viewer's Personal notes), Add writes comment_task_create, and the
+// comment paints "Task · You" at once with Add to Tasks gone from its menu.
+// The tag opens that chat's Tasks on the task. A client is never offered Add
+// to Tasks and reads the bare state ("Task assigned"). The real app tree runs
+// against fixture data; Linux WebKit approximates iOS WebKit, it is not iOS.
 
 const POST = POST_IDS[0] ?? '';
 const COMMENT_ID = '0190f200-0000-7000-8000-0000000000f7';
@@ -66,11 +67,32 @@ function asClient(network: HarnessNetwork): void {
 }
 
 function rowOf(page: Page): Locator {
-  return page.locator(`#post-comments [id="comment-${COMMENT_ID}"]`).first();
+  return page.locator(`#post-comments [data-comments-list] [data-comment-id="${COMMENT_ID}"]`);
 }
 
-function barOf(page: Page): Locator {
-  return rowOf(page).locator('[data-comment-row="root"] [data-comment-bar]').first();
+/** Chat's message menu on the comment: right-click on a laptop, a held finger on touch. */
+async function openMenu(page: Page): Promise<Locator> {
+  const bubble = rowOf(page).locator('[data-bubble]').first();
+  await bubble.scrollIntoViewIfNeeded();
+  if ((page.viewportSize()?.width ?? 0) >= 768) {
+    await bubble.click({ button: 'right' });
+  } else {
+    const box = await bubble.boundingBox();
+    if (box === null) throw new Error('comment bubble has no box');
+    const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+    const touch = { ...at, pointerType: 'touch', pointerId: 7, isPrimary: true };
+    await bubble.dispatchEvent('pointerdown', touch);
+    await page.waitForTimeout(900);
+    await bubble.dispatchEvent('pointerup', touch);
+  }
+  const menu = page.getByRole('menu', { name: 'Message actions' });
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+async function closeMenu(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu', { name: 'Message actions' })).toHaveCount(0);
 }
 
 async function openPost(page: Page): Promise<void> {
@@ -87,26 +109,14 @@ test('an agency member turns a comment into a task for Me @theme', async ({ page
   seed(network);
   await openPost(page);
 
-  // The bar is always shown: Add reaction, Reply, Resolve, To-do on someone else's comment;
-  // no Copy, no Reply privately, no role label, no ⋯.
-  const bar = barOf(page);
-  await expect(bar).toBeVisible();
-  const names = await bar
-    .locator('button')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? ''));
-  expect(names).toEqual(['Add reaction', 'Reply', 'Resolve', 'To-do']);
-  await expect(rowOf(page).locator('[data-row-action="copy"]')).toHaveCount(0);
-  await expect(rowOf(page).getByRole('button', { name: 'Reply privately' })).toHaveCount(0);
+  // No action bar: the comment is chat's row; its menu carries Add to Tasks
+  // on someone else's comment, never Reply (a tap opens the thread instead).
+  await expect(page.locator('#post-comments [data-comment-bar]')).toHaveCount(0);
+  const menu = await openMenu(page);
+  await expect(menu.locator('[data-menu-item="reply"]')).toHaveCount(0);
 
-  // The bar rides half above the row, right aligned.
-  const row = await rowOf(page).locator('[data-comment-row="root"]').first().boundingBox();
-  const pill = await bar.boundingBox();
-  if (row === null || pill === null) throw new Error('no boxes');
-  expect(Math.abs(pill.y + pill.height / 2 - row.y)).toBeLessThanOrEqual(2);
-  expect(Math.abs(pill.x + pill.width - (row.x + row.width))).toBeLessThanOrEqual(2);
-
-  // To-do: the "New task" sheet, the comment's plain text in the field.
-  await bar.getByRole('button', { name: 'To-do' }).click();
+  // Add to Tasks: the "New task" sheet, the comment's plain text in the field.
+  await menu.locator('[data-menu-item="add-task"]').click();
   const sheet = page.getByRole('dialog', { name: 'New task' });
   await expect(sheet).toBeVisible();
   await expect(sheet.locator('[data-comment-task-title]')).toHaveValue(COMMENT_TEXT);
@@ -130,12 +140,12 @@ test('an agency member turns a comment into a task for Me @theme', async ({ page
   });
   expect(typeof call?.args.p_trace_id).toBe('string');
 
-  // The tag paints at once; To-do is gone (one task per comment).
+  // The tag paints at once; Add to Tasks is gone (one task per comment).
   const tag = rowOf(page).locator('[data-comment-task-tag]').first();
   await expect(tag).toHaveText('Task · You');
-  await expect(bar.getByRole('button', { name: 'To-do' })).toHaveCount(0);
-  // Finishing a task never resolves the comment: Resolve is still offered.
-  await expect(bar.getByRole('button', { name: 'Resolve' })).toBeVisible();
+  const again = await openMenu(page);
+  await expect(again.locator('[data-menu-item="add-task"]')).toHaveCount(0);
+  await closeMenu(page);
 
   // The tag opens that chat's Tasks sheet on the task: it navigates to the chat
   // task link. ChatConnected consumes and drops `task` from the URL at once, so
@@ -155,7 +165,7 @@ test('an agency member turns a comment into a task for Me @theme', async ({ page
   expect(pushed.some((u) => u.includes(`channel=${encodeURIComponent(NOTES)}&task=`))).toBe(true);
 });
 
-test('a client never sees To-do and reads the bare task state', async ({ page }) => {
+test('a client never sees Add to Tasks and reads the bare task state', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   asClient(network);
   seed(network, {
@@ -165,16 +175,15 @@ test('a client never sees To-do and reads the bare task state', async ({ page })
   });
   await openPost(page);
 
-  const bar = barOf(page);
-  await expect(bar.getByRole('button', { name: 'Reply' })).toBeVisible();
-  await expect(bar.getByRole('button', { name: 'To-do' })).toHaveCount(0);
-  await expect(bar.getByRole('button', { name: 'Resolve' })).toHaveCount(0);
+  const menu = await openMenu(page);
+  await expect(menu.locator('[data-menu-item="add-task"]')).toHaveCount(0);
+  await closeMenu(page);
   const tag = rowOf(page).locator('[data-comment-task-tag]').first();
   await expect(tag).toHaveText('Task assigned');
   await expect(tag.locator('[data-comment-task-open]')).toHaveCount(0);
 });
 
-test('a done task reads "Task done · {name}" for the agency, never resolving the comment', async ({
+test('a done task reads "Task done · {name}" for the agency, with no second task', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -191,6 +200,6 @@ test('a done task reads "Task done · {name}" for the agency, never resolving th
   await expect(rowOf(page).locator('[data-comment-task-tag]').first()).toHaveText(
     'Task done · Leo',
   );
-  await expect(barOf(page).getByRole('button', { name: 'Resolve' })).toBeVisible();
-  await expect(barOf(page).getByRole('button', { name: 'To-do' })).toHaveCount(0);
+  const menu = await openMenu(page);
+  await expect(menu.locator('[data-menu-item="add-task"]')).toHaveCount(0);
 });

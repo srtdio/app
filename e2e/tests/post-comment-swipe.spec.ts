@@ -4,12 +4,13 @@ import { ME, PEER, POST_IDS, WORKSPACE_ID } from '../fixtures/chat-data';
 import { undoStrip } from '../helpers/undo-strip';
 
 // Post comments swipe both ways on touch (CLAUDE.md Swipe: right = Reply,
-// left = Delete), through the one core (src/lib/chat/swipe-reply.ts). Right
-// opens the row's reply composer on anyone's comment. Left on the viewer's own
-// comment is the ⋯ menu's Delete (the row hides, the Undo strip says "Comment
-// deleted", Undo brings it back); on someone else's comment it only
-// rubber-bands and nothing opens. The real app tree runs against fixture
-// data; Linux WebKit approximates iOS WebKit, it is not iOS.
+// left = Delete), through the one core (src/lib/chat/swipe-reply.ts), on
+// chat's row (comments as a chat, 11 Nov 2026). Right opens the comment's
+// thread (chat's ThreadViewFrame with its "Reply" box) on anyone's comment.
+// Left on the viewer's own comment is the menu's Delete (the row hides, the
+// Undo strip says "Comment deleted", Undo brings it back); on someone else's
+// comment it only rubber-bands and nothing opens. The real app tree runs
+// against fixture data; Linux WebKit approximates iOS WebKit, it is not iOS.
 
 const POST = POST_IDS[0] ?? '';
 const OWN_ID = '0190f200-0000-7000-8000-0000000000e1';
@@ -59,13 +60,22 @@ function seedComments(network: HarnessNetwork): void {
   rows.push(comment(PEER_ID, PEER, PEER_BODY, 120_000));
 }
 
-/** A comment's own sliding row (not a reply's under it). */
+/** A comment's own sliding row in the page's list (chat's MessageBubble row). */
 function rowOf(page: Page, id: string): Locator {
-  return page.locator(`#post-comments [id="comment-${id}"] [data-comment-row]`).first();
+  return page.locator(`#post-comments [data-comments-list] li[data-comment-id="${id}"]`);
 }
 
-function composerUnder(page: Page, id: string): Locator {
-  return page.locator(`#post-comments [id="comment-${id}"] [data-reply-composer]`);
+/** The comment's thread is open: its list and its "Reply" box. */
+async function expectThreadOpen(page: Page, id: string): Promise<void> {
+  const view = page.locator('[data-thread-view]');
+  await expect(view.locator(`[data-comment-thread="${id}"]`)).toBeVisible();
+  await expect(view.locator('[data-comment-thread-composer]')).toBeVisible();
+}
+
+/** Back out of the thread ("<", Close thread). */
+async function closeThread(page: Page): Promise<void> {
+  await page.locator('[data-thread-view] [data-thread-view-close]').click();
+  await expect(page.locator('[data-thread-view]')).toHaveCount(0);
 }
 
 /** A finger drags a row by dx px (left when negative) and lets go, on touch. */
@@ -102,33 +112,37 @@ test('post comments swipe right to Reply and left to Delete (own only) @theme', 
   await expect(peer).toContainText(PEER_BODY);
 
   // The row slides on its own: vertical scroll stays the list's, and a slid
-  // row never makes anything scroll sideways.
+  // row never makes the page scroll sideways.
   expect(await own.evaluate((el) => getComputedStyle(el).touchAction)).toContain('pan-y');
-  expect(await own.evaluate((el) => getComputedStyle(el.parentElement as Element).overflowX)).toBe(
-    'clip',
-  );
 
   // Someone else's comment, left: a rubber band, nothing opens or goes.
   await swipeRow(peer, -120);
   await expect(peer).toContainText(PEER_BODY);
   await expect(undoStrip(page)).toHaveCount(0);
   await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.locator('[data-thread-view]')).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(peer).not.toHaveAttribute('style', /translate/);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
 
-  // Right on someone else's comment: its reply composer opens.
+  // Right on someone else's comment: its thread opens, the Reply box ready.
   await swipeRow(peer, 120);
-  await expect(composerUnder(page, PEER_ID)).toBeVisible();
-  // The bar's Reply reads open (aria-expanded), exactly as after a tap on it.
-  await expect(peer.locator('[data-row-action="reply"]')).toHaveAttribute('aria-expanded', 'true');
+  await expectThreadOpen(page, PEER_ID);
+  await closeThread(page);
 
   // Right on the viewer's own comment: the same.
   await swipeRow(own, 120);
-  await expect(composerUnder(page, OWN_ID)).toBeVisible();
+  await expectThreadOpen(page, OWN_ID);
+  await closeThread(page);
 
-  // Left on the viewer's own comment: the bar's Delete (Undo strip).
+  // Left on the viewer's own comment: the menu's Delete (Undo strip).
   await swipeRow(own, -120);
-  await expect(page.locator('#post-comments').getByText(OWN_BODY)).toHaveCount(0);
+  await expect(page.locator('#post-comments [data-comments-list]').getByText(OWN_BODY)).toHaveCount(
+    0,
+  );
   const strip = undoStrip(page, 'Comment deleted');
   await expect(strip).toBeVisible();
   await strip.getByRole('button', { name: 'Undo' }).click();

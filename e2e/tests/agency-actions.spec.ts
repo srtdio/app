@@ -216,9 +216,9 @@ test('PCS type roles: page title 28px, caption body 14px, details meta 12px @the
 // offer clients on a draft, so the tag is the @[uuid] token typed by hand (the
 // body carries it as is). comment_create's mention rule (the fixture mirrors
 // the live proc) raises invalid_mention with the client's id as DETAIL; the
-// one toast explains, and the composer keeps the typed text. PEER is a client
-// member and the harness viewer (ME) is the owner. iPhone viewport, dark and
-// light (@theme).
+// one toast explains, and the comment stays as chat's "Not sent" row with its
+// reason (comments as a chat, 11 Nov 2026). PEER is a client member and the
+// harness viewer (ME) is the owner. iPhone viewport, dark and light (@theme).
 
 const DRAFT_POST = POST_IDS[0] ?? '';
 const TOAST = "Clients can't see drafts. Tag them once it's in Review.";
@@ -249,23 +249,30 @@ test('Draft post: tagging a client keeps the comment and shows the drafts toast 
   });
 
   const section = page.locator('#post-comments');
-  const box = section.getByRole('textbox', { name: 'Comment body', exact: true });
+  const box = section
+    .locator('[data-comments-composer]')
+    .getByRole('textbox', { name: 'Message', exact: true });
   await box.scrollIntoViewIfNeeded();
   await box.click();
   const text = `Over to @[${PEER}] for a look`;
   await page.keyboard.type(text);
   await expect(box).toHaveText(text);
 
-  await section.getByRole('button', { name: 'Post', exact: true }).click();
+  await section
+    .locator('[data-comments-composer]')
+    .getByRole('button', { name: 'Send', exact: true })
+    .click();
 
   await expect(page.getByRole('status').getByText(TOAST, { exact: true })).toBeVisible();
-  // The server refused it: nothing landed, and the draft is still in the box.
+  // The server refused it: nothing landed, and the comment stays on screen as
+  // chat's "Not sent" row with its reason (nothing is lost).
   const creates = network.rpcCalls.filter((c) => c.name === 'comment_create');
   expect(creates).toHaveLength(1);
   expect(String(creates[0]?.args.p_body)).toContain(`@[${PEER}]`);
   expect(network.world.tables.comments ?? []).toHaveLength(0);
-  await expect(box).toHaveText(text);
-  // The toast is the one explanation: no inline error under the composer.
-  await expect(section.getByRole('alert')).toHaveCount(0);
+  const failed = section.locator('[data-comments-list] li[data-msg-id]', {
+    hasText: 'for a look',
+  });
+  await expect(failed.locator('[data-failed-reason]')).toBeVisible();
   expectCleanComments(network);
 });

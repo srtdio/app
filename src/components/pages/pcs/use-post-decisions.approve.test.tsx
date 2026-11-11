@@ -84,7 +84,6 @@ function Harness(props: { role: string; reload: () => Promise<void> }): ReactEle
     creatorName: null,
     mediaCount: null,
     approveDay: '',
-    openCount: 0,
     reload: props.reload,
   });
   handle.current = decisions;

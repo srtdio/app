@@ -120,7 +120,6 @@ const REQUIRED: readonly string[] = [
   'chat-send-failed-file',
   'chat-link-youtube',
   'chat-link-no-picture',
-  'comment-no-reactions',
   'comment-reactions',
   'emoji-sheet-add-reaction',
   'plan-comment-reactions',
@@ -237,7 +236,6 @@ const REQUIRED: readonly string[] = [
   'plan-tab-week-zero',
   'post-approve-busy',
   'post-comment-file-viewer',
-  'post-comments-all',
   'post-detail',
   'post-detail-approved',
   'post-detail-approver',
@@ -250,7 +248,6 @@ const REQUIRED: readonly string[] = [
   'post-preview-tiktok',
   'post-preview-x',
   'post-preview-youtube-shorts',
-  'post-thread-folded',
   'recently-deleted',
   'recently-deleted-empty',
   'select-open',
@@ -365,8 +362,11 @@ const REQUIRED: readonly string[] = [
   // Flat finish (8 Nov 2026): own edited comment, its inline editor with Save
   // in view, and the Edit concept day tiles with one picked.
   'plan-day-picker',
-  'post-comment-edited',
   'post-comment-editing',
+  'post-comment-thread',
+  'post-comment-menu',
+  'post-comments-empty',
+  'brief-comments',
   // Alignment and one thread strip (9 Nov 2026).
   'catch-up-thread-empty',
   'catch-up-thread-replies',

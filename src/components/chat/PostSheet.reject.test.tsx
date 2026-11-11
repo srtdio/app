@@ -290,7 +290,7 @@ describe('approver Reject (phone: the bottom bar)', () => {
     expect(mocks.rpcStageTransition).not.toHaveBeenCalled();
   });
 
-  it('confirm moves review to rejected, then posts the reason as a checkpoint', async () => {
+  it('confirm moves review to rejected, then posts the reason as a plain comment (comment_create)', async () => {
     await render('client', view(row()));
     await press(buttonNamed('Reject', q('[data-decision-bar]')!));
     const field = dialogTitled('Reject this post?')?.querySelector('textarea');
@@ -302,12 +302,14 @@ describe('approver Reject (phone: the bottom bar)', () => {
       p_to_stage: 'rejected',
       p_trace_id: 'trace-1',
     });
-    expect(mocks.runCreateCommentBatch).toHaveBeenCalledWith(expect.anything(), {
-      workspaceId: 'ws-1',
-      postId: 'p1',
-      points: [{ body: 'Wrong logo' }],
-      traceId: 'trace-1',
+    expect(mocks.createComment).toHaveBeenCalledWith(expect.anything(), {
+      workspace_id: 'ws-1',
+      entity_type: 'post',
+      entity_id: 'p1',
+      body: 'Wrong logo',
+      trace_id: 'trace-1',
     });
+    expect(mocks.runCreateCommentBatch).not.toHaveBeenCalled();
   });
 
   it('an approved post can be rejected; no reason means no comment', async () => {
@@ -368,15 +370,12 @@ describe('creator moves', () => {
     });
   });
 
-  it('Send for review again with open comments asks first, and Send anyway sends', async () => {
+  it('Send for review again never warns, even with comments on the post', async () => {
     mocks.openCount = 2;
     await render('agency', view(row()));
     expect(barLabels()).toEqual(['Send for review again']);
     await press(buttonNamed('Send for review again', q('[data-decision-bar]')!));
-    const warn = dialogTitled('2 comments are still open. Send anyway?');
-    expect(warn).toBeDefined();
-    expect(mocks.runPostReadyNotify).not.toHaveBeenCalled();
-    await press(buttonNamed('Send anyway', warn!));
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(mocks.runPostReadyNotify).toHaveBeenCalledOnce();
   });
 

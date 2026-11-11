@@ -20,6 +20,11 @@ const FLASH_MS = 1200;
 export function flashNode(elementId: string): void {
   const node = document.getElementById(elementId);
   if (node === null) return;
+  flashElement(node);
+}
+
+/** The same scroll-and-flash for a node found another way (a comment row by its data hook). */
+export function flashElement(node: HTMLElement): void {
   const scroller = scrollParent(node);
   if (scroller !== null) {
     const style = getComputedStyle(node);

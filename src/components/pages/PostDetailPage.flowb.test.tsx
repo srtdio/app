@@ -178,10 +178,6 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
     },
   };
 });
-vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
-  return { ...actual, CheckpointProgress: () => null };
-});
 vi.mock('@/components/pages/pcs/PostDecisionBar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/PostDecisionBar')>();
   return { ...actual, PostDecisionBar: () => null, DECISION_BAR_SPACE_PX: 0 };
@@ -197,9 +193,7 @@ vi.mock('@/components/preview/PlatformPreviewPanel', () => ({
 import {
   COMMENTS_SECTION_ID,
   PostDetailPage,
-  openCommentsLabel,
   postPageGrid,
-  scrollToCommentsSection,
 } from '@/components/pages/PostDetailPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -395,62 +389,10 @@ describe('28. one meta line', () => {
     expect(row?.textContent ?? '').not.toContain('Due');
     expect(document.querySelector('[data-post-details-edit]')).toBeNull();
   });
-
-  it('A2: the preview pill and the open checkpoints pill share one row', async () => {
-    h.counts = { resolved: 1, total: 3 };
-    await render();
-    const chip = document.querySelector('[data-open-comments-chip]');
-    expect(chip?.parentElement?.hasAttribute('data-post-pills')).toBe(true);
-  });
-});
-
-describe('29. open checkpoints pill', () => {
-  it('reads "{n} open checkpoints" (singular at 1), hidden at 0', () => {
-    expect(openCommentsLabel(8)).toBe('8 open checkpoints');
-    expect(openCommentsLabel(1)).toBe('1 open checkpoint');
-  });
-
-  it('sits under the title in review and scrolls smoothly to the comments', async () => {
-    h.counts = { resolved: 1, total: 3 };
-    await render();
-    const chip = document.querySelector<HTMLButtonElement>('[data-open-comments-chip]');
-    expect(chip?.textContent).toContain('2 open checkpoints');
-    const h1 = document.querySelector('h1');
-    expect(h1?.compareDocumentPosition(chip!) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-
-    await act(async () => {
-      chip?.click();
-    });
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById(COMMENTS_SECTION_ID));
-  });
-
-  it('respects reduced motion', () => {
-    const node = document.createElement('section');
-    node.id = COMMENTS_SECTION_ID;
-    document.body.appendChild(node);
-    (window as { matchMedia?: unknown }).matchMedia = (q: string) => ({
-      matches: q === '(prefers-reduced-motion: reduce)',
-    });
-    scrollToCommentsSection(document);
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
-  });
-
-  it('is hidden at 0 and outside review', async () => {
-    h.counts = { resolved: 2, total: 2 };
-    await render();
-    expect(document.querySelector('[data-open-comments-chip]')).toBeNull();
-    act(() => root?.unmount());
-    root = createRoot(host!);
-    h.counts = { resolved: 0, total: 2 };
-    h.stage = 'draft';
-    await render();
-    expect(document.querySelector('[data-open-comments-chip]')).toBeNull();
-  });
 });
 
 describe('34. laptop two columns, one grid for skeleton and page', () => {
-  it('D1 lg: two columns, gallery and caption left, checkpoints right from the top, sticky; below lg one column', () => {
+  it('D1 lg: two columns, gallery and caption left, comments right from the top, sticky; below lg one column', () => {
     const grid = postPageGrid(false);
     expect(grid.page).toContain('grid-cols-1');
     expect(grid.page).toContain('lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]');
@@ -467,7 +409,7 @@ describe('34. laptop two columns, one grid for skeleton and page', () => {
     expect(postPageGrid(true).side).not.toContain('lg:');
   });
 
-  it('D1: the checkpoints section sits in its own column, not under the caption', async () => {
+  it('D1: the comments section sits in its own column, not under the caption', async () => {
     await render();
     const side = document.querySelector('[data-post-side]');
     expect(side?.className).toBe(postPageGrid(false).side);
@@ -475,7 +417,7 @@ describe('34. laptop two columns, one grid for skeleton and page', () => {
     expect(side?.contains(document.querySelector('[data-caption-block]'))).toBe(false);
   });
 
-  it('the skeleton and the loaded page share the same grid; reading order is title, details, pill, caption, checkpoints', async () => {
+  it('the skeleton and the loaded page share the same grid; reading order is title, details, pill, caption, comments', async () => {
     const gallery = deferred<void>();
     h.galleryGate = gallery.promise;
     h.desktop = true;
@@ -493,7 +435,7 @@ describe('34. laptop two columns, one grid for skeleton and page', () => {
     const order = [
       document.querySelector('h1'),
       document.querySelector('[data-post-details]'),
-      document.querySelector('[data-open-comments-chip]'),
+      document.querySelector('[data-post-pills]'),
       document.querySelector('[data-caption-block]'),
       document.getElementById(COMMENTS_SECTION_ID),
     ];

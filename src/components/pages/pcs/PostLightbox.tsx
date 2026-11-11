@@ -5,7 +5,6 @@ import type {
   MouseEvent as ReactMouseEvent,
   UIEvent as ReactUIEvent,
   ReactElement,
-  ReactNode,
   Ref,
   SyntheticEvent,
 } from 'react';
@@ -77,7 +76,7 @@ export function slideViewerKind(item: GalleryItem): FileKind | null {
   return classifyFileKind(item.mimeType ?? '');
 }
 
-/** The minimal rect shape the pin math reads off the rendered image. */
+/** The minimal rect shape the zoom math reads off the rendered image. */
 interface RectLike {
   left: number;
   top: number;
@@ -85,38 +84,8 @@ interface RectLike {
   height: number;
 }
 
-function clamp01(value: number): number {
-  return value < 0 ? 0 : value > 1 ? 1 : value;
-}
-
 function clamp(value: number, lo: number, hi: number): number {
   return value < lo ? lo : value > hi ? hi : value;
-}
-
-/**
- * Normalised [0,1] point of a click inside an image rect, or null when the click
- * falls outside the rect (those taps are ignored). The in-range result is clamped
- * defensively so a float edge never escapes [0,1]. Pure. (F5 placement.)
- */
-export function pinPointFromRect(
-  rect: RectLike,
-  clientX: number,
-  clientY: number,
-): { x: number; y: number } | null {
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  const x = (clientX - rect.left) / rect.width;
-  const y = (clientY - rect.top) / rect.height;
-  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
-  return { x: clamp01(x), y: clamp01(y) };
-}
-
-/** As {@link pinPointFromRect}, but reading the rect off the tapped element. */
-export function placePinFromEvent(
-  target: { getBoundingClientRect: () => RectLike },
-  clientX: number,
-  clientY: number,
-): { x: number; y: number } | null {
-  return pinPointFromRect(target.getBoundingClientRect(), clientX, clientY);
 }
 
 /**
@@ -290,8 +259,6 @@ export interface LightboxViewProps {
   manage?: LightboxManage | undefined;
   /** A gallery write is in flight: the bar says "Saving…". */
   saving?: boolean;
-  /** F5 seam: overlay rendered over the sharp image; nothing when omitted. */
-  pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /** Swipe-down offset in px (translateY only); 0 or omitted at rest. */
   dragY?: number | undefined;
   /** Open a pdf, office or other file slide in the FileViewer. */
@@ -319,7 +286,7 @@ function SlideSpinner(): ReactElement {
 
 /** One slide's stage: the fully-visible sharp image, no letterbox filler. */
 function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): ReactElement {
-  const { zoom, srcFor, failedFor, dimsFor, presignEnabled, onImageLoad, pinOverlay } = props;
+  const { zoom, srcFor, failedFor, dimsFor, presignEnabled, onImageLoad } = props;
   const src = srcFor(item);
   const failed = failedFor(item);
   const dims = dimsFor(item);
@@ -353,9 +320,6 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
             onLoad={(event) => onImageLoad(item, event)}
             className="h-full w-full object-contain"
           />
-          {pinOverlay !== undefined && !zoomed ? (
-            <div className="pointer-events-none absolute inset-0">{pinOverlay(item, i)}</div>
-          ) : null}
         </div>
       ) : showImage ? (
         <img
@@ -651,8 +615,6 @@ interface PostLightboxProps {
   deps: PresignDeps;
   onIndexChange: (index: number) => void;
   onClose: () => void;
-  /** F5 seam: overlay rendered over the image area; nothing renders when omitted. */
-  pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /**
    * Agency manage-row callbacks, each taking the slide index. They MUST be wired
    * to the existing slide-mutation paths (gallery-transforms + gallery_set commit
@@ -673,8 +635,7 @@ interface PostLightboxProps {
  * In-place post-gallery viewer: a full-width, in-flow block (no modal, no
  * overlay sheet, no body scroll lock) with a native horizontal scroll-snap track
  * (one slide per width), overlaid "<" Back/counter/prev-next, tap-toggled chrome,
- * pinch and double-tap zoom, and the agency manage row below the image. Pins are
- * placed from the inline gallery now, never here.
+ * pinch and double-tap zoom, and the agency manage row below the image.
  */
 export function PostLightbox({
   items,
@@ -684,7 +645,6 @@ export function PostLightbox({
   deps,
   onIndexChange,
   onClose,
-  pinOverlay,
   manage,
   saving = false,
   title,
@@ -1104,7 +1064,6 @@ export function PostLightbox({
     rootRef,
     manage: manageView,
     saving,
-    pinOverlay,
     dragY,
     onOpenFile: openFile,
     openFailedFor: (it) => openFailed[it.assetAttachmentId] === true,

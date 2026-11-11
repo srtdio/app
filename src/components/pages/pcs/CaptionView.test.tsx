@@ -7,7 +7,6 @@ import {
   CAPTION_MARKER_ATTR,
   type SelectionLike,
 } from '@/components/pages/pcs/CaptionView';
-import { CheckpointCircle } from '@/components/comments/CheckpointCircle';
 
 // The unit environment is node (no DOM renderer), so these specs walk the JSX
 // tree returned by the hookless captionView and exercise the offset math with
@@ -46,10 +45,10 @@ function elementNode(children: Node[], marker = false): Node {
 }
 
 describe('captionView', () => {
-  it('renders an ink-underlined highlight and an unselectable numbered ink circle', () => {
+  it('renders an ink-underlined highlight with no number (11 Nov 2026)', () => {
     const tree = captionView({
       caption: 'Hello world',
-      annotations: [{ id: 'a1', n: 1, captionStart: 0, captionEnd: 5, commentId: 'c1' }],
+      annotations: [{ id: 'a1', captionStart: 0, captionEnd: 5, commentId: 'c1' }],
       onHighlightClick: () => {},
     });
     const all = elements(tree);
@@ -62,34 +61,18 @@ describe('captionView', () => {
     expect(markClass).toContain('bg-transparent');
     expect(markClass).not.toContain('annotation');
 
+    // No number marker inside the highlight: the quote chip carries no number either.
     const marker = all.find(
       (el) => (el.props as Record<string, unknown>)[CAPTION_MARKER_ATTR] !== undefined,
     );
-    expect(marker).toBeDefined();
-    expect((marker!.props as Record<string, unknown>)[CAPTION_MARKER_ATTR]).toBe('');
-    // The number marker opts out of selection so offset math can skip it.
-    expect((marker!.props as { className?: string }).className).toContain('select-none');
-    const circle = all.find((el) => el.type === CheckpointCircle);
-    expect(circle?.props).toEqual({ n: 1, state: 'open', size: 'inline' });
-  });
-
-  it('a resolved checkpoint highlight draws its circle good, like the list', () => {
-    const tree = captionView({
-      caption: 'Hello world',
-      annotations: [
-        { id: 'a1', n: 4, state: 'confirmed', captionStart: 0, captionEnd: 5, commentId: 'c1' },
-      ],
-      onHighlightClick: () => {},
-    });
-    const circle = elements(tree).find((el) => el.type === CheckpointCircle);
-    expect(circle?.props).toEqual({ n: 4, state: 'confirmed', size: 'inline' });
+    expect(marker).toBeUndefined();
   });
 
   it('skips an out-of-bounds annotation without throwing or emitting a mark', () => {
     const render = () =>
       captionView({
         caption: 'Hi',
-        annotations: [{ id: 'a', n: 1, captionStart: 0, captionEnd: 99, commentId: 'c' }],
+        annotations: [{ id: 'a', captionStart: 0, captionEnd: 99, commentId: 'c' }],
         onHighlightClick: () => {},
       });
     expect(render).not.toThrow();
@@ -100,7 +83,7 @@ describe('captionView', () => {
     const onHighlightClick = vi.fn();
     const tree = captionView({
       caption: 'Hello world',
-      annotations: [{ id: 'a1', n: 1, captionStart: 6, captionEnd: 11, commentId: 'c-42' }],
+      annotations: [{ id: 'a1', captionStart: 6, captionEnd: 11, commentId: 'c-42' }],
       onHighlightClick,
     });
     const mark = elements(tree).find((el) => el.type === 'mark')!;

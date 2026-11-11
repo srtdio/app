@@ -83,7 +83,6 @@ function Harness(props: { role: string }): ReactElement {
     creatorName: null,
     mediaCount: null,
     approveDay: '',
-    openCount: 0,
     reload: async () => {},
   });
   handle.current = decisions;

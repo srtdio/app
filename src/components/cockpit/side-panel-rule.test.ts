@@ -35,7 +35,10 @@ describe('ui rules: one side panel', () => {
     expect(users.map((f) => f.rel)).toContain('cockpit/Cockpit.tsx');
     for (const { rel, src } of users) {
       expect(src, rel).toContain('useIsLaptop()');
-      expect(src, rel).toMatch(/<Sheet\b/);
+      // Phone: a Sheet, or (a comment thread, 11 Nov 2026) chat's own
+      // full-screen thread view in a bare SidePanel's place.
+      const threadPanel = /<SidePanel[^>]*\bbare\b/.test(src) && /<ThreadViewFrame\b/.test(src);
+      if (!threadPanel) expect(src, rel).toMatch(/<Sheet\b/);
     }
   });
 

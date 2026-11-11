@@ -92,3 +92,10 @@ export const SCREEN_CONTENT_TOP = 16;
 export const SCREEN_GUTTER_PHONE = 16;
 /** The list tab's side gutter on a laptop (md:px-6, md:pl-6). */
 export const SCREEN_GUTTER_LAPTOP = 24;
+
+/**
+ * A chat-drawn list on a page (post and brief comments, plan threads): chat's
+ * rows carry their own 16 inset, so the list bleeds 16 each side and every
+ * photo lands on the page edge (GUTTER) on phone and laptop.
+ */
+export const PAGE_BLEED = '-mx-4';

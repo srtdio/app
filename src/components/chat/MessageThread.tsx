@@ -1047,7 +1047,7 @@ const THREAD_OPEN_FAILED_TOAST = errorText('open this thread', null);
 
 /** The thread view composer's placeholder. */
 /** L4: the thread composer's hint. */
-const THREAD_REPLY_PLACEHOLDER = 'Reply';
+export const THREAD_REPLY_PLACEHOLDER = 'Reply';
 
 /**
  * The About reply a send may carry: only while the About bar shows its post.

@@ -529,8 +529,10 @@ export interface CiPlan {
 
 /**
  * Visual CI's run. Nightly (pr false): the selection as is, ALL included.
- * Pull request: never ALL, at most `cap` screens (one shard): the selected
- * screens first in map order (screens the map lacks after, in spec order),
+ * Pull request: never ALL, at most `cap` screens (one shard): screens with
+ * a missing baseline first (spec order: a PR is their only render before the
+ * nightly, and visual-coverage.test.ts fails until they have one), then the
+ * selected screens in map order (screens the map lacks after, in spec order),
  * then one smoke screen per area not yet covered, cut at the cap.
  */
 export function ciPlan(
@@ -539,14 +541,17 @@ export function ciPlan(
   map: Readonly<ScreenMap> | null,
   pr: boolean,
   cap: number = ONE_SHARD_MAX,
+  missing: ReadonlySet<string> = new Set(),
 ): CiPlan {
   const radius = sel.all ? screens.length : sel.names.length;
   if (!pr) {
     if (sel.all) return { mode: 'all', names: [], radius };
     return { mode: sel.names.length > 0 ? 'some' : 'none', names: sel.names, radius };
   }
-  if (!sel.all && sel.names.length <= cap) {
-    return { mode: sel.names.length > 0 ? 'some' : 'none', names: sel.names, radius };
+  const fresh = screens.map((s) => s.name).filter((n) => missing.has(n));
+  if (!sel.all && sel.names.length + fresh.length <= cap) {
+    const names = [...new Set([...fresh, ...sel.names])];
+    return { mode: names.length > 0 ? 'some' : 'none', names, radius };
   }
   const keys = Object.keys(map ?? {});
   // Gallery screens first (they are cheap and aimed at the changed parts).
@@ -560,7 +565,9 @@ export function ciPlan(
     );
   };
   const wanted = sel.all ? sel.targeted : sel.names;
-  const first = [...new Set(wanted)].sort((a, b) => rank(a) - rank(b)).slice(0, cap);
+  const first = [
+    ...new Set([...fresh, ...[...new Set(wanted)].sort((a, b) => rank(a) - rank(b))]),
+  ].slice(0, cap);
   const covered = new Set(first.map((n) => areaOfScreen(screenOf(screens, n))));
   const smoke = smokeScreens(screens).filter(
     (n) => !first.includes(n) && !covered.has(areaOfScreen(screenOf(screens, n))),
@@ -667,6 +674,53 @@ function readSource(file: string, head?: string): string | undefined {
   }
 }
 
+/**
+ * Screens with a missing baseline on the new side: no image in any project
+ * (a new screen), or tagged @laptop-dark (LAPTOP_DARK_SCREENS) with no
+ * laptop-dark image.
+ */
+export function missingBaselines(
+  screens: readonly ScreenDef[],
+  images: ReadonlySet<string>,
+  laptopDark: ReadonlySet<string>,
+): Set<string> {
+  const named = new Set([...images].map((p) => p.slice(p.indexOf('/') + 1)));
+  return new Set(
+    screens
+      .map((s) => s.name)
+      .filter((n) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(n))
+      .filter(
+        (n) => !named.has(`${n}.png`) || (laptopDark.has(n) && !images.has(`laptop-dark/${n}.png`)),
+      ),
+  );
+}
+
+/** The baseline images on the new side, as "<project>/<name>.png". */
+function baselineImages(head?: string): Set<string> {
+  const dir = 'e2e/visual/__screenshots__/';
+  try {
+    const out = execFileSync(
+      'git',
+      head !== undefined ? ['ls-tree', '-r', '--name-only', head, dir] : ['ls-files', dir],
+      { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    );
+    return new Set(
+      out
+        .split('\n')
+        .filter((l) => l.startsWith(dir))
+        .map((l) => l.slice(dir.length)),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+/** The names the spec tags @laptop-dark (its LAPTOP_DARK_SCREENS set). */
+function laptopDarkNames(spec: string): Set<string> {
+  const block = /const LAPTOP_DARK_SCREENS = new Set\(\[([\s\S]*?)\]\)/.exec(spec)?.[1] ?? '';
+  return new Set([...block.matchAll(/'([a-z0-9-]+)'/g)].map((m) => m[1] ?? ''));
+}
+
 /** The screens defined on the new side. */
 export function readScreenDefs(head?: string): ScreenDef[] {
   return SCREEN_FILES.flatMap((f) => {
@@ -724,7 +778,16 @@ async function main(argv: string[]): Promise<void> {
   const pr = argv.includes('--pr');
   const map = readMap(head);
   const sel = await selectForDiff(base, head, undefined, map);
-  const plan = ciPlan(sel, readScreenDefs(head), map, pr);
+  const screens = readScreenDefs(head);
+  // Only a PR run is capped; there a screen with no baseline renders first.
+  const missing = pr
+    ? missingBaselines(
+        screens,
+        baselineImages(head),
+        laptopDarkNames(readSource(SPEC_FILE, head) ?? ''),
+      )
+    : new Set<string>();
+  const plan = ciPlan(sel, screens, map, pr, ONE_SHARD_MAX, missing);
   report(plan, sel.reasons, argv);
 }
 

@@ -1,19 +1,15 @@
 import { useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  CheckpointCircle,
-  type CheckpointCircleState,
-} from '@/components/comments/CheckpointCircle';
 import { Button } from '@/components/ui/Button';
 import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 
 // Caption-highlight annotations: render a post caption with its caption_span
-// annotations as an ink underline (fg) plus the small numbered ink circle (the
-// checkpoint circle, good once resolved), and let a fresh text selection start
-// a new caption comment. Image pins live elsewhere; this file is caption only.
-// Ink and good are theme tokens, so light and dark flip together.
+// annotations as an ink underline (fg, no number), and let a fresh text
+// selection drop its quote into the comment box. Tapping a highlight jumps to
+// its comment; the comment's quote chip jumps back. Ink is a theme token, so
+// light and dark flip together.
 
 /** Marks the number circle node so the offset walker skips its text. */
 export const CAPTION_MARKER_ATTR = 'data-caption-marker';
@@ -24,12 +20,6 @@ const TEXT_NODE = 3;
 /** One current-version, in-bounds caption_span highlight to draw. */
 export interface CaptionAnnotationView {
   id: string;
-  /** Stable display number shown in the circle and in the comment chip (a
-   *  checkpoint's ledger_seq when the comment is one). */
-  n: number;
-  /** The circle state: the checkpoint's own (open / resolved / confirmed);
-   *  open when absent. */
-  state?: Extract<CheckpointCircleState, 'open' | 'resolved' | 'confirmed'>;
   captionStart: number;
   captionEnd: number;
   commentId: string;
@@ -207,7 +197,7 @@ export function captionView({
         role="button"
         tabIndex={0}
         aria-label={`Comment on "${quote}"`}
-        data-caption-highlight={a.state ?? 'open'}
+        data-caption-highlight=""
         className="rounded-sm bg-transparent text-fg underline decoration-fg decoration-2 underline-offset-4 cursor-pointer outline-none focus-visible:lit-focus"
         onClick={() => onHighlightClick(a.commentId)}
         onKeyDown={(event) => {
@@ -218,13 +208,6 @@ export function captionView({
         }}
       >
         {quote}
-        <span
-          {...{ [CAPTION_MARKER_ATTR]: '' }}
-          className="ml-1 inline-flex select-none align-middle"
-          style={{ userSelect: 'none' }}
-        >
-          <CheckpointCircle n={a.n} state={a.state ?? 'open'} size="inline" />
-        </span>
       </mark>,
     );
     cursor = a.captionEnd;

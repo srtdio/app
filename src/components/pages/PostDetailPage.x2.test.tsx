@@ -67,13 +67,14 @@ describe('1. caption block (mock P1)', () => {
 });
 
 describe('2 / 5. comments header, stage section once, sticky bar', () => {
-  it('drops the phone Feedback h2 and the Comments eyebrow; Comments own the header and the progress row', () => {
+  it('drops the phone Feedback h2 and the Comments eyebrow; the pinned block is the bar alone', () => {
     expect(PAGE).not.toContain('>Feedback</h2>');
     expect(PAGE).not.toContain('>\n                  Comments\n                </span>');
-    expect(PAGE).toContain('showHeader');
-    // Mounted under the list's live state, drawn in the pinned slot under the bar.
-    expect(PAGE).toMatch(/belowHeader=\{\s*<CheckpointProgress/);
+    // 11 Nov 2026: no progress row, no checkpoint header, no pinned slot under the bar.
+    expect(PAGE).not.toContain('showHeader');
+    expect(PAGE).not.toContain('CheckpointProgress');
     expect(PAGE).not.toContain('<CheckpointStrip');
+    expect(PAGE).not.toContain('data-checkpoint-pin-slot');
   });
 
   it('renders the stage section exactly once (one conditional), so role=alert never duplicates', () => {

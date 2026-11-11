@@ -23,27 +23,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { ICON_SIZE, IconLock } from '@/components/ui/icons';
-import { tintTarget } from '@/components/ui/SearchHighlight';
+import { PAGE_BLEED } from '@/components/ui/layout';
+import { cn } from '@/lib/cn';
 import { useToast } from '@/components/ui/toast';
 import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
-import { cancelPendingLongPressesWithin, useLongPress } from '@/components/ui/useLongPress';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
 import { MessageActionMenu } from '@/components/chat/MessageActionMenu';
 import {
   DayPill,
-  MessageBubble,
-  createRowHold,
-  isLinkTarget,
-  paintRowSwipe,
   profileNameOf,
-  rowSwipeCanTrigger,
   threadRows,
   type BubbleMentions,
-  type BubblePointerHandlers,
-  type BubbleSwipe,
-  type RowHold,
 } from '@/components/chat/MessageBubble';
-import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
+import { ThreadCommentRow } from '@/components/chat/ThreadCommentRow';
 import { TEAM_ONLY_LABEL } from '@/components/chat/plan-card';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { setPrivateReplyDraft } from '@/lib/chat/drafts';
@@ -60,7 +52,6 @@ import {
 } from '@/lib/chat/mentions';
 import type { CommentVisibility, PlanAudience } from '@/lib/chat/plans';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
-import { createSwipeReplyController, type SwipeReplyController } from '@/lib/chat/swipe-reply';
 import { SENDER_GROUP_MS, breaksRun, type ThreadMessage } from '@/lib/chat/thread';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { planItemFocusHref } from '@/lib/focus-target';
@@ -69,7 +60,6 @@ import { supabase } from '@/lib/supabase';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
 import { useReactions, type ReactionsApi } from '@/lib/reactions/use-reactions';
-import { whoReactedFromRows } from '@/lib/reactions/reads';
 import type { ReactionSummary } from '@/lib/reactions/model';
 
 /** A comment shown in the thread: a recorded row, or a pending own one. */
@@ -433,11 +423,10 @@ interface OpenMenu {
 }
 
 /**
- * One comment row: chat's MessageRow wiring on chat's MessageBubble. Swipe
- * right replies (the one swipe core); a left swipe rubber-bands (plan
- * comments cannot be deleted, so nothing fires). A hold (touch) or right-click
- * (laptop), Enter / Space / Shift+F10, or the laptop chevron opens the menu.
- * Pending and failed rows never swipe (chat's rule).
+ * One comment row: chat's shared ThreadCommentRow (the same row post and
+ * brief comments draw). Swipe right replies; a left swipe rubber-bands (plan
+ * comments cannot be deleted, so nothing fires). Pending and failed rows
+ * never swipe (chat's rule).
  */
 function PlanCommentRow(props: {
   comment: ShownComment;
@@ -461,117 +450,28 @@ function PlanCommentRow(props: {
   onDiscard: ((id: string) => void) | undefined;
   reactions: ReactionsApi;
 }): ReactElement {
-  const bubbleRef = useRef<HTMLDivElement>(null);
-  const iconRef = useRef<HTMLSpanElement>(null);
-  const deleteIconRef = useRef<HTMLSpanElement>(null);
-  const rowRef = useRef<HTMLLIElement>(null);
-  const swipeIconShownRef = useRef(true);
-  const latest = useRef(props);
-  latest.current = props;
-  const bubbleRect = (): DOMRect | null => bubbleRef.current?.getBoundingClientRect() ?? null;
-  const swipeRef = useRef<SwipeReplyController | null>(null);
-  const { handlers, consumeClickSuppression, cancel, clearClickSuppression } = useLongPress(
-    () => rowHold.hold(),
-    { ignoreMouse: true },
-  );
-  const open = (anchor: DOMRect | null): void => {
-    clearClickSuppression();
-    latest.current.onOpenMenu(latest.current.comment, anchor);
-  };
-  const rowHoldRef = useRef<RowHold | null>(null);
-  rowHoldRef.current ??= createRowHold({
-    selection: () => undefined,
-    coarse: () => latest.current.coarsePointer,
-    openMenu: () => open(bubbleRect()),
-    cancelTimer: () => cancel(),
-    cancelSwipe: () => swipeRef.current?.cancel(),
-    swiping: () => swipeRef.current?.swiping() === true,
-  });
-  const rowHold = rowHoldRef.current;
-  swipeRef.current ??= createSwipeReplyController({
-    direction: 'both',
-    onReply: () => latest.current.onReply?.(),
-    canTrigger: (side) => {
-      // Right replies where a Reply is wired; left never fires (no delete for plan comments).
-      const ok =
-        side === 'right' &&
-        latest.current.onReply !== undefined &&
-        rowSwipeCanTrigger(side, latest.current.message, undefined);
-      swipeIconShownRef.current = ok;
-      return ok;
-    },
-    onFrame: (frame) =>
-      paintRowSwipe(
-        bubbleRef.current,
-        iconRef.current,
-        deleteIconRef.current,
-        frame,
-        swipeIconShownRef.current,
-      ),
-    onStart: (pointerId) => {
-      cancel();
-      const scope = rowRef.current ?? bubbleRef.current;
-      if (scope !== null) cancelPendingLongPressesWithin(scope);
-      window.getSelection()?.removeAllRanges();
-      if (pointerId === undefined) return;
-      try {
-        scope?.setPointerCapture(pointerId);
-      } catch {
-        // The pointer is already gone; the gesture ends on its own.
-      }
-    },
-    enabled: () => latest.current.message.state === 'sent',
-    reducedMotion: () => latest.current.reducedMotion,
-  });
-  const swipe = swipeRef.current;
-  useEffect(() => () => swipe.dispose(), [swipe]);
-  // A deep link's arrival: chat's jump tint on the row (after paint, no read on paint).
-  useEffect(() => {
-    const row = rowRef.current;
-    if (!props.highlighted || row === null) return;
-    return tintTarget(row);
-  }, [props.highlighted]);
-  const pointer: BubblePointerHandlers = {
-    onPointerDown: (e) => {
-      rowHold.pointerDown();
-      if (!isLinkTarget(e.target)) handlers.onPointerDown(e);
-    },
-    onPointerMove: (e) => handlers.onPointerMove(e),
-    onPointerUp: () => handlers.onPointerUp(),
-    onPointerCancel: () => handlers.onPointerCancel(),
-  };
-  const rowSwipeRef = useRef<BubbleSwipe | null>(null);
-  rowSwipeRef.current ??= {
-    iconRef,
-    deleteIconRef,
-    handlers: {
-      onPointerDown: (e) => swipe.handlers.onPointerDown(e),
-      onPointerMove: (e) => swipe.handlers.onPointerMove(e),
-      onPointerUp: (e) => swipe.handlers.onPointerUp(e),
-      onPointerCancel: () => swipe.handlers.onPointerCancel(),
-    },
-    consumeClick: () => swipe.consumeClickSuppression(),
-  };
   const c = props.comment;
   return (
-    <MessageBubble
+    <ThreadCommentRow
       message={props.message}
-      profiles={props.profiles}
-      cache={sharedCardPresignCache()}
-      presignEnabled={PRESIGN_ENABLED}
-      showTicks={false}
-      isGroup
       head={props.head}
       tail={props.tail}
       afterLabel={props.afterLabel}
-      layout={props.layout}
-      viewerUserId={props.me ?? undefined}
-      mentions={props.mentions}
+      profiles={props.profiles}
       workspaceId={props.workspaceId}
+      me={props.me}
+      layout={props.layout}
+      highlighted={props.highlighted}
+      hoverMenu={props.hoverMenu}
+      coarsePointer={props.coarsePointer}
+      reducedMotion={props.reducedMotion}
       personSource={props.personSource}
-      bubbleRef={bubbleRef}
-      rowRef={rowRef}
-      swipe={rowSwipeRef.current}
+      mentions={props.mentions}
+      onOpenMenu={(anchor, reactionsOnly) => props.onOpenMenu(c, anchor, reactionsOnly)}
+      onReply={props.onReply}
+      onRetry={props.onRetry}
+      onDiscard={props.onDiscard}
+      reactions={props.reactions}
       rowData={{
         'data-plan-comment-id': c.id,
         'data-plan-comment': c.visibility,
@@ -581,42 +481,6 @@ function PlanCommentRow(props: {
         'data-plan-comment-highlight': props.highlighted ? '' : undefined,
       }}
       {...(c.visibility === 'team' ? { topLine: <TeamOnlyLine /> } : {})}
-      press={{
-        handlers: pointer,
-        onContextMenu: rowHold.contextMenu,
-        consumeClick: () => {
-          const held = consumeClickSuppression();
-          const swiped = swipe.consumeClickSuppression();
-          return held || swiped;
-        },
-        coarse: props.coarsePointer,
-        onKeyOpen: () => open(bubbleRect()),
-        ...(props.hoverMenu
-          ? {
-              onMore: () => open(bubbleRect()),
-              onReact: () => {
-                clearClickSuppression();
-                latest.current.onOpenMenu(latest.current.comment, bubbleRect(), true);
-              },
-            }
-          : {}),
-      }}
-      {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
-      {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
-      reactionChips={{
-        onToggle: (emoji) => props.reactions.toggle(c.id, emoji),
-        onPick: (emoji) => props.reactions.pick(c.id, emoji),
-        who: {
-          targetId: c.id,
-          viewerId: props.me,
-          load: () =>
-            whoReactedFromRows(supabase, {
-              rows: props.reactions.rowsOf(c.id),
-              workspaceId: props.workspaceId,
-              known: (id) => props.profiles.get(id),
-            }),
-        },
-      }}
     />
   );
 }
@@ -792,7 +656,7 @@ export function PlanItemThread(props: {
   let afterLabel = false;
   return (
     <>
-      <ul data-plan-thread="" className="-mx-4 flex flex-col">
+      <ul data-plan-thread="" className={cn(PAGE_BLEED, 'flex flex-col')}>
         {rows.map((row) => {
           if (row.kind === 'day') {
             afterLabel = true;

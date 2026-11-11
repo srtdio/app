@@ -52,6 +52,20 @@ export function planItemFocusHref(target: {
   return comment !== null ? `${base}&comment=${comment}` : base;
 }
 
+/**
+ * A post or brief comment's link: /posts/{id}?comment={id} or
+ * /briefs/{id}?comment={id}. A top-level comment lands in the list; a reply
+ * opens its thread at the reply (comments/Comments). Pure.
+ */
+export function commentFocusHref(
+  entityType: 'post' | 'brief',
+  entityId: string,
+  commentId: string,
+): string {
+  const base = entityType === 'post' ? '/posts' : '/briefs';
+  return `${base}/${encodeURIComponent(entityId)}?comment=${encodeURIComponent(commentId)}`;
+}
+
 /** How long a target may take to render before it counts as missing. */
 export const FOCUS_WAIT_MS = 8000;
 
