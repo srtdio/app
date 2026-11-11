@@ -914,12 +914,24 @@ export interface ThreadOnBoxGeom {
   scrollerTop: number;
   /** The scroller's and the list's own bottom / top padding plus the edge rows' margins. */
   wantBottomGap: number;
+  /**
+   * How far the scroll area runs past the list's own padding: a laptop row's
+   * hover key (44 tall, out of flow) hangs under the last row, and the end the
+   * thread pins to includes it. 0 on touch.
+   */
+  hangOverflow: number;
   wantTopGap: number;
   firstRowTop: number | null;
   lastRowBottom: number | null;
-  /** The top of what the list sits on: the placeholders when shown, else the reply box. */
+  /**
+   * The scroller's bottom edge: what the list sits on. The reply box (or the
+   * placeholders, then the box) starts there; the step between that edge and
+   * the box's field is the box's own and is not this check's.
+   */
   floorTop: number | null;
-  /** Placeholders: the last one's bottom edge to the reply box, and the padding it keeps. */
+  /** The reply box is there, at or under the scroller's bottom edge. */
+  boxTop: number | null;
+  /** Placeholders: the last one's bottom edge to their block's bottom edge, and the gap the last reply keeps. */
   fillGap: number | null;
   fillWantGap: number | null;
   /** The reply box's input holds focus. */
@@ -939,7 +951,9 @@ export function threadOnBoxViolations(geom: ThreadOnBoxGeom, touch: boolean): st
   if (geom.lastRowBottom === null || geom.firstRowTop === null || geom.floorTop === null) {
     return ['no thread rows or no reply box'];
   }
-  const short = geom.scrollHeight <= geom.clientHeight + 1;
+  if (geom.boxTop === null) out.push('no reply box under the thread');
+  else if (geom.boxTop < geom.floorTop - 1) out.push('the reply box overlaps the thread');
+  const short = geom.scrollHeight <= geom.clientHeight + geom.hangOverflow + 1;
   const unseen = geom.scrollHeight - geom.scrollTop - geom.clientHeight;
   if (!short && unseen > 1) out.push(`the thread sits ${Math.round(unseen)}px above its end`);
   const gap = geom.floorTop - geom.lastRowBottom;
@@ -1001,7 +1015,20 @@ export async function assertThreadSitsOnBox(
     const fillRows = fill !== null ? [...fill.querySelectorAll('[data-thread-fill-row]')] : [];
     const lastFill = fillRows[fillRows.length - 1] ?? null;
     const boxTop = box !== null ? box.getBoundingClientRect().top : null;
-    const wantBottomGap = pads('Bottom', last);
+    const ownBottomGap = pads('Bottom', last);
+    // A descendant of the last row that hangs under it (the laptop hover key)
+    // is part of the scroll area, so the end sits that far under the row.
+    const lastBottom = last !== null ? last.getBoundingClientRect().bottom : 0;
+    const hang =
+      last !== null
+        ? Math.max(
+            0,
+            ...[...last.querySelectorAll('*')].map(
+              (el) => el.getBoundingClientRect().bottom - lastBottom,
+            ),
+          )
+        : 0;
+    const wantBottomGap = Math.max(ownBottomGap, hang);
     const active = document.activeElement;
     return {
       anchored: scroller !== null,
@@ -1010,13 +1037,15 @@ export async function assertThreadSitsOnBox(
       clientHeight: scroller?.clientHeight ?? 0,
       scrollerTop: scroller?.getBoundingClientRect().top ?? 0,
       wantBottomGap,
+      hangOverflow: wantBottomGap - ownBottomGap,
       wantTopGap: pads('Top', first),
       firstRowTop: first !== null ? first.getBoundingClientRect().top : null,
       lastRowBottom: last !== null ? last.getBoundingClientRect().bottom : null,
-      floorTop: fill !== null ? fill.getBoundingClientRect().top : boxTop,
+      floorTop: scroller !== null ? scroller.getBoundingClientRect().bottom : null,
+      boxTop,
       fillGap:
-        lastFill !== null && boxTop !== null
-          ? boxTop - lastFill.getBoundingClientRect().bottom
+        lastFill !== null && fill !== null
+          ? fill.getBoundingClientRect().bottom - lastFill.getBoundingClientRect().bottom
           : null,
       fillWantGap: lastFill !== null && scroller !== null ? wantBottomGap : null,
       boxFocused: active !== null && box !== null && box.contains(active),
