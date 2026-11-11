@@ -1753,11 +1753,17 @@ export async function assertAlignment(
           const h = shown(head) ? textBox(head) : null;
           const c = caption.getBoundingClientRect();
           if (h === null) column.gaps.push({ label: 'no caption header name', gap: -1, min: 0 });
-          else {
+          else if (window.innerWidth >= 768) {
             column.textLefts.push({
               label: 'caption header name',
               x: shared ? h.left : h.left - c.left,
             });
+          } else {
+            // Under 768 the comments sit on the message family's column (16 +
+            // 36 photo + 12 = 64, 11 Nov 2026); the caption header keeps its
+            // own 32 photo + 8 (40 from the block's left) until PostDetailPage
+            // moves onto the family sizes.
+            column.gaps.push({ label: 'caption header name x', gap: h.left - c.left, equals: 40 });
           }
         }
         out.push(column);
@@ -3607,6 +3613,19 @@ export async function assertMessageFamily(
         }
       };
 
+      /**
+       * The inset the body's own wrappers add (a quote rail, a card's pad):
+       * padding, border and margin on the left of every ancestor under `top`.
+       */
+      const insetUnder = (el: Element, top: Element): number => {
+        let sum = 0;
+        for (let at = el.parentElement; at !== null && at !== top; at = at.parentElement) {
+          if (at.contains(top)) break;
+          const cs = getComputedStyle(at);
+          sum += px(cs.paddingLeft) + px(cs.borderLeftWidth) + px(cs.marginLeft);
+        }
+        return sum;
+      };
       // 1. Message rows in a main list (a thread view's root and replies have their own measure).
       let measured = 0;
       const rows = Array.from(document.querySelectorAll('li[data-msg-id]')).filter(
@@ -3627,8 +3646,11 @@ export async function assertMessageFamily(
           if (!near(s.width, fam.photo)) {
             out.push(`${at}: spacer ${r1(s.width)} wide, want ${fam.photo}`);
           }
-          if (bodyLeft !== null && !near(bodyLeft - s.right, fam.gap)) {
-            out.push(`${at}: text ${r1(bodyLeft - s.right)} after the spacer, want ${fam.gap}`);
+          const inset = shown(body) ? insetUnder(body, row) : 0;
+          if (bodyLeft !== null && !near(bodyLeft - s.right, fam.gap + inset)) {
+            out.push(
+              `${at}: text ${r1(bodyLeft - s.right)} after the spacer, want ${fam.gap + inset}`,
+            );
           }
           return;
         }
@@ -3649,8 +3671,13 @@ export async function assertMessageFamily(
         if (nameLeft !== null && !near(nameLeft - p.right, fam.gap)) {
           out.push(`${at}: name ${r1(nameLeft - p.right)} after the photo, want ${fam.gap}`);
         }
-        if (nameLeft !== null && bodyLeft !== null && !near(bodyLeft, nameLeft)) {
-          out.push(`${at}: text x ${r1(bodyLeft)}, not on the name's column ${r1(nameLeft)}`);
+        // The text column: the name's x, plus what the body's own wrappers inset.
+        const column = name.closest('[data-sender-line]')?.parentElement ?? row;
+        const inset = shown(body) ? insetUnder(body, column) : 0;
+        if (nameLeft !== null && bodyLeft !== null && !near(bodyLeft, nameLeft + inset)) {
+          out.push(
+            `${at}: text x ${r1(bodyLeft)}, not on the name's column ${r1(nameLeft + inset)}`,
+          );
         }
         type(name, `${at} name`, fam.name, fam.nameLine);
         const weight = Number(getComputedStyle(name).fontWeight);
