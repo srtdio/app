@@ -3914,6 +3914,7 @@ function postComment(id: string, author: string, body: string, at: number): Row 
     accepted_by: null,
     unaccepted_at: null,
     unaccepted_by: null,
+    task_state: null,
   };
 }
 

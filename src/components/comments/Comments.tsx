@@ -344,7 +344,7 @@ export function commentMenuOffer(input: {
     input.row.author_user_id === input.me;
   return {
     react: live,
-    todo: live && input.viewerIsAgency && input.row.task_state === null,
+    todo: live && input.viewerIsAgency && (input.row.task_state ?? null) === null,
     edit: own,
     copy: live && input.row.body.trim() !== '',
     copyLink: live,
