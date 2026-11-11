@@ -96,7 +96,7 @@ describe('SidePanel fill beside (Thread polish 1)', () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
-    const edge = (): number => window.innerWidth - 700;
+    const edge = (): number => document.documentElement.clientWidth - 700;
     await act(async () => {
       root?.render(
         <SidePanel open bare onClose={() => {}} title="Thread" fillBeside={edge}>
@@ -106,7 +106,7 @@ describe('SidePanel fill beside (Thread polish 1)', () => {
     });
     const panel = document.querySelector<HTMLElement>('[data-side-panel]');
     expect(panel?.hasAttribute('data-side-panel-fill')).toBe(true);
-    expect(panel?.style.left).toBe(`${window.innerWidth - 676}px`);
+    expect(panel?.style.left).toBe(`${document.documentElement.clientWidth - 676}px`);
     expect(panel?.style.width).toBe('676px');
     expect(panel?.className).not.toContain('w-side-panel');
     expect(document.documentElement.style.getPropertyValue('--side-panel-w')).toBe('');

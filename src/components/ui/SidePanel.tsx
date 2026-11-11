@@ -98,7 +98,7 @@ export function SidePanel({
       }
       // The edge as laid out without the squeeze in force now.
       const squeezed = Number.parseFloat(root.style.getPropertyValue(SIDE_PANEL_SQUEEZE_VAR)) || 0;
-      const plan = fillBesidePlan(right + squeezed, window.innerWidth);
+      const plan = fillBesidePlan(right + squeezed, document.documentElement.clientWidth);
       if (plan.squeeze > 0) root.style.setProperty(SIDE_PANEL_SQUEEZE_VAR, `${plan.squeeze}px`);
       else root.style.removeProperty(SIDE_PANEL_SQUEEZE_VAR);
       setFill({ left: plan.left, width: plan.width });

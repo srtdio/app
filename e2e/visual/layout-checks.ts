@@ -920,7 +920,7 @@ export async function assertThreadFillsBeside(page: Page, screenName: string): P
     if (panel === null || head === null) return null;
     const p = panel.getBoundingClientRect();
     return {
-      windowWidth: window.innerWidth,
+      windowWidth: document.documentElement.clientWidth,
       postRight: head.getBoundingClientRect().right,
       panelLeft: p.left,
       panelRight: p.right,
