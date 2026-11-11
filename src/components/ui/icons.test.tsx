@@ -99,6 +99,7 @@ const DOCUMENTED = [
   'IconTarget',
   'IconTaskSquare',
   'IconText',
+  'IconThreads',
   'IconTickDouble',
   'IconTickSingle',
   'IconTodo',

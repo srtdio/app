@@ -14,7 +14,7 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import {
   ActivitySolidRows,
   MARK_ALL_AS_READ,
@@ -125,7 +125,9 @@ describe('a row shows only while its count is above 0', () => {
     await mount(rows({ unread, threads: threadCount }));
     const want = (unread > 0 ? 1 : 0) + (threadCount > 0 ? 1 : 0);
     expect(solidRows()).toHaveLength(want);
-    for (const button of document.querySelectorAll('[data-topbar-catch-up], [data-topbar-threads]')) {
+    for (const button of document.querySelectorAll(
+      '[data-topbar-catch-up], [data-topbar-threads]',
+    )) {
       expect(Number(button.getAttribute('data-count'))).toBeGreaterThan(0);
     }
     expect(document.querySelector('[data-activity-solid-rows]') !== null).toBe(want > 0);
@@ -310,7 +312,8 @@ describe('useActivitySolidRows: the lead slot', () => {
 });
 
 describe('guard: the lead-row buttons never come back', () => {
-  const src = readFileSync(fileURLToPath(new URL('./topbar-actions.tsx', import.meta.url)), 'utf8');
+  // jsdom: import.meta.url is not a file URL; vitest runs from the repo root.
+  const src = readFileSync(join(process.cwd(), 'src/components/shell/topbar-actions.tsx'), 'utf8');
   it('no pair button, box, pill or pulse in topbar-actions', () => {
     expect(src).not.toMatch(
       /PairButton|ThreadsButton|CatchUpButton|ACTIVITY_TOPBAR_|ACTIVITY_LEAD_ROW|useActivityLeadRow/,
