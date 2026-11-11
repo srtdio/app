@@ -15,7 +15,7 @@ Grant hardening: TRUNCATE, TRIGGER, REFERENCES and MAINTAIN are revoked from ano
 
 1. Identity and access: users, user_private, brand_agency_requests, workspaces, workspace_members, workspace_client_domains, workspace_role_permissions, workspace_settings, workspace_onboarding, platform_operators
 2. Content: workspace_buckets, posts, post_versions, post_annotations
-3. Discussion: comments, comment_tasks, comment_reactions
+3. Discussion: comments, comment_tasks, comment_reactions, comment_thread_reads
 4. Briefs: briefs
 5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
@@ -298,7 +298,7 @@ Two primitives: Comments (here) and Chat (section 7). Both are recorded in Postg
 
 Indexes: FTS on body, entity, parent, author. All where deleted_at null. Plus the ledger index comments_entity_ledger_seq_key (unique (entity_id, ledger_seq) where ledger_seq is not null).
 
-comment_create(p_workspace_id, p_entity_type, p_entity_id, p_parent_comment_id, p_body, p_mentions, p_attachment_asset_ids, p_trace_id) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): the only write path to the comments table. One-level threading (a reply to an already-threaded comment is invalid_payload), lands attachment_asset_ids as entity_type='comment' asset_attachments rows, and emits the Activity inbox_entries ('comment' for the audience, urgent 'mention' for mentioned members). The post or brief must be in p_workspace_id (invalid_payload otherwise). Every mentioned id (p_mentions plus @[uuid] in the body) must be an active member of the workspace and, on a draft post, owner/admin/agency; otherwise it raises 'invalid_mention' with DETAIL = the offending ids, comma separated, and nothing is written (20261026120000_speedy_b).
+comment_create(p_workspace_id, p_entity_type, p_entity_id, p_parent_comment_id, p_body, p_mentions, p_attachment_asset_ids, p_trace_id) SECURITY DEFINER (search_path='', EXECUTE to authenticated only): the only write path to the comments table. One-level threading (a reply to an already-threaded comment is invalid_payload), lands attachment_asset_ids as entity_type='comment' asset_attachments rows, and emits the Activity inbox_entries ('comment' for the audience, urgent 'mention' for mentioned members). The post or brief must be in p_workspace_id (invalid_payload otherwise). Every mentioned id (p_mentions plus @[uuid] in the body) must be an active member of the workspace and, on a draft post, owner/admin/agency; otherwise it raises 'invalid_mention' with DETAIL = the offending ids, comma separated, and nothing is written (20261026120000_speedy_b). Approver (client role) top-level comments (20261111120000_comment_thread_reads, applied 11 Nov 2026): an Approver may create a plain top-level comment on a post in any non-draft stage; on a draft post it raises 'invalid_stage' (the old 'forbidden_role' block is gone). Replies and brief comments are unchanged.
 
 comment_resolve(p_comment_id, p_resolved, p_trace_id, p_resolution_note default null) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): toggles the thread-level resolved state on a root comment (a reply is invalid_payload; a missing or soft-deleted comment is not_found). p_resolved=true stamps resolved_at=now()/resolved_by=auth.uid() only when currently open and emits one 'comment_resolved' active inbox entry per other thread author (role-gated like comment_create); p_resolved=false clears the state (including resolution_note) and is silent (no inbox write). p_resolution_note is trimmed, a blank note becomes null, over 500 chars raises invalid_payload; the note is stored only on a real open-to-resolved transition. Any active workspace member may resolve or reopen.
 
@@ -342,6 +342,16 @@ comment_task_create(p_comment_id uuid, p_channel_id text, p_title text, p_priori
 PK (comment_id, user_id, emoji). Fields: workspace_id FK, emoji 1 to 32, created_at.
 
 plan_item_comment_reactions (20261109120000_comment_reactions, applied 9 Nov 2026): same shape for plan_item_comments, RLS on, authenticated SELECT only (plan_item_comment_reactions_select_visible: the comment is readable). Reactions are written only via comment_reaction_add/remove and plan_item_comment_reaction_add/remove (SECURITY DEFINER, search_path '', EXECUTE authenticated, not anon; add needs an active member and a live comment, plan add also a visible comment); reading only via RLS; no notifications on reactions (decision 9 Nov).
+
+### comment_thread_reads
+
+20261111120000_comment_thread_reads (applied 11 Nov 2026). Per user read point inside one post or brief comment thread. PK (root_comment_id, user_id). Fields: root_comment_id uuid FK comments.id ON DELETE CASCADE, user_id uuid FK auth.users.id ON DELETE CASCADE, workspace_id uuid, last_read_at timestamptz, updated_at timestamptz default now(). Index comment_thread_reads_user (user_id).
+
+RLS on. comment_thread_reads_own (SELECT to authenticated) USING user_id = auth.uid(). Table grants: anon none; authenticated SELECT only (INSERT, UPDATE, DELETE revoked); every write goes through the proc below.
+
+- comment_thread_read_set(p_root_id uuid, p_trace_id uuid) RETURNS void, SECURITY DEFINER, search_path '', EXECUTE to authenticated only: forward-only read mark at the latest created_at among the root and its replies. The root must be a top-level comment in a workspace where the caller is an active member ('comment not found' otherwise; 'not authenticated' with no caller).
+
+Backfill at apply time: every active member got a read row (last_read_at = now()) for every top-level comment that had replies (2348 rows, 480 threads).
 
 ## 4. Briefs
 

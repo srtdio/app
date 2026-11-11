@@ -275,8 +275,10 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
 
   // 3 -----------------------------------------------------------------------
   describe('comment_create client top-level post guard', () => {
-    it('rejects a client top-level post comment with forbidden_role', async () => {
-      const postId = await insertPost('review');
+    // 20261111120000_comment_thread_reads: an Approver may post a plain
+    // top-level comment on a non-draft post; a draft raises invalid_stage.
+    it('rejects a client top-level comment on a draft post with invalid_stage', async () => {
+      const postId = await insertPost('draft');
       const { error } = await commentCreate(clientAClient, {
         p_workspace_id: wsA.id,
         p_entity_type: 'post',
@@ -287,7 +289,23 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
         p_attachment_asset_ids: [],
         p_trace_id: generateTraceId(),
       });
-      expect(error?.message).toBe('forbidden_role');
+      expect(error?.message).toBe('invalid_stage');
+    });
+
+    it('lets a client create a top-level comment on a review post', async () => {
+      const postId = await insertPost('review');
+      const { data, error } = await commentCreate(clientAClient, {
+        p_workspace_id: wsA.id,
+        p_entity_type: 'post',
+        p_entity_id: postId,
+        p_parent_comment_id: null as unknown as string,
+        p_body: 'client top-level',
+        p_mentions: null as unknown as CreateArgs['p_mentions'],
+        p_attachment_asset_ids: [],
+        p_trace_id: generateTraceId(),
+      });
+      expect(error).toBeNull();
+      expect(data).toBeTruthy();
     });
 
     it('lets the same client reply under a parent post comment', async () => {
