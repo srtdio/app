@@ -266,6 +266,8 @@ export function RowSend({
   onPointerDown?: (e: PointerEvent<HTMLButtonElement>) => void;
   onMouseDown?: (e: MouseEvent<HTMLButtonElement>) => void;
   onTouchEnd?: () => void;
+  /** A tour key handed in by the composer (sendAnchor); absent: none. */
+  'data-induction'?: string | undefined;
 }) {
   return (
     <button

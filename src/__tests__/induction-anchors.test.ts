@@ -57,6 +57,12 @@ const FORWARDERS: { file: string; renders: RegExp; caller: RegExp }[] = [
     caller: /\bsubmitAnchor:\s*INDUCTION_KEYS\.(\w+)/g,
   },
   {
+    // Post comments put the tour's send keys on chat's composer send.
+    file: 'components/chat/Composer.tsx',
+    renders: /'data-induction':\s*props\.sendAnchor/,
+    caller: /\bsendAnchor(?:=\{|:\s*)INDUCTION_KEYS\.(\w+)/g,
+  },
+  {
     file: 'components/ui/ApproveConfirm.tsx',
     renders: /'data-induction':\s*props\.induction/,
     caller: /\binduction=\{INDUCTION_KEYS\.(\w+)\}/g,

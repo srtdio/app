@@ -103,7 +103,8 @@ export function ThreadCommentRow(props: ThreadCommentRowProps): ReactElement {
     canTrigger: (side) => {
       const p = latest.current;
       const wired = side === 'right' ? p.onReply !== undefined : p.onDelete !== undefined;
-      const ok = wired && rowSwipeCanTrigger(side, p.message, undefined);
+      const ok =
+        wired && rowSwipeCanTrigger(side, p.message, () => latest.current.onDelete !== undefined);
       swipeIconShownRef.current = ok;
       return ok;
     },

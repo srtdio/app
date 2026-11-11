@@ -123,7 +123,11 @@ test('approver: review, ask, talk with real taps, then Done @desktop', async ({ 
   await check('a_comment_button');
   await tapControl(page, step('a_comment_button'));
 
-  await expect(page.getByRole('textbox', { name: 'Caption comment body' })).toBeFocused();
+  // The quote drops into the comment box (chat's composer), which takes focus.
+  await expect(
+    page.locator('[data-comments-composer]').getByRole('textbox', { name: 'Message' }),
+  ).toBeFocused();
+  await expect(page.locator('[data-box-caption-quote]')).toBeVisible();
   await page.keyboard.type('Can the first line be shorter?');
   await check('a_comment_post', undefined, '02-mid-route');
   await tapControl(page, step('a_comment_post'));

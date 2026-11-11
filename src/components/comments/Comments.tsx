@@ -1044,6 +1044,7 @@ export function Comments(props: CommentsProps): ReactElement {
 
   // ---- menu and task -----------------------------------------------------
   const [menu, setMenu] = useState<OpenMenu | null>(null);
+  const rootInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [taskFor, setTaskFor] = useState<{ commentId: string; title: string } | null>(null);
 
   const personSource = useCallback(
@@ -1227,12 +1228,32 @@ export function Comments(props: CommentsProps): ReactElement {
       : {};
 
   const canComment = props.canComment !== false;
+  // A caption quote dropped into the box: the box takes focus (inside the
+  // Comment tap's commit, so the keyboard opens on a phone).
+  const quoteKey = props.captionQuote?.key ?? null;
+  useEffect(() => {
+    if (quoteKey !== null) rootInputRef.current?.focus({ preventScroll: false });
+  }, [quoteKey]);
   const captionQuote = props.captionQuote ?? null;
 
   const threadRoot = openRootId !== null ? rowById.get(openRootId) : undefined;
 
   return (
-    <div ref={listRef} data-comments="" data-entity={entityType}>
+    <div
+      ref={listRef}
+      data-comments=""
+      data-entity={entityType}
+      // The tour's comment (its whole row is the tour's target): a tap beside
+      // its bubble opens the thread too; the bubble's own tap already does.
+      onClick={(e) => {
+        const guide = props.guideReplyCommentId ?? null;
+        const target = e.target as Element;
+        if (guide === null || e.defaultPrevented || target.closest('[data-bubble]') !== null)
+          return;
+        const row = target.closest(commentRowSelector(guide));
+        if (row !== null && row.closest('[data-comment-thread]') === null) openThread(guide, true);
+      }}
+    >
       {loading ? (
         <ul data-comments-loading="" aria-busy="true" className="flex flex-col gap-3 py-2">
           <li className="sr-only">Loading comments</li>
@@ -1258,13 +1279,11 @@ export function Comments(props: CommentsProps): ReactElement {
         </ul>
       )}
       {canComment ? (
-        <div
-          data-comments-composer=""
-          data-induction={INDUCTION_KEYS.postCommentPost}
-          className="mt-6"
-        >
+        <div data-comments-composer="" className="mt-6">
           <Composer
             key={`root:${entityKey}`}
+            inputRef={rootInputRef}
+            sendAnchor={INDUCTION_KEYS.postCommentPost}
             channelId={`comments:${entityKey}`}
             placeholder={COMMENT_PLACEHOLDER}
             onSend={(text, attachments) => queueSend(null, text, attachments)}
@@ -1354,13 +1373,11 @@ export function Comments(props: CommentsProps): ReactElement {
                   </ul>
                 </div>
                 <ThreadViewFill loading={false} failed={false} onRetry={() => void loadAll()} />
-                <div
-                  data-comment-thread-composer=""
-                  {...(threadRoot.id === props.guideReplyCommentId
-                    ? { 'data-induction': INDUCTION_KEYS.postReplyPost }
-                    : {})}
-                >
+                <div data-comment-thread-composer="">
                   <Composer
+                    {...(threadRoot.id === props.guideReplyCommentId
+                      ? { sendAnchor: INDUCTION_KEYS.postReplyPost }
+                      : {})}
                     key={`thread:${threadRoot.id}:${replySeed?.rootId === threadRoot.id ? replySeed.seed : ''}`}
                     channelId={`comment-thread:${threadRoot.id}`}
                     placeholder={THREAD_REPLY_PLACEHOLDER}

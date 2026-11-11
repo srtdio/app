@@ -268,6 +268,8 @@ export interface ComposerProps {
    * chip). Absent: none (every chat caller passes none).
    */
   quoteStrip?: ReactNode;
+  /** A tour key on the send key (post comments); absent: none (every chat caller). */
+  sendAnchor?: string | undefined;
 }
 
 /** The draft link card appears once typing has paused this long. */
@@ -2076,6 +2078,7 @@ export function Composer(props: ComposerProps): ReactElement {
             ) : (
               <RowSend
                 label={editing !== undefined ? 'Save edit' : 'Send'}
+                {...(props.sendAnchor !== undefined ? { 'data-induction': props.sendAnchor } : {})}
                 // Saving an edit: the spinner in the send slot.
                 busy={editBusy}
                 disabled={!canSend}
