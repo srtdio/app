@@ -26,6 +26,7 @@ export const cells: readonly GalleryCell[] = [
     <div className="flex flex-wrap items-start gap-2">
       <Chip label="All" disabled onClick={noop} />
       <Chip label="Review" selected disabled onClick={noop} />
+      <Chip label="Add idea" variant="add" disabled onClick={noop} />
     </div>
   )),
   cell('long-text', () => <Chip label={LONG_TEXT} onClick={noop} />),
@@ -36,7 +37,10 @@ export const cells: readonly GalleryCell[] = [
   cell('max-number', () => <Chip label="Review" count={MAX_NUMBER} onClick={noop} />),
   cell('longest-name', () => <Chip label={LONGEST_NAME} selected={false} onClick={noop} />),
   cell('narrow-320', () => (
-    <Chip label="Review" dot={<StatusDot stage="review" />} count={12} onClick={noop} />
+    <div className="flex flex-col items-start gap-2">
+      <Chip label="Review" dot={<StatusDot stage="review" />} count={12} onClick={noop} />
+      <Chip label={LONG_TEXT} count={MAX_NUMBER} onClick={noop} />
+    </div>
   )),
   cell('all-slots-on', () => (
     <Chip

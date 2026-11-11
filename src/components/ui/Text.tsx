@@ -47,12 +47,30 @@ export const TEXT_ROLE: Record<TextRole, string> = {
 export const SECTION_LABEL_INK = 'text-sm font-semibold uppercase tracking-label';
 export const SECTION_LABEL = `${SECTION_LABEL_INK} text-fg-2`;
 
+/**
+ * A one-line box that cuts its own words with an ellipsis (a cut ui/Tag): the
+ * line box is the tag's 20 height, so the words sit centred as they do in the
+ * flex tag. Same size and weight; only the line box is named here.
+ */
+export const CUT_LINE = 'leading-[1.25rem]';
+
 /** Body inside a text field: 16/22 on phone (iOS never zooms), 14/20 from md. */
 export const INPUT_BODY = 'text-input md:text-base';
 
+/**
+ * A word too long for its line breaks inside itself instead of running off the
+ * screen (11 Nov 2026), and counts as breakable when a row sizes itself. Body,
+ * heading and title take it; a caller's truncate keeps cutting on one line
+ * (the break is left off, so nothing changes there).
+ */
+export const BREAK_LONG_WORD = '[overflow-wrap:anywhere]';
+const BREAKS: ReadonlySet<TextRole> = new Set<TextRole>(['body', 'heading', 'title']);
+const TRUNCATES = /(^|\s)truncate(\s|$)/;
+
 /** The class string for a role, merged with extra layout classes (last wins). */
 export function textRole(role: TextRole, className?: string): string {
-  return cn(TEXT_ROLE[role], className);
+  const breaks = BREAKS.has(role) && !TRUNCATES.test(className ?? '');
+  return cn(TEXT_ROLE[role], breaks && BREAK_LONG_WORD, className);
 }
 
 type TextTag = 'span' | 'p' | 'div' | 'h1' | 'h2' | 'h3' | 'time' | 'dt' | 'dd' | 'label';

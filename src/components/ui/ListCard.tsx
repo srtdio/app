@@ -171,6 +171,13 @@ export const LIST_CARD_LINE2_2 = 'flex min-h-11 min-w-0 items-start gap-2';
 // The secondary role's look without its truncate (a cut preview wraps; it never ellipsizes in CSS).
 export const LIST_CARD_PREVIEW_2 = 'min-w-0 flex-1 break-words text-md font-normal text-fg-2';
 
+/**
+ * The tag's place on line 2 (11 Nov 2026): its own width while it fits, never
+ * stretched; too long, it shrinks and the tag cuts with an ellipsis inside the
+ * row, so the unread dot (shrink-0) keeps its place and nothing leaves the row.
+ */
+export const LIST_CARD_TAG = 'flex min-w-0 shrink';
+
 /** The unread dot: 8px, round, fg ink. */
 export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full bg-fg';
 
@@ -428,12 +435,12 @@ export function ListCard({
                 end, right under the time (the unread dot after it). */}
             {!hasPreview ? <span data-list-card-spacer="" className="flex-1" /> : null}
             {hasTag ? (
-              <span data-list-card-tag="" {...tagHooks} className="flex min-w-0 shrink-0">
+              <span data-list-card-tag="" {...tagHooks} className={LIST_CARD_TAG}>
                 <Tag
                   label={tag}
                   tone="neutral"
+                  cut
                   {...(tagDot !== undefined ? { dot: tagDot } : {})}
-                  className="truncate"
                 />
               </span>
             ) : null}

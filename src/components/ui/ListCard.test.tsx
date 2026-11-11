@@ -308,8 +308,8 @@ describe('ListCard line 2: preview, tag, unread dot', () => {
       const html = render({ preview, unread: true });
       expect(line2Order(html)).toEqual(['spacer', 'tag', 'unread']);
       expect(classOf(html, 'data-list-card-spacer=""')).toContain('flex-1');
-      // The tag keeps its own width (never stretched), so it hugs the right end.
-      expect(classOf(html, 'data-list-card-tag=""')).toContain('shrink-0');
+      // The tag keeps its own width while it fits (never stretched), so it hugs the right end.
+      expect(classOf(html, 'data-list-card-tag=""')).toContain('shrink');
       expect(classOf(html, 'data-list-card-tag=""')).not.toContain('flex-1');
     }
     expect(line2Order(render({ preview: '' }))).toEqual(['spacer', 'tag']);
@@ -502,5 +502,17 @@ describe('ListCard lighting: flat rows', () => {
     const html = render({ unread: true, select: select({ active: true, chosen: true }) });
     expect(html).toContain('lit-pill');
     expect(html).not.toMatch(/shadow-|drop-shadow|backdrop-blur|dark:/);
+  });
+});
+
+describe('ListCard tag holds the row (11 Nov 2026)', () => {
+  it('a long tag cuts with an ellipsis inside the row; the time and the unread dot keep their places', () => {
+    const html = render({ tag: 'A very long tag that would run off the row', unread: true });
+    const tagPlace = classOf(html, 'data-list-card-tag=""');
+    expect(tagPlace).toEqual(expect.arrayContaining(['min-w-0', 'shrink']));
+    expect(tagPlace).not.toContain('shrink-0');
+    expect(html).toMatch(/text-ellipsis[^"]*">A very long tag that would run off the row<\/span>/);
+    expect(classOf(html, 'data-list-card-unread=""')).toContain('shrink-0');
+    expect(classOf(html, 'data-list-card-time=""')).toContain('shrink-0');
   });
 });

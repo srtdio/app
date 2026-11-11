@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, Ref } from 'react';
+import { Children, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
 import { ProgressRing } from '@/components/ui/ProgressRing';
@@ -77,6 +77,44 @@ const BUTTON_SHAPES: Record<ButtonShape, string> = {
   round: 'rounded-full w-11 px-0',
 };
 
+/**
+ * Shape (11 Nov 2026), added by Button itself: never wider than its container
+ * and icons never shrink. A text-only button is its own one-line label, cut
+ * with an ellipsis (12 + 20 + 12 keeps it 44 tall); beside an icon the text
+ * stays on one line and is clipped at the edge (the text stays a bare node).
+ */
+export const BUTTON_FIT = 'max-w-full [&>svg]:shrink-0';
+export const BUTTON_TEXT_ONLY =
+  'inline-block overflow-hidden text-ellipsis whitespace-nowrap py-3 text-center';
+export const BUTTON_ONE_LINE = 'overflow-hidden whitespace-nowrap';
+/** A blocked twin (aria-disabled) keeps taps, so the BUTTON level holds its grey on hover. */
+const BUTTON_LEVEL_BLOCKED = 'aria-disabled:hover:bg-fg/10';
+
+/** True when every child is text (a label, or "Send " + 3). Pure. */
+export function isTextOnly(children: ReactNode): boolean {
+  const kids = Children.toArray(children);
+  return kids.length > 0 && kids.every((c) => typeof c === 'string' || typeof c === 'number');
+}
+
+/** True when some child is text beside an element (an icon). Pure. */
+function hasTextBesideIcon(children: ReactNode): boolean {
+  const kids = Children.toArray(children);
+  return (
+    kids.some((c) => typeof c === 'string' || typeof c === 'number') &&
+    kids.some((c) => typeof c !== 'string' && typeof c !== 'number')
+  );
+}
+
+/** Button's own shape classes for its children, before the caller's className. Pure. */
+export function buttonFit(variant: ButtonVariant, shape: ButtonShape, children: ReactNode): string {
+  return cn(
+    BUTTON_FIT,
+    (variant === 'secondary' || variant === 'default') && BUTTON_LEVEL_BLOCKED,
+    shape === 'default' && isTextOnly(children) && BUTTON_TEXT_ONLY,
+    shape === 'default' && hasTextBesideIcon(children) && BUTTON_ONE_LINE,
+  );
+}
+
 /** The class string a Button renders; exported for the few anchors that must look like one. */
 export function buttonClass(
   variant: ButtonVariant = 'secondary',
@@ -108,16 +146,16 @@ export function Button({
   return (
     <button
       ref={buttonRef}
-      className={buttonClass(variant, shape, className)}
+      className={buttonClass(variant, shape, cn(buttonFit(variant, shape, children), className))}
       {...props}
       disabled={busy || disabled}
       aria-busy={busy ? true : props['aria-busy']}
     >
       {busy ? (
-        <span data-busy="" className="grid place-items-center">
+        <span data-busy="" className="grid min-w-0 max-w-full place-items-center">
           <span
             data-busy-label=""
-            className="invisible col-start-1 row-start-1 inline-flex items-center gap-2"
+            className="invisible col-start-1 row-start-1 inline-flex min-w-0 max-w-full items-center gap-2 overflow-hidden whitespace-nowrap"
           >
             {children}
           </span>

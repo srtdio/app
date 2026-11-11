@@ -41,8 +41,17 @@ export const cells: readonly GalleryCell[] = [
       <Button variant="ghost" disabled onClick={noop}>
         Cancel
       </Button>
+      <Button variant="link" disabled onClick={noop}>
+        Edit
+      </Button>
       <Button variant="success" disabled onClick={noop}>
         Approve
+      </Button>
+      <Button variant="danger" disabled onClick={noop}>
+        Delete
+      </Button>
+      <Button variant="primary" aria-disabled="true" onClick={noop}>
+        New
       </Button>
     </div>
   )),
@@ -73,9 +82,14 @@ export const cells: readonly GalleryCell[] = [
     </Button>
   )),
   cell('narrow-320', () => (
-    <Button variant="primary" onClick={noop}>
-      Send for review
-    </Button>
+    <div className="flex flex-col items-start gap-2">
+      <Button variant="primary" onClick={noop}>
+        Send for review
+      </Button>
+      <Button variant="secondary" onClick={noop}>
+        {LONG_TEXT}
+      </Button>
+    </div>
   )),
   cell('all-slots-on', () => (
     <Button variant="primary" shape="round" aria-label="Send" type="button" onClick={noop}>

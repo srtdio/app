@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { cn } from '@/lib/cn';
 import { ICON_SIZE, type IconProps } from '@/components/ui/icons';
+import { CUT_LINE } from '@/components/ui/Text';
 
 export type TagTone = 'neutral' | 'accent' | 'good' | 'warn' | 'bad';
 
@@ -13,6 +14,11 @@ interface TagProps {
   dot?: TagDot;
   /** A leading icon from ui/icons.tsx, at text size. Absent: today's markup. */
   icon?: ComponentType<IconProps>;
+  /**
+   * One line that ends in an ellipsis when the place is too narrow (ListCard's
+   * line 2). Words only: with a dot or an icon the tag is clipped at the edge.
+   */
+  cut?: boolean;
   className?: string;
 }
 
@@ -37,22 +43,41 @@ export function isTagDot(value: string): value is TagDot {
   return value in DOT;
 }
 
-/** Classes for a tag in a tone. */
+/**
+ * Classes for a tag in a tone. Never wider than its place (11 Nov 2026):
+ * max-w-full, and what does not fit is clipped at the edge.
+ */
 export function tagClass(tone: TagTone): string {
   return cn(
-    'lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium',
+    'lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium max-w-full overflow-hidden',
     TAG_TONE[tone],
   );
 }
 
+/**
+ * A cut tag (words only): the tag box itself is the one line and ends in an
+ * ellipsis when its place is too narrow; the words stay its bare text. The
+ * block display wins with ! so the tag keeps tagClass whole (and its 20 line
+ * box keeps the words centred, CUT_LINE).
+ */
+export const TAG_CUT = `!inline-block text-ellipsis whitespace-nowrap align-middle ${CUT_LINE}`;
+
 /** A static, non-interactive pill for a stage, status or mark. */
-export function Tag({ label, tone = 'neutral', dot, icon: Icon, className }: TagProps) {
+export function Tag({
+  label,
+  tone = 'neutral',
+  dot,
+  icon: Icon,
+  cut = false,
+  className,
+}: TagProps) {
   return (
     <span
       className={cn(
         tagClass(tone),
         dot !== undefined && 'gap-2',
         Icon !== undefined && dot === undefined && 'gap-1',
+        cut && dot === undefined && Icon === undefined && TAG_CUT,
         className,
       )}
     >

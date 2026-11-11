@@ -21,7 +21,19 @@ const ACTIONS = (
   </>
 );
 
+const ACTIONS_OFF = (
+  <>
+    <IconButton label="Search" disabled onClick={noop}>
+      <IconSearch size={ICON_SIZE.control} />
+    </IconButton>
+    <IconButton label="More" aria-disabled="true" onClick={noop}>
+      <IconMore size={ICON_SIZE.control} />
+    </IconButton>
+  </>
+);
+
 export const cells: readonly GalleryCell[] = [
+  cell('disabled', () => <HeaderBar title={SHORT} onBack={noop} actions={ACTIONS_OFF} />),
   cell('default', () => (
     <div className="flex flex-col">
       <HeaderBar title={SHORT} onBack={noop} />
