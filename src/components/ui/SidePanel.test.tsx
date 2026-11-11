@@ -82,7 +82,7 @@ describe('SidePanel fill beside (Thread polish 1)', () => {
     // 1440 window, post column ending at 824: panel 848..1440 (592).
     expect(fillBesidePlan(824, 1440)).toEqual({ left: 848, width: 592, squeeze: 0 });
     // Too little room: 380 at the window edge, the content gives up the rest.
-    expect(fillBesidePlan(824, 1100)).toEqual({ left: 720, width: 380, squeeze: 104 });
+    expect(fillBesidePlan(824, 1100)).toEqual({ left: 720, width: 380, squeeze: 128 });
   });
 
   it('default (Cockpit): 380 and the page pads by --side-panel-w', async () => {
