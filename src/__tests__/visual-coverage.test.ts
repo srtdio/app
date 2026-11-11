@@ -363,6 +363,7 @@ const REQUIRED: readonly string[] = [
   // in view, and the Edit concept day tiles with one picked.
   'plan-day-picker',
   'post-comment-editing',
+  'post-comment-photo-caption',
   'post-comment-thread',
   'post-comment-menu',
   'post-comment-menu-own',

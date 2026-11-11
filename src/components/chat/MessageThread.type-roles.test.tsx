@@ -74,7 +74,7 @@ describe('chat thread type roles', () => {
   }
 
   it('the chat-type.ts tokens sit on the type scale', () => {
-    expect(HEADER_NAME_TYPE.touch).toBe('text-xl font-semibold');
+    expect(HEADER_NAME_TYPE.touch).toBe('text-xl font-bold');
     expect(HEADER_NAME_TYPE.laptop).toBe('text-lg font-medium');
     expect(HEADER_LINE_TYPE.touch).toBe('text-md font-normal');
     expect(BUBBLE_META_TYPE).toBe('text-xs font-normal tabular-nums');
@@ -83,7 +83,7 @@ describe('chat thread type roles', () => {
   it('Seen line meta: muted bubble meta size; the time is sans tabular, never mono', () => {
     const at = '2026-10-02T10:05:00Z';
     const time = formatTime(at, 'UTC');
-    const span = paint(<SeenLine readAt={at} timeZone="UTC" />, 'span', time);
+    const span = paint(<SeenLine readAt={at} timeZone="UTC" layout="touch" />, 'span', time);
     expect(classes(span)).toEqual(expect.arrayContaining(['font-sans', 'tabular-nums']));
     expect(classes(span)).not.toContain('font-mono');
     const line = span.parentElement as HTMLElement;

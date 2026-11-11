@@ -434,9 +434,11 @@ export function RepliesRow(props: {
 
 /**
  * A thread view's root head in catch up (9 Nov 2026; chat's root draws the
- * same in MessageBubble threadPlace 'root'): the 40 square photo on the 16
+ * same on laptop only, MessageBubble rootStack): the 40 square photo on the 16
  * gutter, 12 to the name (line 1) over its threadWhen 'date' time (line 2).
- * The root's text sits full width below it, on the gutter too.
+ * The root's text sits full width below it, on the gutter too. Chat's phone
+ * root is a normal head row instead (36 photo, text on the 64 column); catch
+ * up's thread still stacks on phone until CatchUpThreadView draws a head row.
  */
 export function ThreadRootHead(props: {
   name: string;

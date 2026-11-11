@@ -1,5 +1,12 @@
 // A catch-up card's body parts (9 Nov 2026), pure render: the chat's work
-// layout rows (square photo 36 touch / 32 laptop, 12 to the text, name label + clock time meta, text body), the
+// layout rows (square photo 36 touch / 32 laptop, 12 to the text), in the
+// message family's type (11 Nov 2026): on a phone the name is the family name
+// token (SENDER_NAME_TYPE, 17 bold) and the text the message text token
+// (BUBBLE_BODY_TYPE, 17/20); laptop keeps the label name and the body text.
+// Name to text is one 4 step (a MessageBubble head row's), the same for a one
+// line and a two line comment: the text that opens its thread adds no height
+// (its 44 tap is a hit area, OPEN_THREAD_HIT), and the corner reaction key is
+// out of the flow. Then the
 // feedback points (CheckpointCircle in the photo column, centred on the first
 // text line), the event rows (actor, time, the line without the name), the
 // day lines (DateLine, only when the card spans more than one day), long text
@@ -12,9 +19,11 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import {
+  BUBBLE_BODY_TYPE,
   MESSAGE_AVATAR_ROLE,
   MESSAGE_PHOTO_BOX,
   MESSAGE_PHOTO_COL,
+  SENDER_NAME_TYPE,
   sized,
   useChatLayout,
 } from '@/components/chat/chat-type';
@@ -66,19 +75,38 @@ export function clipReveal(el: Element | null): void {
   });
 }
 
-/** A text with links (new tab, short labels) and my own @name lit. */
+/**
+ * The text that opens its thread: no height of its own (min-h-0 drops the
+ * row's 44 minimum, which centred a one line text 12 lower than a two line
+ * one), the 44 tap from a hit area centred on the text. The text itself sits
+ * above the hit area (OPEN_THREAD_TEXT), so its links and "more" keep their taps.
+ */
+export const OPEN_THREAD_HIT =
+  "relative block min-h-0 before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-['']";
+const OPEN_THREAD_TEXT = 'relative block';
+
+/**
+ * A text with links (new tab, short labels) and my own @name lit, in the
+ * message text token (17/20 on a phone; laptop is the body role, unchanged).
+ */
 export function RichText(props: {
   text: string;
   selfName: string | null;
   className?: string;
 }): ReactElement {
+  const layout = useChatLayout();
   let at = 0;
   return (
     <Text
       role="body"
       as="p"
+      data-catch-up-text=""
       style={WRAP_ANYWHERE}
-      className={cn('whitespace-pre-wrap text-fg', props.className)}
+      className={cn(
+        'whitespace-pre-wrap text-fg',
+        sized(BUBBLE_BODY_TYPE, layout),
+        props.className,
+      )}
     >
       {linkRuns(props.text).map((run) => {
         const key = at;
@@ -166,7 +194,12 @@ export function LongText(props: { text: string; selfName: string | null }): Reac
   );
 }
 
-/** The row head: square photo column (36 touch, 32 laptop; 12 to the text), then name (label, one line) + clock time (meta). */
+/**
+ * The row head: square photo column (36 touch, 32 laptop; 12 to the text), then
+ * the name (one line: the family name token on a phone, the label role on
+ * laptop) + clock time (meta) on one baseline; the line is as tall as the
+ * name's own line (the 16 meta line sits inside it), then 4 to the text.
+ */
 function RowFrame(props: {
   author: CatchUpAuthor;
   createdAt: string;
@@ -197,7 +230,14 @@ function RowFrame(props: {
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {/* With reactions wired, the head line ends clear of the corner smiley (40 + 4). */}
         <div className={cn('flex min-w-0 items-baseline gap-2', reacts && 'pr-11')}>
-          <Text role="label" className="min-w-0 truncate text-fg" data-catch-up-name="">
+          <Text
+            role="label"
+            className={cn(
+              'min-w-0 truncate text-fg',
+              layout === 'touch' && sized(SENDER_NAME_TYPE, layout),
+            )}
+            data-catch-up-name=""
+          >
             {props.author.name}
           </Text>
           <Text role="meta" as="time" dateTime={props.createdAt} className="shrink-0">
@@ -249,7 +289,7 @@ function RepliesLink(props: {
       data-catch-up-replies=""
       onPointerDown={(event) => event.preventDefault()}
       onClick={props.onOpen}
-      className="flex min-h-11 min-w-11 max-w-full items-center gap-2 self-start text-left focus-visible:lit-focus"
+      className="relative flex min-h-11 min-w-11 max-w-full items-center gap-2 self-start text-left focus-visible:lit-focus"
     >
       {props.repliers.length > 0 ? (
         <span
@@ -364,15 +404,21 @@ export function MessageRow(props: {
             // lands: a blur here reflows the card and the click would miss.
             onPointerDown={(event) => event.preventDefault()}
             onClick={props.onOpenThread}
-            className="text-left focus-visible:lit-focus"
+            className={cn('text-left focus-visible:lit-focus', OPEN_THREAD_HIT)}
           >
-            {text}
+            <span className={OPEN_THREAD_TEXT}>{text}</span>
           </PressableRow>
         ) : (
           text
         )}
         {link !== null ? (
-          <LinkPreviewCard url={link} size="compact" tone="plain" className="w-full max-w-sm" />
+          // relative: above the text's hit area, so its top edge keeps its own tap.
+          <LinkPreviewCard
+            url={link}
+            size="compact"
+            tone="plain"
+            className="relative w-full max-w-sm"
+          />
         ) : null}
       </div>
       {props.onOpenThread !== null && row.replyCount > 0 ? (
@@ -392,7 +438,7 @@ export function MessageRow(props: {
 /**
  * A feedback batch: the author row + "N checkpoints"; then each point with its
  * CheckpointCircle in the photo column (centred on the first text line: the
- * text block is py-3 on the 20 body line (centre 22), the circle box h-11 (centre 22)), "{n} · {text}" on the
+ * text block is py-3 on the 20 text line (centre 22; the message text token keeps the 20 line), the circle box h-11 (centre 22)), "{n} · {text}" on the
  * message text column, a chevron right. Tap toggles; an open point offers
  * "Reply" (its thread). No Resolve on cards.
  */
@@ -458,6 +504,7 @@ export function PointsRow(props: {
                 className={cn(
                   'min-w-0 flex-1 py-3',
                   textRole('body'),
+                  sized(BUBBLE_BODY_TYPE, layout),
                   isOpen ? 'whitespace-pre-wrap text-fg' : 'truncate text-fg-2',
                 )}
               >
@@ -495,6 +542,7 @@ export function EventRow(props: {
   row: CatchUpEventRow;
   timeZone: string | undefined;
 }): ReactElement {
+  const layout = useChatLayout();
   return (
     <RowFrame
       author={props.row.author}
@@ -502,7 +550,13 @@ export function EventRow(props: {
       timeZone={props.timeZone}
       hook={{ 'data-catch-up-event': props.row.id }}
     >
-      <Text role="body" as="p" style={WRAP_ANYWHERE} className="text-fg">
+      <Text
+        role="body"
+        as="p"
+        data-catch-up-text=""
+        style={WRAP_ANYWHERE}
+        className={cn('text-fg', sized(BUBBLE_BODY_TYPE, layout))}
+      >
         {props.row.line}
       </Text>
     </RowFrame>

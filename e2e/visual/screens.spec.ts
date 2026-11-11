@@ -32,6 +32,7 @@ import {
   assertWritingBox,
   assertAlignment,
   assertMessageFamily,
+  assertPhotoCaptionColumn,
   type MessageFamilyWant,
   assertCatchUpLayout,
   assertReactionChips,
@@ -762,8 +763,16 @@ const CATCH_UP_MENTION = '0190f1c0-0000-7000-8000-00000000c001';
 const CATCH_UP_STARTED = '0190f1c0-0000-7000-8000-00000000c002';
 const CATCH_UP_COMMENT = '0190f1c0-0000-7000-8000-00000000c003';
 const CATCH_UP_COMMENT_ID = '0190f1c0-0000-7000-8000-00000000c0c3';
+/** `lines`: two more unread comments on the post, a one line and a two line one (phone). */
+const CATCH_UP_LINE_COMMENTS = [
+  { n: 4, body: 'Love it.' },
+  { n: 5, body: 'Could we also try the cooler crop on the second slide, please?' },
+] as const;
 
-function seedCatchUp(network: HarnessNetwork, opts: { mention?: boolean } = {}): void {
+function seedCatchUp(
+  network: HarnessNetwork,
+  opts: { mention?: boolean; lines?: boolean } = {},
+): void {
   const t = network.world.tables;
   const root = THREAD_IDS.gr ?? '';
   const reply = THREAD_IDS.gd ?? '';
@@ -818,14 +827,14 @@ function seedCatchUp(network: HarnessNetwork, opts: { mention?: boolean } = {}):
       payload: { comment_id: CATCH_UP_COMMENT_ID },
     }),
   );
-  (t.comments ??= []).push({
-    id: CATCH_UP_COMMENT_ID,
+  const comment = (id: string, body: string, minsAgo: number): Row => ({
+    id,
     workspace_id: WORKSPACE_ID,
     entity_type: 'post',
     entity_id: POST,
     parent_comment_id: null,
     author_user_id: PEER,
-    body: 'Can we try a warmer cover for this one?',
+    body,
     mentions: null,
     attachment_asset_ids: null,
     resolved_at: null,
@@ -836,10 +845,27 @@ function seedCatchUp(network: HarnessNetwork, opts: { mention?: boolean } = {}):
     ledger_seq: null,
     closed_at: null,
     accepted_at: null,
-    created_at: new Date(NOW - 3 * 60_000).toISOString(),
+    created_at: new Date(NOW - minsAgo * 60_000).toISOString(),
     edited_at: null,
     deleted_at: null,
   });
+  const comments = (t.comments ??= []);
+  comments.push(comment(CATCH_UP_COMMENT_ID, 'Can we try a warmer cover for this one?', 3));
+  for (const { n, body } of opts.lines === true ? CATCH_UP_LINE_COMMENTS : []) {
+    const id = `0190f1c0-0000-7000-8000-00000000c0c${n}`;
+    // Older than the first comment (minutes 5 and 4), so it stays the card's newest.
+    comments.push(comment(id, body, 9 - n));
+    (t.inbox_entries ??= []).push(
+      entry(`0190f1c0-0000-7000-8000-00000000c00${n}`, 9 - n, {
+        actor_user_id: PEER,
+        event_type: 'comment',
+        entity_type: 'post',
+        entity_id: POST,
+        scope: 'posts',
+        payload: { comment_id: id },
+      }),
+    );
+  }
 }
 
 /**
@@ -2028,7 +2054,8 @@ const SCREENS: Screen[] = [
     // A post card from a comment: name row, the strip (closed), the comment.
     name: 'catch-up-comment',
     seed: creator,
-    extra: seedCatchUp,
+    // Message family: a one line and a two line comment beside the first.
+    extra: (network) => seedCatchUp(network, { lines: true }),
     url: `/activity?catchup=${CATCH_UP_COMMENT}`,
     steps: async (page) => {
       await catchUpReady(page);
@@ -5997,6 +6024,40 @@ function seedThreadFiles(network: HarnessNetwork): void {
   );
 }
 
+const PHOTO_COMMENT = '0190f300-0000-7000-8000-0000000000f3';
+const PHOTO_COMMENT_ASSET = '0190e700-0000-7000-8000-0000000000a9';
+const PHOTO_COMMENT_VERSION = '0190e700-0000-7000-8000-0000000000b9';
+
+/** 12 Nov 2026: Priya's comment with one photo over a two line text. */
+function seedPhotoComment(network: HarnessNetwork): void {
+  const t = network.world.tables;
+  (t.asset_versions ??= []).push({
+    id: PHOTO_COMMENT_VERSION,
+    asset_id: PHOTO_COMMENT_ASSET,
+    kind: 'image',
+    mime_type: 'image/png',
+    size_bytes: 1_300_000,
+    width: 1200,
+    height: 900,
+    duration_ms: null,
+    page_count: null,
+    external_url: null,
+    r2_key: `${WORKSPACE_ID}/${PHOTO_COMMENT_ASSET}/v1`,
+    version_number: 1,
+    assets: { display_name: null, filename: 'Grid mock.png' },
+  });
+  (t.comments ??= []).push(
+    threadComment(
+      PHOTO_COMMENT,
+      PEER,
+      'Here is the grid with the morning shot first. ' +
+        'Tell me if the cover should swap with the second slide.',
+      NOW - 30 * 60_000,
+      { attachment_asset_ids: [PHOTO_COMMENT_VERSION] },
+    ),
+  );
+}
+
 /** Thread polish 1, laptop: the post column keeps its width with the thread open and closed (1440). */
 async function assertPostColumnStill(page: Page, name: string): Promise<void> {
   if (!isLaptop(page)) return;
@@ -6268,6 +6329,21 @@ SCREENS.push(
       await page.mouse.move(0, 0);
     },
     after: async (page) => assertMenuOrder(page, 'post-comment-menu-file-only'),
+  },
+  {
+    // 12 Nov 2026: one comment with one photo over a two line text: the text
+    // on the name's column (64 on a phone), never inset by the photo.
+    name: 'post-comment-photo-caption',
+    seed: creator,
+    extra: seedPhotoComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const bubble = commentBubble(page, PHOTO_COMMENT);
+      await waitFor([bubble.locator('img')], 'comment photo');
+      await bubble.scrollIntoViewIfNeeded();
+    },
+    after: async (page) => assertPhotoCaptionColumn(page, 'post-comment-photo-caption'),
   },
   {
     // No comments yet: the zero line over the comment box.
@@ -7483,7 +7559,8 @@ const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
 // x, text column, name and text type, the date line's x, hairline and 16 / 8 /
 // 12, a placeholder's photo rect), phone and laptop, light and dark.
 const MESSAGE_FAMILY_SCREENS: Readonly<Record<string, MessageFamilyWant>> = {
-  'chat-thread': {},
+  // The DM: its Seen line's words on the text column (64 under 768).
+  'chat-thread': { seen: true },
   'chat-thread-group': {},
   'chat-date-lines': { dateLines: 3 },
   'chat-replies-row': {},
@@ -7491,6 +7568,12 @@ const MESSAGE_FAMILY_SCREENS: Readonly<Record<string, MessageFamilyWant>> = {
   'brief-comments': {},
   'plan-item-thread': { rows: false },
   'catch-up-chat-main': {},
+  // 12 Nov 2026: Catch up's comment and chat rows in the family's type, the
+  // name 4 over the text on a one line and a two line row alike.
+  'catch-up-comment': { oneAndTwoLine: true },
+  'catch-up-many-comments': {},
+  'catch-up-thread-mention': {},
+  'catch-up-thread-reply-card': {},
   // The thread opened by a tap while its replies read hangs (no placeholders:
   // none of its replies are still to land).
   'chat-thread-tap-open': { rows: false },
@@ -7546,6 +7629,8 @@ const THREAD_ON_BOX_SCREENS: ReadonlySet<string> = new Set([
 ]);
 
 const LAPTOP_DARK_SCREENS = new Set([
+  // 12 Nov 2026: a comment with a photo over a two line text.
+  'post-comment-photo-caption',
   // 12 Nov 2026: a comment thread whose replies span two days.
   'post-comment-thread-two-days',
   'pipeline',

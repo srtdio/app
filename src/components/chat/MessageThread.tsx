@@ -3337,11 +3337,16 @@ function ThreadBody(
                     />
                   ) : null}
                   {props.reading?.seen?.messageId === row.message.id ? (
-                    <SeenLine readAt={props.reading.seen.readAt} rail={plan.continues} />
+                    <SeenLine
+                      readAt={props.reading.seen.readAt}
+                      layout={props.layout}
+                      rail={plan.continues}
+                    />
                   ) : null}
                   {props.reading?.readBy?.messageId === row.message.id ? (
                     <ReadByLine
                       label={props.reading.readBy.label}
+                      layout={props.layout}
                       onOpen={() => props.onOpenReadInfo?.()}
                       rail={plan.continues}
                     />

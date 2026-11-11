@@ -8,7 +8,7 @@ vi.mock('@/components/ui/Sheet', () => ({
   Sheet: (props: { open: boolean; children: ReactNode }) => (props.open ? props.children : null),
 }));
 
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -224,8 +224,12 @@ describe('reading layer elements', () => {
   });
 
   it('Seen line is 11/14 muted with a sans tabular time, left-aligned (L1)', () => {
-    const html = renderToStaticMarkup(<SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" />);
-    expect(html).toContain('justify-start pl-14');
+    const html = renderToStaticMarkup(
+      <SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" layout="laptop" />,
+    );
+    expect(html).toContain('justify-start');
+    // Laptop keeps its 56 text column (16 + 32 + 8).
+    expect(html).toMatch(/<li[^>]*class="[^"]*\bpl-14\b/);
     expect(html).not.toContain('justify-end');
     expect(html).toContain('text-xs');
     expect(html).toContain('Seen');
@@ -235,11 +239,13 @@ describe('reading layer elements', () => {
 
   it('Seen shows read_at as a clock time; no read_at reads "Seen" with no time', () => {
     const at = '2026-10-02T11:30:00Z';
-    const kolkata = renderToStaticMarkup(<SeenLine readAt={at} timeZone="Asia/Kolkata" />);
+    const kolkata = renderToStaticMarkup(
+      <SeenLine readAt={at} timeZone="Asia/Kolkata" layout="touch" />,
+    );
     expect(kolkata).toContain(formatTime(at, 'Asia/Kolkata'));
     expect(kolkata).toContain('5:00 PM');
     expect(kolkata).not.toContain(formatTime(at, 'UTC'));
-    const none = renderToStaticMarkup(<SeenLine readAt={null} timeZone="UTC" />);
+    const none = renderToStaticMarkup(<SeenLine readAt={null} timeZone="UTC" layout="touch" />);
     expect(none).toContain('Seen');
     expect(none).not.toContain('font-sans tabular-nums');
     expect(none.replace(/<[^>]*>/g, '').trim()).toBe('Seen');
@@ -278,10 +284,41 @@ describe('reading layer elements', () => {
 
   it('Read by line is a real button with a 44px hit area', () => {
     const html = renderToStaticMarkup(
-      <ReadByLine label="Read by 2 of 5" onOpen={() => undefined} />,
+      <ReadByLine label="Read by 2 of 5" layout="touch" onOpen={() => undefined} />,
     );
     expect(html).toContain('<button');
     expect(html).toContain('h-11');
+  });
+
+  it('Seen and Read by start on the message text column: 64 phone, 56 laptop', () => {
+    const liClass = (node: ReactElement): string =>
+      /<li[^>]*class="([^"]*)"/.exec(renderToStaticMarkup(node))?.[1] ?? '';
+    const seen = (layout: 'touch' | 'laptop'): string[] =>
+      liClass(<SeenLine readAt={null} layout={layout} />).split(' ');
+    // No inner pad: the li's pad is the text column.
+    expect(seen('touch')).toContain('pl-16');
+    expect(seen('touch')).not.toContain('pl-14');
+    expect(seen('laptop')).toContain('pl-14');
+    const readBy = (layout: 'touch' | 'laptop', rail = false): string =>
+      renderToStaticMarkup(
+        <ReadByLine label="Read by all" layout={layout} rail={rail} onOpen={() => undefined} />,
+      );
+    const readByLi = (layout: 'touch' | 'laptop'): string[] =>
+      (/<li[^>]*class="([^"]*)"/.exec(readBy(layout))?.[1] ?? '').split(' ');
+    // The button's 8 inner pad (px-2) completes the column: 56 + 8, 48 + 8.
+    expect(readByLi('touch')).toContain('pl-14');
+    expect(readByLi('laptop')).toContain('pl-12');
+    expect(readBy('touch')).toContain('px-2');
+    // The rail branch keeps the same pad.
+    expect(readBy('touch', true)).toMatch(/<li[^>]*class="[^"]*\bpl-14\b[^"]*\brelative\b/);
+    expect(renderToStaticMarkup(<SeenLine readAt={null} layout="touch" rail />)).toMatch(
+      /<li[^>]*class="[^"]*\bpl-16\b/,
+    );
+    // The words carry their own hooks for the layout checks.
+    expect(renderToStaticMarkup(<SeenLine readAt={null} layout="touch" />)).toContain(
+      'data-seen-words',
+    );
+    expect(readBy('touch')).toContain('data-read-by-words');
   });
 
   it('sent line reads "Sent <day> at <time>", no em-dashes', () => {

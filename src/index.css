@@ -839,8 +839,9 @@
 /* Catch up (9 Nov 2026): the page tone and the card surface per theme, one
    class each so call sites carry no dark: and no shadow. Light: the card is
    the panel on the panel-3 page with a hairline. Dark: the card is panel-3 on
-   the bg page with the strong edge and the floating layer's shadow (the card
-   floats over the page; the guard keeps card and page tokens distinct). */
+   the bg page with the strong edge and no shadow: a shadow there fell on Keep
+   unread / Mark as read under the card (the guard keeps card and page tokens
+   distinct and the dark card shadow-free). */
 @layer components {
   .catch-up-page {
     background-color: var(--panel-3);
@@ -855,7 +856,6 @@
   .dark .catch-up-card {
     background-color: var(--panel-3);
     border-color: var(--border-strong);
-    box-shadow: var(--lit-overlay);
   }
 }
 

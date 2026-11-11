@@ -1,13 +1,15 @@
 // One catch-up card (9 Nov 2026): one ITEM (a post, a brief, a plan item, a
 // bank idea, a chat, a chat thread). Frame: rounded-2xl, the catch-up-card
-// surface (light: panel + hairline; dark: panel-3 + strong edge + the floating
-// shadow). First row: the name row (min-h-14, a faint fg tint, hairline under)
+// surface (light: panel + hairline; dark: panel-3 + strong edge, no shadow:
+// it fell on Keep unread / Mark as read under the card). First row: the name row (min-h-14, a faint fg tint, hairline under)
 // with the centred title and ⌄; a tap opens the ActionMenu (Open <kind>, Copy
 // link; no Mute, no Star). While typing on a phone its left slot is Hide
 // keyboard and its right slot the ink check (Mark as read + next). Under it,
 // on non-chat cards, the context strip (closed). Then the rows in the chat's
 // work layout with the "New" line and day lines; the fill rule places the
 // scroll; scrolling up loads older rows without moving the reading position.
+// The thread tip is a plain row above the reply box: a top hairline (the list
+// ends at it), its words on the row inset, "Got it" ending on the same inset.
 // The reply box sits at the bottom. Read only: no edit, no resolve. Pure
 // render: the screen owns every read and write.
 
@@ -15,6 +17,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ComponentType } from 'react';
 import type { HTMLAttributes, ReactElement, ReactNode, Ref, UIEvent } from 'react';
 import { cn } from '@/lib/cn';
+import { sized, TIP_LINE_TYPE, useChatLayout } from '@/components/chat/chat-type';
 import { Text } from '@/components/ui/Text';
 import { Tag } from '@/components/ui/Tag';
 import { Button } from '@/components/ui/Button';
@@ -175,6 +178,7 @@ export function TypingCheck(props: { onPress: () => void }): ReactElement {
 
 export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   const { item, body } = props;
+  const layout = useChatLayout();
   const chat = item.kind === 'chat-main' || item.kind === 'chat-thread';
   const ready = body !== undefined && body !== 'skip' && body !== 'error' ? body : null;
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -427,9 +431,15 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       {props.tip != null && props.reply != null && props.typing === null ? (
         <div
           data-catch-up-tip=""
-          className="mx-3 mb-2 flex shrink-0 items-center justify-between gap-2 rounded-xl border pl-3"
+          // A plain row: the list ends at its hairline; words on the row inset
+          // (16, the photos' x); "Got it" (px-3 hit) ends on the same inset.
+          className="flex shrink-0 items-center justify-between gap-2 border-t border-border pl-4 pr-1"
         >
-          <Text role="secondary" className="min-w-0">
+          <Text
+            role="secondary"
+            data-catch-up-tip-text=""
+            className={cn('min-w-0', sized(TIP_LINE_TYPE, layout))}
+          >
             {props.tip.text}
           </Text>
           <Button

@@ -107,6 +107,21 @@ export const REPLIES_ROW_PAD: ChatSize = {
   laptop: 'pl-12',
 };
 
+/**
+ * The Seen line's left pad (no inner pad), so its words start on the row's
+ * text column: 64 touch, 56 laptop.
+ */
+export const SEEN_LINE_PAD: ChatSize = {
+  touch: 'pl-16',
+  laptop: 'pl-14',
+};
+
+/** A tip line inside a card (Catch up's tip): 15/20 (lg) touch, 13/18 (md) laptop, 400. */
+export const TIP_LINE_TYPE: ChatSize = {
+  touch: 'text-lg font-normal',
+  laptop: 'text-md font-normal',
+};
+
 /** L1: the clock time beside the name: 12/16 (sm), 400, mono tabular (the time rule). */
 export const SENDER_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
 
@@ -131,9 +146,9 @@ export const POST_CARD_TITLE_TYPE: ChatSize = {
 /** Shared post card meta: 12/16, 400 on both. */
 export const POST_CARD_META_TYPE = 'text-sm font-normal';
 
-/** Thread header name: 17/22 (xl) 600 touch; laptop is the screen header size (lg, 15/20), 500. */
+/** Thread header name: 17/22 (xl) bold touch; laptop is the screen header size (lg, 15/20), 500. */
 export const HEADER_NAME_TYPE: ChatSize = {
-  touch: 'text-xl font-semibold',
+  touch: 'text-xl font-bold',
   laptop: 'text-lg font-medium',
 };
 
