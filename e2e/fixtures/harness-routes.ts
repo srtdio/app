@@ -1256,6 +1256,31 @@ const RPC: Record<string, RpcHandler> = {
     if (invalid.length > 0) throw new HarnessRpcError('invalid_mention', invalid.join(','));
     return INDUCTION_RPC.comment_create?.(args, tables) ?? null;
   },
+  // A comment thread opened (fire and forget): the viewer's read point moves
+  // to the thread's newest reply (the root's time with none), as the live proc
+  // upserts it; the next comments read embeds it (postgrest.ts NAMED_EMBEDS).
+  comment_thread_read_set: (args, tables) => {
+    const rootId = String(args.p_root_id ?? '');
+    const comments = tables.comments ?? [];
+    const root = comments.find((c) => c.id === rootId);
+    if (root === undefined) return null;
+    const newest = comments
+      .filter((c) => c.parent_comment_id === rootId)
+      .map((c) => String(c.created_at))
+      .reduce((a, b) => (b > a ? b : a), String(root.created_at));
+    const reads = (tables.comment_thread_reads ??= []);
+    const mine = reads.find((r) => r.root_comment_id === rootId && r.user_id === ME);
+    if (mine !== undefined) mine.last_read_at = newest;
+    else {
+      reads.push({
+        root_comment_id: rootId,
+        user_id: ME,
+        workspace_id: root.workspace_id,
+        last_read_at: newest,
+      });
+    }
+    return null;
+  },
   // A comment's To-do, as the live proc behaves: agency roles only, one task
   // per comment, the task through the chat's one save batch, the link row and
   // task_state written. The comment row carries its embed (comment_tasks) so

@@ -16,7 +16,6 @@ import {
   movedSideways,
   lineHeightPx,
   chipViolations,
-  commentBarViolations,
   listCardViolations,
   MAX_ROLES_PER_PART,
   overlappingPairs,
@@ -27,7 +26,6 @@ import {
   topbarDriftViolations,
   topbarViolations,
   trayTileViolations,
-  underBarViolations,
   uploadBarViolations,
   wrapsPastOneLine,
   writingBoxViolations,
@@ -36,7 +34,6 @@ import {
   type AlignFamily,
   type Box,
   type ChipGeom,
-  type CommentBarGeom,
   type EdgeItem,
   type LayoutViolation,
   type ListCardGeom,
@@ -75,10 +72,10 @@ import {
 //     16 inside the bled row (x) and ROW_INSET (12) from its top (y), 12 to the
 //     text (flat look 7 Nov; one size 10 Nov 2026);
 //   7 post screens (after the shot, so the baseline never moves): the pinned
-//     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll),
-//     the checkpoint progress row sits directly under the bar in the same
-//     pinned block (assertProgressRowUnderBar), and the comment composer's "+"
-//     tray opens with exactly Photos, File and Assets (assertCommentTray);
+//     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll)
+//     and the comment composer's "+" tray opens with exactly Photos, File and
+//     Assets (assertCommentTray); the checkpoint progress row is gone (11 Nov
+//     2026, comments as a chat);
 //   8 the top bar (decision A, every screen that shows its slots): search |
 //     sort | "+" | avatar, left to right, the sort and "+" slots fixed 44x44,
 //     the sort right before the "+" and the "+" last before the avatar; across
@@ -94,9 +91,9 @@ import {
 //     tray is the top of its box (inside the frame, in flow, no fill, edge or
 //     shadow of its own, one outline around both); a comment / reply box takes
 //     its full column width and no clipping ancestor cuts its sides;
-//  12 post screens (assertCommentBars, 8 Nov 2026): every comment's action bar
-//     is 44 hits, rides half above its row (its middle on the row's top edge),
-//     ends on the row's end and covers no time, name or title;
+//  12 retired (11 Nov 2026): comments have no action bar; the post screen's
+//     alignment (one text column, one right edge, text off the comments
+//     hairline) is check 14's 'post-screen' scope;
 //  13 catch-up screens (assertCatchUpLayout, 9 Nov 2026): every control a 44
 //     hit (the bar's keys 48), each checkpoint circle on its text's first
 //     line and the point text on the message text column, no card row over a
@@ -743,34 +740,9 @@ export async function assertPinnedBarOnScroll(page: Page, screenName: string): P
 }
 
 /**
- * Check 7b: the post's checkpoint progress row is directly under the exit
- * bar, inside the bar's pinned block ([data-header-pin]).
- */
-export async function assertProgressRowUnderBar(page: Page, screenName: string): Promise<void> {
-  const geom = await page.evaluate(() => {
-    const toBox = (el: Element | null): Box | null => {
-      if (el === null) return null;
-      const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, width: r.width, height: r.height };
-    };
-    const row = document.querySelector('[data-checkpoint-progress-row]');
-    const pin = row?.closest('[data-header-pin]') ?? null;
-    const bar =
-      pin?.querySelector('[data-header-bar]') ??
-      document.querySelector('header[data-header-pinned]') ??
-      document.querySelector('[data-header-bar]');
-    return { bar: toBox(bar), row: toBox(row), insidePin: pin !== null };
-  });
-  settleFindings(
-    screenName,
-    underBarViolations(geom).map((message) => ({ check: 'under-bar' as const, message })),
-  );
-}
-
-/**
- * Check 7c: the comment composer's "+" opens the tray with exactly Photos,
- * File and Assets (CommentComposer / SlotComposer COMMENT_TRAY_TILES), then
- * closes it again with Escape.
+ * Check 7c: the comment composer's "+" (chat's Composer in
+ * [data-comments-composer]) opens the tray with exactly Photos, File and
+ * Assets, then closes it again with Escape.
  */
 export async function assertCommentTray(page: Page, screenName: string): Promise<void> {
   const plus = page.locator('[data-comments-composer] [data-plus]');
@@ -786,50 +758,6 @@ export async function assertCommentTray(page: Page, screenName: string): Promise
   settleFindings(
     screenName,
     trayTileViolations(tiles).map((message) => ({ check: 'tray-tiles' as const, message })),
-  );
-}
-
-/**
- * Check 12: every comment action bar ([data-comment-bar]) on the screen, as
- * commentBarViolations reads it. Screens with no comments find none and pass.
- */
-export async function assertCommentBars(page: Page, screenName: string): Promise<void> {
-  const bars: CommentBarGeom[] = await page.evaluate(() => {
-    const toBox = (el: Element): Box => {
-      const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, width: r.width, height: r.height };
-    };
-    const shown = (el: Element): boolean => {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
-    };
-    const around = Array.from(
-      document.querySelectorAll(
-        '[data-comment-time], [data-comment-author], [data-group-meta], [data-comments-header] h3',
-      ),
-    ).filter(shown);
-    return Array.from(document.querySelectorAll('[data-comment-bar]'))
-      .filter(shown)
-      .map((bar, i) => {
-        const row = bar.closest('[data-comment-row]') ?? bar.parentElement ?? bar;
-        const id = bar.closest('[id^="comment-"]')?.id ?? `bar ${i + 1}`;
-        return {
-          label: id,
-          bar: toBox(bar),
-          row: toBox(row),
-          buttons: Array.from(bar.querySelectorAll('button')).filter(shown).map(toBox),
-          around: around
-            .filter((el) => !bar.contains(el))
-            .map((el) => ({
-              label: `${el.getAttribute('data-comment-time') !== null ? 'a time' : el.tagName === 'H3' ? 'the title' : 'a name'} (${el.textContent?.trim().slice(0, 24) ?? ''})`,
-              box: toBox(el),
-            })),
-        };
-      });
-  });
-  settleFindings(
-    screenName,
-    commentBarViolations(bars).map((message) => ({ check: 'comment-bar' as const, message })),
   );
 }
 
@@ -1340,7 +1268,13 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
 }
 
 /** Which family the alignment check measures on a screen. */
-export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row' | 'threads-list';
+export type AlignScope =
+  | 'chat-thread'
+  | 'catch-up-thread'
+  | 'chat-replies-row'
+  | 'threads-list'
+  | 'post-screen'
+  | 'brief-screen';
 
 /**
  * Check 14 (9 Nov 2026, CLAUDE.md "Alignment"): measures rules 1, 2, 3 and 5
@@ -1362,6 +1296,22 @@ export type AlignScope = 'chat-thread' | 'catch-up-thread' | 'chat-replies-row' 
  * - chat-replies-row: every replies row in the main chat: no reply text node,
  *   the last reply's time shown, 8 between photos, count, time and dot, the
  *   row's target at least 44 tall.
+ * - post-screen (11 Nov 2026, comments as a chat, EXACT +-1): one text column:
+ *   every comment row's name and text ([data-comments-list] > li: chat's
+ *   [data-sender-line] and [data-msg-body]) and the caption header's
+ *   workspace name start on one x (absolute when the caption and the comments
+ *   share a column, as on a phone; each from its own column's left when the
+ *   laptop puts the comments in their own column); one right edge: the
+ *   caption's Edit (its painted end) and the tip's "Got it" text end on the
+ *   caption block's right edge, the version key's text ([data-gallery-versions])
+ *   on the gallery tools row's right edge; text off the hairline: the last
+ *   text above the comments section's top hairline (#post-comments border-t,
+ *   in its column, fixed and sticky layers aside) and the first text under it
+ *   are each 12+ from it. A screen with no comment row fails.
+ * - brief-screen (11 Nov 2026): one text column: every comment row's name and
+ *   text on one x; the section's "Comments" label starts on the rows' photo
+ *   edge (the photos hang left of the text column). A screen with no comment
+ *   row fails.
  */
 export async function assertAlignment(
   page: Page,
@@ -1377,8 +1327,11 @@ export async function assertAlignment(
         return getComputedStyle(el).visibility !== 'hidden';
       };
       /** The painted text's box inside el (its text nodes' rects), or null. */
-      const textBox = (el: Element): { left: number; top: number; bottom: number } | null => {
+      const textBox = (
+        el: Element,
+      ): { left: number; right: number; top: number; bottom: number } | null => {
         let left = Infinity;
+        let right = -Infinity;
         let top = Infinity;
         let bottom = -Infinity;
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -1389,13 +1342,180 @@ export async function assertAlignment(
           for (const rect of Array.from(range.getClientRects())) {
             if (rect.width === 0 || rect.height === 0) continue;
             left = Math.min(left, rect.left);
+            right = Math.max(right, rect.right);
             top = Math.min(top, rect.top);
             bottom = Math.max(bottom, rect.bottom);
           }
         }
-        return Number.isFinite(left) ? { left, top, bottom } : null;
+        return Number.isFinite(left) ? { left, right, top, bottom } : null;
       };
       const out: AlignFamily[] = [];
+      if (which === 'post-screen' || which === 'brief-screen') {
+        const post = which === 'post-screen';
+        const missing = (label: string): AlignFamily[] => [
+          { label: which, textLefts: [], rightEdges: [], gaps: [{ label, gap: -1, min: 0 }] },
+        ];
+        const section = post
+          ? document.querySelector('#post-comments')
+          : (document.querySelector('[data-comments][data-entity="brief"]')?.closest('section') ??
+            null);
+        if (!shown(section)) return missing('no comments section shown');
+        const sec = section.getBoundingClientRect();
+        const rows = Array.from(
+          section.querySelectorAll('[data-comments-list] > li[data-msg-id]'),
+        ).filter(shown);
+        if (rows.length === 0) return missing('no comment row shown');
+        // Rule 1: the caption header's name shares the rows' column (phone),
+        // or sits at the same offset in its own column (laptop's side column).
+        const caption = post ? document.querySelector('[data-caption-block]') : null;
+        const shared =
+          caption === null || Math.abs(caption.getBoundingClientRect().left - sec.left) <= 1;
+        const fromSection = (x: number): number => (shared ? x : x - sec.left);
+        const column: AlignFamily = {
+          label: `${which} text column${shared ? '' : ' (from each column left)'}`,
+          textLefts: [],
+          rightEdges: [],
+          gaps: [],
+        };
+        rows.forEach((row, i) => {
+          const name = row.querySelector('[data-sender-line]');
+          const n = shown(name) ? textBox(name) : null;
+          if (n !== null)
+            column.textLefts.push({ label: `comment ${i + 1} name`, x: fromSection(n.left) });
+          const body = row.querySelector('[data-msg-body]');
+          const t = shown(body) ? textBox(body) : null;
+          if (t !== null)
+            column.textLefts.push({ label: `comment ${i + 1} text`, x: fromSection(t.left) });
+        });
+        if (caption !== null) {
+          const head = caption.querySelector(':scope > div:first-child > .min-w-0');
+          const h = shown(head) ? textBox(head) : null;
+          const c = caption.getBoundingClientRect();
+          if (h === null) column.gaps.push({ label: 'no caption header name', gap: -1, min: 0 });
+          else {
+            column.textLefts.push({
+              label: 'caption header name',
+              x: shared ? h.left : h.left - c.left,
+            });
+          }
+        }
+        out.push(column);
+        if (!post) {
+          // The "Comments" label on the photo edge: the photos hang left of the text.
+          const label = section.querySelector(':scope > div:first-child');
+          const l = shown(label) ? textBox(label) : null;
+          const photo = rows[0]?.querySelector('[data-avatar-role]') ?? null;
+          const edge: AlignFamily = {
+            label: 'brief-screen photo edge',
+            textLefts: [],
+            rightEdges: [],
+            gaps: [],
+          };
+          if (l !== null) edge.textLefts.push({ label: '"Comments" label', x: l.left });
+          if (shown(photo)) {
+            edge.textLefts.push({
+              label: 'comment 1 photo',
+              x: photo.getBoundingClientRect().left,
+            });
+          }
+          out.push(edge);
+          return out;
+        }
+        // Rule 3: one right edge per column (the caption block's, the gallery tools row's).
+        const paintedRight = (el: Element): number | null => {
+          const t = textBox(el);
+          let right = t?.right ?? -Infinity;
+          for (const svg of Array.from(el.querySelectorAll('svg')).filter(shown)) {
+            right = Math.max(right, svg.getBoundingClientRect().right);
+          }
+          return Number.isFinite(right) ? right : null;
+        };
+        if (caption !== null) {
+          const edge: AlignFamily = {
+            label: 'post-screen caption right edge',
+            textLefts: [],
+            rightEdges: [
+              { label: 'caption block right', x: caption.getBoundingClientRect().right },
+            ],
+            gaps: [],
+          };
+          const edit = caption.querySelector('[data-caption-edit]');
+          const e = shown(edit) ? paintedRight(edit) : null;
+          if (e !== null) edge.rightEdges.push({ label: 'caption Edit', x: e });
+          const gotIt = caption.querySelector('[data-caption-tip] button');
+          const g = shown(gotIt) ? textBox(gotIt) : null;
+          if (g !== null) edge.rightEdges.push({ label: '"Got it" text', x: g.right });
+          out.push(edge);
+        }
+        const tools = document.querySelector('[data-gallery-tools]');
+        const versions = tools?.querySelector('[data-gallery-versions]') ?? null;
+        if (shown(tools) && shown(versions)) {
+          const v = textBox(versions);
+          out.push({
+            label: 'post-screen gallery right edge',
+            textLefts: [],
+            rightEdges: [
+              { label: 'gallery tools row right', x: tools.getBoundingClientRect().right },
+              ...(v !== null ? [{ label: 'version key text', x: v.right }] : []),
+            ],
+            gaps: [],
+          });
+        }
+        // Rule 5: text off the comments section's top hairline, above and under it.
+        const layered = new Map<Element, boolean>();
+        const inLayer = (el: Element | null): boolean => {
+          if (el === null || el === document.body) return false;
+          const known = layered.get(el);
+          if (known !== undefined) return known;
+          const pos = getComputedStyle(el).position;
+          const v = pos === 'fixed' || pos === 'sticky' || inLayer(el.parentElement);
+          layered.set(el, v);
+          return v;
+        };
+        let above = -Infinity;
+        let under = Infinity;
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+          if ((n.textContent ?? '').trim() === '') continue;
+          const host = n.parentElement;
+          if (host === null || host.closest('[aria-hidden="true"]') !== null) continue;
+          if (getComputedStyle(host).visibility === 'hidden') continue;
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const rect of Array.from(range.getClientRects())) {
+            // Painted text only: an sr-only label is a 1px box.
+            if (rect.width <= 1 || rect.height <= 1) continue;
+            if (rect.right <= sec.left || rect.left >= sec.right) continue;
+            if (section.contains(n)) {
+              if (rect.top >= sec.top - 0.5) under = Math.min(under, rect.top);
+            } else if (rect.top < sec.top && !inLayer(host)) {
+              above = Math.max(above, rect.bottom);
+            }
+          }
+        }
+        const hairline: AlignFamily = {
+          label: 'post-screen comments hairline',
+          textLefts: [],
+          rightEdges: [],
+          gaps: [],
+        };
+        if (Number.isFinite(above)) {
+          hairline.gaps.push({
+            label: 'last text above to the comments hairline',
+            gap: sec.top - above,
+            min: 12,
+          });
+        }
+        if (Number.isFinite(under)) {
+          hairline.gaps.push({
+            label: 'the comments hairline to the first text under it',
+            gap: under - sec.top,
+            min: 12,
+          });
+        }
+        out.push(hairline);
+        return out;
+      }
       if (which === 'chat-replies-row') {
         // The main chat's replies rows: photos, count, time, dot; no reply text.
         const rowsHere = Array.from(document.querySelectorAll('[data-replies-row]')).filter(shown);
@@ -1674,9 +1794,10 @@ export async function assertAlignment(
  * reaction chip row ([data-reaction-chips]) is measured (EXACT +-1):
  * - each pill ([data-reaction-chip], the smiley [data-reaction-add]) is 32
  *   tall and its tap box (the pill grown by its ::before) at least 44 tall;
- * - the row's left edge is its row's text column: a comment's head
- *   ([data-comment-header]); a chat, plan comment or thread reply message's
- *   body text ([data-msg-body]); a catch-up row's text (its last paragraph);
+ * - the row's left edge is its row's text column: a chat, post / brief
+ *   comment (chat's row since 11 Nov 2026), plan comment or thread reply
+ *   message's body text ([data-msg-body]); a catch-up row's text (its last
+ *   paragraph);
  * - in a thread view the root's row sits at x16 and replies' at x60 from the
  *   strip's left, the root's chip row ends 12 over the strip's top hairline,
  *   and the first reply's name sits 8 under the strip;
@@ -1733,20 +1854,10 @@ export async function assertReactionChips(
           out.push(`${at}: ${name} tap box ${r1(r.height + grow)} tall, want 44+`);
         }
       }
-      const comment = row.closest('[data-comment-row]');
       const catchUp = row.closest('[data-catch-up-message]');
       const message = row.closest('li[data-msg-id]');
       const view = row.closest('[data-thread-view], [data-catch-up-thread]');
       const strip = view?.querySelector('[data-thread-strip]') ?? null;
-      if (comment !== null) {
-        const head = comment.querySelector('[data-comment-header]');
-        if (shown(head) && !near(box.left, head.getBoundingClientRect().left)) {
-          out.push(
-            `${at}: left ${r1(box.left)}, comment column ${r1(head.getBoundingClientRect().left)}`,
-          );
-        }
-        return;
-      }
       if (shown(strip)) {
         const s = strip.getBoundingClientRect();
         const isRoot = box.bottom <= s.top + 0.5;

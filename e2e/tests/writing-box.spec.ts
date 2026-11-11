@@ -588,7 +588,7 @@ test('S11 phone: the post comment box stays on screen and its @ list opens above
   await installHarnessNetwork(page);
   await page.goto(`/posts/${POST_IDS[0] ?? ''}`);
   const composer = page.locator('[data-comments-composer]');
-  const editor = composer.getByRole('textbox', { name: 'Comment body' });
+  const editor = composer.getByRole('textbox', { name: 'Message' });
   await editor.scrollIntoViewIfNeeded();
   await editor.click();
   const box = composer.locator('[data-writing-box]').first();
@@ -698,7 +698,7 @@ test('S12 phone: focusing the post comment box or a Reply box never shifts or wi
 
   // The bottom box: tap it (the card opens) and write a long line.
   const bottom = page.locator('[data-comments-composer]');
-  const editor = bottom.getByRole('textbox', { name: 'Comment body' });
+  const editor = bottom.getByRole('textbox', { name: 'Message' });
   await editor.scrollIntoViewIfNeeded();
   await editor.click();
   await expect(bottom.locator('[data-writing-box]').first()).toHaveAttribute('data-shape', 'card');
@@ -723,12 +723,17 @@ test('S12 phone: focusing the post comment box or a Reply box never shifts or wi
     )
     .toBe('ok');
 
-  // A Reply box in the thread: open it, a mention chip and words.
-  const reply = page.locator('#post-comments [data-row-action="reply"]').first();
-  await reply.scrollIntoViewIfNeeded();
-  await reply.click();
-  const replyBox = page.locator('#post-comments [data-reply-composer] [data-writing-box]').first();
-  await expect(replyBox).toHaveAttribute('data-shape', 'card');
+  // The thread's Reply box (comments as a chat, 11 Nov 2026): a tap on the
+  // comment opens its thread over the post; tap the box and write.
+  const comment = page.locator('#post-comments [data-comments-list] [data-bubble]').first();
+  await comment.scrollIntoViewIfNeeded();
+  await comment.click();
+  const replySel = '[data-comment-thread-composer] [data-writing-box]';
+  const replyField = page.locator('[data-comment-thread-composer]').getByRole('textbox', {
+    name: 'Message',
+  });
+  await replyField.click();
+  await expect(page.locator(replySel).first()).toHaveAttribute('data-shape', 'card');
   await page.keyboard.type('and a reply that also runs on past the edge ');
-  await onScreen('#post-comments [data-reply-composer] [data-writing-box]');
+  await onScreen(replySel);
 });

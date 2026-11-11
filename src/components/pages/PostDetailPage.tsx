@@ -20,19 +20,19 @@ import { IconButton } from '@/components/ui/IconButton';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { Text, textRole } from '@/components/ui/Text';
-import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
+import { CONTROL_IN_LINE, GUTTER, TRAILING_PULL } from '@/components/ui/layout';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Textarea } from '@/components/ui/Textarea';
 import { WritingBox } from '@/components/ui/WritingBox';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { Comments } from '@/components/comments/Comments';
+import { Comments, commentRowSelector } from '@/components/comments/Comments';
 import type { CaptionQuote } from '@/components/comments/Comments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
-import { flashNode } from '@/components/comments/flash-node';
+import { flashElement, flashNode } from '@/components/comments/flash-node';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
 import { cn } from '@/lib/cn';
@@ -1862,7 +1862,7 @@ export function PostDetailPage({
               Flow B 27: platform and format live once, in the details row;
               the version button lives in the gallery tools row. */}
             <section data-caption-block="">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Avatar name={workspaceName ?? ''} role="header" kind="group" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-base font-medium text-fg">
@@ -1897,7 +1897,7 @@ export function PostDetailPage({
                     variant="ghost"
                     data-caption-edit=""
                     onClick={openCaptionEditor}
-                    className="shrink-0"
+                    className={cn('shrink-0', TRAILING_PULL)}
                   >
                     <IconEdit size={ICON_SIZE.inline} />
                     Edit
@@ -1956,7 +1956,12 @@ export function PostDetailPage({
                     <CaptionView
                       caption={post.caption ?? ''}
                       annotations={highlights}
-                      onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
+                      onHighlightClick={(commentId) => {
+                        const row = document.querySelector<HTMLElement>(
+                          commentRowSelector(commentId),
+                        );
+                        if (row !== null) flashElement(row);
+                      }}
                       onAnnotate={handleAnnotate}
                     />
                   </div>

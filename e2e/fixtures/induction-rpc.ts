@@ -153,7 +153,8 @@ export const INDUCTION_RPC: Record<string, RpcHandler> = {
     return id;
   },
   annotation_create: () => crypto.randomUUID(),
-  // A client's line or pin comment is a checkpoint (PostDetailPage).
+  // A reject's points (chat's PostSheet) land as numbered checkpoints; the
+  // post and brief screens never call it (comments as a chat, 11 Nov 2026).
   comment_batch_create: (args, tables) => {
     const points = (args.p_points ?? []) as Array<{ body?: string }>;
     const seqBase = (tables.comments ?? []).filter(
