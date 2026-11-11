@@ -399,6 +399,14 @@ test('S6 a plan item comment: a mention chip inside a bullet', async ({ page }) 
   const option = page.locator(`[data-mention-option="${COLLEAGUE_A}"]`);
   await expect(option).toBeVisible();
   await option.click();
+  // The pick puts the caret after the mention on the next frame
+  // (PlanItemScreen.pickMention): type only once that frame has run, or the
+  // first letters land before the caret moves and the words come out shuffled.
+  await expect(option).toBeHidden();
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
+  );
   await page.keyboard.type('can you check the hook?');
   await item.getByRole('button', { name: 'Send comment', exact: true }).click();
 

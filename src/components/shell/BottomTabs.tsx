@@ -4,6 +4,7 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import {
   NOTIFICATIONS_PATH,
+  NOTIFICATIONS_TITLE,
   notificationsLabel,
   onNotifications,
 } from '@/components/shell/NotificationsButton';
@@ -104,22 +105,37 @@ export function chatTabLabel(unread: number): string {
 }
 
 /**
- * A pill tab: one fixed 44x44 slot on every tab, icon only, so no tab and no
- * icon moves when the active tab changes. Inactive is the icon in fg-2;
- * active is the panel-3 fill behind the icon in fg ink. Flat: no ink fill, no
+ * A pill tab, always a 44x44 target or wider: inactive is the icon alone in
+ * fg-2; active is the panel-3 fill in fg ink with its name (the name hides
+ * and the tab is 44 again while the dock is shrunk). Flat: no ink fill, no
  * pill light.
  */
-export function tabClass(active: boolean): string {
+export function tabClass(active: boolean, shrunk = false): string {
   return cn(
-    'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
+    'relative flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
     MOVE_CLASS.dock,
-    active ? 'bg-panel-3 text-fg' : 'text-fg-2',
+    active ? 'bg-panel-3 text-fg' : 'w-11 text-fg-2',
+    active && (shrunk ? 'w-11' : 'gap-2 px-3'),
   );
 }
 
+/** The badge ring matches what is behind it: the active tab's fill, else the bar. */
+function badgeRing(active: boolean): string {
+  return active ? 'border-2 border-panel-3' : 'border-2 border-surface-top';
+}
+
+/** The open tab's name; nothing on any other tab or while the dock is shrunk. */
+function TabLabel({ show, label }: { show: boolean; label: string }) {
+  return show ? (
+    <span data-tab-name="" className="shrink-0 whitespace-nowrap text-md font-medium">
+      {label}
+    </span>
+  ) : null;
+}
+
 /** One pill tab of the primary nav (Pipeline, Briefs, Assets, Plan). */
-function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
-  const { item, planUnread } = props;
+function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number; shrunk: boolean }) {
+  const { item, planUnread, shrunk } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
   // Plan with unread comments: the tap lands on the newest one (jump to latest).
   const newest = useNewestPlanUnread();
@@ -130,7 +146,7 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number })
       data-selected={active ? 'true' : undefined}
       aria-label={item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label}
       {...navPrefetchProps(item.to)}
-      className={() => tabClass(active)}
+      className={() => tabClass(active, shrunk)}
     >
       {item.showPlanBadge === true ? (
         // Plan: the icon carries the unread plan comments badge.
@@ -139,24 +155,25 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number })
           {planUnread > 0 ? (
             <CountBadge
               count={planUnread}
-              className="absolute -right-2 -top-2 border-2 border-surface-top"
+              className={cn('absolute -right-2 -top-2', badgeRing(active))}
             />
           ) : null}
         </span>
       ) : (
         <item.Icon size={ICON_SIZE.control} />
       )}
+      <TabLabel show={active && !shrunk} label={item.label} />
     </NavLink>
   );
 }
 
 /**
  * Phone nav (below md): a centred floating pill (Pipeline, Briefs, Assets,
- * Plan, Activity) and a separate Chat circle, 16px above the bottom. Every
- * tab is one fixed 44 slot, icons only, so the bar has one width on every tab
- * and nothing slides when the tab changes. Flat: hairline edge, no shadow. 52
- * at rest, 44 while scrolling down, back at rest on scroll up or near the top
- * (useDockShrunk, MOVE_CLASS.dock). A fade strip behind it keeps content that
+ * Plan, Activity) and a separate Chat circle, 16px above the bottom, only as
+ * wide as its tabs. Only the open tab shows its name (Chat too: an ink pill);
+ * every other tab is a 44 icon slot. Flat: hairline edge, no shadow. 52 at
+ * rest, 44 while scrolling down (every name hides, icons stay), back at rest
+ * on scroll up or near the top (useDockShrunk, MOVE_CLASS.dock). A fade strip behind it keeps content that
  * scrolls under the bar readable. Badges read the chat and inbox stores the
  * shell already holds: no read, no effect, no measuring.
  */
@@ -196,7 +213,7 @@ export function BottomTabs() {
           )}
         >
           {PILL_NAV.map((item) => (
-            <PillTab key={item.to} item={item} planUnread={planUnread} />
+            <PillTab key={item.to} item={item} planUnread={planUnread} shrunk={shrunk} />
           ))}
           {/* Activity: last in the pill on phone (the top bar's button is laptop only). */}
           <NavLink
@@ -207,19 +224,20 @@ export function BottomTabs() {
             {...(activityActive ? { 'aria-current': 'page' as const } : {})}
             {...activityPrefetchProps()}
             data-selected={activityActive ? 'true' : undefined}
-            className={tabClass(activityActive)}
+            className={tabClass(activityActive, shrunk)}
           >
-            <span className="relative">
+            <span className="relative inline-flex">
               <span ref={activityNudgeRef} className="inline-flex">
                 <IconNotifications size={ICON_SIZE.control} />
               </span>
               {unreadCount > 0 ? (
                 <CountBadge
                   count={unreadCount}
-                  className="absolute -right-2 -top-2 border-2 border-surface-top"
+                  className={cn('absolute -right-2 -top-2', badgeRing(activityActive))}
                 />
               ) : null}
             </span>
+            <TabLabel show={activityActive && !shrunk} label={NOTIFICATIONS_TITLE} />
           </NavLink>
         </div>
         {CHAT_NAV !== undefined ? (
@@ -230,23 +248,25 @@ export function BottomTabs() {
             data-induction={INDUCTION_KEYS.chatTab}
             {...navPrefetchProps(CHAT_NAV.to)}
             // Opaque in every state, so the chat rows never show through the
-            // circle on /chat. Active is the ink fill; it shrinks with the dock.
+            // circle on /chat. Open at rest it is the ink pill with its name;
+            // shrunk it is the 44 circle again.
             className={({ isActive }) =>
               cn(
                 'relative flex shrink-0 items-center justify-center rounded-full border focus-visible:lit-focus',
                 MOVE_CLASS.dock,
-                shrunk ? 'h-11 w-11' : 'h-13 w-13',
+                shrunk ? 'h-11 w-11' : isActive ? 'h-13 gap-2 px-4' : 'h-13 w-13',
                 isActive
                   ? 'border-transparent bg-accent text-accent-fg'
                   : 'border-border bg-panel text-fg-2',
               )
             }
           >
-            {() => (
+            {({ isActive }) => (
               <>
                 <span ref={chatNudgeRef} className="relative inline-flex">
                   <CHAT_NAV.Icon size={ICON_SIZE.tray} />
                 </span>
+                <TabLabel show={isActive && !shrunk} label={CHAT_NAV.label} />
                 {total > 0 ? (
                   <CountBadge
                     count={total}

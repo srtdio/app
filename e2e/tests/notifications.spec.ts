@@ -392,28 +392,63 @@ test(
     for (const link of await page.locator('[data-tab-pill] a').all()) {
       expectMinTouchTarget(await link.boundingBox());
     }
-    // Every tab is one fixed 44 slot, icons only (10 Nov 2026): the active one
-    // (Pipeline) is the fill, no word.
+    // Only the open tab shows its name (11 Nov 2026): Pipeline is wider than
+    // 44 and carries the word; every other tab is a 44 icon slot.
     const active = page.locator('[data-tab-pill] a[aria-current="page"]');
-    await expect(active).not.toContainText('Pipeline');
+    await expect(active).toContainText('Pipeline');
     await expect(active).toHaveAttribute('aria-label', 'Pipeline');
     const activeBox = await active.boundingBox();
     expect(activeBox?.height).toBeCloseTo(44, 0);
-    expect(activeBox?.width).toBeCloseTo(44, 0);
+    expect(activeBox?.width).toBeGreaterThan(44);
+    await expect(page.locator('nav [data-tab-name]')).toHaveCount(1);
+    expect((await tab.boundingBox())?.width).toBeCloseTo(44, 0);
 
-    // The tab opens Activity; the bar keeps its width and Chat its place.
+    // Scroll down: the dock shrinks, every tab and Chat are 44, no name shows.
+    // Back at the top the name returns. A small scroller of its own drives the
+    // dock (useDockShrunk hears every scroller), so the page's length never matters.
+    const scrollProbe = async (top: number): Promise<void> => {
+      await page.evaluate(async (to) => {
+        let el = document.querySelector<HTMLElement>('[data-dock-probe]');
+        if (el === null) {
+          el = document.createElement('div');
+          el.setAttribute('data-dock-probe', '');
+          el.style.cssText =
+            'position:fixed;top:0;left:0;width:1px;height:40px;overflow:auto;pointer-events:none';
+          const tall = document.createElement('div');
+          tall.style.height = '2000px';
+          el.appendChild(tall);
+          document.body.appendChild(el);
+        }
+        el.scrollTop = to;
+        await new Promise<void>((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => done())),
+        );
+      }, top);
+    };
+    await scrollProbe(100);
+    await scrollProbe(400);
+    await expect(nav).toHaveAttribute('data-dock', 'shrunk');
+    await expect(page.locator('nav [data-tab-name]')).toHaveCount(0);
+    for (const link of await page.locator('[data-tab-pill] a, [data-chat-tab]').all()) {
+      await expect.poll(async () => (await link.boundingBox())?.width).toBeCloseTo(44, 0);
+    }
+    await scrollProbe(0);
+    await expect(nav).toHaveAttribute('data-dock', 'rest');
+    await expect(page.locator('nav [data-tab-name]')).toHaveText('Pipeline');
+
+    // The tab opens Activity, which now carries its own name.
     await tab.click();
     await expect(page).toHaveURL(/\/notifications$/);
     await expect(tab).toHaveAttribute('aria-current', 'page');
-    // No word on the active tab (its unread badge count may show).
-    await expect(tab).not.toContainText('Activity');
-    expect((await nav.boundingBox())?.width).toBeCloseTo(row.width, 0);
-    expect((await page.locator('[data-chat-tab]').boundingBox())?.x).toBeCloseTo(chat.x, 0);
+    await expect(tab).toContainText('Activity');
+    await expect(page.locator('nav [data-tab-name]')).toHaveText('Activity');
+    expect((await tab.boundingBox())?.width).toBeGreaterThan(44);
 
     // Chat: the circle opens the normal chat page.
     await page.locator('[data-chat-tab]').click();
     await expect(page).toHaveURL(/\/chat$/);
     await expect(page.locator('[data-chat-tab]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('nav [data-tab-name]')).toHaveText('Chat');
     expectClean(network);
   },
 );
