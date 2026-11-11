@@ -1550,7 +1550,9 @@ const SCREENS: Screen[] = [
       const all = (network.world.tables.chat_messages ?? [])
         .filter((m) => m.channel_id === DM_CHANNEL && typeof m.created_at === 'string')
         .sort((a, b) => at(a) - at(b));
-      const roots = new Set(all.map((m) => m.thread_root_message_id).filter((id) => id != null));
+      const roots = new Set<unknown>(
+        all.map((m) => m.thread_root_message_id).filter((id) => id != null),
+      );
       const lastFive = all
         .filter(
           (m) =>
