@@ -5567,6 +5567,38 @@ export type Database = {
           },
         ]
       }
+      comment_thread_reads: {
+        Row: {
+          last_read_at: string
+          root_comment_id: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          last_read_at: string
+          root_comment_id: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          last_read_at?: string
+          root_comment_id?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_thread_reads_root_comment_id_fkey"
+            columns: ["root_comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           accepted_at: string | null
@@ -10512,6 +10544,10 @@ export type Database = {
           p_trace_id: string
         }
         Returns: Json
+      }
+      comment_thread_read_set: {
+        Args: { p_root_id: string; p_trace_id: string }
+        Returns: undefined
       }
       dm_channel_ensure: {
         Args: {
