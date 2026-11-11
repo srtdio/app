@@ -204,7 +204,7 @@ export function mainChatMessages<T extends Pick<ThreadMessage, 'threadRootId' | 
 /** A root's replies row, from the loaded rows (and the threads-for-me unread flag). */
 export interface RepliesInfo {
   count: number;
-  /** Up to 3 latest distinct repliers, newest first. */
+  /** Up to 3 latest distinct repliers, oldest of them first: the latest replier is last (next to the count). */
   repliers: string[];
   /** The latest live reply. */
   last: ThreadMessage | null;
@@ -241,6 +241,8 @@ export function repliesInfoByRoot(
       const sender = sorted[i]?.senderUserId;
       if (sender != null && !repliers.includes(sender)) repliers.push(sender);
     }
+    // Collected newest first; drawn with the latest replier last (right-most).
+    repliers.reverse();
     out.set(root, {
       count: sorted.length,
       repliers,

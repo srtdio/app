@@ -31,6 +31,10 @@ import {
   writingBoxViolations,
   threadHeaderViolations,
   type ThreadHeaderGeom,
+  commentThreadEndViolations,
+  type CommentThreadEndGeom,
+  threadFillViolations,
+  type ThreadFillGeom,
   type AlignFamily,
   type Box,
   type ChipGeom,
@@ -867,6 +871,66 @@ export async function assertThreadHeader(page: Page, screenName: string): Promis
   settleFindings(
     screenName,
     threadHeaderViolations(geom).map((message) => ({ check: 'thread-header' as const, message })),
+  );
+}
+
+/**
+ * Thread polish 1: the open comment thread (phone and laptop) landed at its
+ * end before anything scrolled it, the last row 12 above the reply box.
+ */
+export async function assertCommentThreadEnd(page: Page, screenName: string): Promise<void> {
+  const geom = await page.evaluate((): CommentThreadEndGeom => {
+    const scroller = document.querySelector<HTMLElement>(
+      '[data-thread-view] [data-comment-thread]',
+    );
+    const last = scroller?.querySelector('ul')?.lastElementChild ?? null;
+    const box = document.querySelector('[data-comment-thread-composer]');
+    return {
+      scrollHeight: scroller?.scrollHeight ?? 0,
+      scrollTop: scroller?.scrollTop ?? 0,
+      clientHeight: scroller?.clientHeight ?? 0,
+      lastRowBottom: last !== null ? last.getBoundingClientRect().bottom : null,
+      replyBoxTop: box !== null ? box.getBoundingClientRect().top : null,
+    };
+  });
+  settleFindings(
+    screenName,
+    commentThreadEndViolations(geom).map((message) => ({ check: 'thread-end' as const, message })),
+  );
+}
+
+/** The post column's right edge on the post page (its head block), or null. */
+export async function readPostColumnRight(page: Page): Promise<number | null> {
+  return page.evaluate(() => {
+    const side = document.querySelector('[data-post-side]');
+    const head = side?.parentElement?.firstElementChild ?? null;
+    return head !== null ? head.getBoundingClientRect().right : null;
+  });
+}
+
+/**
+ * Thread polish 1, laptop: the comment thread panel fills beside the post
+ * (post right + 24 to the window edge, min 380).
+ */
+export async function assertThreadFillsBeside(page: Page, screenName: string): Promise<void> {
+  const geom = await page.evaluate((): ThreadFillGeom | null => {
+    const panel = document.querySelector('[data-side-panel]');
+    const side = document.querySelector('[data-post-side]');
+    const head = side?.parentElement?.firstElementChild ?? null;
+    if (panel === null || head === null) return null;
+    const p = panel.getBoundingClientRect();
+    return {
+      windowWidth: document.documentElement.clientWidth,
+      postRight: head.getBoundingClientRect().right,
+      panelLeft: p.left,
+      panelRight: p.right,
+    };
+  });
+  settleFindings(
+    screenName,
+    (geom === null ? ['no thread panel beside the post'] : threadFillViolations(geom)).map(
+      (message) => ({ check: 'thread-fill' as const, message }),
+    ),
   );
 }
 

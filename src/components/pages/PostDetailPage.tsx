@@ -182,7 +182,8 @@ export const COMMENTS_SECTION_ID = 'post-comments';
  * Flow B 34: the page grid, shared by the skeleton and the loaded page so the
  * first paint never jumps. Below lg (phone, tablet portrait) one column: head
  * (title, details, pills), media, body (caption), side (comments). lg and
- * up, two columns: head, picture and caption on the left (at most 560px), the
+ * up, two columns: head, picture and caption on the left (at most 560px, less
+ * --side-panel-squeeze when a comment thread beside it needs its 380), the
  * comments on the right as their own column from the top, sticky and
  * scrolling on their own within the viewport so neither side sits blank; page
  * at most 1120px, centred. Embedded (inside another screen) stays one column.
@@ -204,7 +205,7 @@ export function postPageGrid(embedded: boolean): {
     };
   }
   return {
-    page: `mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 ${GUTTER} pt-4 pb-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:gap-x-8`,
+    page: `mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 ${GUTTER} pt-4 pb-6 lg:grid-cols-[minmax(0,calc(560px-var(--side-panel-squeeze,0px)))_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:gap-x-8`,
     head: 'min-w-0 lg:col-start-1 lg:row-start-1',
     media: 'min-w-0 lg:col-start-1 lg:row-start-2',
     body: 'min-w-0 lg:col-start-1 lg:row-start-3 lg:self-start',

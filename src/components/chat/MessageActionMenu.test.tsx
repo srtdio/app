@@ -348,8 +348,8 @@ describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per c
 });
 
 describe('QUICK_REACTIONS', () => {
-  it('is exactly the approved quick-react set, in order, followed by the "+"', () => {
-    expect([...QUICK_REACTIONS]).toEqual(['👍', '✅', '❤️', '😂', '🙏']);
+  it('is exactly the approved quick-react set, in order, followed by the smiley key', () => {
+    expect([...QUICK_REACTIONS]).toEqual(['👍', '✅', '❤️', '😂', '🙏', '👏']);
     const buttons = rowButtons(row());
     expect(buttons.map((b) => b.props['aria-label'])).toEqual([
       ...QUICK_REACTIONS.map((e) => `React ${e}`),
@@ -396,32 +396,34 @@ function rowButtons(el: ReactElement): ReactElement<Record<string, unknown>>[] {
   });
 }
 
-describe('D6: the reactions row and its "+"', () => {
-  it('six 44x44 controls: the five quick reactions, then "+"', () => {
+describe('D6: the reactions row and its smiley key', () => {
+  it('seven round 44 circles filled bg-panel-2: the six quick reactions, then the smiley key', () => {
     const buttons = rowButtons(row());
-    expect(buttons).toHaveLength(6);
+    expect(buttons).toHaveLength(7);
     for (const b of buttons) {
       expect(String(b.props.className)).toContain('h-11');
       expect(String(b.props.className)).toContain('w-11');
+      expect(String(b.props.className)).toContain('rounded-full');
+      expect(String(b.props.className)).toContain('bg-panel-2');
     }
-    expect(buttons[5]?.props['data-react-more']).toBe('');
+    expect(buttons[6]?.props['data-react-more']).toBe('');
   });
 
-  it('"+" opens the picker; a quick reaction reacts', () => {
+  it('the smiley key opens the picker; a quick reaction reacts', () => {
     const onMore = vi.fn();
     const onReact = vi.fn();
     const buttons = rowButtons(row({ onMore, onReact }));
-    (buttons[5]?.props.onClick as () => void)();
+    (buttons[6]?.props.onClick as () => void)();
     expect(onMore).toHaveBeenCalledOnce();
     expect(onReact).not.toHaveBeenCalled();
     (buttons[0]?.props.onClick as () => void)();
     expect(onReact).toHaveBeenCalledWith('👍');
   });
 
-  it('the laptop smiley row (reactionsOnly) carries the "+" too, as a focus stop', () => {
+  it('the laptop smiley row (reactionsOnly) carries the smiley key too, as a focus stop', () => {
     const buttons = rowButtons(row({ reactionsOnly: true }));
-    expect(buttons).toHaveLength(6);
-    expect(buttons[5]?.props['data-menu-item']).toBe('react-more');
+    expect(buttons).toHaveLength(7);
+    expect(buttons[6]?.props['data-menu-item']).toBe('react-more');
   });
 
   it('a pick reacts once through the same path, then closes the picker and the menu', () => {
@@ -593,8 +595,9 @@ describe('the divider is the 1px border token', () => {
       'utf8',
     );
     expect(src).toContain('data-menu-divider="" className="border-t border-border"');
-    // L10: one hairline before More actions, one before the danger rows on its page.
-    expect(src.split('data-menu-divider').length - 1).toBe(2);
+    // L10: one hairline before More actions, one before the danger rows on its
+    // page, one before a danger row folded onto the first page.
+    expect(src.split('data-menu-divider').length - 1).toBe(3);
   });
 });
 

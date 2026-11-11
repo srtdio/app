@@ -174,7 +174,6 @@ test('laptop: right-click opens the actions in the sheet order, tiles first', as
     .evaluateAll((els) => els.map((el) => el.getAttribute('data-menu-item')));
   const actions = keys.filter((k) => k !== null && !k.startsWith('react'));
   expect(actions[0]).toBe('reply');
-  expect(actions).toContain('more-actions');
   expect(actions.indexOf('copy-link')).toBeGreaterThan(actions.indexOf('reply'));
   expectClean(network);
   await context.close();

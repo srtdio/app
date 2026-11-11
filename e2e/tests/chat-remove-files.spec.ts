@@ -174,7 +174,11 @@ test('Remove file on an own single file keeps the text @theme @desktop', async (
 
   menu = await openMessageMenu(page, SINGLE_FILE_BODY);
   // L10: Remove file sits on the More actions page, after its hairline, just before Delete.
-  await menu.locator('[data-menu-item="more-actions"]').click();
+  // Two or fewer hidden actions sit on the first page (no More actions).
+  {
+    const moreActions = menu.locator('[data-menu-item="more-actions"]');
+    if ((await moreActions.count()) > 0) await moreActions.click();
+  }
   await expect(menu.locator('[data-menu-divider]')).toHaveCount(1);
   const remove = menu.locator('[data-menu-item="remove-file"]');
   await expect(remove).toHaveText('Remove file');

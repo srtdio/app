@@ -126,3 +126,21 @@ describe('Guard 3: no checkpoints, ticks or pins on the post or brief screens', 
     expect(decisions).not.toContain('sendAnywayTitle');
   });
 });
+
+// Thread polish 1 (11 Nov 2026): asset_versions and assets have two foreign
+// keys between them, so the comment files embed must name its column or
+// PostgREST answers HTTP 300 and every file draws as "Attachment / File".
+describe('Thread polish 1: comment files embed and thread scroll', () => {
+  it('the comment-file select keeps the !asset_id hint', () => {
+    const files = code(read('components/comments/comment-files.ts'));
+    expect(files).toContain('assets!asset_id(display_name, filename)');
+    expect(files).not.toMatch(/[ ,]assets\(/);
+  });
+
+  it('the comment thread reuses chat stick-to-bottom (no second scroll core)', () => {
+    const comments = code(read('components/comments/Comments.tsx'));
+    expect(comments).toContain("from '@/lib/chat/stick-to-bottom'");
+    expect(comments).toContain('ref={threadScrollRef}');
+    expect(comments).toContain('fillBeside={postColumnRight}');
+  });
+});

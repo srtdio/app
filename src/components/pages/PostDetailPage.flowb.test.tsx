@@ -395,7 +395,9 @@ describe('34. laptop two columns, one grid for skeleton and page', () => {
   it('D1 lg: two columns, gallery and caption left, comments right from the top, sticky; below lg one column', () => {
     const grid = postPageGrid(false);
     expect(grid.page).toContain('grid-cols-1');
-    expect(grid.page).toContain('lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]');
+    expect(grid.page).toContain(
+      'lg:grid-cols-[minmax(0,calc(560px-var(--side-panel-squeeze,0px)))_minmax(0,1fr)]',
+    );
     expect(grid.page).toContain('max-w-6xl');
     expect(grid.page).toContain('mx-auto');
     expect(grid.head).toContain('lg:col-start-1');

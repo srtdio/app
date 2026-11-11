@@ -365,6 +365,8 @@ const REQUIRED: readonly string[] = [
   'post-comment-editing',
   'post-comment-thread',
   'post-comment-menu',
+  'post-comment-menu-own',
+  'post-comment-thread-files',
   'post-comments-empty',
   'brief-comments',
   // Alignment and one thread strip (9 Nov 2026).

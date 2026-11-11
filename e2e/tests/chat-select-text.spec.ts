@@ -84,7 +84,11 @@ async function userSelect(target: Locator): Promise<string> {
 async function pickSelect(page: Page): Promise<void> {
   await expect(menu(page).locator('[data-menu-item="more"]')).toHaveCount(0);
   // L10: select-text sits on the More actions page.
-  await menu(page).locator('[data-menu-item="more-actions"]').click();
+  // Two or fewer hidden actions sit on the first page (no More actions).
+  {
+    const moreActions = menu(page).locator('[data-menu-item="more-actions"]');
+    if ((await moreActions.count()) > 0) await moreActions.click();
+  }
   await menu(page).locator('[data-menu-item="select-text"]').click();
   await expect(menu(page)).toHaveCount(0);
 }
@@ -132,7 +136,8 @@ async function expectMenuStyle(page: Page): Promise<void> {
     expect(icon.width).toBe(iconWidth);
     expectMinTouchTarget({ height: icon.height }, { dimension: 'height' });
   }
-  expect(style.cells).toHaveLength(6);
+  // Six quick reactions and the smiley key (Thread polish 1).
+  expect(style.cells).toHaveLength(7);
   for (const cell of style.cells) expectMinTouchTarget(cell);
 }
 
@@ -148,8 +153,11 @@ test.describe('iPhone', () => {
     const viewport = page.viewportSize();
     if (viewport !== null) expect(panel.y + panel.height).toBeLessThanOrEqual(viewport.height);
     await expectMenuStyle(page);
-    // L10: Select text sits on the More actions page.
-    await expect(menu(page).locator('[data-menu-item="more-actions"]')).toBeVisible();
+    // L10: Select text sits on the More actions page, or on the first page
+    // when two or fewer actions would hide there.
+    await expect(
+      menu(page).locator('[data-menu-item="more-actions"], [data-menu-item="select-text"]'),
+    ).not.toHaveCount(0);
     await expect(menu(page).locator('[data-menu-item="select"]')).toHaveCount(0);
   });
 
@@ -283,7 +291,11 @@ test.describe('iPhone', () => {
     await expect(row).toBeVisible();
     await hold(page, bubbleWith(page, line));
     // L10: delete sits on the More actions page.
-    await menu(page).locator('[data-menu-item="more-actions"]').click();
+    // Two or fewer hidden actions sit on the first page (no More actions).
+    {
+      const moreActions = menu(page).locator('[data-menu-item="more-actions"]');
+      if ((await moreActions.count()) > 0) await moreActions.click();
+    }
     await menu(page).locator('[data-menu-item="delete"]').click();
     // Delete opens the delete sheet; a fresh own message offers Delete for everyone.
     await page.getByTestId('delete-sheet').locator('[data-delete-choice="everyone"]').click();

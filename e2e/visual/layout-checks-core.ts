@@ -293,8 +293,72 @@ export interface LayoutViolation {
     | 'thread-header'
     | 'catch-up'
     | 'alignment'
-    | 'list-screen';
+    | 'list-screen'
+    | 'thread-end'
+    | 'thread-fill';
   message: string;
+}
+
+/** A comment thread as read on open: its scroller and last row, and the reply box. */
+export interface CommentThreadEndGeom {
+  scrollHeight: number;
+  scrollTop: number;
+  clientHeight: number;
+  lastRowBottom: number | null;
+  replyBoxTop: number | null;
+}
+
+/**
+ * Thread polish 1: a comment thread opens at its end (a short one at the
+ * top, nothing to scroll), its last row (reaction chips included) at least
+ * 12 above the reply box. Pure.
+ */
+export function commentThreadEndViolations(geom: CommentThreadEndGeom): string[] {
+  const out: string[] = [];
+  const unseen = geom.scrollHeight - geom.scrollTop - geom.clientHeight;
+  if (geom.scrollHeight > geom.clientHeight + 1 && unseen > 1) {
+    out.push(`the thread opened ${Math.round(unseen)}px above its end`);
+  }
+  if (geom.scrollHeight <= geom.clientHeight + 1 && geom.scrollTop > 1) {
+    out.push('a thread shorter than its pane does not start at the top');
+  }
+  if (geom.lastRowBottom === null || geom.replyBoxTop === null) {
+    out.push('no last row or no reply box');
+  } else if (geom.replyBoxTop - geom.lastRowBottom < 12 - 1) {
+    out.push(
+      `the last row ends ${Math.round(geom.replyBoxTop - geom.lastRowBottom)}px above the reply box (want >= 12)`,
+    );
+  }
+  return out;
+}
+
+/** The laptop comment thread panel beside the post column. */
+export interface ThreadFillGeom {
+  windowWidth: number;
+  postRight: number;
+  panelLeft: number;
+  panelRight: number;
+}
+
+/**
+ * Thread polish 1: the laptop thread panel runs from the post column's right
+ * edge + 24 (±1) to the window edge (±1), never under 380. Pure.
+ */
+export function threadFillViolations(geom: ThreadFillGeom): string[] {
+  const out: string[] = [];
+  const width = geom.panelRight - geom.panelLeft;
+  if (width < 380 - 1) out.push(`the thread panel is ${Math.round(width)}px wide (min 380)`);
+  if (Math.abs(geom.panelRight - geom.windowWidth) > 1) {
+    out.push(
+      `the panel's right edge ${Math.round(geom.panelRight)} is not the window edge ${geom.windowWidth}`,
+    );
+  }
+  if (width >= 380 && Math.abs(geom.panelLeft - (geom.postRight + 24)) > 1) {
+    out.push(
+      `the panel starts at ${Math.round(geom.panelLeft)}, want the post column's right edge + 24 (${Math.round(geom.postRight + 24)})`,
+    );
+  }
+  return out;
 }
 
 /** The thread screen's header as read: its title and second line, and the bar. */

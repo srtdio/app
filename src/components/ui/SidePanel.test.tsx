@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SidePanel } from '@/components/ui/SidePanel';
+import { fillBesidePlan, SidePanel } from '@/components/ui/SidePanel';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -74,5 +74,41 @@ describe('SidePanel header', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('SidePanel fill beside (Thread polish 1)', () => {
+  it('runs from the content edge + 24 to the window edge; never under 380', () => {
+    // 1440 window, post column ending at 824: panel 848..1440 (592).
+    expect(fillBesidePlan(824, 1440)).toEqual({ left: 848, width: 592, squeeze: 0 });
+    // Too little room: 380 at the window edge, the content gives up the rest.
+    expect(fillBesidePlan(824, 1100)).toEqual({ left: 720, width: 380, squeeze: 128 });
+  });
+
+  it('default (Cockpit): 380 and the page pads by --side-panel-w', async () => {
+    const { panel } = await mount();
+    expect(panel.className).toContain('w-side-panel');
+    expect(panel.hasAttribute('data-side-panel-fill')).toBe(false);
+    expect(document.documentElement.style.getPropertyValue('--side-panel-w')).toBe('380px');
+  });
+
+  it('fill beside: measured left and width, no page padding', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const edge = (): number => document.documentElement.clientWidth - 700;
+    await act(async () => {
+      root?.render(
+        <SidePanel open bare onClose={() => {}} title="Thread" fillBeside={edge}>
+          <p>body</p>
+        </SidePanel>,
+      );
+    });
+    const panel = document.querySelector<HTMLElement>('[data-side-panel]');
+    expect(panel?.hasAttribute('data-side-panel-fill')).toBe(true);
+    expect(panel?.style.left).toBe(`${document.documentElement.clientWidth - 676}px`);
+    expect(panel?.style.width).toBe('676px');
+    expect(panel?.className).not.toContain('w-side-panel');
+    expect(document.documentElement.style.getPropertyValue('--side-panel-w')).toBe('');
   });
 });

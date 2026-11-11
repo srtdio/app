@@ -47,7 +47,10 @@ describe('the batched files read', () => {
     expect(COMMENT_FILE_COLUMNS).toContain('mime_type');
     expect(COMMENT_FILE_COLUMNS).toContain('size_bytes');
     expect(COMMENT_FILE_COLUMNS).toContain('page_count');
-    expect(COMMENT_FILE_COLUMNS).toContain('assets(display_name, filename)');
+    // The embed names its foreign key: asset_versions and assets have two
+    // foreign keys between them, so a bare assets(...) answers HTTP 300.
+    expect(COMMENT_FILE_COLUMNS).toContain('assets!asset_id(display_name, filename)');
+    expect(COMMENT_FILE_COLUMNS).not.toMatch(/(^|[ ,])assets\(/);
   });
 
   it('asks once for every id (deduped, blanks dropped), no N+1', async () => {

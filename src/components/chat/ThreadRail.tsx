@@ -360,7 +360,7 @@ function StripLead(props: { label: string; empty: boolean }): ReactElement {
 /**
  * The replies row under a thread root in the main chat (9 Nov 2026; the
  * work-chat layout, aligned under the root's text: photo 32 + gap 8). Up to 3
- * square photos (32) of the latest repliers, newest first, "N replies"
+ * square photos (32) of the latest repliers, the latest last (next to the count), "N replies"
  * (semibold ink, never truncates), the last reply's time (rowWhen, fg-3, the
  * first thing to truncate) and an 8px ink dot while a reply is unread by me;
  * 8 between each. No reply text. The whole row is one 44 tall target that

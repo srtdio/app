@@ -95,8 +95,18 @@ export function ThreadsSheet(props: {
   const laptop = useIsLaptop();
   const [fetched, setFetched] = useState<Map<string, ThreadMessage>>(() => new Map());
   const askedRef = useRef(new Set<string>());
+  // Answers are kept until the sheet unmounts. Dropping them on every deps
+  // change (the old effect cleanup) left ids marked asked but never filled,
+  // so rows read "Thread / Message" forever.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const { open, threads, loaded, currentUserId } = props;
-  // Roots not loaded: one read when the list opens.
+  // Roots not loaded: one batched read when the list opens, off the paint path.
   useEffect(() => {
     if (!open) return;
     const missing = threads
@@ -104,22 +114,20 @@ export function ThreadsSheet(props: {
       .filter((id) => !loaded.has(id) && !askedRef.current.has(id));
     if (missing.length === 0) return;
     missing.forEach((id) => askedRef.current.add(id));
-    let live = true;
     void loadMessagesByIds(supabase, missing).then((result) => {
-      if (!live) return;
       if (!result.ok) {
+        // Forget the ids so the next pass asks again.
+        missing.forEach((id) => askedRef.current.delete(id));
         logger.warn('chat: thread roots read failed', { error: result.error.message });
         return;
       }
+      if (!mountedRef.current) return;
       setFetched((prev) => {
         const next = new Map(prev);
         for (const row of result.data) next.set(row.id, rowToThreadMessage(row, currentUserId));
         return next;
       });
     });
-    return () => {
-      live = false;
-    };
   }, [open, threads, loaded, currentUserId]);
   const rows = useMemo(
     () =>
