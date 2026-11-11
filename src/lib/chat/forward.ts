@@ -215,7 +215,7 @@ export const FORWARDED_LABEL = 'Forwarded';
  * briefs, no reply, no mentions, and the source id. Marks are not carried.
  */
 export function forwardRecordInput(
-  source: ThreadMessage,
+  source: Pick<ThreadMessage, 'id' | 'body' | 'attachments' | 'sharedPostIds' | 'sharedBriefIds'>,
   ids: { id: string; channelId: string; traceId: string },
 ): Omit<SendRecordParams, 'client'> {
   return {
@@ -249,13 +249,11 @@ type ForwardRunResult<T> = { ok: true } | { ok: false; failed: T; message: strin
  * Forward sequentially: for each chat, each message in order. The first failed
  * send stops the whole run and names its chat; chats after it are untouched.
  */
-export async function runForward<T>(deps: {
+export async function runForward<T, M = ThreadMessage>(deps: {
   targets: readonly T[];
-  messages: readonly ThreadMessage[];
-  sendOne: (
-    target: T,
-    message: ThreadMessage,
-  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Chat messages, or a comment's forward source (forward-comment.ts). */
+  messages: readonly M[];
+  sendOne: (target: T, message: M) => Promise<{ ok: true } | { ok: false; message: string }>;
 }): Promise<ForwardRunResult<T>> {
   for (const target of deps.targets) {
     for (const message of deps.messages) {

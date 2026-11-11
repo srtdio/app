@@ -27,8 +27,8 @@ describe('Reply privately row', () => {
     const items = messageMenuItems(
       itemProps({ canReplyPrivately: true, replyPrivatelyName: 'Asha Rao' }),
     );
-    // L10: Reply privately opens the More actions page.
-    expect(items.find((i) => i.label === REPLY_PRIVATELY)?.group).toBe('more');
+    // Thread polish 2: one page; Reply privately is a tools row.
+    expect(items.find((i) => i.label === REPLY_PRIVATELY)?.group).toBe('tools');
     const row = items.find((i) => i.key === 'reply-privately');
     expect(row?.kind === 'action' && row.hint).toBe('to Asha');
     expect(row?.kind === 'action' && row.key).toBe('reply-privately');

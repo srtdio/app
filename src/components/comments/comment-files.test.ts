@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Client } from '@srtdio/comments';
 import {
   COMMENT_FILE_COLUMNS,
+  commentForwardFiles,
+  fetchCommentAttachmentIds,
   commentViewerTitle,
   fetchCommentFiles,
   idsToRead,
@@ -170,5 +172,72 @@ describe('the photo viewer title', () => {
     const at = '2026-11-07T09:55:00Z';
     expect(commentViewerTitle('Maya Rao', at, now)).toBe(`Maya Rao · ${formatAgo(at, now)}`);
     expect(commentViewerTitle('', at, now)).toBe(formatAgo(at, now));
+  });
+});
+
+describe('a comment forward carries its files (Thread polish 2)', () => {
+  const known = new Map<string, CommentFile>([
+    ['v1', { name: 'Deck.pdf', mime: 'application/pdf', size: 10 }],
+  ]);
+
+  it('details the screen holds are used as they are: no read', async () => {
+    const { client, calls } = fakeClient({ data: [], error: null });
+    const out = await commentForwardFiles(client, ['v1'], known);
+    expect(calls).toEqual([]);
+    expect(out).toEqual([{ assetId: 'v1', name: 'Deck.pdf', mime: 'application/pdf', size: 10 }]);
+  });
+
+  it('missing details are read in one batch; every stored id is kept, in order', async () => {
+    const { client, calls } = fakeClient({
+      data: [{ id: 'v2', mime_type: 'image/png', assets: { filename: 'Grid.png' } }],
+      error: null,
+    });
+    const out = await commentForwardFiles(client, ['v2', 'v1', 'v3'], known);
+    expect(calls.map((c) => c.ids)).toEqual([['v2', 'v3']]);
+    expect(out?.map((a) => a.assetId)).toEqual(['v2', 'v1', 'v3']);
+    expect(out?.[0]).toMatchObject({ name: 'Grid.png', mime: 'image/png' });
+  });
+
+  it('a failed read is null (the forward fails; nothing is sent without its files)', async () => {
+    const { client } = fakeClient({ data: null, error: { message: 'down' } });
+    expect(await commentForwardFiles(client, ['v9'], known)).toBeNull();
+  });
+
+  it("reads one comment's stored ids by id; gone, deleted or failed is null", async () => {
+    const asked: string[] = [];
+    const clientFor = (result: { data: unknown; error: unknown } | Error): Client =>
+      ({
+        from: (table: string) => ({
+          select: (columns: string) => ({
+            eq: (column: string, id: string) => ({
+              maybeSingle: async () => {
+                asked.push(`${table}:${columns}:${column}=${id}`);
+                if (result instanceof Error) throw result;
+                return result;
+              },
+            }),
+          }),
+        }),
+      }) as unknown as Client;
+    const live = { attachment_asset_ids: ['v1', 'v2'], deleted_at: null };
+    expect(await fetchCommentAttachmentIds(clientFor({ data: live, error: null }), 'c1')).toEqual([
+      'v1',
+      'v2',
+    ]);
+    expect(asked).toEqual(['comments:attachment_asset_ids, deleted_at:id=c1']);
+    expect(
+      await fetchCommentAttachmentIds(
+        clientFor({ data: { attachment_asset_ids: null, deleted_at: null }, error: null }),
+        'c1',
+      ),
+    ).toEqual([]);
+    for (const bad of [
+      { data: null, error: null },
+      { data: { ...live, deleted_at: '2026-11-11T10:00:00Z' }, error: null },
+      { data: null, error: { message: 'down' } },
+      new Error('thrown'),
+    ]) {
+      expect(await fetchCommentAttachmentIds(clientFor(bad), 'c1')).toBeNull();
+    }
   });
 });

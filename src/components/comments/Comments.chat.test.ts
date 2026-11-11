@@ -126,7 +126,15 @@ describe('replies row, menu, seeds, links', () => {
       copy: true,
       copyLink: true,
       delete: true,
+      forward: true,
     });
+    // Forward: a live comment with text or at least one file (file-only too).
+    const offers = (over: Partial<CommentRow>): boolean =>
+      commentMenuOffer({ row: { ...theirs, ...over }, me: ME, viewerIsAgency: false }).forward;
+    expect(offers({ body: '', attachment_asset_ids: ['v1'] })).toBe(true);
+    expect(offers({ body: '', attachment_asset_ids: [] })).toBe(false);
+    expect(offers({ body: ' ', attachment_asset_ids: null })).toBe(false);
+    expect(offers({ deleted_at: '2026-11-11T10:05:00.000Z' })).toBe(false);
     const other = commentMenuOffer({ row: theirs, me: ME, viewerIsAgency: true });
     expect(other.edit).toBe(false);
     expect(other.delete).toBe(false);

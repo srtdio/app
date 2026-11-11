@@ -141,3 +141,25 @@ describe('Guard 2: a comment draws exactly as a chat message', () => {
     });
   }
 });
+
+// Thread polish 2 (11 Nov 2026): a thread's main message always carries the
+// add-reaction key; nothing else gains one.
+describe("Guard: the add-reaction key on a thread's main message", () => {
+  it('a root that can be reacted to shows the key with zero reactions', () => {
+    const root = commentRow(comment(), 'root');
+    expect(root).toContain('data-reaction-chips');
+    expect(root.split('data-reaction-add').length - 1).toBe(1);
+  });
+
+  it('a reply and a main-list row with zero reactions show no chips row and no key', () => {
+    for (const place of ['reply', undefined] as const) {
+      const row = commentRow(comment(), place);
+      expect(row).not.toContain('data-reaction-chips');
+      expect(row).not.toContain('data-reaction-add');
+    }
+  });
+
+  it('a root that cannot be reacted to (no chip wiring) shows none', () => {
+    expect(chatRow(comment(), 'root')).not.toContain('data-reaction-add');
+  });
+});

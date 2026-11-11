@@ -87,15 +87,15 @@ const everything = {
 };
 
 describe('fix 1: the long-press menu, one level', () => {
-  it('reads Reply, Forward, Copy text, then More actions: Select, Transcribe, Save, Edit, Remove file, Delete', () => {
+  it('reads Reply, Forward, Edit, Copy text, Select, Save, Transcribe, then Remove file, Delete', () => {
     expect(messageMenuItems(everything).map((i) => i.key)).toEqual([
       'reply',
       'forward',
+      'edit',
       'copy',
       'select-text',
-      'transcribe',
       'save-notes',
-      'edit',
+      'transcribe',
       'remove-file',
       'delete',
     ]);

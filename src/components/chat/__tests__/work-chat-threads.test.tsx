@@ -303,19 +303,19 @@ describe('L10: the long-press sheet', () => {
     canDelete: true,
   };
 
-  it('three tiles, then Mark unread, Copy link, Copy text; Delete under More actions', () => {
+  it('three tiles, then Mark unread; Copy link, Copy text; Delete last on the same page', () => {
     const items = messageMenuItems(base);
     expect(itemsOfGroup(items, 'tile').map((i) => i.label)).toEqual([
       'Reply',
       'Forward',
       ADD_TO_TASKS_LABEL,
     ]);
-    expect(itemsOfGroup(items, 'row').map((i) => i.label)).toEqual([
-      MARK_UNREAD_LABEL,
+    expect(itemsOfGroup(items, 'row').map((i) => i.label)).toEqual([MARK_UNREAD_LABEL]);
+    expect(itemsOfGroup(items, 'tools').map((i) => i.label)).toEqual([
       COPY_LINK_LABEL,
       'Copy text',
     ]);
-    expect(itemsOfGroup(items, 'more').map((i) => i.key)).toEqual(['delete']);
+    expect(itemsOfGroup(items, 'danger').map((i) => i.key)).toEqual(['delete']);
   });
 
   it('a tile is a big card target with the icon over the label', () => {

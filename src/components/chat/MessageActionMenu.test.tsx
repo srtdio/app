@@ -13,7 +13,11 @@ import {
   MORE_REACTIONS_LABEL,
   QUICK_REACTIONS,
   ReactionsRow,
-  dividerBefore,
+  MENU_DIVIDER,
+  MENU_WIDTH_PX,
+  menuAnchorX,
+  menuEntries,
+  sheetMenuMaxHeight,
   messageMenuItems,
   runMenuItem,
   nextWindowBoundaryMs,
@@ -135,14 +139,14 @@ describe('ownMessageActions: the edit and delete windows', () => {
   });
 });
 
-describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per case', () => {
+describe('messageMenuItems: the locked order (tiles, rows, tools, danger), row set per case', () => {
   it('own within 15 min', () => {
     expect(rowsFor(msg(ago(5)))).toEqual([
       'Reply',
       'Forward',
+      'Edit',
       'Copy text',
       'Select text',
-      'Edit',
       'Delete',
     ]);
   });
@@ -170,7 +174,7 @@ describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per c
     ]);
   });
 
-  it('the full order: tiles, rows, then More actions with Delete last', () => {
+  it('the full order: tiles, Mark unread and Edit, the copy group, then Remove file and Delete last', () => {
     const all: Partial<ItemProps> = {
       canAddToTasks: true,
       canMarkUnread: true,
@@ -189,13 +193,13 @@ describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per c
       'forward',
       'add-task',
       'mark-unread',
+      'edit',
       'copy-link',
       'copy',
-      'reply-privately',
       'select-text',
-      'transcribe',
       'save-notes',
-      'edit',
+      'reply-privately',
+      'transcribe',
       'remove-file',
       'delete',
     ]);
@@ -205,14 +209,14 @@ describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per c
       'tile',
       'row',
       'row',
-      'row',
-      'more',
-      'more',
-      'more',
-      'more',
-      'more',
-      'more',
-      'more',
+      'tools',
+      'tools',
+      'tools',
+      'tools',
+      'tools',
+      'tools',
+      'danger',
+      'danger',
     ]);
   });
 
@@ -301,12 +305,37 @@ describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per c
     expect(own.find((i) => i.key === 'delete')?.hint).toBe('30 min');
   });
 
-  it('one divider, before the first danger row, only when a danger row shows', () => {
-    const both = messageMenuItems(itemProps({ canRemoveFile: true, canDelete: true }));
-    expect(dividerBefore(both)).toBe(both.findIndex((i) => i.key === 'remove-file'));
-    const deleteOnly = messageMenuItems(itemProps({ canDelete: true }));
-    expect(dividerBefore(deleteOnly)).toBe(deleteOnly.length - 1);
-    expect(dividerBefore(messageMenuItems(itemProps()))).toBeNull();
+  it('dividers sit only between two groups that show: never first, last or doubled', () => {
+    const shape = (over: Partial<ItemProps>): string[] =>
+      menuEntries(messageMenuItems(itemProps(over))).map((e) => (e === MENU_DIVIDER ? '|' : e.key));
+    // Tiles and the lead rows are one block; the copy group and the danger rows each get a hairline.
+    expect(
+      shape({
+        canMarkUnread: true,
+        canEdit: true,
+        canCopyLink: true,
+        canRemoveFile: true,
+        canDelete: true,
+      }),
+    ).toEqual([
+      'reply',
+      'forward',
+      'mark-unread',
+      'edit',
+      '|',
+      'copy-link',
+      'copy',
+      'select-text',
+      '|',
+      'remove-file',
+      'delete',
+    ]);
+    // No lead rows: one hairline between the tiles and the copy group.
+    expect(shape({})).toEqual(['reply', 'forward', '|', 'copy', 'select-text']);
+    // No copy group: one hairline before the danger row, never two.
+    expect(
+      shape({ canCopy: false, canSelectText: false, canForward: false, canDelete: true }),
+    ).toEqual(['reply', '|', 'delete']);
     // A danger row alone (nothing above it) needs no divider.
     const alone: MessageMenuItem = {
       kind: 'action',
@@ -315,8 +344,56 @@ describe('messageMenuItems: L10 order (tiles, rows, More actions), row set per c
       icon: null,
       run: () => {},
       danger: true,
+      group: 'danger',
     };
-    expect(dividerBefore([alone])).toBeNull();
+    expect(menuEntries([alone])).toEqual([alone]);
+    expect(menuEntries([])).toEqual([]);
+  });
+
+  it('every mix: no divider first, last or doubled; Delete is the last entry', () => {
+    const flags = [
+      'canReply',
+      'canForward',
+      'canAddToTasks',
+      'canMarkUnread',
+      'canEdit',
+      'canCopyLink',
+      'canCopy',
+      'canSelectText',
+      'canSaveToNotes',
+      'canReplyPrivately',
+      'canTranscribe',
+      'canRemoveFile',
+      'canDelete',
+    ] as const;
+    for (let mask = 0; mask < 1 << flags.length; mask += 1) {
+      const over: Record<string, boolean> = {};
+      flags.forEach((flag, bit) => {
+        over[flag] = (mask & (1 << bit)) !== 0;
+      });
+      const entries = menuEntries(messageMenuItems(itemProps(over as Partial<ItemProps>)));
+      if (entries.length === 0) continue;
+      const bad =
+        entries[0] === MENU_DIVIDER ||
+        entries[entries.length - 1] === MENU_DIVIDER ||
+        entries.some((e, i) => e === MENU_DIVIDER && entries[i + 1] === MENU_DIVIDER);
+      const last = entries[entries.length - 1];
+      const deleteLast =
+        over.canDelete !== true || (last !== MENU_DIVIDER && last?.key === 'delete');
+      if (bad || !deleteLast) throw new Error(`menu mix ${mask}: divider or Delete out of place`);
+    }
+  });
+
+  it('the phone sheet caps the menu so the list scrolls inside it; the laptop box stays in the window', () => {
+    // 84% of the visible viewport less the sheet's handle and padding (44).
+    expect(sheetMenuMaxHeight(800)).toBe(628);
+    expect(sheetMenuMaxHeight(0)).toBe(0);
+    // Someone else's row: the box hangs right of x; near the right edge it is pulled in.
+    expect(menuAnchorX({ left: 100, right: 300 }, false, 1280)).toBe(100);
+    expect(menuAnchorX({ left: 1230, right: 1274 }, false, 1280)).toBe(1280 - 8 - MENU_WIDTH_PX);
+    // An own row: the box hangs left of x; near the left edge it is pushed out.
+    expect(menuAnchorX({ left: 900, right: 1200 }, true, 1280)).toBe(1200);
+    expect(menuAnchorX({ left: 0, right: 40 }, true, 1280)).toBe(8 + MENU_WIDTH_PX);
   });
 
   it('runs the forward, edit, remove file and delete handlers', () => {
@@ -565,7 +642,7 @@ describe('Transcribe', () => {
       canTranscribe: true,
       onTranscribe: () => {},
     };
-    // L10: Forward is a tile; Transcribe sits on the More actions page.
+    // Forward is a tile; Transcribe is the last tools row.
     expect(menu(voice)).toEqual(['Reply', 'Forward', 'Transcribe']);
   });
 
@@ -589,15 +666,14 @@ describe('Transcribe', () => {
 });
 
 describe('the divider is the 1px border token', () => {
-  it('a hairline above the danger rows, no new colour', () => {
+  it('one hairline renderer, drawn from menuEntries, no new colour', () => {
     const src = readFileSync(
       fileURLToPath(new URL('./MessageActionMenu.tsx', import.meta.url)),
       'utf8',
     );
-    expect(src).toContain('data-menu-divider="" className="border-t border-border"');
-    // L10: one hairline before More actions, one before the danger rows on its
-    // page, one before a danger row folded onto the first page.
-    expect(src.split('data-menu-divider').length - 1).toBe(3);
+    expect(src).toContain('className="shrink-0 border-t border-border"');
+    expect(src.split('data-menu-divider=""').length - 1).toBe(1);
+    expect(src).toContain('entry === MENU_DIVIDER');
   });
 });
 

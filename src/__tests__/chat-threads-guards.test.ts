@@ -67,46 +67,96 @@ describe('L3: no quote strip in the main composer', () => {
   });
 });
 
-// Thread polish 1 (11 Nov 2026): the long-press sheet never hides two or fewer
-// actions behind "More actions"; replies row photos end with the latest replier.
-describe('Thread polish 1: More actions and replier order', () => {
-  const item = (key: string, group: 'row' | 'more', danger = false) => ({
-    kind: 'action' as const,
-    key,
-    label: key,
-    icon: null,
-    run: () => {},
-    group,
-    ...(danger ? { danger: true } : {}),
-  });
-
-  it('two or fewer hidden actions show as rows, danger last; three or more keep the page', async () => {
-    const { menuPages, MORE_ACTIONS_MIN } = await import('@/components/chat/MessageActionMenu');
-    expect(MORE_ACTIONS_MIN).toBe(3);
-    const two = menuPages([
-      item('copy', 'row'),
-      item('edit', 'more'),
-      item('delete', 'more', true),
-    ]);
-    expect(two.more).toEqual([]);
-    expect(two.rows.map((i) => i.key)).toEqual(['copy', 'edit', 'delete']);
-    const one = menuPages([item('copy', 'row'), item('delete', 'more', true)]);
-    expect(one.more).toEqual([]);
-    const three = menuPages([
-      item('copy', 'row'),
-      item('select-text', 'more'),
-      item('edit', 'more'),
-      item('delete', 'more', true),
-    ]);
-    expect(three.more.map((i) => i.key)).toEqual(['select-text', 'edit', 'delete']);
-    expect(three.rows.map((i) => i.key)).toEqual(['copy']);
-  });
-
-  it('the renderer draws "More actions" only from menuPages', () => {
+// Thread polish 2 (11 Nov 2026, locked): the long-press sheet is one page. No
+// "More actions" row or page for any message, Delete is the last entry, a
+// divider only ever sits between two groups that show. Thread polish 1's
+// replier order stays.
+describe('Thread polish 2: one-page sheet; Thread polish 1: replier order', () => {
+  it('the sheet has no More actions row, page or page state', () => {
     const menu = read('../components/chat/MessageActionMenu.tsx');
-    expect(menu).toContain('const { rows, more } = menuPages(items);');
-    expect(menu).toMatch(/const moreRow =\s*more\.length > 0 \?/);
-    expect(menu).not.toContain("itemsOfGroup(items, 'more');\n  const divider");
+    for (const gone of [
+      'more-actions',
+      'data-menu-page',
+      'setPage',
+      'menuPages',
+      'moreActionsFolded',
+      'MORE_ACTIONS_MIN',
+      'HeaderBar',
+      'IconChevronRight',
+    ]) {
+      expect(menu, gone).not.toContain(gone);
+    }
+    // The label lives on only as the replies bar's three-dot key's name.
+    expect(menu.split('MORE_ACTIONS_LABEL').length - 1).toBe(1);
+    expect(read('../components/chat/ThreadRail.tsx')).toContain('label={MORE_ACTIONS_LABEL}');
+    // One list, drawn from menuEntries, on phone and laptop alike.
+    expect(menu).toContain('const rest = menuEntries(items).slice(tiles.length);');
+  });
+
+  it('Delete is always last; a divider is never first, last or doubled (every mix)', async () => {
+    const { MENU_DIVIDER, menuEntries, messageMenuItems } =
+      await import('@/components/chat/MessageActionMenu');
+    const flags = [
+      'canReply',
+      'canForward',
+      'canAddToTasks',
+      'canMarkUnread',
+      'canEdit',
+      'canCopyLink',
+      'canCopy',
+      'canSelectText',
+      'canSaveToNotes',
+      'canReplyPrivately',
+      'canTranscribe',
+      'canRemoveFile',
+      'canDelete',
+    ] as const;
+    const broken: number[] = [];
+    for (let mask = 0; mask < 1 << flags.length; mask += 1) {
+      const on = (flag: (typeof flags)[number]): boolean =>
+        (mask & (1 << flags.indexOf(flag))) !== 0;
+      const entries = menuEntries(
+        messageMenuItems({
+          onReply: () => {},
+          onCopy: () => {},
+          canReply: on('canReply'),
+          canForward: on('canForward'),
+          canAddToTasks: on('canAddToTasks'),
+          canMarkUnread: on('canMarkUnread'),
+          canEdit: on('canEdit'),
+          canCopyLink: on('canCopyLink'),
+          canCopy: on('canCopy'),
+          canSelectText: on('canSelectText'),
+          canSaveToNotes: on('canSaveToNotes'),
+          canReplyPrivately: on('canReplyPrivately'),
+          canTranscribe: on('canTranscribe'),
+          canRemoveFile: on('canRemoveFile'),
+          canDelete: on('canDelete'),
+        }),
+      );
+      const last = entries[entries.length - 1];
+      const dividerOut =
+        entries[0] === MENU_DIVIDER ||
+        last === MENU_DIVIDER ||
+        entries.some((e, i) => e === MENU_DIVIDER && entries[i + 1] === MENU_DIVIDER);
+      const deleteOut =
+        on('canDelete') && (last === undefined || last === MENU_DIVIDER || last.key !== 'delete');
+      if (dividerOut || deleteOut) broken.push(mask);
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it("a thread's main message always carries the add-reaction key; nothing else gains one", () => {
+    expect(THREAD).toContain(
+      'const rootAddKey = rootPlace && canReactChips && message.deleted !== true;',
+    );
+    expect(THREAD).toContain('{hasReactions || rootAddKey ? (');
+    expect(THREAD).toContain('addWhenEmpty={rootAddKey}');
+    expect(THREAD.split('addWhenEmpty').length - 1).toBe(1);
+    // Opt-in only: the row still draws nothing with no reactions by default.
+    expect(read('../components/ui/ReactionChips.tsx')).toContain(
+      'if (reactions.length === 0 && !(props.addWhenEmpty === true && canReact)) return null;',
+    );
   });
 
   it('replies row photos: the latest replier is last (chat and comments)', async () => {

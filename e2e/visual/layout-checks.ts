@@ -934,6 +934,298 @@ export async function assertThreadFillsBeside(page: Page, screenName: string): P
   );
 }
 
+/** The message / comment menu's entries, top to bottom (MessageActionMenu, Thread polish 2). */
+const MENU_ITEM_ORDER = [
+  'reply',
+  'forward',
+  'add-task',
+  'mark-unread',
+  'edit',
+  'copy-link',
+  'copy',
+  'select-text',
+  'save-notes',
+  'reply-privately',
+  'transcribe',
+  'remove-file',
+  'delete',
+] as const;
+
+/**
+ * Thread polish 2: the open message / comment menu (phone sheet, laptop
+ * popover) is one page in the locked order. No "More actions" row or second
+ * page; the entries follow MENU_ITEM_ORDER, Delete last; a divider
+ * ([data-menu-divider]) never opens or ends the list, never doubles, and has
+ * a tile row or a row on each side; every row's label starts on one x; the
+ * menu and the box that holds it sit inside the window.
+ */
+export async function assertMenuOrder(page: Page, screenName: string): Promise<void> {
+  const messages = await page.evaluate(
+    (order: string[]): string[] => {
+      const out: string[] = [];
+      const shown = (el: Element | null): el is Element => {
+        if (el === null) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+      };
+      const r1 = (n: number): number => Math.round(n * 10) / 10;
+      const menu =
+        Array.from(document.querySelectorAll('[role="menu"][aria-label="Message actions"]')).find(
+          shown,
+        ) ?? null;
+      if (menu === null) return ['no message menu shown'];
+      if (menu.querySelector('[data-menu-item="more-actions"]') !== null) {
+        out.push('a "More actions" row shows (one page, no such row)');
+      }
+      if (document.querySelector('[data-menu-page]') !== null) {
+        out.push('a second menu page shows ([data-menu-page])');
+      }
+      const list = menu.querySelector('[data-menu-list]');
+      if (!shown(list)) return [...out, 'no [data-menu-list] in the menu'];
+      // Order: the keys as drawn are a run of MENU_ITEM_ORDER; Delete is last.
+      const keys = Array.from(list.querySelectorAll('[data-menu-item]'))
+        .filter(shown)
+        .map((el) => el.getAttribute('data-menu-item') ?? '');
+      const at = keys.map((k) => order.indexOf(k));
+      keys.forEach((k, i) => {
+        if ((at[i] ?? -1) < 0) out.push(`unknown menu entry "${k}"`);
+        else if (i > 0 && (at[i] ?? 0) <= (at[i - 1] ?? -1)) {
+          out.push(`"${k}" sits after "${keys[i - 1] ?? ''}" (order: ${order.join(', ')})`);
+        }
+      });
+      if (keys.includes('delete') && keys[keys.length - 1] !== 'delete') {
+        out.push(`Delete is not the last entry (last: "${keys[keys.length - 1] ?? ''}")`);
+      }
+      // Dividers: only between two blocks (the tile row, or a row), never doubled.
+      const kinds = Array.from(list.children)
+        .filter(shown)
+        .map((el) => (el.hasAttribute('data-menu-divider') ? 'divider' : 'block'));
+      kinds.forEach((kind, i) => {
+        if (kind !== 'divider') return;
+        if (i === 0) out.push('a divider is the first thing in the list');
+        else if (kinds[i - 1] === 'divider')
+          out.push(`two dividers in a row (children ${i}, ${i + 1})`);
+        if (i === kinds.length - 1) out.push('a divider is the last thing in the list');
+      });
+      // One text column: every row's label (the span after its icon) starts on one x.
+      const lefts = Array.from(list.querySelectorAll('[data-menu-item]:not([data-menu-tile])'))
+        .filter(shown)
+        .flatMap((row) => {
+          const label = row.querySelector('[data-menu-icon]')?.nextElementSibling ?? null;
+          return shown(label)
+            ? [
+                {
+                  key: row.getAttribute('data-menu-item') ?? '',
+                  x: label.getBoundingClientRect().left,
+                },
+              ]
+            : [];
+        });
+      const x0 = lefts[0]?.x;
+      for (const l of lefts) {
+        if (x0 !== undefined && Math.abs(l.x - x0) > 1) {
+          out.push(`"${l.key}" label x ${r1(l.x)}, the first row's ${r1(x0)}`);
+        }
+      }
+      // Inside the window: the menu and the box that holds it (popover or sheet body).
+      const vw = document.documentElement.clientWidth;
+      const vh = window.innerHeight;
+      const boxes: Array<[string, Element | null]> = [
+        ['menu', menu],
+        ['menu box', menu.parentElement],
+      ];
+      for (const [label, el] of boxes) {
+        if (!shown(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.left < -0.5 || r.top < -0.5 || r.right > vw + 0.5 || r.bottom > vh + 0.5) {
+          out.push(
+            `${label} runs outside the window: ${r1(r.left)},${r1(r.top)} to ${r1(r.right)},${r1(r.bottom)} in ${vw}x${vh}`,
+          );
+        }
+      }
+      return out;
+    },
+    [...MENU_ITEM_ORDER],
+  );
+  settleFindings(
+    screenName,
+    messages.map((message) => ({ check: 'alignment' as const, message: `menu: ${message}` })),
+  );
+}
+
+/** Reads the laptop thread panel against the post page as painted (assertThreadPanelClear). */
+async function threadPanelFindings(page: Page): Promise<string[]> {
+  return page.evaluate(async (): Promise<string[]> => {
+    // The panel re-measures on resize: read after the next two frames.
+    await new Promise<void>((done) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => done()));
+    });
+    const out: string[] = [];
+    const shown = (el: Element | null): el is Element => {
+      if (el === null) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const r1 = (n: number): number => Math.round(n * 10) / 10;
+    const panel = document.querySelector('[data-side-panel][data-side-panel-fill]');
+    if (!shown(panel)) return ['no filling thread panel shown ([data-side-panel-fill])'];
+    const p = panel.getBoundingClientRect();
+    // The panel's own "<" and title are on top at their centres (nothing covers them).
+    const bar = panel.querySelector('[data-header-bar]');
+    const parts: Array<[string, Element | null]> = [
+      ['panel back "<"', bar?.querySelector('button') ?? null],
+      ['panel title', bar?.querySelector('[data-thread-view-title]') ?? null],
+    ];
+    for (const [label, el] of parts) {
+      if (!shown(el)) {
+        out.push(`${label} is not shown`);
+        continue;
+      }
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const own = top !== null && (el.contains(top) || (top.contains(el) && panel.contains(top)));
+      if (!own) {
+        const what = top === null ? 'nothing' : `<${top.tagName.toLowerCase()}>`;
+        out.push(`${label} is covered at its centre by ${what} outside the panel`);
+      }
+    }
+    // The post's pinned bar ends on the panel's left edge.
+    const postBar =
+      Array.from(document.querySelectorAll('header[data-header-bar][data-header-pinned]')).find(
+        (el) => !panel.contains(el) && shown(el),
+      ) ?? null;
+    if (postBar === null) out.push('no pinned post bar outside the panel');
+    else {
+      const right = postBar.getBoundingClientRect().right;
+      if (Math.abs(right - p.left) > 1) {
+        out.push(`post bar right ${r1(right)}, panel left ${r1(p.left)} (want equal)`);
+      }
+    }
+    // The side column is hidden whole; only the panel shows through.
+    const side = document.querySelector('[data-post-side]');
+    if (side === null) out.push('no [data-post-side] column');
+    else {
+      if (getComputedStyle(side).visibility !== 'hidden') {
+        out.push('[data-post-side] is visible under the thread panel');
+      }
+      const seen = Array.from(side.querySelectorAll('*')).filter(
+        (el) => !panel.contains(el) && getComputedStyle(el).visibility !== 'hidden',
+      );
+      const first = seen[0];
+      if (first !== undefined) {
+        const hook = Array.from(first.attributes).find((a) => a.name.startsWith('data-'));
+        out.push(
+          `${seen.length} parts of the side column are visible beside the panel (first: <${first.tagName.toLowerCase()}${hook !== undefined ? ` ${hook.name}` : ''}>)`,
+        );
+      }
+    }
+    return out;
+  });
+}
+
+/**
+ * Thread polish 2, laptop: with a comment thread filling beside the post, the
+ * panel's own "<" and title are the top element at their centres, the post's
+ * pinned bar ends on the panel's left edge (+-1), and the side column under
+ * the panel is hidden whole ([data-post-side] and everything in it outside
+ * the panel). Measured at the suite's width and again at 1440 (the viewport
+ * is put back). The post column's width open vs closed is the spec's
+ * assertPostColumnStill, run after this (it closes the thread).
+ */
+export async function assertThreadPanelClear(page: Page, screenName: string): Promise<void> {
+  const before = page.viewportSize();
+  if (before === null || before.width < 768) return;
+  const messages = (await threadPanelFindings(page)).map((m) => `${before.width}: ${m}`);
+  await page.setViewportSize({ width: 1440, height: before.height });
+  messages.push(...(await threadPanelFindings(page)).map((m) => `1440: ${m}`));
+  await page.setViewportSize(before);
+  settleFindings(
+    screenName,
+    messages.map((message) => ({ check: 'thread-fill' as const, message: `panel: ${message}` })),
+  );
+}
+
+/**
+ * Thread polish 2: in a thread view (chat's and a post / brief comment's) the
+ * main message always carries the add-reaction key: exactly one shown
+ * [data-reaction-add] on the root row; a reply's [data-reaction-chips] row
+ * shows only with a reaction in it. Phone (EXACT +-1): the root's reaction
+ * row (the key alone, or the chips with the key) starts 8 under the root's
+ * message ([data-bubble]) and ends 12 over the replies bar
+ * ([data-thread-separator]).
+ */
+export async function assertRootReactionKey(page: Page, screenName: string): Promise<void> {
+  const phone = (page.viewportSize()?.width ?? 0) < 768;
+  const messages = await page.evaluate((measure: boolean): string[] => {
+    const out: string[] = [];
+    const shown = (el: Element | null): el is Element => {
+      if (el === null) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const r1 = (n: number): number => Math.round(n * 10) / 10;
+    const view = Array.from(document.querySelectorAll('[data-thread-view]')).find(shown) ?? null;
+    if (view === null) return ['no thread view shown'];
+    const rows = Array.from(view.querySelectorAll('li[data-msg-id]')).filter(shown);
+    const root = rows.find((row) => row.querySelector('[data-thread-root-head]') !== null);
+    if (root === undefined) return ['no root row in the thread view ([data-thread-root-head])'];
+    const keys = Array.from(root.querySelectorAll('[data-reaction-add]')).filter(shown);
+    if (keys.length !== 1) out.push(`${keys.length} add-reaction keys on the root, want 1`);
+    rows.forEach((row, i) => {
+      if (row === root) return;
+      const chips = row.querySelector('[data-reaction-chips]');
+      if (shown(chips) && chips.querySelector('[data-reaction-chip]') === null) {
+        out.push(`reply row ${i} shows a reaction row with no reaction in it`);
+      }
+    });
+    if (!measure) return out;
+    const chips = root.querySelector('[data-reaction-chips]');
+    const bubble = root.querySelector('[data-bubble]');
+    const strip = view.querySelector('[data-thread-separator]');
+    if (!shown(chips)) return [...out, 'no reaction row on the root'];
+    const c = chips.getBoundingClientRect();
+    // No reactions yet: the key is the row, so measure the key itself.
+    const key = keys[0];
+    const lone = chips.querySelector('[data-reaction-chip]') === null;
+    const row = lone && key !== undefined ? key.getBoundingClientRect() : c;
+    const top = row.top;
+    const bottom = row.bottom;
+    if (!shown(bubble)) out.push('no root message to measure from ([data-bubble])');
+    else {
+      const gap = top - bubble.getBoundingClientRect().bottom;
+      if (Math.abs(gap - 8) > 1) out.push(`root message to its reaction row ${r1(gap)}, want 8`);
+    }
+    if (!shown(strip)) out.push('no replies bar ([data-thread-separator])');
+    else {
+      const gap = strip.getBoundingClientRect().top - bottom;
+      if (Math.abs(gap - 12) > 1)
+        out.push(`root reaction row to the replies bar ${r1(gap)}, want 12`);
+    }
+    return out;
+  }, phone);
+  settleFindings(
+    screenName,
+    messages.map((message) => ({
+      check: 'alignment' as const,
+      message: `thread root reactions: ${message}`,
+    })),
+  );
+}
+
+/**
+ * Thread polish 2: a post / brief comment thread's replies bar carries three
+ * keys on the root, in order: Add to Tasks, Forward, More
+ * ([data-thread-root-action] tasks, forward, more).
+ */
+export async function assertThreadBarKeys(page: Page, screenName: string): Promise<void> {
+  const keys = await page
+    .locator('[data-thread-view] [data-thread-separator] [data-thread-root-action]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-thread-root-action') ?? ''));
+  expect
+    .soft(keys, `${screenName}: the replies bar's keys, in order`)
+    .toEqual(['tasks', 'forward', 'more']);
+}
+
 /**
  * Check 11: the writing box screens (ui/WritingBox: chat, comment, field,
  * caption). Each shown box's row keys ([data-composer-key]) and send
@@ -1784,7 +2076,10 @@ export async function assertAlignment(
         const t = text !== null && shown(text) ? textBox(text) : null;
         if (t !== null) at('root text', t.left, 16);
         else f.gaps.push({ label: 'no root text', gap: -1, min: 0 });
-        const last = lastOf(root);
+        // Thread polish 2: a chat thread's root carries its reaction row (the
+        // add key at least), so that row is the last line over the strip.
+        const chips = catchUp ? null : root.querySelector('[data-reaction-chips]');
+        const last = shown(chips) ? chips : lastOf(root);
         if (shown(last)) {
           f.gaps.push({
             label: 'root last line to strip hairline',
@@ -1803,6 +2098,17 @@ export async function assertAlignment(
       }
       // The trailing key's glyph on the strip's content edge (16 in).
       const keys = Array.from(strip.querySelectorAll('[data-thread-root-action]')).filter(shown);
+      // Thread polish 2: the keys read Add to Tasks, Forward, More, in that order.
+      const keyOrder = ['tasks', 'forward', 'more'];
+      const keyNames = keys.map((k) => k.getAttribute('data-thread-root-action') ?? '');
+      const keyAt = keyNames.map((k) => keyOrder.indexOf(k));
+      if (keyAt.some((n, i) => n < 0 || (i > 0 && n <= (keyAt[i - 1] ?? -1)))) {
+        f.gaps.push({
+          label: `strip keys read ${keyNames.join(', ')}, want tasks, forward, more`,
+          gap: -1,
+          min: 0,
+        });
+      }
       const glyph = keys.pop()?.querySelector('svg') ?? null;
       if (shown(glyph)) {
         f.gaps.push({

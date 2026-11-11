@@ -137,3 +137,40 @@ describe('ReactionChips', () => {
     expect(names.get('👍')).toEqual(['You', 'Ana']);
   });
 });
+
+describe("ReactionChips addWhenEmpty (a thread's main message)", () => {
+  it('default: no reactions, nothing renders', async () => {
+    const host = await mount(
+      <ReactionChips reactions={[]} onToggle={() => {}} onPick={() => {}} />,
+    );
+    expect(host.querySelector('[data-reaction-chips]')).toBeNull();
+  });
+
+  it('opt-in: no reactions, the smiley key alone; with reactions, chips then the same key', async () => {
+    const host = await mount(
+      <ReactionChips reactions={[]} addWhenEmpty onToggle={() => {}} onPick={() => {}} />,
+    );
+    const buttons = [...host.querySelectorAll('[data-reaction-chips] button')];
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Add reaction']);
+    expect(buttons[0]?.hasAttribute('data-reaction-add')).toBe(true);
+    act(() => root?.unmount());
+    const withChips = await mount(
+      <ReactionChips reactions={two} addWhenEmpty onToggle={() => {}} onPick={() => {}} />,
+    );
+    expect(withChips.querySelectorAll('[data-reaction-add]')).toHaveLength(1);
+    expect(withChips.querySelectorAll('[data-reaction-chip]')).toHaveLength(2);
+  });
+
+  it('opt-in but the viewer cannot react: nothing renders', async () => {
+    const host = await mount(
+      <ReactionChips
+        reactions={[]}
+        addWhenEmpty
+        canReact={false}
+        onToggle={() => {}}
+        onPick={() => {}}
+      />,
+    );
+    expect(host.querySelector('[data-reaction-chips]')).toBeNull();
+  });
+});

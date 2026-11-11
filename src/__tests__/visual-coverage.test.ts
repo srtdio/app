@@ -299,9 +299,8 @@ const REQUIRED: readonly string[] = [
   'emoji-sheet',
   'post-caption-box',
   'post-comment-box',
-  // Work-chat threads (8 Nov 2026): the More actions page, the group layout,
-  // the replies row and the thread screen.
-  'message-action-menu-more',
+  // Work-chat threads (8 Nov 2026): the group layout, the replies row and the
+  // thread screen.
   'chat-group-work',
   'chat-replies-row',
   'chat-thread-screen',
@@ -367,6 +366,13 @@ const REQUIRED: readonly string[] = [
   'post-comment-menu',
   'post-comment-menu-own',
   'post-comment-thread-files',
+  // Thread polish 2 (11 Nov 2026): the one-page menu on a voice note, on
+  // someone else's group message and on a file-only comment; the comment
+  // thread's replies bar menu (laptop).
+  'message-action-menu-voice',
+  'message-action-menu-theirs',
+  'post-comment-thread-more-menu',
+  'post-comment-menu-file-only',
   'post-comments-empty',
   'brief-comments',
   // Alignment and one thread strip (9 Nov 2026).
@@ -460,6 +466,9 @@ const LAPTOP_LIGHT_NAMES = [
   'chip-row-hover',
   'chat-box-expanded-laptop',
   'sidebar-activity-active',
+  // The comment thread fills beside the post on a laptop only (light here;
+  // dark through the spec's LAPTOP_DARK_SCREENS).
+  'post-comment-thread-more-menu',
 ];
 
 /** Laptop dark shots taken in the laptop-light project (`only: 'laptop', dark: true`). */

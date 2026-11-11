@@ -24,7 +24,10 @@ interface SidePanelProps {
    * to the default. The panel then runs from that edge + 24 to the window
    * edge, never under 380, and the page is NOT padded (the content keeps its
    * size and place). Below 380 the content gives up the difference through
-   * --side-panel-squeeze. Must be stable (useCallback).
+   * --side-panel-squeeze. While it fills, --side-panel-cover holds how much of
+   * the page's width the panel covers, so a pinned bar on the page can end at
+   * the panel's left edge instead of running over its header. Must be stable
+   * (useCallback).
    */
   fillBeside?: () => number | null;
 }
@@ -39,6 +42,21 @@ export const SIDE_PANEL_MIN_PX = 380;
 export const FILL_BESIDE_GAP_PX = 24;
 /** Fill beside: how much the content beside gives up when the room is under 380. */
 export const SIDE_PANEL_SQUEEZE_VAR = '--side-panel-squeeze';
+/**
+ * Fill beside: the width of the page (the scrolling main) under the panel,
+ * set only while a panel fills. A pinned bar on the page takes it as its
+ * right margin, so the bar ends at the panel's left edge and the panel's own
+ * header is never covered. Unset everywhere else (0).
+ */
+export const SIDE_PANEL_COVER_VAR = '--side-panel-cover';
+
+/**
+ * Fill beside: how much of the page the panel covers, from the page's right
+ * content edge (its scrollbar excluded) back to the panel's left. Pure.
+ */
+export function fillBesideCover(pageRight: number, panelLeft: number): number {
+  return Math.max(0, pageRight - panelLeft);
+}
 
 /**
  * Fill beside: the panel's left and width for a content right edge (as laid
@@ -93,6 +111,7 @@ export function SidePanel({
       const right = fillBeside();
       if (right === null) {
         root.style.removeProperty(SIDE_PANEL_SQUEEZE_VAR);
+        root.style.removeProperty(SIDE_PANEL_COVER_VAR);
         setFill(null);
         return;
       }
@@ -101,6 +120,13 @@ export function SidePanel({
       const plan = fillBesidePlan(right + squeezed, document.documentElement.clientWidth);
       if (plan.squeeze > 0) root.style.setProperty(SIDE_PANEL_SQUEEZE_VAR, `${plan.squeeze}px`);
       else root.style.removeProperty(SIDE_PANEL_SQUEEZE_VAR);
+      // The page under the panel: its pinned bar ends at the panel's left edge.
+      const page = panelRef.current?.closest('main') ?? null;
+      const pageRight =
+        page !== null
+          ? page.getBoundingClientRect().left + page.clientLeft + page.clientWidth
+          : document.documentElement.clientWidth;
+      root.style.setProperty(SIDE_PANEL_COVER_VAR, `${fillBesideCover(pageRight, plan.left)}px`);
       setFill({ left: plan.left, width: plan.width });
     };
     measure();
@@ -108,6 +134,7 @@ export function SidePanel({
     return () => {
       window.removeEventListener('resize', measure);
       root.style.removeProperty(SIDE_PANEL_SQUEEZE_VAR);
+      root.style.removeProperty(SIDE_PANEL_COVER_VAR);
     };
   }, [rendered, fillBeside]);
   const filling = fill !== null;

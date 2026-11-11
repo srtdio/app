@@ -9,7 +9,8 @@
 // "Add reaction"). 44 tall taps come from a pseudo-element (before:-inset-y-1.5),
 // never from growing the pill. Tap a pill = toggle mine. Long-press (phone) =
 // who reacted (chat's sheet); hover (laptop) = a small popover with the names.
-// No reactions: nothing renders. Pure
+// No reactions: nothing renders, except where the host opts in (addWhenEmpty:
+// a thread's main message always carries the smiley key alone). Pure
 // render on paint: the drawer chunk and any who-reacted read start on a tap.
 
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
@@ -165,6 +166,12 @@ export interface ReactionChipsProps {
   onWho?: ((emoji: string) => void) | undefined;
   /** Off: draw the chips only (no smiley; a row that cannot take a reaction). */
   canReact?: boolean;
+  /**
+   * Opt-in (a thread's main message): with no reactions the row still draws,
+   * holding the smiley key alone, when the viewer can react. Default off: no
+   * reactions, nothing renders.
+   */
+  addWhenEmpty?: boolean;
   className?: string;
 }
 
@@ -182,7 +189,7 @@ export function ReactionChips(props: ReactionChipsProps): ReactElement | null {
     asked.current = false;
     setNames(null);
   }, [signature]);
-  if (reactions.length === 0) return null;
+  if (reactions.length === 0 && !(props.addWhenEmpty === true && canReact)) return null;
   const loadNames = (): void => {
     if (who === undefined || asked.current) return;
     asked.current = true;

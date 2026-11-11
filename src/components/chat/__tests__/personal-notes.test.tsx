@@ -316,7 +316,7 @@ function labels(props: Partial<MenuProps>): string[] {
 }
 
 describe('menu matrix', () => {
-  it('DM and group: Save to notes sits after Forward and before Edit', () => {
+  it('DM and group: Save to notes sits after Forward and Edit, in the copy group', () => {
     const rows = labels({
       canSaveToNotes: true,
       onSaveToNotes: () => {},
@@ -326,7 +326,7 @@ describe('menu matrix', () => {
     expect(rows).not.toContain('More');
     const save = rows.indexOf('Save to notes');
     expect(save).toBeGreaterThan(rows.indexOf('Forward'));
-    expect(save).toBeLessThan(rows.indexOf('Edit'));
+    expect(save).toBeGreaterThan(rows.indexOf('Edit'));
   });
 
   it('notes: no Save to notes; Edit and Delete for an hour-old own note, no hints', () => {
