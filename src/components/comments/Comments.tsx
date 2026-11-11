@@ -44,6 +44,7 @@ import { ThreadViewFill, ThreadViewFrame } from '@/components/chat/ThreadView';
 import { ThreadCommentRow } from '@/components/chat/ThreadCommentRow';
 import { isAgencySide, usePlanMentionMembers } from '@/components/chat/PlanItemThread';
 import { useChatLayout } from '@/components/chat/chat-type';
+import { useInduction } from '@/components/induction/InductionProvider';
 import { CommentTaskSheet } from '@/components/comments/CommentTaskSheet';
 import { CommentTaskTag } from '@/components/comments/CommentTaskTag';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
@@ -1228,6 +1229,10 @@ export function Comments(props: CommentsProps): ReactElement {
       : {};
 
   const canComment = props.canComment !== false;
+  const induction = useInduction();
+  const replyStepUp =
+    induction?.resolution.kind === 'step' &&
+    induction.resolution.step.targets.includes(INDUCTION_KEYS.postCommentReply);
   // A caption quote dropped into the box: the box takes focus (inside the
   // Comment tap's commit, so the keyboard opens on a phone).
   const quoteKey = props.captionQuote?.key ?? null;
@@ -1243,13 +1248,13 @@ export function Comments(props: CommentsProps): ReactElement {
       ref={listRef}
       data-comments=""
       data-entity={entityType}
-      // The tour's comment (its whole row is the tour's target): a tap beside
-      // its bubble opens the thread too; the bubble's own tap already does.
+      // The tour's "open the thread" step: its whole row is the target, so a
+      // tap anywhere on it (the quote chip included) opens the thread. Only
+      // while that step is up; otherwise the row is chat's.
       onClick={(e) => {
         const guide = props.guideReplyCommentId ?? null;
+        if (guide === null || !replyStepUp || thread?.rootId === guide) return;
         const target = e.target as Element;
-        if (guide === null || e.defaultPrevented || target.closest('[data-bubble]') !== null)
-          return;
         const row = target.closest(commentRowSelector(guide));
         if (row !== null && row.closest('[data-comment-thread]') === null) openThread(guide, true);
       }}
