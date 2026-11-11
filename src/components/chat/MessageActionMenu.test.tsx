@@ -14,6 +14,7 @@ import {
   QUICK_REACTIONS,
   ReactionsRow,
   MENU_DIVIDER,
+  MENU_WIDTH_PX,
   menuAnchorX,
   menuEntries,
   sheetMenuMaxHeight,

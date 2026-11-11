@@ -14,6 +14,10 @@ import {
   assertCommentTray,
   assertCommentThreadEnd,
   assertThreadFillsBeside,
+  assertThreadPanelClear,
+  assertMenuOrder,
+  assertRootReactionKey,
+  assertThreadBarKeys,
   readPostColumnRight,
   assertThreadHeader,
   assertListCards,
@@ -1744,21 +1748,12 @@ const SCREENS: Screen[] = [
     steps: async (page) => waitFor([page.getByText('Help articles', { exact: true })], 'help'),
   },
   {
+    // Thread polish 2: one page, the locked order (assertMenuOrder).
     name: 'message-action-menu',
     seed: creator,
     url: '/chat',
     steps: openDmMessageMenu,
-  },
-  {
-    // L10: the sheet's second page ("<" More actions).
-    name: 'message-action-menu-more',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await openDmMessageMenu(page);
-      await tap([page.locator('[data-menu-item="more-actions"]')], 'More actions');
-      await waitFor([page.locator('[data-menu-page="more"]')], 'More actions page');
-    },
+    after: async (page) => assertMenuOrder(page, 'message-action-menu'),
   },
   {
     // L1: the group chat, everyone on the left, square photos, name + time lines.
@@ -1794,6 +1789,7 @@ const SCREENS: Screen[] = [
       await waitFor([page.locator('[data-thread-separator]')], 'thread screen');
       await assertThreadHeader(page, 'chat-thread-screen');
     },
+    after: async (page) => assertRootReactionKey(page, 'chat-thread-screen'),
   },
   {
     // A thread on a plan card: the plan's title over the chat's name, the
@@ -2448,6 +2444,7 @@ const SCREENS: Screen[] = [
       );
       await waitFor([page.locator('[data-thread-view] [data-thread-strip="replies"]')], 'strip');
     },
+    after: async (page) => assertRootReactionKey(page, 'chat-thread-replies'),
   },
   {
     // 9 Nov 2026: the replies row with the last reply today: photos, "4
@@ -2667,6 +2664,7 @@ const SCREENS: Screen[] = [
         'thread divider icons',
       );
     },
+    after: async (page) => assertRootReactionKey(page, 'chat-thread-view-divider'),
   },
   // Loading boxes (sweepBoxes): each read below never answers, and a fresh
   // browser holds nothing for the screen, so its boxes are what paints.
@@ -4128,8 +4126,11 @@ async function openGroupMessageMenu(page: Page): Promise<void> {
       break;
     }
   }
-  // L10: Reply privately sits on the More actions page.
-  await waitFor(menuRow(page, /More actions/), 'More actions in the message menu');
+  // One page (Thread polish 2): Reply privately is a row of the menu itself.
+  await waitFor(
+    [page.locator('[data-menu-item="reply-privately"]')],
+    'Reply privately in the message menu',
+  );
 }
 
 SCREENS.push(
@@ -4176,6 +4177,23 @@ SCREENS.push(
     extra: seedGroupPeople,
     url: '/chat',
     steps: openGroupMessageMenu,
+  },
+  {
+    // Thread polish 2: someone else's message in a group chat: no Edit, no
+    // Delete; Reply privately with its "to <name>" hint among the tools rows.
+    name: 'message-action-menu-theirs',
+    seed: creator,
+    extra: seedGroupPeople,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await openGroupMessageMenu(page);
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await expect(menu.locator('[data-menu-item="reply-privately"]')).toContainText('to Leo');
+      await expect(menu.locator('[data-menu-item="more-actions"]')).toHaveCount(0);
+      await page.mouse.move(0, 0);
+    },
+    after: async (page) => assertMenuOrder(page, 'message-action-menu-theirs'),
   },
   {
     name: 'chat-dm-private-reply-strip',
@@ -4461,6 +4479,37 @@ SCREENS.push(
       await waitFor([note.locator('[data-voice-bars]')], 'voice bars');
       await threadStill(page);
     },
+  },
+  {
+    // Thread polish 2: the menu on ME's own voice note with no transcript: no
+    // Copy text (no words), Delete last. Transcribe is the tools group's last
+    // row where the app has a transcribe endpoint; the harness env has none
+    // (e2e/harness/stubs/env.ts), so the row is checked only when it shows.
+    name: 'message-action-menu-voice',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const bubble = await lastVisible(
+        page.locator('[data-bubble][data-own]', { has: page.locator('[data-voice-note]') }),
+        'own voice note bubble',
+      );
+      await threadStill(page);
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      // A synthetic hold can be cut short by a scroll settling under it: try again.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await openMenuGesture(page, bubble);
+        if (await menu.isVisible().catch(() => false)) break;
+      }
+      await waitFor([menu.locator('[data-menu-item="delete"]')], 'voice note menu');
+      await expect(menu.locator('[data-menu-item="copy"]')).toHaveCount(0);
+      await expect(menu.locator('[data-menu-item="more-actions"]')).toHaveCount(0);
+      const transcribe = menu.locator('[data-menu-item="transcribe"]');
+      if ((await transcribe.count()) > 0) await expect(transcribe).toHaveText('Transcribe');
+      await page.mouse.move(0, 0);
+    },
+    after: async (page) => assertMenuOrder(page, 'message-action-menu-voice'),
   },
   {
     // Settings > Profile with Sound switched off: the off ink pill (clear well,
@@ -4793,12 +4842,7 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await openDmMessageMenu(page);
-      // L10: select-text sits on the More actions page.
-      // Two or fewer hidden actions sit on the first page (no More actions).
-      {
-        const moreActions = page.locator('[data-menu-item="more-actions"]');
-        if ((await moreActions.count()) > 0) await moreActions.click();
-      }
+      // One page: Select text is a row of the menu itself.
       await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
       await waitFor([page.locator('[data-selecting-text]')], 'select mode');
       await page.mouse.move(0, 0);
@@ -4921,12 +4965,7 @@ async function openDmMenuOn(page: Page, text: string): Promise<void> {
 /** The message menu's Delete: the delete sheet opens. */
 async function openDeleteSheetOn(page: Page, text: string): Promise<Locator> {
   await openDmMenuOn(page, text);
-  // L10: delete sits on the More actions page.
-  // Two or fewer hidden actions sit on the first page (no More actions).
-  {
-    const moreActions = page.locator('[data-menu-item="more-actions"]');
-    if ((await moreActions.count()) > 0) await moreActions.click();
-  }
+  // One page: Delete is the menu's last row.
   await tap([page.locator('[data-menu-item="delete"]')], 'menu Delete');
   return firstVisible([page.getByTestId('delete-sheet')], 'delete sheet');
 }
@@ -5782,6 +5821,35 @@ function seedCommentPdf(network: HarnessNetwork): void {
   );
 }
 
+const FILE_ONLY_COMMENT = '0190f300-0000-7000-8000-0000000000f2';
+const FILE_ONLY_ASSET = '0190e600-0000-7000-8000-0000000000aa';
+const FILE_ONLY_VERSION = '0190e600-0000-7000-8000-0000000000ba';
+
+/** Thread polish 2: Priya's comment that is a stored PDF alone, no text (Forward still offers). */
+function seedFileOnlyComment(network: HarnessNetwork): void {
+  const t = network.world.tables;
+  (t.asset_versions ??= []).push({
+    id: FILE_ONLY_VERSION,
+    asset_id: FILE_ONLY_ASSET,
+    kind: 'file',
+    mime_type: 'application/pdf',
+    size_bytes: 2_400_000,
+    width: null,
+    height: null,
+    duration_ms: null,
+    page_count: FIXTURE_PDF_PAGES,
+    external_url: null,
+    r2_key: `${WORKSPACE_ID}/${FILE_ONLY_ASSET}/v1.pdf`,
+    version_number: 1,
+    assets: { display_name: null, filename: COMMENT_PDF_NAME },
+  });
+  (t.comments ??= []).push(
+    threadComment(FILE_ONLY_COMMENT, PEER, '', NOW - 30 * 60_000, {
+      attachment_asset_ids: [FILE_ONLY_VERSION],
+    }),
+  );
+}
+
 /** Thread polish 1: a thread whose replies carry a picture, a PDF, an Excel file and a video. */
 const FILES_ROOT = '0190f300-0000-7000-8000-0000000000e0';
 const FILES_LAST_REPLY = '0190f300-0000-7000-8000-0000000000e5';
@@ -5944,10 +6012,66 @@ SCREENS.push(
     after: async (page) => {
       await assertThreadHeader(page, 'post-comment-thread');
       await assertCommentThreadEnd(page, 'post-comment-thread');
+      await assertRootReactionKey(page, 'post-comment-thread');
+      await assertThreadBarKeys(page, 'post-comment-thread');
       if (isLaptop(page)) {
         await assertThreadFillsBeside(page, 'post-comment-thread');
+        // Panel clear first (the thread stays open); the column check closes it.
+        await assertThreadPanelClear(page, 'post-comment-thread');
         await assertPostColumnStill(page, 'post-comment-thread');
       }
+    },
+  },
+  {
+    // Thread polish 2, laptop: the replies bar's three-dot key on the right
+    // edge opens the root comment's menu, its whole box inside the window.
+    name: 'post-comment-thread-more-menu',
+    seed: creator,
+    extra: seedConversation,
+    only: 'laptop',
+    hold: true,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postConversationReady(page);
+      await openCommentThread(page);
+      await tap(
+        [page.locator('[data-thread-view] [data-thread-root-action="more"]')],
+        'replies bar more key',
+      );
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await waitFor([menu.locator('[data-menu-item="forward"]')], 'root comment menu');
+      await page.mouse.move(0, 0);
+    },
+    after: async (page) => {
+      const name = 'post-comment-thread-more-menu';
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      const boxes = await menu.evaluate((el) => {
+        const rect = (e: Element) => {
+          const r = e.getBoundingClientRect();
+          return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+        };
+        return {
+          menu: rect(el),
+          popover: el.parentElement !== null ? rect(el.parentElement) : null,
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
+      });
+      for (const [what, box] of [
+        ['menu', boxes.menu],
+        ['popover', boxes.popover],
+      ] as const) {
+        if (box === null) continue;
+        expect.soft(box.left, `${name}: ${what} left inside the window`).toBeGreaterThanOrEqual(0);
+        expect.soft(box.top, `${name}: ${what} top inside the window`).toBeGreaterThanOrEqual(0);
+        expect
+          .soft(box.right, `${name}: ${what} right inside the window`)
+          .toBeLessThanOrEqual(boxes.width);
+        expect
+          .soft(box.bottom, `${name}: ${what} bottom inside the window`)
+          .toBeLessThanOrEqual(boxes.height);
+      }
+      await assertMenuOrder(page, name);
     },
   },
   {
@@ -5973,12 +6097,20 @@ SCREENS.push(
     },
     after: async (page) => {
       await assertCommentThreadEnd(page, 'post-comment-thread-files');
-      if (isLaptop(page)) await assertThreadFillsBeside(page, 'post-comment-thread-files');
+      await assertRootReactionKey(page, 'post-comment-thread-files');
+      await assertThreadBarKeys(page, 'post-comment-thread-files');
+      if (isLaptop(page)) {
+        await assertThreadFillsBeside(page, 'post-comment-thread-files');
+        // Panel clear first (the thread stays open); the column check closes it.
+        await assertThreadPanelClear(page, 'post-comment-thread-files');
+        await assertPostColumnStill(page, 'post-comment-thread-files');
+      }
     },
   },
   {
     // Long-press (phone) / right-click (laptop) on a comment: chat's
-    // MessageActionMenu (reactions, Add to Tasks, Copy text, Copy link, More).
+    // MessageActionMenu, one page (reactions, Forward, Add to Tasks, Copy
+    // link, Copy text, Reply privately).
     name: 'post-comment-menu',
     seed: creator,
     extra: seedConversation,
@@ -5993,10 +6125,11 @@ SCREENS.push(
       await expect(menu.locator('[data-menu-item="reply"]')).toHaveCount(0);
       await page.mouse.move(0, 0);
     },
+    after: async (page) => assertMenuOrder(page, 'post-comment-menu'),
   },
   {
-    // Thread polish 1: ME's own comment: Edit and Delete sit on the first page
-    // as rows (Delete last, under the divider); no More actions.
+    // ME's own comment: Edit under the tiles, Delete the last row under its
+    // divider, all on the one page.
     name: 'post-comment-menu-own',
     seed: creator,
     extra: seedConversation,
@@ -6011,6 +6144,28 @@ SCREENS.push(
       await expect(menu.locator('[data-menu-item="more-actions"]')).toHaveCount(0);
       await page.mouse.move(0, 0);
     },
+    after: async (page) => assertMenuOrder(page, 'post-comment-menu-own'),
+  },
+  {
+    // Thread polish 2: a comment that is a file alone (no text): the sheet
+    // still carries the Forward tile; no Copy text.
+    name: 'post-comment-menu-file-only',
+    seed: creator,
+    extra: seedFileOnlyComment,
+    hold: true,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const bubble = commentBubble(page, FILE_ONLY_COMMENT);
+      await waitFor([bubble], 'file-only comment');
+      await openMenuGesture(page, bubble);
+      const menu = page.getByRole('menu', { name: 'Message actions' });
+      await waitFor([menu.locator('[data-menu-item="forward"]')], 'Forward');
+      await expect(menu.locator('[data-menu-item="copy"]')).toHaveCount(0);
+      await expect(menu.locator('[data-menu-item="more-actions"]')).toHaveCount(0);
+      await page.mouse.move(0, 0);
+    },
+    after: async (page) => assertMenuOrder(page, 'post-comment-menu-file-only'),
   },
   {
     // No comments yet: the zero line over the comment box.
@@ -6757,7 +6912,7 @@ SCREENS.push(
   },
   {
     // ME's own edited comment (its bubble says "edited") taken back into the
-    // comment box through chat's menu (More actions, Edit): chat's Composer
+    // comment box through chat's menu (its Edit row): chat's Composer
     // editing bar "Editing your message" over the text, Clear to cancel, in view.
     name: 'post-comment-editing',
     seed: creator,
@@ -6770,11 +6925,6 @@ SCREENS.push(
       await waitFor([own.locator('[data-edited]')], 'edited');
       await openMenuGesture(page, own);
       const menu = page.getByRole('menu', { name: 'Message actions' });
-      // Two or fewer hidden actions sit on the first page (no More actions).
-      {
-        const moreActions = menu.locator('[data-menu-item="more-actions"]');
-        if ((await moreActions.count()) > 0) await moreActions.click();
-      }
       await tap([menu.locator('[data-menu-item="edit"]')], 'Edit');
       const composer = page.locator('[data-comments-composer]');
       const bar = composer.getByText('Editing your message', { exact: true });
@@ -7307,6 +7457,11 @@ const LAPTOP_DARK_SCREENS = new Set([
   'post-detail-approved',
   'post-comment-thread',
   'post-comment-menu',
+  // Thread polish 2: the one-page menu and the replies bar's menu, light and dark.
+  'message-action-menu-voice',
+  'message-action-menu-theirs',
+  'post-comment-thread-more-menu',
+  'post-comment-menu-file-only',
   'post-comment-editing',
   'brief-comments',
   'post-comment-file-viewer',

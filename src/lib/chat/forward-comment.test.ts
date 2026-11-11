@@ -71,7 +71,9 @@ describe('forwardComment', () => {
           over.source === undefined ? source : over.source,
         ),
       ),
-      send: vi.fn((_record: Record) => Promise.resolve({ ok: results.shift() ?? true })),
+      send: vi.fn((record: Record) =>
+        Promise.resolve({ ok: record.id !== '' && (results.shift() ?? true) }),
+      ),
       newId: () => `m${(n += 1)}`,
       newTrace: () => 'trace',
     };

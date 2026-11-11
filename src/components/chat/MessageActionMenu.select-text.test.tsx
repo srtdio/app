@@ -146,9 +146,9 @@ describe('menu order', () => {
     expect(keysFor(old, { notes: true })).toEqual([
       'reply',
       'forward',
+      'edit',
       'copy',
       'select-text',
-      'edit',
       'delete',
     ]);
   });
