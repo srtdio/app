@@ -1384,9 +1384,9 @@ export function threadListItems(
   /** The last older page failed (FT41): its Retry; the row replaces Load older. */
   retryOlder?: () => void,
   /**
-   * The thread view (8 Nov 2026): its content starts at the top, so the
-   * spacer takes no slack (no bottom-anchored gap). The main chat keeps the
-   * bottom pin.
+   * Top aligned: the spacer takes no slack. The thread view was this from
+   * 8 Nov 2026; since 12 Nov 2026 it passes anchorBottom and keeps the bottom
+   * pin like the main chat, so nothing passes true today.
    */
   topAligned = false,
 ): ReactElement[] {
@@ -1486,6 +1486,8 @@ interface MessageRowProps {
   reducedMotion: boolean;
   /** Swiped right past the threshold: the same reply path as the menu's Reply. */
   onSwipeReply: (message: ThreadMessage) => void;
+  /** A plain tap on the row: opens its thread; on touch the reply box is not focused. */
+  onTapOpenThread: (message: ThreadMessage) => void;
   /**
    * Inside a thread view: no reply gesture. A right swipe is not taken at all
    * (no movement, no icon); the left swipe (Delete) stays.
@@ -1729,7 +1731,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       onTapOpen={
         selecting || props.replyBlocked === true || props.message.deleted === true
           ? undefined
-          : () => latest.current.onSwipeReply(latest.current.message)
+          : () => latest.current.onTapOpenThread(latest.current.message)
       }
       swipe={rowSwipe}
       press={{
@@ -1984,6 +1986,14 @@ function ThreadBody(
     showTicks: boolean;
     isGroup: boolean;
     onReply: (message: ThreadMessage) => void;
+    /** A plain tap on a row (12 Nov 2026): opens its thread, keyboard down on touch; absent: as Reply. */
+    onOpenThread?: (message: ThreadMessage) => void;
+    /**
+     * The thread view (12 Nov 2026): the content sits on the reply box. The
+     * list's first child (the spacer) takes margin-top auto, so a short thread's
+     * spare room is at the top. CSS only; the main chat never passes it.
+     */
+    anchorBottom?: boolean;
     /** Present while selection mode is on. */
     selection?: { selected: ReadonlySet<string>; onToggle: (id: string) => void };
     /**
@@ -2867,6 +2877,7 @@ function ThreadBody(
     };
   };
   const onSwipeReply = useStableCallback(props.onReply);
+  const onTapOpenThread = useStableCallback(props.onOpenThread ?? props.onReply);
   // Swipe left: exactly the long-press menu's Delete (its rule, its sheet).
   const canSwipeDelete = useStableCallback(
     (m: ThreadMessage): boolean =>
@@ -3137,6 +3148,7 @@ function ThreadBody(
               props.onLoadOlder?.();
             }
           }}
+          {...(props.anchorBottom === true ? { 'data-thread-anchor-bottom': '' } : {})}
           className={THREAD_LIST_CLASS}
         >
           {props.loadFailed === true ? threadLoadErrorRow(props.onRetryLoad) : null}
@@ -3255,6 +3267,7 @@ function ThreadBody(
                       coarsePointer={coarsePointer}
                       reducedMotion={reducedMotion}
                       onSwipeReply={onSwipeReply}
+                      onTapOpenThread={onTapOpenThread}
                       replyBlocked={props.threads?.viewRootId !== undefined}
                       onSwipeDelete={onSwipeDelete}
                       canSwipeDelete={canSwipeDelete}
@@ -3354,7 +3367,7 @@ function ThreadBody(
               ? (row) => <TaskEventLine key={row.key} line={row.line} ctx={taskCtx} />
               : undefined,
             olderFailed && props.loadingOlder !== true && win.start === 0 ? retryOlder : undefined,
-            props.threads?.viewRootId !== undefined,
+            props.threads?.viewRootId !== undefined && props.anchorBottom !== true,
           )}
         </ul>
         {unread !== undefined && unread !== null && pill !== 'unknown' ? (
@@ -4652,6 +4665,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const handleReply = (message: ThreadMessage): void => {
     openThreadRef.current(threadRootOf(message), true, true);
   };
+  // 12 Nov 2026: a plain tap opens the thread with the keyboard down on touch
+  // (no focus); a laptop keeps the cursor in the reply box (no keyboard there).
+  const handleTapOpen = (message: ThreadMessage): void => {
+    openThreadRef.current(threadRootOf(message), finePointer, true);
+  };
   // The quoted message became a tombstone: the reply chip loses its text and
   // reads the deleted label (the draft map is stripped by the store too).
   const replyQuoteId =
@@ -5160,6 +5178,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
    * an unknown root waits for its read, and a root not found toasts. A newer
    * open supersedes an older one (no gate). From a gesture the view mounts in
    * that event (flushSync) so the composer's focus raises the iPhone keyboard.
+   * 12 Nov 2026: `focus` is true on touch only for an explicit Reply (the
+   * sheet's Reply tile, swipe right); every other path opens with the
+   * keyboard down (false, or finePointer: a laptop has no keyboard to raise).
    */
   const openThread = (rootId: string, focus = false, gesture = false): void => {
     let opening: Promise<boolean> = Promise.resolve(false);
@@ -5240,7 +5261,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       // The same loaded rows as the count: it moves with every reply, no read.
       time: info.last !== null ? rowWhen(info.last.time) : '',
       unread: info.unread,
-      onOpen: () => openThread(message.id, true, true),
+      onOpen: () => openThread(message.id, finePointer, true),
     };
   };
   // L4/L7: the thread screen's "New" line, decided once as the thread opens
@@ -5307,7 +5328,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   useEffect(() => {
     if (aboutDraft === null) return;
     setAboutDraft(null);
-    openThread(aboutDraft.cardMessageId, true);
+    openThread(aboutDraft.cardMessageId, finePointer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aboutDraft]);
   const mainThreads: ThreadBodyThreads = {
@@ -5824,13 +5845,18 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             repliesFor={repliesFor}
             chipFor={chipFor}
             onTalkAbout={talkAbout}
-            onTalkAboutFocus={() => focusComposerInput(composerInputRef.current)}
+            // 12 Nov 2026: Talk about opens the card's thread with the keyboard
+            // down on touch; a laptop keeps the cursor in a box.
+            onTalkAboutFocus={() => {
+              if (finePointer) focusComposerInput(composerInputRef.current);
+            }}
             threads={mainThreads}
             loading={bodyLoading}
             {...(channelId !== undefined ? { olderKey: channelOlderKey(channelId) } : {})}
             {...(props.loadFailed !== undefined ? { loadFailed: props.loadFailed } : {})}
             {...(props.onRetryLoad !== undefined ? { onRetryLoad: props.onRetryLoad } : {})}
             onReply={handleReply}
+            onOpenThread={handleTapOpen}
             // An older page held for its task lines is still loading: the page
             // anchor holds until its rows and lines paint together.
             {...(props.loadingOlder !== undefined || olderPageHeld
@@ -6044,7 +6070,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           }
           onOpenThread={(rootId) => {
             setThreadsOpen(false);
-            openThread(rootId, true, true);
+            openThread(rootId, finePointer, true);
           }}
         />
       ) : null}
@@ -6083,9 +6109,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               onLoadOlder={threadView.loadOlder}
               olderKey={threadOlderKey(view.rootId)}
               loadOlderRow
+              anchorBottom
             />
           </ReactorLoadContext.Provider>
           <ThreadViewFill
+            // The replies still to land: the known count less the rows already shown.
+            count={viewCount === null ? null : Math.max(0, viewCount - viewParts.replies.length)}
             loading={view.loading === true}
             failed={view.failed === true}
             onRetry={threadView.retry}

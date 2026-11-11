@@ -245,10 +245,27 @@ export function ThreadViewFrame(props: {
 
 /** Placeholder rows (photo, name, line) sized like the reply rows: the family's photo box, 12 to the text. */
 export const THREAD_FILL_ROWS = ['w-48', 'w-36', 'w-56'];
+/** Placeholder rows when the reply count is unknown, and the most ever drawn. */
+export const THREAD_FILL_UNKNOWN = 3;
+export const THREAD_FILL_MAX = 6;
+/**
+ * How many placeholder rows hold the replies' place (12 Nov 2026): the known
+ * count of replies still to land, at most 6; 3 when unknown. Pure.
+ */
+export function threadFillCount(count: number | null | undefined): number {
+  if (count === null || count === undefined) return THREAD_FILL_UNKNOWN;
+  return Math.max(0, Math.min(THREAD_FILL_MAX, Math.floor(count)));
+}
 export const THREAD_LOAD_FAILED = "Couldn't load this thread.";
 
-/** Under the root: placeholder rows while the first page reads, or the failure + Retry. */
+/**
+ * Above the reply box: placeholder rows while the first page reads, or the
+ * failure + Retry. The rows sit where the last replies will (the list above is
+ * bottom anchored), so the bottom edge and the reply box never move on load.
+ */
 export function ThreadViewFill(props: {
+  /** Replies still to land (null or absent: unknown). */
+  count?: number | null;
   loading: boolean;
   failed: boolean;
   onRetry: () => void;
@@ -269,11 +286,13 @@ export function ThreadViewFill(props: {
     );
   }
   if (!props.loading) return null;
+  const rows = threadFillCount(props.count);
+  if (rows === 0) return null;
   return (
     <ul data-thread-fill="" aria-busy="true" className="flex shrink-0 flex-col gap-3 px-4 py-2">
       <li className="sr-only">Loading replies</li>
-      {THREAD_FILL_ROWS.map((width) => (
-        <li key={width} className="flex gap-3" aria-hidden="true">
+      {Array.from({ length: rows }, (_, at) => (
+        <li key={at} data-thread-fill-row="" className="flex gap-3" aria-hidden="true">
           <Bone
             lit="lit-avatar"
             as="span"
@@ -281,7 +300,10 @@ export function ThreadViewFill(props: {
           />
           <span className="flex min-w-0 flex-1 flex-col gap-2">
             <Bone lit="flat" className="h-3 w-24 rounded" />
-            <Bone lit="flat" className={cn('h-4 rounded', width)} />
+            <Bone
+              lit="flat"
+              className={cn('h-4 rounded', THREAD_FILL_ROWS[at % THREAD_FILL_ROWS.length])}
+            />
           </span>
         </li>
       ))}

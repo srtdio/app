@@ -904,6 +904,133 @@ export async function assertCommentThreadEnd(page: Page, screenName: string): Pr
   );
 }
 
+/** What assertThreadSitsOnBox reads off the open thread view. */
+export interface ThreadOnBoxGeom {
+  /** The bottom-anchored scroller is there. */
+  anchored: boolean;
+  scrollHeight: number;
+  scrollTop: number;
+  clientHeight: number;
+  scrollerTop: number;
+  /** The scroller's and the list's own bottom / top padding plus the edge rows' margins. */
+  wantBottomGap: number;
+  wantTopGap: number;
+  firstRowTop: number | null;
+  lastRowBottom: number | null;
+  /** The top of what the list sits on: the placeholders when shown, else the reply box. */
+  floorTop: number | null;
+  /** Placeholders: the last one's bottom edge to the reply box, and the padding it keeps. */
+  fillGap: number | null;
+  fillWantGap: number | null;
+  /** The reply box's input holds focus. */
+  boxFocused: boolean;
+}
+
+/**
+ * 12 Nov 2026, pure: the thread's content sits on the reply box. The last row
+ * ends today's gap (the list's own bottom padding, +-1) above the box; a
+ * thread shorter than its pane keeps its spare room at the top (never under
+ * the last row); a longer one is at its end; on touch the reply box is not
+ * focused after open; the last placeholder ends where the last reply will.
+ */
+export function threadOnBoxViolations(geom: ThreadOnBoxGeom, touch: boolean): string[] {
+  const out: string[] = [];
+  if (!geom.anchored) return ['no bottom-anchored thread scroller ([data-thread-anchor-bottom])'];
+  if (geom.lastRowBottom === null || geom.firstRowTop === null || geom.floorTop === null) {
+    return ['no thread rows or no reply box'];
+  }
+  const short = geom.scrollHeight <= geom.clientHeight + 1;
+  const unseen = geom.scrollHeight - geom.scrollTop - geom.clientHeight;
+  if (!short && unseen > 1) out.push(`the thread sits ${Math.round(unseen)}px above its end`);
+  const gap = geom.floorTop - geom.lastRowBottom;
+  if (Math.abs(gap - geom.wantBottomGap) > 1) {
+    out.push(
+      `the last row ends ${Math.round(gap)}px above the reply box (want ${Math.round(geom.wantBottomGap)})`,
+    );
+  }
+  if (short) {
+    const rows = geom.lastRowBottom - geom.firstRowTop;
+    const spare = geom.clientHeight - rows - geom.wantBottomGap - geom.wantTopGap;
+    const top = geom.firstRowTop - geom.scrollerTop - geom.wantTopGap;
+    if (Math.abs(top - spare) > 1) {
+      out.push(
+        `a short thread's spare room (${Math.round(spare)}px) is not above its main message (${Math.round(top)}px there)`,
+      );
+    }
+  }
+  if (touch && geom.boxFocused) out.push('the reply box is focused after open on touch');
+  if (geom.fillGap !== null && geom.fillWantGap !== null) {
+    if (Math.abs(geom.fillGap - geom.fillWantGap) > 1) {
+      out.push(
+        `the last placeholder ends ${Math.round(geom.fillGap)}px above the reply box (the last reply ends ${Math.round(geom.fillWantGap)})`,
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * 12 Nov 2026: the open thread view (chat and comment threads, phone and
+ * laptop, light and dark) sits on its reply box (threadOnBoxViolations).
+ * Measured, never scrolled by the check.
+ */
+export async function assertThreadSitsOnBox(
+  page: Page,
+  screenName: string,
+  touch: boolean,
+): Promise<void> {
+  const geom = await page.evaluate((): ThreadOnBoxGeom => {
+    const view = document.querySelector('[data-thread-view]');
+    const scroller = view?.querySelector<HTMLElement>('[data-thread-anchor-bottom]') ?? null;
+    const list =
+      scroller === null || scroller.matches('ul') ? scroller : scroller.querySelector('ul');
+    const px = (value: string): number => Number.parseFloat(value) || 0;
+    const rows = [...(list?.children ?? [])].filter((el) => el.getBoundingClientRect().height > 0);
+    const first = rows[0] ?? null;
+    const last = rows[rows.length - 1] ?? null;
+    const pads = (edge: 'Top' | 'Bottom', row: Element | null): number => {
+      if (scroller === null || list === null) return 0;
+      const own = px(getComputedStyle(scroller)[`padding${edge}`]);
+      const inner = list === scroller ? 0 : px(getComputedStyle(list)[`padding${edge}`]);
+      const margin = row !== null ? px(getComputedStyle(row)[`margin${edge}`]) : 0;
+      return own + inner + margin;
+    };
+    const box =
+      view?.querySelector('[data-comment-thread-composer]') ?? view?.querySelector('form') ?? null;
+    const fill = view?.querySelector('[data-thread-fill]') ?? null;
+    const fillRows = fill !== null ? [...fill.querySelectorAll('[data-thread-fill-row]')] : [];
+    const lastFill = fillRows[fillRows.length - 1] ?? null;
+    const boxTop = box !== null ? box.getBoundingClientRect().top : null;
+    const wantBottomGap = pads('Bottom', last);
+    const active = document.activeElement;
+    return {
+      anchored: scroller !== null,
+      scrollHeight: scroller?.scrollHeight ?? 0,
+      scrollTop: scroller?.scrollTop ?? 0,
+      clientHeight: scroller?.clientHeight ?? 0,
+      scrollerTop: scroller?.getBoundingClientRect().top ?? 0,
+      wantBottomGap,
+      wantTopGap: pads('Top', first),
+      firstRowTop: first !== null ? first.getBoundingClientRect().top : null,
+      lastRowBottom: last !== null ? last.getBoundingClientRect().bottom : null,
+      floorTop: fill !== null ? fill.getBoundingClientRect().top : boxTop,
+      fillGap:
+        lastFill !== null && boxTop !== null
+          ? boxTop - lastFill.getBoundingClientRect().bottom
+          : null,
+      fillWantGap: lastFill !== null && scroller !== null ? wantBottomGap : null,
+      boxFocused: active !== null && box !== null && box.contains(active),
+    };
+  });
+  settleFindings(
+    screenName,
+    threadOnBoxViolations(geom, touch).map((message) => ({
+      check: 'thread-end' as const,
+      message: `sits on box: ${message}`,
+    })),
+  );
+}
+
 /** The post column's right edge on the post page (its head block), or null. */
 export async function readPostColumnRight(page: Page): Promise<number | null> {
   return page.evaluate(() => {

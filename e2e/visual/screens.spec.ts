@@ -13,6 +13,7 @@ import {
   assertCommentTray,
   assertCommentThreadEnd,
   assertThreadFillsBeside,
+  assertThreadSitsOnBox,
   assertThreadPanelClear,
   assertMenuOrder,
   assertRootReactionKey,
@@ -1674,8 +1675,8 @@ const SCREENS: Screen[] = [
     steps: async (page) => openChat(page, GROUP_NAME),
   },
   {
-    // 10 Nov 2026: a tap on a message's text opens its thread at once: the
-    // root and placeholder rows (the replies read never answers here).
+    // 10 Nov 2026: a tap on a message's text opens its thread at once (the
+    // replies read never answers here): the root, on the reply box.
     name: 'chat-thread-tap-open',
     seed: creator,
     url: '/chat',
@@ -1684,7 +1685,13 @@ const SCREENS: Screen[] = [
       await openChat(page, MAYA_NAME);
       // Its leading edge: on laptop the hover More key covers the text's right end.
       await plainMessageText(page).click({ position: { x: 4, y: 4 } });
-      await waitFor([page.locator('[data-thread-view] [data-thread-fill]')], 'placeholders');
+      // 12 Nov 2026: a message with no replies known waits on nothing: no
+      // placeholder rows, the main message sits on the reply box.
+      await waitFor(
+        [page.locator('[data-thread-view] [data-thread-anchor-bottom] [data-bubble]')],
+        'main message',
+      );
+      await expect(page.locator('[data-thread-view] [data-thread-fill]')).toHaveCount(0);
     },
   },
   {
@@ -5804,6 +5811,32 @@ function seedConversation(network: HarnessNetwork, on: 'post' | 'brief' = 'post'
   );
 }
 
+/** A comment whose thread spans two days: the root and one reply yesterday, two replies today. */
+const TWO_DAY_ROOT = '0190f300-0000-7000-8000-0000000000d1';
+const TWO_DAY_LAST_REPLY = '0190f300-0000-7000-8000-0000000000d4';
+function seedTwoDayThread(network: HarnessNetwork): void {
+  const reply = { parent_comment_id: TWO_DAY_ROOT };
+  const day = 24 * 3_600_000;
+  (network.world.tables.comments ??= []).push(
+    threadComment(TWO_DAY_ROOT, PEER, 'Which cover goes first on the grid?', NOW - day - 3_600_000),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000d2',
+      COLLEAGUE_A,
+      'The blue one, it reads at a glance.',
+      NOW - day - 50 * 60_000,
+      reply,
+    ),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000d3',
+      ME,
+      'Swapped it in this morning.',
+      NOW - 40 * 60_000,
+      reply,
+    ),
+    threadComment(TWO_DAY_LAST_REPLY, PEER, 'Looks right now.', NOW - 20 * 60_000, reply),
+  );
+}
+
 /** The comment's chat bubble on the page (never one inside an open thread). */
 function commentBubble(page: Page, id: string): Locator {
   return page.locator(`[data-comments-list] [data-comment-id="${id}"] [data-bubble]`).first();
@@ -6068,6 +6101,28 @@ SCREENS.push(
         await assertPostColumnStill(page, 'post-comment-thread');
       }
     },
+  },
+  {
+    // 12 Nov 2026: a comment thread whose main message and first reply are
+    // from yesterday and whose last replies are from today: every head says
+    // its day ("Yesterday at ...", "Today at ..."), the thread on the reply box.
+    name: 'post-comment-thread-two-days',
+    seed: creator,
+    extra: seedTwoDayThread,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      await tap(
+        [page.locator('[data-comments-list] [data-thread-open="replies"]').first()],
+        'replies row',
+      );
+      const thread = page.locator(`[data-thread-view] [data-comment-thread="${TWO_DAY_ROOT}"]`);
+      await waitFor([thread], 'comment thread');
+      await waitFor([thread.locator(`[data-comment-id="${TWO_DAY_LAST_REPLY}"]`)], 'last reply');
+      await expect(thread.getByText(/Yesterday at /).first()).toBeVisible();
+      await expect(thread.getByText(/Today at /).first()).toBeVisible();
+    },
+    after: async (page) => assertCommentThreadEnd(page, 'post-comment-thread-two-days'),
   },
   {
     // Thread polish 2, laptop: the replies bar's three-dot key on the right
@@ -7380,6 +7435,10 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   const align = ALIGN_SCREENS[screen.name];
   if (align !== undefined) await assertAlignment(page, screen.name, align);
   // The message family: photo, text column, type, date lines, placeholders.
+  // 12 Nov 2026: the thread view sits on its reply box, keyboard down on touch.
+  if (THREAD_ON_BOX_SCREENS.has(screen.name)) {
+    await assertThreadSitsOnBox(page, screen.name, !isLaptop(page));
+  }
   const family = MESSAGE_FAMILY_SCREENS[screen.name];
   if (family !== undefined) await assertMessageFamily(page, screen.name, family);
   // A catch-up screen: 44 hits (bar keys 48), checkpoint circles on their
@@ -7432,8 +7491,9 @@ const MESSAGE_FAMILY_SCREENS: Readonly<Record<string, MessageFamilyWant>> = {
   'brief-comments': {},
   'plan-item-thread': { rows: false },
   'catch-up-chat-main': {},
-  // The thread's placeholder rows while its replies read hangs.
-  'chat-thread-tap-open': { placeholders: true, rows: false },
+  // The thread opened by a tap while its replies read hangs (no placeholders:
+  // none of its replies are still to land).
+  'chat-thread-tap-open': { rows: false },
 };
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
@@ -7471,7 +7531,23 @@ const LIST_CARD_SCREENS = new Set([
 // (playwright.visual.config.ts greps @laptop-dark there). The tag rides on the
 // screen's one test title, so the iPhone and laptop-light projects still run
 // it; the snapshot name stays the screen name (laptop-dark/<name>.png).
+// The thread view screens (chat and comment threads): assertThreadSitsOnBox
+// measures the last row on the reply box, a short thread's spare room at the
+// top and no focus on touch, phone and laptop, light and dark.
+const THREAD_ON_BOX_SCREENS: ReadonlySet<string> = new Set([
+  'chat-thread-screen',
+  'chat-thread-screen-plan',
+  'chat-thread-replies',
+  'chat-thread-reactions',
+  'chat-thread-tap-open',
+  'post-comment-thread',
+  'post-comment-thread-files',
+  'post-comment-thread-two-days',
+]);
+
 const LAPTOP_DARK_SCREENS = new Set([
+  // 12 Nov 2026: a comment thread whose replies span two days.
+  'post-comment-thread-two-days',
   'pipeline',
   'chat-date-lines',
   'plan-tab',
