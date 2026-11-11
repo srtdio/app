@@ -1950,10 +1950,14 @@ export async function assertAlignment(
             rightEdges: [],
             gaps: [],
           };
-          const at = (label: string, x: number | null): void => {
+          const at = (label: string, x: number | null, want = 60): void => {
             if (x === null) f.gaps.push({ label: `no ${label}`, gap: -1, min: 0 });
-            else f.gaps.push({ label: `${label} x`, gap: x - b.left, equals: 60 });
+            else f.gaps.push({ label: `${label} x`, gap: x - b.left, equals: want });
           };
+          // Message family (11 Nov 2026): a reply's text column is 16 + photo
+          // + 12: 64 under 768 (36 photo), 60 from 768 (32 photo). The block's
+          // header, more and buttons keep their 60 inset (ThreadsListScreen).
+          const msgCol = window.innerWidth >= 768 ? 60 : 64;
           const header = block.querySelector('[data-threads-header]');
           for (const line of Array.from(header?.children ?? []).filter(shown)) {
             at('header line', textBox(line)?.left ?? null);
@@ -1969,9 +1973,9 @@ export async function assertAlignment(
             .filter(shown)
             .forEach((row, i) => {
               const name = row.querySelector('[data-sender-line]');
-              if (shown(name)) at(`message ${i + 1} name`, textBox(name)?.left ?? null);
+              if (shown(name)) at(`message ${i + 1} name`, textBox(name)?.left ?? null, msgCol);
               const body = row.querySelector('[data-msg-body]');
-              if (shown(body)) at(`message ${i + 1} text`, textBox(body)?.left ?? null);
+              if (shown(body)) at(`message ${i + 1} text`, textBox(body)?.left ?? null, msgCol);
               const padRight = parseFloat(getComputedStyle(row).paddingRight) || 0;
               f.gaps.push({
                 label: `message ${i + 1} right edge`,
@@ -2026,9 +2030,12 @@ export async function assertAlignment(
       }
       // A thread view (9 Nov 2026, EXACT): the root (40 photo at x16, its text
       // full width at x16), 12 from its last line to the strip, the strip
-      // label at x16, 8 to the first reply's name, replies' text at x60, 16
+      // label at x16, 8 to the first reply's name, replies' text at x64 phone / x60 laptop, 16
       // between replies, the last key's glyph on the content edge (374 phone).
       const catchUp = which === 'catch-up-thread';
+      // Message family (11 Nov 2026): a reply's text column is 16 + photo + 12:
+      // 64 under 768 (36 photo), 60 from 768 (32 photo).
+      const replyCol = window.innerWidth >= 768 ? 60 : 64;
       const strip = document.querySelector(
         catchUp
           ? '[data-catch-up-thread] [data-thread-strip]'
@@ -2136,11 +2143,11 @@ export async function assertAlignment(
       below.slice(0, 4).forEach((r, i) => {
         const text = textOf(r);
         const t = text !== null && shown(text) ? textBox(text) : null;
-        if (t !== null) at(`reply ${i + 1} text`, t.left, 60);
+        if (t !== null) at(`reply ${i + 1} text`, t.left, replyCol);
         const name = nameOf(r);
         if (shown(name)) {
           const n = textBox(name);
-          if (n !== null) at(`reply ${i + 1} name`, n.left, 60);
+          if (n !== null) at(`reply ${i + 1} name`, n.left, replyCol);
         }
         const next = below[i + 1];
         const nextName = next !== undefined ? nameOf(next) : null;
@@ -2236,7 +2243,8 @@ export async function assertReactionChips(
       if (shown(strip)) {
         const s = strip.getBoundingClientRect();
         const isRoot = box.bottom <= s.top + 0.5;
-        const want = isRoot ? 16 : 60;
+        // Replies sit on the family text column: 64 under 768, 60 from 768.
+        const want = isRoot ? 16 : window.innerWidth >= 768 ? 60 : 64;
         if (!near(box.left - s.left, want)) {
           out.push(`${at}: x ${r1(box.left - s.left)} in the thread, want ${want}`);
         }
@@ -3521,5 +3529,265 @@ export function assertTabFrameStill(name: string, rows: readonly TabFrameAt[]): 
   settleFindings(
     name,
     tabFrameViolations(rows).map((message) => ({ check: 'topbar' as const, message })),
+  );
+}
+
+/** What a message-family screen must show (assertMessageFamily). */
+export interface MessageFamilyWant {
+  /** At least this many date lines show (default 0). */
+  dateLines?: number;
+  /** A loading screen: at least one placeholder photo shows and is measured. */
+  placeholders?: boolean;
+  /** At least one message row's photo is measured (default true). */
+  rows?: boolean;
+}
+
+/**
+ * Check 17 (11 Nov 2026, CLAUDE.md "Work chat": the message family), MEASURED
+ * on the screen as shot, +-1px, phone and laptop, light and dark. Under 768
+ * the touch table (photo 36, 12 to the text, name 17 / 22 bold, text 17 / 20,
+ * date words 17 bold); from 768 the laptop table (photo 32, 8 to the text,
+ * name 13 / 18 600, text 14 / 20, date words 15 bold).
+ * - every main-list message row (li[data-msg-id] outside a thread view) with a
+ *   name: its photo is the family square, sits on the row's own left pad, and
+ *   the name starts at photo right + gap; the text starts on the name's x;
+ *   name and text carry the family's computed size and line; a follow-on
+ *   row's spacer is the photo's width and its text sits one gap after it;
+ * - every Catch up row ([data-catch-up-photo]): the column is the photo's
+ *   width and the name starts 12 after it;
+ * - every date line ([data-date-line]): the words at the family size, bold,
+ *   16 in from the line's left (the photo's x); the hairline spans the list;
+ *   16 above the words (0 as the list's first row), 8 from the words to the
+ *   hairline, 12 from the hairline to the line's end, and a message row
+ *   right under it has no top padding;
+ * - every placeholder photo (a placeholder row's leading Bone): the family square, with the
+ *   next bar one gap after it (12 in a thread view and in Catch up, where the
+ *   loaded rows sit 12 from the photo on both layouts), 16 in from a thread
+ *   fill's left: the rect the loaded row's photo takes.
+ */
+export async function assertMessageFamily(
+  page: Page,
+  screenName: string,
+  want: MessageFamilyWant = {},
+): Promise<void> {
+  const findings: string[] = await page.evaluate(
+    (opts: { dateLines: number; placeholders: boolean; rows: boolean }): string[] => {
+      const out: string[] = [];
+      const laptop = window.innerWidth >= 768;
+      const fam = laptop
+        ? { photo: 32, gap: 8, name: 13, nameLine: 18, nameWeight: 600, text: 14, textLine: 20 }
+        : { photo: 36, gap: 12, name: 17, nameLine: 22, nameWeight: 700, text: 17, textLine: 20 };
+      const dateSize = laptop ? 15 : 17;
+      const r1 = (n: number): number => Math.round(n * 10) / 10;
+      const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+      const px = (v: string): number => parseFloat(v) || 0;
+      const shown = (el: Element | null): el is Element => {
+        if (el === null) return false;
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return false;
+        return getComputedStyle(el).visibility !== 'hidden';
+      };
+      const textLeft = (el: Element): number | null => {
+        let left = Infinity;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+          if ((n.textContent ?? '').trim() === '') continue;
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const rect of Array.from(range.getClientRects())) {
+            if (rect.width > 0 && rect.height > 0) left = Math.min(left, rect.left);
+          }
+        }
+        return Number.isFinite(left) ? left : null;
+      };
+      const type = (el: Element, label: string, size: number, line: number): void => {
+        const s = getComputedStyle(el);
+        if (!near(px(s.fontSize), size) || !near(px(s.lineHeight), line)) {
+          out.push(`${label}: type ${s.fontSize} / ${s.lineHeight}, want ${size}px / ${line}px`);
+        }
+      };
+
+      // 1. Message rows in a main list (a thread view's root and replies have their own measure).
+      let measured = 0;
+      const rows = Array.from(document.querySelectorAll('li[data-msg-id]')).filter(
+        (row) =>
+          shown(row) &&
+          row.closest('[data-thread-view], [data-comment-thread], [data-threads-block]') === null,
+      );
+      rows.forEach((row, i) => {
+        const at = `message row ${i + 1}`;
+        const rowBox = row.getBoundingClientRect();
+        const body = row.querySelector('[data-msg-body]');
+        const bodyLeft = shown(body) ? textLeft(body) : null;
+        const name = row.querySelector('[data-sender-name]');
+        if (!shown(name)) {
+          const spacer = row.querySelector('[data-photo-spacer]');
+          if (!shown(spacer)) return;
+          const s = spacer.getBoundingClientRect();
+          if (!near(s.width, fam.photo)) {
+            out.push(`${at}: spacer ${r1(s.width)} wide, want ${fam.photo}`);
+          }
+          if (bodyLeft !== null && !near(bodyLeft - s.right, fam.gap)) {
+            out.push(`${at}: text ${r1(bodyLeft - s.right)} after the spacer, want ${fam.gap}`);
+          }
+          return;
+        }
+        const photo = row.querySelector(
+          '[data-avatar-role="message"], [data-avatar-role="header"]',
+        );
+        if (!shown(photo)) return;
+        measured += 1;
+        const p = photo.getBoundingClientRect();
+        if (!near(p.width, fam.photo) || !near(p.height, fam.photo)) {
+          out.push(`${at}: photo ${r1(p.width)}x${r1(p.height)}, want ${fam.photo} square`);
+        }
+        const pad = px(getComputedStyle(row).paddingLeft);
+        if (!near(p.left - rowBox.left, pad)) {
+          out.push(`${at}: photo x ${r1(p.left - rowBox.left)}, want the row's left pad ${pad}`);
+        }
+        const nameLeft = textLeft(name);
+        if (nameLeft !== null && !near(nameLeft - p.right, fam.gap)) {
+          out.push(`${at}: name ${r1(nameLeft - p.right)} after the photo, want ${fam.gap}`);
+        }
+        if (nameLeft !== null && bodyLeft !== null && !near(bodyLeft, nameLeft)) {
+          out.push(`${at}: text x ${r1(bodyLeft)}, not on the name's column ${r1(nameLeft)}`);
+        }
+        type(name, `${at} name`, fam.name, fam.nameLine);
+        const weight = Number(getComputedStyle(name).fontWeight);
+        if (weight !== fam.nameWeight) {
+          out.push(`${at}: name weight ${weight}, want ${fam.nameWeight}`);
+        }
+        if (shown(body)) type(body, `${at} text`, fam.text, fam.textLine);
+      });
+
+      // 2. Catch up rows draw their own photo column.
+      Array.from(document.querySelectorAll('[data-catch-up-photo]'))
+        .filter(shown)
+        .forEach((col, i) => {
+          measured += 1;
+          const at = `catch-up row ${i + 1}`;
+          const c = col.getBoundingClientRect();
+          if (!near(c.width, fam.photo)) {
+            out.push(`${at}: photo column ${r1(c.width)} wide, want ${fam.photo}`);
+          }
+          const name = col.parentElement?.querySelector('[data-catch-up-name]') ?? null;
+          const nameLeft = shown(name) ? textLeft(name) : null;
+          if (nameLeft !== null && !near(nameLeft - c.right, 12)) {
+            out.push(`${at}: name ${r1(nameLeft - c.right)} after the photo column, want 12`);
+          }
+        });
+      if (opts.rows && measured === 0) out.push('no message row photo shown to measure');
+
+      // 3. Date lines.
+      const lines = Array.from(document.querySelectorAll('[data-date-line]')).filter(shown);
+      if (lines.length < opts.dateLines) {
+        out.push(`${lines.length} date lines shown, want ${opts.dateLines} or more`);
+      }
+      lines.forEach((line, i) => {
+        const at = `date line ${i + 1}`;
+        const label = line.querySelector('[data-date-label]');
+        const rule = line.querySelector('[data-date-rule]');
+        const list = line.parentElement;
+        if (!shown(label) || !shown(rule) || list === null) {
+          out.push(`${at}: its words or hairline are missing`);
+          return;
+        }
+        const l = line.getBoundingClientRect();
+        const w = label.getBoundingClientRect();
+        const h = rule.getBoundingClientRect();
+        const ls = getComputedStyle(label);
+        if (!near(px(ls.fontSize), dateSize) || Number(ls.fontWeight) !== 700) {
+          out.push(`${at}: words ${ls.fontSize} weight ${ls.fontWeight}, want ${dateSize}px 700`);
+        }
+        if (line.getAttribute('role') !== 'separator') out.push(`${at}: not a separator`);
+        const left = textLeft(label);
+        if (left !== null && !near(left - l.left, 16)) {
+          out.push(`${at}: words x ${r1(left - l.left)}, want 16 (the photo's x)`);
+        }
+        // The same x as a photo of the list's own rows (those on the 16 pad).
+        const photo = Array.from(
+          list.querySelectorAll('[data-avatar-role="message"], [data-avatar-role="header"]'),
+        ).find((el) => {
+          const row = el.closest('li[data-msg-id]');
+          return shown(el) && row !== null && near(px(getComputedStyle(row).paddingLeft), 16);
+        });
+        if (left !== null && photo !== undefined) {
+          const p = photo.getBoundingClientRect();
+          if (!near(left, p.left)) {
+            out.push(`${at}: words x ${r1(left)}, not on the photo's x ${r1(p.left)}`);
+          }
+        }
+        const listBox = list.getBoundingClientRect();
+        const line1 = px(getComputedStyle(rule).borderBottomWidth);
+        if (!near(line1, 1)) out.push(`${at}: hairline ${line1} thick, want 1`);
+        if (!near(h.left, listBox.left) || !near(h.right, listBox.left + list.clientWidth)) {
+          out.push(
+            `${at}: hairline ${r1(h.left)}..${r1(h.right)}, want the list ${r1(listBox.left)}..${r1(listBox.left + list.clientWidth)}`,
+          );
+        }
+        const first = list.firstElementChild === line;
+        if (!near(w.top - l.top, first ? 0 : 16)) {
+          out.push(`${at}: ${r1(w.top - l.top)} above the words, want ${first ? 0 : 16}`);
+        }
+        if (!near(h.bottom - line1 - w.bottom, 8)) {
+          out.push(`${at}: ${r1(h.bottom - line1 - w.bottom)} from words to hairline, want 8`);
+        }
+        if (!near(l.bottom - h.bottom, 12)) {
+          out.push(`${at}: ${r1(l.bottom - h.bottom)} under the hairline, want 12`);
+        }
+        const next = line.nextElementSibling;
+        if (next !== null && next.matches('li[data-msg-id]')) {
+          const top = px(getComputedStyle(next).paddingTop);
+          if (!near(top, 0)) out.push(`${at}: the row under it has ${top} top padding, want 0`);
+        }
+      });
+
+      // 4. Placeholder photos: the rect the loaded row's photo takes.
+      // The photo bone leads each placeholder row of a message surface.
+      const bones = Array.from(
+        document.querySelectorAll(
+          [
+            '[data-thread-fill]',
+            '[data-comments-loading]',
+            '[data-catch-up-bones]',
+            '[data-list-skeleton]',
+          ]
+            .map((list) => `${list} li > [data-bone]:first-child`)
+            .join(', '),
+        ),
+      ).filter(shown);
+      if (opts.placeholders && bones.length === 0) out.push('no placeholder photo shown');
+      bones.forEach((bone, i) => {
+        const at = `placeholder ${i + 1}`;
+        const b = bone.getBoundingClientRect();
+        if (!near(b.width, fam.photo) || !near(b.height, fam.photo)) {
+          out.push(`${at}: photo ${r1(b.width)}x${r1(b.height)}, want ${fam.photo} square`);
+        }
+        const fill = bone.closest('[data-thread-fill]');
+        const twelve = fill !== null || bone.closest('[data-catch-up-bones]') !== null;
+        const gap = twelve ? 12 : fam.gap;
+        const bar = bone.nextElementSibling;
+        if (shown(bar) && !near(bar.getBoundingClientRect().left - b.right, gap)) {
+          out.push(
+            `${at}: bar ${r1(bar.getBoundingClientRect().left - b.right)} after the photo, want ${gap}`,
+          );
+        }
+        if (fill !== null && !near(b.left - fill.getBoundingClientRect().left, 16)) {
+          out.push(
+            `${at}: photo x ${r1(b.left - fill.getBoundingClientRect().left)} in the thread, want 16`,
+          );
+        }
+      });
+      return out;
+    },
+    {
+      dateLines: want.dateLines ?? 0,
+      placeholders: want.placeholders === true,
+      rows: want.rows !== false,
+    },
+  );
+  settleFindings(
+    screenName,
+    findings.map((message) => ({ check: 'alignment' as const, message })),
   );
 }

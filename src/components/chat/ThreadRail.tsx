@@ -18,7 +18,13 @@ import { TRAILING_PULL } from '@/components/ui/layout';
 import { ADD_TO_TASKS_LABEL, MORE_ACTIONS_LABEL } from '@/components/chat/MessageActionMenu';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
-import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import {
+  MESSAGE_PHOTO_COL,
+  NO_TOUCH_SELECT,
+  REPLIES_ROW_PAD,
+  sized,
+  useChatLayout,
+} from '@/components/chat/chat-type';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
 import { replyCountLabel } from '@/lib/chat/thread-rail';
 import { Avatar } from '@/components/ui/Avatar';
@@ -328,9 +334,11 @@ export function RepliesSeparatorRow(props: {
 
 /**
  * The strip's lead (9 Nov 2026). Replies: "N replies" semibold ink on the 16
- * gutter, no icon. None: the bubble icon (32 column) and "Reply in thread".
+ * gutter, no icon. None: the bubble icon (the photo column: 36 touch, 32
+ * laptop) and "Reply in thread".
  */
 function StripLead(props: { label: string; empty: boolean }): ReactElement {
+  const layout = useChatLayout();
   if (!props.empty) {
     return (
       <span
@@ -346,7 +354,7 @@ function StripLead(props: { label: string; empty: boolean }): ReactElement {
       <span
         aria-hidden="true"
         data-thread-strip-icon=""
-        className="flex w-8 shrink-0 justify-center text-fg-2"
+        className={cn('flex shrink-0 justify-center text-fg-2', sized(MESSAGE_PHOTO_COL, layout))}
       >
         <IconChat size={ICON_SIZE.control} />
       </span>
@@ -359,7 +367,8 @@ function StripLead(props: { label: string; empty: boolean }): ReactElement {
 
 /**
  * The replies row under a thread root in the main chat (9 Nov 2026; the
- * work-chat layout, aligned under the root's text: photo 32 + gap 8). Up to 3
+ * work-chat layout, aligned under the root's text: photo 36 + gap 12 touch,
+ * 32 + 8 laptop, REPLIES_ROW_PAD). Up to 3
  * square photos (32) of the latest repliers, the latest last (next to the count), "N replies"
  * (semibold ink, never truncates), the last reply's time (rowWhen, fg-3, the
  * first thing to truncate) and an 8px ink dot while a reply is unread by me;
@@ -375,11 +384,12 @@ export function RepliesRow(props: {
   coarse: boolean;
   onOpen: () => void;
 }): ReactElement {
+  const layout = useChatLayout();
   return (
     <li
       data-replies-row=""
       data-unread={props.unread ? '' : undefined}
-      className={cn('flex min-w-0 pl-12 pr-4', NO_TOUCH_SELECT)}
+      className={cn('flex min-w-0 pr-4', sized(REPLIES_ROW_PAD, layout), NO_TOUCH_SELECT)}
       {...guardProps(props.coarse)}
     >
       <PressableRow

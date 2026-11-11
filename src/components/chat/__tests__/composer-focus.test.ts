@@ -44,9 +44,9 @@ describe('composer focus on open', () => {
 });
 
 describe('F7: composer input size by width, never under 16px on a phone', () => {
-  it('390px (phone) is 17px; 1024px (iPad, laptop table) and 1280px are 15px', () => {
+  it('390px (phone) is 17px (the message text token); 1024px (iPad, laptop table) and 1280px are 15px', () => {
     const phone = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 390 }));
-    expect(phone).toContain('!text-xl');
+    expect(phone).toContain('!text-msg');
     const ipad = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 1024 }));
     expect(ipad).toContain('!text-lg');
     const laptop = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 1280 }));
@@ -63,12 +63,13 @@ describe('F7: composer input size by width, never under 16px on a phone', () => 
       lg: 15,
       input: 16,
       xl: 17,
+      msg: 17,
       '2xl': 20,
       '3xl': 28,
     };
     for (const widthPx of [320, 360, 390, 430, 767]) {
       const cls = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx }));
-      const token = /!text-(xs|sm|md|base|lg|input|xl|2xl|3xl)\b/.exec(cls)?.[1] ?? '';
+      const token = /!text-(xs|sm|md|base|lg|input|xl|2xl|3xl|msg)\b/.exec(cls)?.[1] ?? '';
       const px = SCALE_PX[token] ?? Number.NaN;
       expect(px).toBeGreaterThanOrEqual(16);
       expect(cls).not.toContain('md:');

@@ -20,6 +20,8 @@ describe('design tokens: type and radius scales', () => {
       '2xl': ['20px', '26px'],
       '3xl': ['28px', '34px'],
       input: ['16px', '22px'],
+      // Phone message text and the chat composer (the message family, 11 Nov 2026).
+      msg: ['17px', '20px'],
     });
     expect(extend).not.toHaveProperty('fontSize');
   });

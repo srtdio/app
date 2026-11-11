@@ -57,7 +57,12 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
 }));
 
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
-import { SENDER_NAME_TYPE, SENDER_TIME_TYPE } from '@/components/chat/chat-type';
+import {
+  readChatLayout,
+  SENDER_NAME_TYPE,
+  SENDER_TIME_TYPE,
+  sized,
+} from '@/components/chat/chat-type';
 import { ToastProvider } from '@/components/ui/toast';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 
@@ -168,7 +173,9 @@ describe('Plan item screen type roles', () => {
   it("comments use chat's type: the group head's name and time, chat's bubble body", async () => {
     await mount();
     const author = byText('[data-sender-name]', 'Asha');
-    expect(classes(author)).toEqual(expect.arrayContaining(SENDER_NAME_TYPE.split(' ')));
+    expect(classes(author)).toEqual(
+      expect.arrayContaining(sized(SENDER_NAME_TYPE, readChatLayout()).split(' ')),
+    );
     const body = byText('[data-msg-body]', 'Looks good to me');
     expect(classes(body)).toContain('whitespace-pre-wrap');
     const description = byText('[data-plan-description]', 'A walk through the plant.');

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Type roles in the chat thread: the header name and its second line keep
 // the chat-type.ts sizes (WhatsApp lock) on both tables; the Seen line's
-// time is sans tabular figures (not mono); the day pill and the Forwarded
+// time is sans tabular figures (not mono); the date line and the Forwarded
 // meta keep their sizes. Pure renders; nothing reads.
 
 import { describe, expect, it, vi } from 'vitest';
@@ -14,11 +14,11 @@ vi.mock('agora-chat', () => ({
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
 
-import { DayPill, ForwardedLabel, ThreadHeaderIdentity } from '@/components/chat/MessageThread';
+import { DateLine, ForwardedLabel, ThreadHeaderIdentity } from '@/components/chat/MessageThread';
 import { SeenLine } from '@/components/chat/ReadingLayer';
 import {
   BUBBLE_META_TYPE,
-  DATE_PILL_TYPE,
+  DATE_LINE_TYPE,
   HEADER_LINE_TYPE,
   HEADER_NAME_TYPE,
   type ChatLayout,
@@ -64,11 +64,12 @@ describe('chat thread type roles', () => {
       );
     });
 
-    it(`${layout}: the day pill keeps the chat-type.ts pill size`, () => {
-      const pill = paint(<DayPill label="Today" layout={layout} />, 'span', 'Today');
-      expect(classes(pill)).toEqual(
-        expect.arrayContaining(['text-fg-3', ...tokens(DATE_PILL_TYPE[layout])]),
+    it(`${layout}: the date line's words keep the chat-type.ts size, bold fg ink`, () => {
+      const label = paint(<DateLine label="Today" layout={layout} />, '[data-date-label]', 'Today');
+      expect(classes(label)).toEqual(
+        expect.arrayContaining(['text-fg', 'font-bold', ...tokens(DATE_LINE_TYPE[layout])]),
       );
+      expect(classes(label)).not.toContain('text-fg-3');
     });
   }
 

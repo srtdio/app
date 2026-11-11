@@ -51,6 +51,7 @@ const REQUIRED: readonly string[] = [
   'catch-up-thread-reactions',
   'chat-composer-keyboard',
   'chat-composer-recording',
+  'chat-date-lines',
   'chat-delete-sheet-everyone',
   'chat-delete-sheet-me',
   'chat-dm-private-reply-bubble',

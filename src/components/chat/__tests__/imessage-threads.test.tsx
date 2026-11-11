@@ -211,14 +211,14 @@ describe('group geometry (i4-group-b)', () => {
     expect(out).toContain('w-[15px]');
   });
 
-  it('a tucked row reaches across the 32px gutter (the header avatar role) to its bubble', () => {
+  it('a tucked row reaches across the photo gutter (36 on touch, the message avatar role) to its bubble', () => {
     const out = bubble(memberRow, {
       member: true,
       isGroup: true,
       head: false,
       rail: railFor('middle', { isGroup: true }),
     });
-    expect(out).toContain('w-8 shrink-0');
+    expect(out).toContain('w-9 shrink-0');
     expect(out).toContain('w-[55px]');
   });
 

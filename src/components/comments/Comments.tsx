@@ -41,7 +41,7 @@ import { createPortal } from 'react-dom';
 import { Composer } from '@/components/chat/Composer';
 import { MessageActionMenu } from '@/components/chat/MessageActionMenu';
 import {
-  DayPill,
+  DateLine,
   profileNameOf,
   threadRows,
   type BubbleMentions,
@@ -51,7 +51,12 @@ import { RepliesRow, RepliesSeparatorRow } from '@/components/chat/ThreadRail';
 import { ThreadViewFill, ThreadViewFrame } from '@/components/chat/ThreadView';
 import { ThreadCommentRow } from '@/components/chat/ThreadCommentRow';
 import { isAgencySide, usePlanMentionMembers } from '@/components/chat/PlanItemThread';
-import { useChatLayout } from '@/components/chat/chat-type';
+import {
+  MESSAGE_PHOTO_BOX,
+  MESSAGE_PHOTO_GAP,
+  sized,
+  useChatLayout,
+} from '@/components/chat/chat-type';
 import { useInduction } from '@/components/induction/InductionProvider';
 import { CommentTaskSheet } from '@/components/comments/CommentTaskSheet';
 import { CommentTaskTag } from '@/components/comments/CommentTaskTag';
@@ -1321,7 +1326,7 @@ export function Comments(props: CommentsProps): ReactElement {
   for (const r of threadRows(listMessages, nowMs, undefined)) {
     if (r.kind === 'day') {
       afterLabel = true;
-      mainRows.push(<DayPill key={r.key} label={r.label} layout={layout} />);
+      mainRows.push(<DateLine key={r.key} label={r.label} layout={layout} />);
       continue;
     }
     if (r.kind !== 'message') continue;
@@ -1429,8 +1434,12 @@ export function Comments(props: CommentsProps): ReactElement {
         <ul data-comments-loading="" aria-busy="true" className="flex flex-col gap-3 py-2">
           <li className="sr-only">Loading comments</li>
           {['w-48', 'w-36'].map((w) => (
-            <li key={w} className="flex gap-3" aria-hidden="true">
-              <Bone lit="lit-avatar" as="span" className="h-8 w-8 shrink-0 rounded-lg" />
+            <li key={w} className={cn('flex', sized(MESSAGE_PHOTO_GAP, layout))} aria-hidden="true">
+              <Bone
+                lit="lit-avatar"
+                as="span"
+                className={cn('shrink-0 rounded-lg', sized(MESSAGE_PHOTO_BOX, layout))}
+              />
               <span className="flex min-w-0 flex-1 flex-col gap-2">
                 <Bone lit="flat" className="h-3 w-24 rounded" />
                 <Bone lit="flat" className={cn('h-4 rounded', w)} />

@@ -1,8 +1,8 @@
 // A catch-up card's body parts (9 Nov 2026), pure render: the chat's work
-// layout rows (32 square photo, name label + clock time meta, text body), the
+// layout rows (square photo 36 touch / 32 laptop, 12 to the text, name label + clock time meta, text body), the
 // feedback points (CheckpointCircle in the photo column, centred on the first
 // text line), the event rows (actor, time, the line without the name), the
-// day lines (DayPill, only when the card spans more than one day), long text
+// day lines (DateLine, only when the card spans more than one day), long text
 // (>6 lines clamps with a quiet "more" that opens a bordered window that
 // scrolls itself), tappable short links, my @name lit (MENTION_ME_PEER), the
 // context strip (closed by default, a reading window when open; read only)
@@ -11,6 +11,13 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import {
+  MESSAGE_AVATAR_ROLE,
+  MESSAGE_PHOTO_BOX,
+  MESSAGE_PHOTO_COL,
+  sized,
+  useChatLayout,
+} from '@/components/chat/chat-type';
 import { Bone, ITEM_OUT, DUR_SLOW_MS, EASE, MOVE_CLASS, play } from '@/lib/motion';
 import { Text, textRole } from '@/components/ui/Text';
 import { Avatar } from '@/components/ui/Avatar';
@@ -27,7 +34,7 @@ import {
 } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { CheckpointCircle, CHECKPOINT_HIT_CLASS } from '@/components/comments/CheckpointCircle';
-import { DayPill, MENTION_ME_PEER } from '@/components/chat/MessageBubble';
+import { DateLine, MENTION_ME_PEER } from '@/components/chat/MessageBubble';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import type { PresignCache } from '@/lib/asset-presign';
 import { segmentSelfMentions } from '@/components/pages/activity/data';
@@ -159,7 +166,7 @@ export function LongText(props: { text: string; selfName: string | null }): Reac
   );
 }
 
-/** The row head: 32 square photo column, then name (label, one line) + clock time (meta). */
+/** The row head: square photo column (36 touch, 32 laptop; 12 to the text), then name (label, one line) + clock time (meta). */
 function RowFrame(props: {
   author: CatchUpAuthor;
   createdAt: string;
@@ -174,14 +181,15 @@ function RowFrame(props: {
   reactions?: ReactNode;
 }): ReactElement {
   const reacts = props.reactions !== undefined && props.reactions !== null;
+  const layout = useChatLayout();
   return (
     <li {...props.hook} className={cn('relative flex gap-3 py-2', CATCH_UP_ROW_X)}>
-      <span className="w-8 shrink-0">
+      <span data-catch-up-photo="" className={cn('shrink-0', sized(MESSAGE_PHOTO_COL, layout))}>
         {props.photo ?? (
           <Avatar
             name={props.author.name}
             {...(props.author.avatarUrl !== null ? { src: props.author.avatarUrl } : {})}
-            role="header"
+            role={MESSAGE_AVATAR_ROLE[layout]}
             decorative
           />
         )}
@@ -405,6 +413,7 @@ export function PointsRow(props: {
       else next.add(id);
       return next;
     });
+  const layout = useChatLayout();
   return (
     <>
       <RowFrame
@@ -435,8 +444,10 @@ export function PointsRow(props: {
                 CATCH_UP_ROW_X,
               )}
             >
-              {/* The photo column (w-8): the 44 circle box centred on the first text line (22 down). */}
-              <span className="flex w-8 shrink-0 justify-center">
+              {/* The photo column (36 touch, 32 laptop): the 44 circle box centred on the first text line (22 down). */}
+              <span
+                className={cn('flex shrink-0 justify-center', sized(MESSAGE_PHOTO_COL, layout))}
+              >
                 <span data-catch-up-point-circle="" className={CHECKPOINT_HIT_CLASS}>
                   <CheckpointCircle n={point.n} state={point.open ? 'open' : 'resolved'} />
                 </span>
@@ -458,7 +469,7 @@ export function PointsRow(props: {
             </PressableRow>
             {isOpen && point.open ? (
               <div className={cn('flex gap-3', CATCH_UP_ROW_X)}>
-                <span className="w-8 shrink-0" />
+                <span className={cn('shrink-0', sized(MESSAGE_PHOTO_COL, layout))} />
                 <Button
                   type="button"
                   variant="ghost"
@@ -505,7 +516,7 @@ export function DayLine(props: {
   laptop: boolean;
 }): ReactElement {
   return (
-    <DayPill
+    <DateLine
       label={formatDayLabel(props.at, new Date(), props.timeZone)}
       layout={props.laptop ? 'laptop' : 'touch'}
     />
@@ -564,11 +575,15 @@ export function dividersAt(
 
 /** Loading rows (Bone), the rows' own footprint, no spinner. */
 export function BoneRows({ count = 3 }: { count?: number }): ReactElement {
+  const layout = useChatLayout();
   return (
     <ul data-catch-up-bones="" aria-hidden="true" className="flex flex-col py-2">
       {Array.from({ length: count }, (_, place) => `bone-${place}`).map((id) => (
         <li key={id} className={cn('flex gap-3 py-2', CATCH_UP_ROW_X)}>
-          <Bone lit="flat" className="h-8 w-8 shrink-0 rounded-lg" />
+          <Bone
+            lit="flat"
+            className={cn('shrink-0 rounded-lg', sized(MESSAGE_PHOTO_BOX, layout))}
+          />
           <span className="flex min-w-0 flex-1 flex-col gap-2">
             <Bone lit="flat" className="h-4 w-1/3 rounded" />
             <Bone lit="flat" className="h-4 w-3/4 rounded" />
@@ -657,7 +672,7 @@ function StripVideo(props: {
 
 /**
  * The context strip (non-chat cards), under the name row, closed by default:
- * one min-h-11 row (32 thumbnail, label, due, first line, ⌄). Open: a reading
+ * one min-h-11 row (thumbnail 36 touch / 32 laptop, label, due, first line, ⌄). Open: a reading
  * window (max-h-64, scrolls itself): the big picture (1/N; tap opens the
  * lightbox), a video inline, then the full text. Read only. Closing resets
  * its scroll.
@@ -676,6 +691,7 @@ export function ContextStrip(props: {
   }, [open]);
   const firstLine = context.text.split('\n')[0] ?? '';
   const thumb = context.pictures[0] ?? null;
+  const layout = useChatLayout();
   return (
     <div
       data-catch-up-strip=""
@@ -695,7 +711,12 @@ export function ContextStrip(props: {
         )}
       >
         {thumb !== null || context.video !== null ? (
-          <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg">
+          <span
+            className={cn(
+              'relative shrink-0 overflow-hidden rounded-lg',
+              sized(MESSAGE_PHOTO_BOX, layout),
+            )}
+          >
             <Thumbnail
               assetVersionId={thumb}
               cache={props.cache}

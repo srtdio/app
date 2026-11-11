@@ -33,10 +33,11 @@ describe('initialsFor', () => {
 });
 
 describe('Avatar roles', () => {
-  it('has exactly five roles: inline 20, header 32, row 40, card 48 (the list row picture; 40 in Compact), profile 72', () => {
+  it('has exactly these roles: inline 20, message 36 (a message row on phone), header 32, row 40, card 48 (the list row picture; 40 in Compact), profile 72', () => {
     expect(AVATAR_PX).toEqual({
       inline: 20,
       stack: 32,
+      message: 36,
       header: 32,
       row: 40,
       card: 48,

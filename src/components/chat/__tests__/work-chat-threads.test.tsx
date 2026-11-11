@@ -98,12 +98,12 @@ function bubbleHtml(
 }
 
 describe('L1: everyone on the left, no bubbles', () => {
-  it('a peer head: square photo 32, name and clock time on line 1, no fill', () => {
+  it('a peer head: square photo 36 on touch, name and clock time on line 1, no fill', () => {
     const html = bubbleHtml(msg());
     expect(html).toContain('data-sender-name');
     expect(html).toContain('Leo Park');
     expect(html).toContain('data-sender-time');
-    expect(html).toContain('data-avatar-role="header"');
+    expect(html).toContain('data-avatar-role="message"');
     expect(html).not.toContain('bg-panel-2 text-fg lit-bubble-other');
     expect(html).not.toContain('flex-row-reverse');
   });
@@ -111,7 +111,7 @@ describe('L1: everyone on the left, no bubbles', () => {
   it('own messages look the same: own photo, own name (never "You"), left side, ticks after the time', () => {
     const html = bubbleHtml(msg({ mine: true, senderUserId: 'me', status: 'read' }));
     expect(html).toContain('Shubham Gune');
-    expect(html).toContain('data-avatar-role="header"');
+    expect(html).toContain('data-avatar-role="message"');
     expect(html).not.toContain('bg-bubble-own');
     expect(html).not.toContain('flex-row-reverse');
     expect(html).not.toContain('items-end');
@@ -120,7 +120,7 @@ describe('L1: everyone on the left, no bubbles', () => {
   it('a continuation within 5 minutes: no photo or name, the body under the first', () => {
     const html = bubbleHtml(msg(), { head: false });
     expect(html).not.toContain('data-sender-name');
-    expect(html).toContain('w-8 shrink-0');
+    expect(html).toContain('w-9 shrink-0');
     expect(
       breaksRun(
         { mine: false, senderUserId: 'leo', time: 0 + 1 },

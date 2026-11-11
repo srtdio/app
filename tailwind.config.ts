@@ -33,6 +33,8 @@ export default {
       '3xl': ['28px', '34px'],
       // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
       input: ['16px', '22px'],
+      // Phone message text and the chat composer: 17 on a 20 line (Slack's measured row).
+      msg: ['17px', '20px'],
     },
     // Spacing: the 4px grid (step N = 4N px) as used in src, plus px (hairline),
     // 0.5 (2px, inside badges and pills) and 1.5 (6px). 2.5 and 3.5 are gone.

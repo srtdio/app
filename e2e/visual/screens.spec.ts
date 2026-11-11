@@ -30,6 +30,8 @@ import {
   reportListScreenAxis,
   assertWritingBox,
   assertAlignment,
+  assertMessageFamily,
+  type MessageFamilyWant,
   assertCatchUpLayout,
   assertReactionChips,
   assertNoReactionsHere,
@@ -1535,6 +1537,48 @@ const SCREENS: Screen[] = [
     },
   },
   { name: 'chat-thread', seed: creator, url: '/chat', steps: openDm },
+  {
+    // Message family (11 Nov 2026): the DM's last five plain messages re-dated
+    // across three days (two, two, one), every other message three days
+    // further back, so three date lines sit on one screen over their rows.
+    name: 'chat-date-lines',
+    seed: creator,
+    extra: (network) => {
+      const day = 24 * 60 * 60_000;
+      const at = (m: { created_at?: unknown }): number =>
+        typeof m.created_at === 'string' ? Date.parse(m.created_at) : 0;
+      const all = (network.world.tables.chat_messages ?? [])
+        .filter((m) => m.channel_id === DM_CHANNEL && typeof m.created_at === 'string')
+        .sort((a, b) => at(a) - at(b));
+      const roots = new Set(all.map((m) => m.thread_root_message_id).filter((id) => id != null));
+      const lastFive = all
+        .filter(
+          (m) =>
+            typeof m.body === 'string' &&
+            m.body !== '' &&
+            m.deleted_at == null &&
+            m.shared_post_ids == null &&
+            m.shared_brief_ids == null &&
+            m.attachment_asset_ids == null &&
+            m.reply_to_message_id == null &&
+            m.thread_root_message_id == null &&
+            !roots.has(m.id),
+        )
+        .slice(-5);
+      const back = [2, 2, 1, 1, 0];
+      for (const m of all) {
+        const place = lastFive.indexOf(m);
+        const days = place < 0 ? 3 : (back[place + 5 - lastFive.length] ?? 0);
+        m.created_at = new Date(at(m) - days * day).toISOString();
+      }
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      await waitFor([page.locator('[data-date-line]').nth(2)], 'three date lines');
+      await waitFor([page.locator('[data-date-line]', { hasText: 'Yesterday' })], 'Yesterday');
+    },
+  },
   {
     // The DM's open-items drawer from its ticker: grey sheet, lit cards.
     name: 'chat-status-drawer',
@@ -7333,6 +7377,9 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   // photos, text off hairlines; measured on the screens that carry them.
   const align = ALIGN_SCREENS[screen.name];
   if (align !== undefined) await assertAlignment(page, screen.name, align);
+  // The message family: photo, text column, type, date lines, placeholders.
+  const family = MESSAGE_FAMILY_SCREENS[screen.name];
+  if (family !== undefined) await assertMessageFamily(page, screen.name, family);
   // A catch-up screen: 44 hits (bar keys 48), checkpoint circles on their
   // first line, no overlapping rows, the card on its own surface (check 13).
   if (screen.name.startsWith('catch-up-')) await assertCatchUpLayout(page, screen.name);
@@ -7368,6 +7415,23 @@ const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
   'post-detail': 'post-screen',
   'post-detail-approver': 'post-screen',
   'brief-comments': 'brief-screen',
+};
+
+// Message family (CLAUDE.md "Work chat", 11 Nov 2026): the screens that show
+// message rows, date lines or their placeholders are measured (photo box and
+// x, text column, name and text type, the date line's x, hairline and 16 / 8 /
+// 12, a placeholder's photo rect), phone and laptop, light and dark.
+const MESSAGE_FAMILY_SCREENS: Readonly<Record<string, MessageFamilyWant>> = {
+  'chat-thread': {},
+  'chat-thread-group': {},
+  'chat-date-lines': { dateLines: 3 },
+  'chat-replies-row': {},
+  'post-detail': {},
+  'brief-comments': {},
+  'plan-item-thread': { rows: false },
+  'catch-up-chat-main': {},
+  // The thread's placeholder rows while its replies read hangs.
+  'chat-thread-tap-open': { placeholders: true, rows: false },
 };
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
@@ -7407,6 +7471,7 @@ const LIST_CARD_SCREENS = new Set([
 // it; the snapshot name stays the screen name (laptop-dark/<name>.png).
 const LAPTOP_DARK_SCREENS = new Set([
   'pipeline',
+  'chat-date-lines',
   'plan-tab',
   'plan-screen-today',
   'chat-thread',

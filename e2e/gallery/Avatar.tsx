@@ -9,6 +9,7 @@ export const cells: readonly GalleryCell[] = [
     <div className="flex flex-wrap items-start gap-2">
       <Avatar name={NAME} src={PHOTO} role="inline" />
       <Avatar name={NAME} src={PHOTO} role="stack" />
+      <Avatar name={NAME} src={PHOTO} role="message" />
       <Avatar name={NAME} src={PHOTO} role="header" />
       <Avatar name={NAME} src={PHOTO} role="row" />
       <Avatar name={NAME} src={PHOTO} role="card" />
@@ -23,6 +24,7 @@ export const cells: readonly GalleryCell[] = [
     <div className="flex flex-wrap items-start gap-2">
       <Avatar name={NAME} role="inline" />
       <Avatar name={NAME} role="stack" />
+      <Avatar name={NAME} role="message" />
       <Avatar name={NAME} role="header" />
       <Avatar name={NAME} role="row" />
       <Avatar name={NAME} role="card" />

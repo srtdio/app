@@ -39,7 +39,7 @@ describe('L1: no bubble classes in chat rows', () => {
   it('rows keep the long-press guard (no iOS text selection or callout)', () => {
     expect(CHAT_TYPE).toContain("NO_TOUCH_SELECT = 'select-none [-webkit-touch-callout:none]'");
     expect(THREAD).toMatch(
-      /const rowClass = cn\(\s*'group flex items-start gap-2',\s*railRowClass\(rail, false\),\s*NO_TOUCH_SELECT,/,
+      /const rowClass = cn\(\s*'group flex items-start',[\s\S]{0,120}?sized\(MESSAGE_PHOTO_GAP, layout\),\s*railRowClass\(rail, false\),\s*NO_TOUCH_SELECT,/,
     );
   });
 });
