@@ -260,6 +260,9 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await check('c_reply_button');
   await tapControl(page, step('c_reply_button'));
   await expectGuideId(page, 'c_reply_post');
+  // 12 Nov 2026: the thread opens with the keyboard down on touch; a tap on
+  // the reply box focuses it.
+  await page.locator('[data-comment-thread-composer] textarea').first().click();
   await page.keyboard.type('On it.');
   await check('c_reply_post');
   await tapControl(page, step('c_reply_post'));

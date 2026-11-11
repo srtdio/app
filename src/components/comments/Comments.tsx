@@ -1267,7 +1267,13 @@ export function Comments(props: CommentsProps): ReactElement {
   const renderRow = (
     message: ThreadMessage,
     place: { head: boolean; tail: boolean; afterLabel: boolean; threadPlace?: 'root' | 'reply' },
-    wiring: { onOpen: (() => void) | undefined; highlighted: boolean },
+    wiring: {
+      /** A plain tap: opens the thread, keyboard down on touch. */
+      onOpen: (() => void) | undefined;
+      /** Swipe right (an explicit Reply): opens the thread with the reply box focused. */
+      onReply?: (() => void) | undefined;
+      highlighted: boolean;
+    },
   ): ReactElement => {
     const row = rowById.get(message.id);
     const isPending = row === undefined;
@@ -1293,7 +1299,9 @@ export function Comments(props: CommentsProps): ReactElement {
         onOpenMenu={(anchor, reactionsOnly) =>
           setMenu({ message, anchor, reactionsOnly: reactionsOnly === true })
         }
-        onReply={wiring.onOpen}
+        onReply={wiring.onReply ?? wiring.onOpen}
+        // A thread's rows say their day ("Yesterday at 11:27 AM"), as chat's threads do.
+        timeLabel={place.threadPlace !== undefined ? 'day' : undefined}
         onDelete={own ? () => remove(message.id) : undefined}
         onTapOpen={wiring.onOpen}
         onRetry={isPending ? retry : undefined}
@@ -1340,7 +1348,10 @@ export function Comments(props: CommentsProps): ReactElement {
         message,
         { head: r.head, tail: r.tail, afterLabel: under },
         {
-          onOpen: canOpen ? () => openThread(message.id, true) : undefined,
+          // 12 Nov 2026: a tap opens the thread with the keyboard down on touch;
+          // swipe right is the explicit Reply (the reply box takes focus).
+          onOpen: canOpen ? () => openThread(message.id, !coarsePointer) : undefined,
+          onReply: canOpen ? () => openThread(message.id, true) : undefined,
           highlighted: focusId === message.id && replyLink === null,
         },
       ),
@@ -1360,7 +1371,7 @@ export function Comments(props: CommentsProps): ReactElement {
           time={last !== undefined ? rowWhen(last.created_at) : ''}
           unread={threadUnread(readAt, replies, me)}
           coarse={coarsePointer}
-          onOpen={() => openThread(root.id, true)}
+          onOpen={() => openThread(root.id, !coarsePointer)}
         />,
       );
     }
@@ -1427,7 +1438,8 @@ export function Comments(props: CommentsProps): ReactElement {
         if (guide === null || !replyStepUp || thread?.rootId === guide) return;
         const target = e.target as Element;
         const row = target.closest(commentRowSelector(guide));
-        if (row !== null && row.closest('[data-comment-thread]') === null) openThread(guide, true);
+        if (row !== null && row.closest('[data-comment-thread]') === null)
+          openThread(guide, !coarsePointer);
       }}
     >
       {loading ? (
@@ -1510,10 +1522,14 @@ export function Comments(props: CommentsProps): ReactElement {
                 <div
                   ref={threadScrollRef}
                   data-comment-thread={threadRoot.id}
-                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                  data-thread-anchor-bottom=""
+                  // 12 Nov 2026: the content sits on the reply box. A flex column
+                  // whose list takes margin-top auto: a short thread's spare room
+                  // is at the top; on overflow the margin is 0 (CSS only).
+                  className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
                 >
                   {/* pb-3: 12 between the last row (its chips included) and the reply box. */}
-                  <ul className="flex flex-col pb-3 pt-4">
+                  <ul className="mt-auto flex shrink-0 flex-col pb-3 pt-4">
                     {renderRow(
                       messageOf(threadRoot),
                       { head: true, tail: true, afterLabel: false, threadPlace: 'root' },

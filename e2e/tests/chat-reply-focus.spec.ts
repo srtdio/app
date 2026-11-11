@@ -3,10 +3,12 @@ import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { MAYA_NAME, PEER_NAME } from '../fixtures/chat-data';
 
 // L3 (8 Nov 2026): every reply is a thread. Reply (long-press menu, swipe
-// right, laptop chevron, right-click) and Talk about (a card hold or the
-// sheet's) open that message's thread with its composer focused (hint
-// "Reply"), so typing lands there with no extra tap; inside a thread, Reply
-// just focuses the thread composer. Decision 32 holds: opening a chat on touch
+// right, laptop chevron, right-click) opens that message's thread with its
+// composer focused (hint "Reply"), so typing lands there with no extra tap;
+// inside a thread, Reply just focuses the thread composer.
+// 12 Nov 2026: on touch every other way in (a tap, the "N replies" row, Talk
+// about) opens the thread with the keyboard down: the reply box is not
+// focused until it is tapped. Decision 32 holds: opening a chat on touch
 // focuses nothing.
 // Linux WebKit approximates iOS WebKit (it never shows a keyboard); it is not iOS.
 
@@ -290,17 +292,35 @@ test.describe('iPhone, cards and threads', () => {
     await target.dispatchEvent('pointerup', touch);
   }
 
-  test('card hold Talk about focuses the composer on release', async ({ page }) => {
+  /** The thread is open with the keyboard down: no composer holds focus. */
+  async function expectOpenUnfocused(page: Page): Promise<void> {
+    await expect(page.locator('[data-thread-view]')).toBeVisible();
+    await expect(threadComposer(page)).toBeVisible();
+    await expect(threadComposer(page)).not.toBeFocused();
+    await expect(composer(page)).not.toBeFocused();
+  }
+
+  test('card hold Talk about opens the thread, keyboard down', async ({ page }) => {
     await openMaya(page);
     await expect(composer(page)).not.toBeFocused();
     const card = page.locator('[role="button"][aria-label^="Open post"]').last();
     await settle(page, card);
     await hold(page, card);
     await expect(page.getByRole('menu')).toHaveCount(0);
-    await expectFocusedAtEnd(page);
+    await expectOpenUnfocused(page);
   });
 
-  test('sheet Talk about focuses the composer', async ({ page }) => {
+  test('the "N replies" row opens the thread, keyboard down; a tap on the box focuses it', async ({
+    page,
+  }) => {
+    await openMaya(page);
+    await page.locator('[data-thread-open="replies"]', { hasText: '4 replies' }).click();
+    await expectOpenUnfocused(page);
+    await threadComposer(page).click();
+    await expect(threadComposer(page)).toBeFocused();
+  });
+
+  test('sheet Talk about opens the thread, keyboard down', async ({ page }) => {
     await openMaya(page);
     const card = page.locator('[role="button"][aria-label^="Open post"]').last();
     await settle(page, card);
@@ -309,7 +329,7 @@ test.describe('iPhone, cards and threads', () => {
     await expect(talk).toBeVisible();
     await talk.click();
     await expect(talk).toHaveCount(0);
-    await expectFocusedAtEnd(page);
+    await expectOpenUnfocused(page);
   });
 
   test('inside the thread view the long-press sheet has no Reply (8 Nov 2026)', async ({

@@ -371,6 +371,15 @@ describe('L11 / L14 wiring', () => {
     expect(src).toContain('const onSwipeReply = useStableCallback(props.onReply);');
   });
 
+  it('12 Nov 2026: a plain tap, the replies row and the Threads sheet open with the keyboard down on touch', () => {
+    const src = read('../MessageThread.tsx');
+    expect(src).toContain('openThreadRef.current(threadRootOf(message), finePointer, true);');
+    expect(src).toContain('onOpen: () => openThread(message.id, finePointer, true),');
+    expect(src).toContain('openThread(rootId, finePointer, true);');
+    expect(src).not.toContain('openThread(message.id, true, true)');
+    expect(src).not.toContain('openThread(rootId, true, true)');
+  });
+
   it('Mark unread routes main-chat messages and thread replies to their procs', () => {
     const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
     expect(src).toContain(

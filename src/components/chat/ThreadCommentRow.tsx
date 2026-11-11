@@ -63,6 +63,8 @@ export interface ThreadCommentRowProps {
   reactions: ReactionsApi;
   /** The thread view's places (chat's own); absent: the main list's row. */
   threadPlace?: 'root' | 'reply' | undefined;
+  /** The head's time: 'clock' (default) or 'day' (a thread's rows say their day). */
+  timeLabel?: 'clock' | 'day' | undefined;
   rowData?: { [hook: `data-${string}`]: string | undefined } | undefined;
   topLine?: ReactNode;
   bottomLine?: ReactNode;
@@ -181,6 +183,7 @@ export function ThreadCommentRow(props: ThreadCommentRowProps): ReactElement {
       rowRef={rowRef}
       swipe={rowSwipeRef.current}
       threadPlace={props.threadPlace}
+      timeLabel={props.timeLabel}
       rowData={props.rowData}
       onTapOpen={props.onTapOpen}
       {...(props.topLine !== undefined ? { topLine: props.topLine } : {})}
