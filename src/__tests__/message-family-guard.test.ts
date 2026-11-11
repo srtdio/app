@@ -182,7 +182,7 @@ describe('message family: a row lands where its placeholder was', () => {
     // their placeholders keep that 12.
     expect(BUBBLE).toContain("replyPlace && 'gap-3'");
     expect(read('components/chat/ThreadView.tsx')).toMatch(
-      /<li key=\{width\} className="flex gap-3" aria-hidden="true">/,
+      /<li key=\{at\} data-thread-fill-row="" className="flex gap-3" aria-hidden="true">/,
     );
     const catchUp = read('components/catch-up/CatchUpRows.tsx');
     expect(catchUp).toContain("cn('relative flex gap-3 py-2', CATCH_UP_ROW_X)");
