@@ -471,7 +471,6 @@ describe('Activity: the solid rows under the pills', () => {
     inboxUnread.count = 20;
     render();
     await settle();
-    inboxUnread.count = 0;
     expect(catchUp()?.getAttribute('aria-label')).toBe('Catch up, 20 unread');
     expect(catchUp()?.getAttribute('data-count')).toBe('20');
     // No unread thread held: the Threads row is not in the DOM.
@@ -508,6 +507,7 @@ describe('Activity: the solid rows under the pills', () => {
     expect(document.querySelector('[data-probe-topbar] [data-topbar-threads]')).toBeNull();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
     expect(document.querySelector('[data-activity-bucket-head] button')).toBeNull();
+    inboxUnread.count = 0;
   });
 
   it('at 0 unread and 0 threads there are no rows and no lead slot', async () => {
