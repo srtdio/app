@@ -75,7 +75,7 @@ import type { ThreadMessage } from '@/lib/chat/thread';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { commentTaskTag, isAgencyRole, taskTitleFrom } from '@/lib/comment-tasks';
+import { commentTaskTag, isAgencyRole, taskStateOf, taskTitleFrom } from '@/lib/comment-tasks';
 import {
   FOCUS_FAILED_COPY,
   FOCUS_MISSING_COPY,
@@ -344,7 +344,7 @@ export function commentMenuOffer(input: {
     input.row.author_user_id === input.me;
   return {
     react: live,
-    todo: live && input.viewerIsAgency && (input.row.task_state ?? null) === null,
+    todo: live && input.viewerIsAgency && taskStateOf(input.row.task_state) === null,
     edit: own,
     copy: live && input.row.body.trim() !== '',
     copyLink: live,

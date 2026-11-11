@@ -135,11 +135,13 @@ describe('replies row, menu, seeds, links', () => {
       commentMenuOffer({ row: { ...theirs, task_state: 'assigned' }, me: ME, viewerIsAgency: true })
         .todo,
     ).toBe(false);
-    // A row read without the column (undefined) has no task: To-do shows.
-    const { task_state: _unused, ...noColumn } = theirs;
-    void _unused;
+    // task_state undefined (a row read without the column) is no task: To-do shows.
     expect(
-      commentMenuOffer({ row: noColumn as typeof theirs, me: ME, viewerIsAgency: true }).todo,
+      commentMenuOffer({
+        row: { ...theirs, task_state: undefined as unknown as string | null },
+        me: ME,
+        viewerIsAgency: true,
+      }).todo,
     ).toBe(true);
     expect(
       commentMenuOffer({
