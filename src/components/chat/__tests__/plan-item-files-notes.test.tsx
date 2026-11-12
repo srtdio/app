@@ -11,7 +11,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import type { ItemScreenData, PlanBundle, PlanItemRow } from '@/lib/chat/plans';
+import type { ItemScreenData, PlanBundle, PlanCommentSend, PlanItemRow } from '@/lib/chat/plans';
 import type { Result } from '@srtdio/rpc';
 
 const env = vi.hoisted(() => ({
@@ -19,7 +19,10 @@ const env = vi.hoisted(() => ({
   coarse: false,
   reads: 0,
   result: null as unknown,
-  comment: vi.fn(async () => ({ ok: true, data: 'cm-new' })),
+  comment: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; data: string }>>(async () => ({
+    ok: true,
+    data: 'cm-new',
+  })),
 }));
 
 vi.mock('agora-chat', () => ({
@@ -81,9 +84,22 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
     env.reads += 1;
     return env.result;
   },
+  // plan_item_comment_send, seen through the old proc's argument names.
+  sendPlanComment: (client: unknown, send: PlanCommentSend) =>
+    env.comment(client, {
+      p_item_id: send.itemId,
+      p_parent_comment_id: send.parentId,
+      p_body: send.body,
+      p_visibility: send.visibility,
+      p_attachment_version_ids: [...send.attachmentVersionIds],
+    }),
+  setPlanCommentThreadRead: () => undefined,
 }));
+vi.mock('@/components/chat/Composer', async () => import('./composer-stub'));
 
-import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
+import { PlanItemScreen, commentChannel } from '@/components/chat/PlanItemScreen';
+import { composerProps } from './composer-stub';
+import { resetDrafts } from '@/lib/chat/drafts';
 import { CONCEPT_FILES_READ_FAILED } from '@/components/chat/ConceptSheet';
 import { ToastProvider } from '@/components/ui/toast';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
@@ -175,6 +191,8 @@ function key(el: HTMLElement, init: KeyboardEventInit): void {
 
 beforeEach(() => {
   resetHistorySteps();
+  resetDrafts();
+  composerProps.clear();
   env.laptop = true;
   env.coarse = false;
   env.reads = 0;
@@ -294,52 +312,28 @@ describe('post items: Plan notes (U5)', () => {
   });
 });
 
-describe('the comment box (U10)', () => {
-  it('is the shared Textarea; Enter sends on a fine pointer, Shift+Enter does not; it keeps focus', async () => {
+describe("the comment box (12 Nov 2026: chat's Composer)", () => {
+  it("is chat's Composer docked at the page's foot; Enter sends and the box clears", async () => {
     await mount(CONCEPT);
-    const box = $<HTMLTextAreaElement>('[data-plan-comment-input]') as HTMLTextAreaElement;
+    const box = $<HTMLTextAreaElement>(
+      '[data-plan-comments-composer] textarea',
+    ) as HTMLTextAreaElement;
     expect(box.tagName).toBe('TEXTAREA');
-    expect($('[data-plan-comment-hint]')?.textContent).toBe(
-      'Enter to send · Shift+Enter for a new line',
-    );
+    // No Plan-only hint line or send key: the box is chat's.
+    expect($('[data-plan-comment-hint]')).toBeNull();
+    expect($('[data-plan-comment-send]')).toBeNull();
     box.focus();
     await act(async () => type(box, 'Line one'));
-    await act(async () => key(box, { key: 'Enter', shiftKey: true }));
-    expect(env.comment).not.toHaveBeenCalled();
     await act(async () => key(box, { key: 'Enter' }));
     await settle();
     expect(env.comment).toHaveBeenCalledTimes(1);
     expect(box.value).toBe('');
-    expect(document.activeElement).toBe(box);
   });
 
-  it('on a coarse pointer Return never sends and the hint is hidden', async () => {
-    env.coarse = true;
+  it("the tray offers post comments' tiles and there is no mic", async () => {
     await mount(CONCEPT);
-    const box = $<HTMLTextAreaElement>('[data-plan-comment-input]') as HTMLTextAreaElement;
-    await act(async () => type(box, 'Note'));
-    await act(async () => key(box, { key: 'Enter' }));
-    await settle();
-    expect(env.comment).not.toHaveBeenCalled();
-    expect($('[data-plan-comment-hint]')).toBeNull();
-  });
-
-  it('phone: no hint', async () => {
-    env.laptop = false;
-    await mount(CONCEPT);
-    expect($('[data-plan-comment-hint]')).toBeNull();
-  });
-
-  it("sits in ui/WritingBox comment mode (the chat composer's box): Aa, Emoji, @ and send in its row", async () => {
-    await mount(CONCEPT);
-    const area = $<HTMLTextAreaElement>('[data-plan-comment-input]') as HTMLTextAreaElement;
-    const box = area.closest<HTMLElement>('[data-writing-box]');
-    expect(box?.dataset.mode).toBe('comment');
-    await act(async () => area.focus());
-    expect(box?.querySelector('[aria-label="Emoji"]')).not.toBeNull();
-    expect(box?.querySelector('[aria-label="Mention"]')).not.toBeNull();
-    // Send is the row's own key (ui/WritingBox RowSend), inside the box.
-    const send = box?.querySelector<HTMLButtonElement>('[data-plan-comment-send]');
-    expect(send?.hasAttribute('data-row-send')).toBe(true);
+    const props = composerProps.get(commentChannel(CONCEPT.id, null));
+    expect(props?.voice).toBe(false);
+    expect(props?.tray?.tiles).toEqual(['photos', 'file', 'assets']);
   });
 });

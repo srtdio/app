@@ -299,7 +299,8 @@ export interface LayoutViolation {
     | 'alignment'
     | 'list-screen'
     | 'thread-end'
-    | 'thread-fill';
+    | 'thread-fill'
+    | 'reply-box';
   message: string;
 }
 
@@ -996,6 +997,93 @@ export function writingBoxViolations(boxes: readonly WritingBoxGeom[]): string[]
           `${box.label} send ends at ${Math.round(sendRight)}px, past the box (${Math.round(frameRight)}px)`,
         );
       }
+    }
+  }
+  return out;
+}
+
+/** Check 19: the first line sits this close (CSS px) to the frame's and the "+" key's centre. */
+export const REPLY_BOX_CENTRE_TOLERANCE_PX = 1.5;
+/** Check 19: the phone edges and the text column hold to this (CSS px). */
+export const REPLY_BOX_EDGE_TOLERANCE_PX = 1;
+/** Check 19, phone: the writing frame keeps this from both screen edges (the dock's px-4). */
+export const REPLY_BOX_GUTTER_PX = 16;
+/**
+ * Check 19, phone: the field's text starts on the message text column (dock
+ * 16 + border 1 + pl-1 4 + the 36 "+" key + gap 8 = 65, inside the tolerance).
+ */
+export const REPLY_BOX_TEXT_COLUMN_PX = 64;
+/** Float slack so an exact-integer edge on the tolerance passes. */
+const REPLY_BOX_EPSILON = 0.01;
+
+/** A reply box (chat's Composer: the form holding textarea[aria-label="Message"]) at rest, as measured. */
+export interface ReplyBoxRestGeom {
+  /** Names the box in a failure (its surface's hook). */
+  label: string;
+  viewportWidth: number;
+  /** The writing frame ([data-writing-frame]). */
+  frame: Box;
+  /** The field's first line centre: textarea top + border-top + padding-top + line-height / 2. */
+  lineCentreY: number;
+  /** Where the field's text starts: textarea left + border-left + padding-left. */
+  textStartX: number;
+  /** The leading "+" key (the tray trigger's 44 hit), when the box shows one. */
+  plus: Box | null;
+  /**
+   * Phone only: the box is a dock across the screen, so its edges and text
+   * column are judged. False for a box inline in a page column (the post and
+   * brief comment box under the page gutter).
+   */
+  docked: boolean;
+}
+
+/**
+ * Check 19 (12 Nov 2026), pure: a reply box at rest, unfocused.
+ * (a) the field's first line (placeholder or typed text) sits on the writing
+ *     frame's vertical centre and on the "+" key's centre (+-1.5), every width;
+ * (b) phone (< 768), docked: the frame is 16 (+-1) from both screen edges;
+ * (c) phone, docked, with a "+": the text starts on the 64 column (+-1).
+ */
+export function replyBoxRestViolations(boxes: readonly ReplyBoxRestGeom[]): string[] {
+  const out: string[] = [];
+  const r1 = (n: number): number => Math.round(n * 10) / 10;
+  const off = (got: number, want: number, tolerance: number): boolean =>
+    Math.abs(got - want) > tolerance + REPLY_BOX_EPSILON;
+  for (const box of boxes) {
+    const frameMid = box.frame.y + box.frame.height / 2;
+    if (off(box.lineCentreY, frameMid, REPLY_BOX_CENTRE_TOLERANCE_PX)) {
+      out.push(
+        `${box.label}: the field's first line centre ${r1(box.lineCentreY)} is off the frame's centre ${r1(frameMid)}`,
+      );
+    }
+    if (box.plus !== null) {
+      const plusMid = box.plus.y + box.plus.height / 2;
+      if (off(box.lineCentreY, plusMid, REPLY_BOX_CENTRE_TOLERANCE_PX)) {
+        out.push(
+          `${box.label}: the field's first line centre ${r1(box.lineCentreY)} is off the "+" key's centre ${r1(plusMid)}`,
+        );
+      }
+    }
+    if (box.viewportWidth >= 768 || !box.docked) continue;
+    const left = box.frame.x;
+    const right = box.viewportWidth - (box.frame.x + box.frame.width);
+    if (off(left, REPLY_BOX_GUTTER_PX, REPLY_BOX_EDGE_TOLERANCE_PX)) {
+      out.push(
+        `${box.label}: the frame is ${r1(left)} from the left screen edge, want ${REPLY_BOX_GUTTER_PX}`,
+      );
+    }
+    if (off(right, REPLY_BOX_GUTTER_PX, REPLY_BOX_EDGE_TOLERANCE_PX)) {
+      out.push(
+        `${box.label}: the frame is ${r1(right)} from the right screen edge, want ${REPLY_BOX_GUTTER_PX}`,
+      );
+    }
+    if (
+      box.plus !== null &&
+      off(box.textStartX, REPLY_BOX_TEXT_COLUMN_PX, REPLY_BOX_EDGE_TOLERANCE_PX)
+    ) {
+      out.push(
+        `${box.label}: the field's text starts at ${r1(box.textStartX)}, want the ${REPLY_BOX_TEXT_COLUMN_PX} column`,
+      );
     }
   }
   return out;

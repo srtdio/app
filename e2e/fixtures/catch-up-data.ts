@@ -590,6 +590,9 @@ function planCommentRow(id: string, itemId: string, author: string, body: string
     created_at: iso(at),
     edited_at: null,
     deleted_at: null,
+    // Plan comment threads (12 Nov 2026): a main comment, no files.
+    parent_comment_id: null,
+    attachment_asset_ids: null,
   };
 }
 

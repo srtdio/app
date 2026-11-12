@@ -46,7 +46,8 @@ describe('message-body (U2: moved out of MessageThread, unchanged)', () => {
     expect(item).toContain("import { renderMessageBody } from '@/components/chat/message-body';");
     expect(item).toContain('{renderMessageBody(description, false)}');
     expect(item).not.toMatch(/from '@\/components\/chat\/MessageThread'/);
-    expect(item).not.toMatch(/from '@\/components\/chat\/Composer'/);
+    // 12 Nov 2026: the comment box is chat's Composer.
+    expect(item).toMatch(/from '@\/components\/chat\/Composer'/);
   });
 });
 

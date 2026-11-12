@@ -68,6 +68,11 @@ async function hold(page: Page, target: Locator): Promise<void> {
   await target.dispatchEvent('pointerup', at);
 }
 
+/** The open thread's reply box (chat's Composer under the shared thread layer). */
+function replyBox(page: Page): Locator {
+  return page.locator('[data-comment-thread-composer]').getByRole('textbox', { name: 'Message' });
+}
+
 test('a plan comment is a chat row: swipe right replies, left rubber-bands @theme', async ({
   page,
 }) => {
@@ -88,9 +93,9 @@ test('a plan comment is a chat row: swipe right replies, left rubber-bands @them
   await expect(page.getByRole('dialog', { name: /delete/i })).toHaveCount(0);
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
 
-  // Right: Reply focuses the comment box (a plan item is itself a thread).
+  // Right: Reply opens the comment's thread (12 Nov 2026) with its reply box focused.
   await swipeRow(r, 120);
-  await expect(itemPage(page).getByRole('textbox', { name: 'Comment' })).toBeFocused();
+  await expect(replyBox(page)).toBeFocused();
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 
@@ -108,10 +113,10 @@ test("a long-press opens chat's menu with the rows a plan comment has @theme", a
     await expect(m.locator(`[data-menu-item="${key}"]`)).toHaveCount(0);
   }
   await expect(m.getByRole('button', { name: 'More reactions' })).toHaveCount(1);
-  // Reply: the box takes focus and the menu closes.
+  // Reply: the comment's thread opens with its reply box focused; the menu closes.
   await m.locator('[data-menu-item="reply"]').click();
   await expect(m).toHaveCount(0);
-  await expect(itemPage(page).getByRole('textbox', { name: 'Comment' })).toBeFocused();
+  await expect(replyBox(page)).toBeFocused();
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 

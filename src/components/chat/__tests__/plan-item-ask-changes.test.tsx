@@ -36,8 +36,10 @@ describe('FT55: Ask changes opens the composer first', () => {
     expect(src).toMatch(
       /const askChanges = \(\): void => \{[\s\S]*?setAskingChanges\(true\);\s*commentRef\.current\?\.focus\(\);/,
     );
-    expect(src).toContain('ref={commentRef}');
-    expect(src).toContain("data-plan-comment-send={askingChanges ? 'changes' : 'comment'}");
+    expect(src).toContain('inputRef={commentRef}');
+    // The box is chat's Composer; an empty note still asks changes from the hint's Send.
+    expect(src).toContain('data-plan-ask-send=""');
+    expect(src).toContain('{ASK_CHANGES_SEND}');
     expect(src).toMatch(
       /if \(steps\.includes\('changes'\)\) \{\s*if \(await review\('changes'\)\) setAskingChanges\(false\);/,
     );
@@ -65,8 +67,8 @@ describe('Not OK on a row: the item screen asks changes at once', () => {
       /props\.askChanges === true\s*\?\s*slotSide\(side, bundle\.plan\.audience\)/,
     );
     expect(src).toContain('p_side: reviewSide,');
-    // A post item shows the note form while asking.
-    expect(src).toContain("item.kind === 'post' && !askingChanges ? undefined : (");
+    // A post item shows the note box while asking (the docked Composer).
+    expect(src).toContain('{askingChanges ? commentDock : null}');
     const screen = read('PlanScreen.tsx');
     expect(screen).toMatch(
       /const planNotOk = [\s\S]*?undoable\.flush\(\);\s*setAskChanges\(true\);\s*setRowHighlight\(null\);\s*setItemId\(item\.id\);/,

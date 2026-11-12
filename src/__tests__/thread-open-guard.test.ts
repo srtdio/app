@@ -18,7 +18,10 @@ const read = (path: string): string =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
 
 const chat = read('../components/chat/MessageThread.tsx');
-const comments = read('../components/comments/Comments.tsx');
+// Post / brief comments plus their thread layer (lifted, shared with Plan comment threads).
+const comments =
+  read('../components/comments/Comments.tsx') +
+  read('../components/comments/CommentThreadLayer.tsx');
 
 /** The arguments of every `name(` call in src, split at top-level commas. */
 function callArgs(src: string, name: string): string[][] {

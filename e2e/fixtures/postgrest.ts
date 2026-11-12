@@ -162,10 +162,13 @@ const TO_MANY_EMBED = /(\w+)!(\w+)_fkey\(/g;
 
 // To-many embeds named without their foreign key whose child column is known:
 // the comments read's own read point (`comment_thread_reads(last_read_at)`,
-// RLS: the viewer's rows only; the fixture holds only the harness viewer's).
-// No fixture table: an empty list, as PostgREST answers with no rows.
+// and the plan comments read's `plan_item_comment_thread_reads(last_read_at)`,
+// an array of 0..1; RLS: the viewer's rows only; the fixture holds only the
+// harness viewer's). No fixture table: an empty list, as PostgREST answers
+// with no rows.
 const NAMED_EMBEDS: Readonly<Record<string, string>> = {
   comment_thread_reads: 'root_comment_id',
+  plan_item_comment_thread_reads: 'root_comment_id',
 };
 
 function toManyEmbeds(select: string | null): Map<string, string> {

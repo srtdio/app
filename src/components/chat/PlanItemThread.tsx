@@ -20,7 +20,7 @@
 // (peekWorkspaceMembers), never a request on paint. Tokens only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { ICON_SIZE, IconLock } from '@/components/ui/icons';
 import { PAGE_BLEED } from '@/components/ui/layout';
@@ -36,6 +36,14 @@ import {
   type BubbleMentions,
 } from '@/components/chat/MessageBubble';
 import { ThreadCommentRow } from '@/components/chat/ThreadCommentRow';
+import { THREAD_REPLY_PLACEHOLDER } from '@/components/chat/MessageThread';
+import { RepliesRow, RepliesSeparatorRow } from '@/components/chat/ThreadRail';
+import {
+  CommentForwardLayer,
+  CommentThreadLayer,
+  useCommentThreadStick,
+} from '@/components/comments/CommentThreadLayer';
+import { toCommentFileAttachments, type CommentFile } from '@/components/comments/comment-files';
 import { TEAM_ONLY_LABEL } from '@/components/chat/plan-card';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { setPrivateReplyDraft } from '@/lib/chat/drafts';
@@ -50,13 +58,24 @@ import {
   resolvePersonMentionText,
   type MentionMember,
 } from '@/lib/chat/mentions';
-import type { CommentVisibility, PlanAudience } from '@/lib/chat/plans';
+import type { MessageAttachment } from '@/lib/chat/attachments';
+import { canForwardComment } from '@/lib/chat/forward-comment';
+import {
+  planRepliesInfo,
+  setPlanCommentThreadRead,
+  type CommentVisibility,
+  type PlanAudience,
+} from '@/lib/chat/plans';
+import { THREAD_TITLE } from '@/lib/chat/thread-rail';
+import { repliesLabel } from '@/lib/chat/thread-signals';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { SENDER_GROUP_MS, breaksRun, type ThreadMessage } from '@/lib/chat/thread';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { planItemFocusHref } from '@/lib/focus-target';
 import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-privately';
 import { supabase } from '@/lib/supabase';
+import { rowWhen } from '@/lib/time';
+import { generateTraceId } from '@/lib/trace';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
 import { useReactions, type ReactionsApi } from '@/lib/reactions/use-reactions';
@@ -79,6 +98,14 @@ export interface ShownComment {
   failed?: boolean;
   /** A failed write the server refused for good: shown with Delete only, never Retry. */
   refusal?: string;
+  /** The main comment this one replies to (one level); null or absent on a main comment. */
+  parentId?: string | null;
+  /** A recorded comment's files: asset version ids as stored. */
+  attachmentIds?: readonly string[] | null;
+  /** A pending own send's files (local until the upload lands). */
+  localAttachments?: MessageAttachment[];
+  /** A main comment: my read point on its thread (null: never opened). */
+  readAt?: string | null;
 }
 
 /** Where a plan comment's Reply privately points: the plan, the item, its title. */
@@ -119,6 +146,9 @@ function authorLeft(
   if (held === null) return false;
   return !held.rows.some((r) => r.user_id === userId && r.active === true && r.removed_at === null);
 }
+
+/** The thread reply box's hint (chat's word), for the screen's reply box. */
+export { THREAD_REPLY_PLACEHOLDER };
 
 /** Comments this close together from one author are one run: chat's own group gap. */
 export const PLAN_RUN_GAP_MS = SENDER_GROUP_MS;
@@ -317,16 +347,20 @@ export function usePlanMentionMembers(
 const NO_REACTIONS: readonly ReactionSummary[] = [];
 const NO_IDS: string[] = [];
 
+const NO_FILES: ReadonlyMap<string, CommentFile> = new Map();
+
 /**
  * A plan comment as a chat ThreadMessage, so chat's own bubble draws it: a
  * recorded row is 'sent', a pending own one 'sending' (the clock), a failed
  * own one 'failed' ("Not sent" + Retry, or its refusal with Delete only).
- * Plan comments carry no files, cards or quotes; reactions come from the
- * thread's batched read (none on a pending one). Pure.
+ * Files are post comments' (the batched asset_versions read, `files`; a
+ * pending send's local files as picked); no cards or quotes; reactions come
+ * from the thread's batched read (none on a pending one). Pure.
  */
 export function planCommentMessage(
   c: ShownComment,
   reactions: readonly ReactionSummary[] = NO_REACTIONS,
+  files: ReadonlyMap<string, CommentFile> = NO_FILES,
 ): ThreadMessage {
   const time = Date.parse(c.createdAt);
   return {
@@ -337,7 +371,7 @@ export function planCommentMessage(
     time: Number.isFinite(time) ? time : 0,
     provisionalTime: c.pending,
     mine: c.mine,
-    attachments: [],
+    attachments: c.localAttachments ?? toCommentFileAttachments(c.attachmentIds ?? null, files),
     sharedPostIds: NO_IDS,
     sharedBriefIds: NO_IDS,
     reply: null,
@@ -420,12 +454,48 @@ interface OpenMenu {
   comment: ShownComment;
   anchor: DOMRect | null;
   reactionsOnly?: boolean;
+  /** Opened inside the thread view: no Reply there (CLAUDE.md "Thread view"). */
+  inThread?: boolean;
+}
+
+/** The open thread: its main comment, a reply a link landed on, and whether the box takes focus. */
+interface OpenThread {
+  rootId: string;
+  focusId: string | null;
+  focus: boolean;
+}
+
+/** Whether a comment is recorded (not a pending or failed own send). Pure. */
+function recorded(c: Pick<ShownComment, 'pending' | 'failed'>): boolean {
+  return !c.pending && c.failed !== true;
+}
+
+/** Main comments (parent null) and each one's replies, both in the order given. Pure. */
+export function planCommentLists(comments: readonly ShownComment[]): {
+  mains: ShownComment[];
+  replies: Map<string, ShownComment[]>;
+} {
+  const mains: ShownComment[] = [];
+  const replies = new Map<string, ShownComment[]>();
+  for (const c of comments) {
+    const root = c.parentId ?? null;
+    if (root === null) {
+      mains.push(c);
+      continue;
+    }
+    const list = replies.get(root);
+    if (list) list.push(c);
+    else replies.set(root, [c]);
+  }
+  return { mains, replies };
 }
 
 /**
  * One comment row: chat's shared ThreadCommentRow (the same row post and
- * brief comments draw). Swipe right replies; a left swipe rubber-bands (plan
- * comments cannot be deleted, so nothing fires). Pending and failed rows
+ * brief comments draw). In the main list a tap opens the thread (keyboard
+ * down on touch) and a right swipe is the explicit Reply (the box takes
+ * focus); in the thread view neither (no reply gesture there). A left swipe
+ * rubber-bands (plan comments cannot be deleted). Pending and failed rows
  * never swipe (chat's rule).
  */
 function PlanCommentRow(props: {
@@ -446,9 +516,13 @@ function PlanCommentRow(props: {
   mentions: BubbleMentions;
   onOpenMenu: (comment: ShownComment, anchor: DOMRect | null, reactionsOnly?: boolean) => void;
   onReply: (() => void) | undefined;
+  onTapOpen?: (() => void) | undefined;
   onRetry: ((id: string) => void) | undefined;
   onDiscard: ((id: string) => void) | undefined;
   reactions: ReactionsApi;
+  threadPlace?: 'root' | 'reply' | undefined;
+  /** The "Creators only" line on a team note (the page and the top of its thread). */
+  teamLine: boolean;
 }): ReactElement {
   const c = props.comment;
   return (
@@ -469,9 +543,13 @@ function PlanCommentRow(props: {
       mentions={props.mentions}
       onOpenMenu={(anchor, reactionsOnly) => props.onOpenMenu(c, anchor, reactionsOnly)}
       onReply={props.onReply}
+      onTapOpen={props.onTapOpen}
       onRetry={props.onRetry}
       onDiscard={props.onDiscard}
       reactions={props.reactions}
+      threadPlace={props.threadPlace}
+      // A thread's rows say their day ("Yesterday at 11:27 AM"), as chat's threads do.
+      timeLabel={props.threadPlace !== undefined ? 'day' : undefined}
       rowData={{
         'data-plan-comment-id': c.id,
         'data-plan-comment': c.visibility,
@@ -480,7 +558,7 @@ function PlanCommentRow(props: {
         'data-plan-run-tail': props.tail ? '' : undefined,
         'data-plan-comment-highlight': props.highlighted ? '' : undefined,
       }}
-      {...(c.visibility === 'team' ? { topLine: <TeamOnlyLine /> } : {})}
+      {...(props.teamLine && c.visibility === 'team' ? { topLine: <TeamOnlyLine /> } : {})}
     />
   );
 }
@@ -489,8 +567,9 @@ function PlanCommentRow(props: {
  * The open comment's long-press menu: chat's MessageActionMenu with the rows
  * a plan comment has (the quick reactions and "+", Reply, Copy link, Copy
  * text, Reply privately, and a failed own send's Delete). No Forward, Tasks,
- * Mark unread, Edit or Delete: plan comments store none of those. Mounted only while open, so
- * its hooks never run on paint.
+ * Mark unread, Edit or Delete: plan comments store none of those. Reply opens
+ * the comment's thread; inside the thread view there is no Reply. Mounted
+ * only while open, so its hooks never run on paint.
  */
 function PlanCommentMenu(props: {
   menu: OpenMenu;
@@ -500,7 +579,7 @@ function PlanCommentMenu(props: {
   held: WorkspaceMembersData | null;
   replyPrivately: PlanReplyPrivatelyTarget | null;
   linkTo: PlanCommentLinkTarget | null;
-  onReply: (() => void) | undefined;
+  onReply: ((comment: ShownComment) => void) | undefined;
   onDiscard: ((id: string) => void) | undefined;
   onClose: () => void;
   reactions: ReactionsApi;
@@ -523,9 +602,11 @@ function PlanCommentMenu(props: {
           itemId: props.replyPrivately.itemId,
         })
       : null;
+  const canReply =
+    props.onReply !== undefined && props.menu.inThread !== true && (c.parentId ?? null) === null;
   const offer = planCommentMenu({
     comment: c,
-    canReply: props.onReply !== undefined,
+    canReply,
     canLink: props.linkTo !== null,
     replyPrivately: draft !== null,
   });
@@ -537,7 +618,7 @@ function PlanCommentMenu(props: {
       anchor={props.menu.anchor}
       mine={c.mine}
       currentReaction={props.reactions.of(c.id).find((r) => r.mine)?.emoji ?? null}
-      canReact={!c.pending && c.failed !== true}
+      canReact={recorded(c)}
       reactionsOnly={props.menu.reactionsOnly === true}
       canCopy={offer.copy}
       onCopy={() => {
@@ -546,10 +627,10 @@ function PlanCommentMenu(props: {
         );
       }}
       onReact={(emoji) => {
-        if (!c.pending && c.failed !== true) props.reactions.toggle(c.id, emoji);
+        if (recorded(c)) props.reactions.toggle(c.id, emoji);
       }}
       onReply={() => {
-        if (offer.reply) props.onReply?.();
+        if (offer.reply) props.onReply?.(c);
       }}
       canCopyLink={offer.copyLink}
       onCopyLink={() => {
@@ -574,44 +655,61 @@ function PlanCommentMenu(props: {
 }
 
 /**
- * The comments as a chat thread, drawn by chat's own parts: chat's grouping
- * (threadRows: same sender within 5 min, a day pill between days), chat's
- * MessageBubble per comment (everyone on the left, square photo 32 + name +
- * clock time on a group head), chat's swipe (right = Reply), long-press /
- * right-click MessageActionMenu, clock while pending and "Not sent" + Retry
- * on a failed own send, and chat's @mention names. `held` is the session's
- * members, read synchronously, never fetched here.
+ * The comments as a chat with threads (12 Nov 2026), drawn by the parts post
+ * comments use: main comments only (parent null) as chat's family rows under
+ * the shared DateLine, each with chat's RepliesRow (photos, "N replies", the
+ * last reply's time, the unread dot) when it has replies; a tap, a right
+ * swipe or the replies row opens the thread in the shared CommentThreadLayer
+ * (ThreadViewFrame, "Thread" + the item's title, the main comment with its
+ * add-reaction key, chat's "N replies" strip, the replies, the reply box from
+ * `replyBox`). It opens at the latest reply, keyboard down on touch unless an
+ * explicit Reply. My read point moves (fire and forget) when a thread opens
+ * and when a reply lands while it is open. `held` is the session's members,
+ * read synchronously, never fetched here.
  */
 export function PlanItemThread(props: {
+  /** Every comment: main comments and replies (oldest first), pending own sends last. */
   comments: readonly ShownComment[];
   workspaceId: string | null;
   me: string | null;
   highlightedId?: string | null;
   /** Offer Reply privately on others' comments, pointing here. Absent: never. */
   replyPrivately?: PlanReplyPrivatelyTarget | null;
-  /** Reply (swipe right, the menu's Reply): focus the box. Absent: no Reply. */
-  onReply?: () => void;
   /** A failed own comment's Retry; absent: no Retry. */
   onRetry?: (id: string) => void;
   /** A failed own comment's Delete (it never left the device); absent: none. */
   onDiscard?: (id: string) => void;
   /** Where Copy link points; absent: no Copy link. */
   linkTo?: PlanCommentLinkTarget | null;
+  /** Comment files by version id (the screen's one batched read). */
+  files?: ReadonlyMap<string, CommentFile>;
+  /** The thread's sub-line: the item's title. */
+  threadSubtitle?: string;
+  /** The open thread's reply box (chat's Composer); absent: threads do not open. */
+  replyBox?: (root: ShownComment, focus: boolean) => ReactNode;
+  /** A linked reply: its thread opens at it (once per id). */
+  openReplyId?: string | null;
 }): ReactElement {
   const layout = useChatLayout();
   const hoverMenu = useHoverPointer();
   const coarsePointer = useCoarsePointer();
   const reducedMotion = usePrefersReducedMotion();
   const [menu, setMenu] = useState<OpenMenu | null>(null);
+  const [thread, setThread] = useState<OpenThread | null>(null);
+  const [forwardFor, setForwardFor] = useState<ShownComment | null>(null);
+  // Local read points, so an opened thread's dot goes at once (no wait for the write).
+  const [readNow, setReadNow] = useState<Map<string, string>>(new Map());
+  const files = props.files ?? NO_FILES;
   const held =
     props.me !== null && props.workspaceId !== null
       ? peekWorkspaceMembers(props.me, props.workspaceId)
       : null;
   const profiles = planCommentProfiles(props.comments, held, props.workspaceId);
-  // The recorded comments' reactions: one batched read after paint, again
-  // whenever the comments refresh (the screen's own read; no new channel).
+  const nameOf = profileNameOf(profiles, props.workspaceId);
+  // The recorded comments' reactions (replies too): one batched read after
+  // paint, again whenever the comments refresh (the screen's own read).
   const reactionIds = useMemo(
-    () => props.comments.filter((c) => !c.pending && c.failed !== true).map((c) => c.id),
+    () => props.comments.filter(recorded).map((c) => c.id),
     [props.comments],
   );
   const reactions = useReactions({
@@ -620,7 +718,7 @@ export function PlanItemThread(props: {
     epoch: props.comments,
     me: props.me,
   });
-  const rows = planThreadRows(props.comments, Date.now());
+  const lists = useMemo(() => planCommentLists(props.comments), [props.comments]);
   const latest = useRef({ props, held });
   latest.current = { props, held };
   // Stable for the thread's life (they read the latest props at tap time).
@@ -651,47 +749,231 @@ export function PlanItemThread(props: {
       setMenu({ comment, anchor, reactionsOnly: reactionsOnly === true });
     },
   ).current;
-  // Reply focuses the box inside the tap; the menu closes after (runMenuItem).
-  const onReply = props.onReply;
+
+  // ---- threads -----------------------------------------------------------
+  const canThread = props.replyBox !== undefined;
+  const markRead = (rootId: string): void => {
+    setReadNow((prev) => new Map(prev).set(rootId, new Date().toISOString()));
+    // Fire and forget: never awaited on a paint or tap path.
+    setPlanCommentThreadRead(supabase, rootId, generateTraceId());
+  };
+  const openThread = (rootId: string, focus: boolean, focusId: string | null = null): void => {
+    if (!canThread) return;
+    setThread({ rootId, focus, focusId });
+    markRead(rootId);
+  };
+  const openRootId = thread?.rootId ?? null;
+  const openReplies = openRootId !== null ? (lists.replies.get(openRootId) ?? []) : [];
+  const openRecorded = openReplies.filter(recorded);
+  const newestOpenReply = openRecorded[openRecorded.length - 1]?.id ?? null;
+  const openOwnPending = openReplies.filter((c) => c.pending).length;
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  useCommentThreadStick({
+    scrollRef: threadScrollRef,
+    rootId: openRootId,
+    landing: (thread?.focusId ?? null) !== null,
+    rowsKey: `${openReplies.length}:${newestOpenReply ?? ''}:${openOwnPending}`,
+    ownPending: openOwnPending,
+  });
+  // A reply landing while the thread is open moves the read point too.
+  const seenNewest = useRef<string | null>(null);
+  useEffect(() => {
+    if (openRootId === null) {
+      seenNewest.current = null;
+      return;
+    }
+    if (newestOpenReply === null || seenNewest.current === newestOpenReply) return;
+    const first = seenNewest.current === null;
+    seenNewest.current = newestOpenReply;
+    if (!first) markRead(openRootId);
+  }, [openRootId, newestOpenReply]);
+  // A link to a reply opens its thread at that reply, once per id.
+  const landedReply = useRef<string | null>(null);
+  const linkedReply =
+    props.openReplyId != null ? props.comments.find((c) => c.id === props.openReplyId) : undefined;
+  const linkedRoot = linkedReply?.parentId ?? null;
+  useEffect(() => {
+    const id = props.openReplyId ?? null;
+    if (id === null || linkedRoot === null || landedReply.current === id) return;
+    landedReply.current = id;
+    openThread(linkedRoot, false, id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.openReplyId, linkedRoot]);
+
+  const messageOf = (c: ShownComment): ThreadMessage =>
+    planCommentMessage(c, reactions.of(c.id), files);
+  const displayName = (id: string): string =>
+    profiles.get(id)?.displayName ??
+    props.comments.find((c) => c.authorUserId === id)?.authorName ??
+    '';
+
+  const rowProps = {
+    profiles,
+    workspaceId: props.workspaceId,
+    me: props.me,
+    layout,
+    hoverMenu,
+    coarsePointer,
+    reducedMotion,
+    personSource,
+    mentions,
+    onOpenMenu: openMenu,
+    onRetry: props.onRetry,
+    onDiscard: props.onDiscard,
+    reactions,
+  };
+
+  // ---- the main list ------------------------------------------------------
+  const rows = planThreadRows(lists.mains, Date.now());
+  const items: ReactElement[] = [];
   let afterLabel = false;
+  for (const row of rows) {
+    if (row.kind === 'day') {
+      afterLabel = true;
+      items.push(<DateLine key={row.key} label={row.label} layout={layout} />);
+      continue;
+    }
+    const comment = row.comment;
+    const under = afterLabel;
+    afterLabel = false;
+    const canOpen = canThread && recorded(comment);
+    items.push(
+      <PlanCommentRow
+        key={comment.id}
+        {...rowProps}
+        comment={comment}
+        message={messageOf(comment)}
+        head={row.head}
+        tail={row.tail}
+        afterLabel={under}
+        highlighted={props.highlightedId === comment.id}
+        // A tap opens the thread with the keyboard down on touch; swipe right
+        // is the explicit Reply (the reply box takes focus).
+        onTapOpen={canOpen ? () => openThread(comment.id, !coarsePointer) : undefined}
+        onReply={canOpen ? () => openThread(comment.id, true) : undefined}
+        teamLine
+      />,
+    );
+    const replies = (lists.replies.get(comment.id) ?? []).filter(recorded);
+    if (replies.length === 0) continue;
+    const info = planRepliesInfo(
+      replies.map((r) => ({ author_user_id: r.authorUserId, created_at: r.createdAt })),
+      readNow.get(comment.id) ?? comment.readAt ?? null,
+      props.me,
+    );
+    items.push(
+      <RepliesRow
+        key={`replies:${comment.id}`}
+        label={repliesLabel(info.count)}
+        repliers={info.repliers.map((id) => {
+          const src = profiles.get(id)?.avatarUrl;
+          return { id, name: displayName(id), ...(src != null ? { src } : {}) };
+        })}
+        time={info.lastAt !== null ? rowWhen(info.lastAt) : ''}
+        unread={info.unread}
+        coarse={coarsePointer}
+        onOpen={() => openThread(comment.id, !coarsePointer)}
+      />,
+    );
+  }
+
+  // ---- the open thread ----------------------------------------------------
+  const root = openRootId !== null ? lists.mains.find((c) => c.id === openRootId) : undefined;
+  let threadLayer: ReactElement | null = null;
+  if (thread !== null && root !== undefined && props.replyBox !== undefined) {
+    const replies = lists.replies.get(root.id) ?? [];
+    const recordedCount = replies.filter(recorded).length;
+    const byId = new Map(replies.map((c) => [c.id, c]));
+    const forward = canForwardComment({
+      sent: recorded(root),
+      deleted: false,
+      body: root.body,
+      fileCount: root.attachmentIds?.length ?? 0,
+    });
+    threadLayer = (
+      <CommentThreadLayer
+        title={THREAD_TITLE}
+        subtitle={
+          props.threadSubtitle !== undefined && props.threadSubtitle !== ''
+            ? props.threadSubtitle
+            : undefined
+        }
+        rootId={root.id}
+        scrollRef={threadScrollRef}
+        scrollerData={{ 'data-plan-comment-thread': '' }}
+        onRetry={() => undefined}
+        onClosed={() => setThread(null)}
+        onClose={() => setThread(null)}
+        rows={
+          <>
+            <PlanCommentRow
+              {...rowProps}
+              comment={root}
+              message={messageOf(root)}
+              head
+              tail
+              afterLabel={false}
+              highlighted={false}
+              onReply={undefined}
+              threadPlace="root"
+              teamLine
+            />
+            <RepliesSeparatorRow
+              label={recordedCount > 0 ? repliesLabel(recordedCount) : null}
+              through={false}
+              coarse={coarsePointer}
+              family="chat"
+              className="mb-2 mt-3"
+              actions={{
+                ...(forward ? { onForward: () => setForwardFor(root) } : {}),
+                onMore: (el: HTMLElement) =>
+                  setMenu({
+                    comment: root,
+                    anchor: el.getBoundingClientRect(),
+                    reactionsOnly: false,
+                    inThread: true,
+                  }),
+              }}
+            />
+            {threadRows(
+              replies.map((c) => messageOf(c)),
+              Date.now(),
+              undefined,
+              { days: false },
+            ).map((r, i) => {
+              if (r.kind !== 'message') return null;
+              const c = byId.get(r.message.id);
+              if (c === undefined) return null;
+              return (
+                <PlanCommentRow
+                  key={c.id}
+                  {...rowProps}
+                  comment={c}
+                  message={r.message}
+                  head={r.head}
+                  tail={r.tail}
+                  // The first reply sits under the strip, which carries the gap (chat's afterStrip).
+                  afterLabel={i === 0}
+                  highlighted={thread.focusId === c.id}
+                  onReply={undefined}
+                  threadPlace="reply"
+                  teamLine={false}
+                />
+              );
+            })}
+          </>
+        }
+        composer={props.replyBox(root, thread.focus)}
+      />
+    );
+  }
+
   return (
     <>
       <ul data-plan-thread="" className={cn(PAGE_BLEED, 'flex flex-col')}>
-        {rows.map((row) => {
-          if (row.kind === 'day') {
-            afterLabel = true;
-            return <DateLine key={row.key} label={row.label} layout={layout} />;
-          }
-          const comment = row.comment;
-          const under = afterLabel;
-          afterLabel = false;
-          return (
-            <PlanCommentRow
-              key={comment.id}
-              comment={comment}
-              message={planCommentMessage(comment, reactions.of(comment.id))}
-              head={row.head}
-              tail={row.tail}
-              afterLabel={under}
-              profiles={profiles}
-              workspaceId={props.workspaceId}
-              me={props.me}
-              layout={layout}
-              highlighted={props.highlightedId === comment.id}
-              hoverMenu={hoverMenu}
-              coarsePointer={coarsePointer}
-              reducedMotion={reducedMotion}
-              personSource={personSource}
-              mentions={mentions}
-              onOpenMenu={openMenu}
-              onReply={onReply}
-              onRetry={props.onRetry}
-              onDiscard={props.onDiscard}
-              reactions={reactions}
-            />
-          );
-        })}
+        {items}
       </ul>
+      {threadLayer}
       {menu !== null ? (
         <PlanCommentMenu
           menu={menu}
@@ -701,10 +983,21 @@ export function PlanItemThread(props: {
           held={held}
           replyPrivately={props.replyPrivately ?? null}
           linkTo={props.linkTo ?? null}
-          onReply={onReply}
+          onReply={
+            canThread ? (c) => (recorded(c) ? openThread(c.id, true) : undefined) : undefined
+          }
           onDiscard={props.onDiscard}
           onClose={() => setMenu(null)}
           reactions={reactions}
+        />
+      ) : null}
+      {forwardFor !== null ? (
+        <CommentForwardLayer
+          body={() => resolveMentionText(forwardFor.body, nameOf)}
+          attachmentIds={forwardFor.attachmentIds ?? []}
+          files={files}
+          newTrace={generateTraceId}
+          onClose={() => setForwardFor(null)}
         />
       ) : null}
     </>

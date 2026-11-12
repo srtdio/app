@@ -36,8 +36,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { ReactElement, ReactNode, RefObject } from 'react';
-import { createPortal } from 'react-dom';
+import type { ReactElement, ReactNode } from 'react';
 import { Composer } from '@/components/chat/Composer';
 import { MessageActionMenu } from '@/components/chat/MessageActionMenu';
 import {
@@ -48,7 +47,6 @@ import {
 } from '@/components/chat/MessageBubble';
 import { THREAD_REPLY_PLACEHOLDER } from '@/components/chat/MessageThread';
 import { RepliesRow, RepliesSeparatorRow } from '@/components/chat/ThreadRail';
-import { ThreadViewFill, ThreadViewFrame } from '@/components/chat/ThreadView';
 import { ThreadCommentRow } from '@/components/chat/ThreadCommentRow';
 import { isAgencySide, usePlanMentionMembers } from '@/components/chat/PlanItemThread';
 import {
@@ -58,17 +56,20 @@ import {
   useChatLayout,
 } from '@/components/chat/chat-type';
 import { useInduction } from '@/components/induction/InductionProvider';
+import {
+  CommentForwardLayer,
+  CommentThreadLayer,
+  useCommentThreadStick,
+} from '@/components/comments/CommentThreadLayer';
 import { CommentTaskSheet } from '@/components/comments/CommentTaskSheet';
 import { CommentTaskTag } from '@/components/comments/CommentTaskTag';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
 import {
-  commentForwardFiles,
   fetchCommentFiles,
   idsToRead,
   toCommentFileAttachments,
   type CommentFile,
 } from '@/components/comments/comment-files';
-import { ForwardPicker } from '@/components/chat/ForwardPicker';
 import { LoadError } from '@/components/ui/LoadError';
 import { ClearButton } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -76,27 +77,16 @@ import { PAGE_BLEED } from '@/components/ui/layout';
 import { Text, textRole } from '@/components/ui/Text';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
-import { SidePanel } from '@/components/ui/SidePanel';
 import { Bone } from '@/lib/motion';
 import { useOptionalToast, useToast } from '@/components/ui/toast';
-import { useOpenPersonDm, useRosterSafe } from '@/components/ui/use-open-person-dm';
+import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
 import { cn } from '@/lib/cn';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { setPrivateReplyDraft } from '@/lib/chat/drafts';
-import { canForwardComment, forwardComment } from '@/lib/chat/forward-comment';
+import { canForwardComment } from '@/lib/chat/forward-comment';
 import { isFormerMember, resolveMentionText, resolvePersonMentionText } from '@/lib/chat/mentions';
-import { newMessageId } from '@/lib/chat/message-id';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
-import { sendMessageRecord } from '@/lib/chat/record';
 import { repliesLabel } from '@/lib/chat/thread-signals';
-import {
-  distanceFromBottom,
-  intentAfterScroll,
-  newRowsAction,
-  openingIntent,
-  sizeChangeAction,
-  type ScrollSource,
-} from '@/lib/chat/stick-to-bottom';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -610,90 +600,6 @@ interface OpenThread {
 }
 
 let pendingSeq = 0;
-
-/**
- * A comment thread opens at the latest reply (Thread polish 1, 11 Nov 2026):
- * chat's stick-to-bottom decisions (src/lib/chat/stick-to-bottom.ts, no
- * second scroll core) on the thread's scroller. On open it is set in a layout
- * effect, before the first paint (a thread shorter than the pane stays at the
- * top: there is nothing to scroll). While the viewer is at the end it stays
- * there when a reply lands, they send, the reply box grows or the keyboard
- * opens (visualViewport); once they scroll up it never moves them. A linked
- * reply (focusId) owns the opening position. No await, timer or read.
- */
-function useCommentThreadStick(input: {
-  scrollRef: RefObject<HTMLDivElement>;
-  rootId: string | null;
-  landing: boolean;
-  /** Changes when a reply lands (count and newest id). */
-  rowsKey: string;
-  /** This device's own sends still pending in the open thread. */
-  ownPending: number;
-}): void {
-  const { scrollRef, rootId, landing, rowsKey, ownPending } = input;
-  const intentRef = useRef(openingIntent());
-  const programRef = useRef(false);
-  const pin = useCallback((): void => {
-    const el = scrollRef.current;
-    if (el === null || distanceFromBottom(el) === 0) return;
-    programRef.current = true;
-    el.scrollTop = el.scrollHeight;
-  }, [scrollRef]);
-  // Open: at the end before the first paint.
-  useLayoutEffect(() => {
-    if (rootId === null) return;
-    intentRef.current = landing ? false : openingIntent();
-    if (intentRef.current) pin();
-    // Only a new thread re-opens; a landing change inside it does not.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rootId, pin]);
-  // A reply lands, or the viewer sends from this device (takes hold again).
-  const ownRef = useRef(ownPending);
-  useLayoutEffect(() => {
-    const ownLocalSend = ownPending > ownRef.current;
-    ownRef.current = ownPending;
-    if (rootId === null) return;
-    if (ownLocalSend) intentRef.current = true;
-    if (newRowsAction({ intent: intentRef.current, flicking: false, ownLocalSend }) === 'pin') {
-      pin();
-    }
-  }, [rowsKey, ownPending, rootId, pin]);
-  // Size: the rows grow (pictures, chips), the pane shrinks (reply box, keyboard).
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (rootId === null || el === null) return;
-    const onSize = (): void => {
-      const action = sizeChangeAction({
-        intent: intentRef.current,
-        pendingJump: false,
-        olderPageRestore: false,
-        flicking: false,
-      });
-      if (action === 'pin') pin();
-    };
-    const onScroll = (): void => {
-      const source: ScrollSource = programRef.current ? 'program' : 'user';
-      programRef.current = false;
-      intentRef.current = intentAfterScroll({
-        intent: intentRef.current,
-        source,
-        distanceFromBottom: distanceFromBottom(el),
-      });
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onSize) : null;
-    observer?.observe(el);
-    const list = el.firstElementChild;
-    if (list !== null) observer?.observe(list);
-    const viewport = typeof window !== 'undefined' ? window.visualViewport : null;
-    viewport?.addEventListener('resize', onSize);
-    return () => {
-      el.removeEventListener('scroll', onScroll);
-      observer?.disconnect();
-      viewport?.removeEventListener('resize', onSize);
-    };
-  }, [rootId, scrollRef, pin]);
-}
 
 /**
  * Laptop, post page: the post column's right edge (px), read from the
@@ -1505,31 +1411,25 @@ export function Comments(props: CommentsProps): ReactElement {
                 .map((p) => pendingMessage(p, me)),
             ];
             const offer = commentMenuOffer({ row: threadRoot, me, viewerIsAgency });
-            const frame = (
-              <ThreadViewFrame
+            return (
+              <CommentThreadLayer
                 title={THREAD_TITLE}
                 subtitle={
                   props.whereLabel !== undefined && props.whereLabel !== ''
                     ? props.whereLabel
                     : undefined
                 }
-                selecting={false}
+                rootId={threadRoot.id}
+                scrollRef={threadScrollRef}
+                onRetry={() => void loadAll()}
                 onClosed={() => {
                   setThread(null);
                   setReplySeed(null);
                 }}
-              >
-                <div
-                  ref={threadScrollRef}
-                  data-comment-thread={threadRoot.id}
-                  data-thread-anchor-bottom=""
-                  // 12 Nov 2026: the content sits on the reply box. A flex column
-                  // whose list takes margin-top auto: a short thread's spare room
-                  // is at the top; on overflow the margin is 0 (CSS only).
-                  className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
-                >
-                  {/* pb-3: 12 between the last row (its chips included) and the reply box. */}
-                  <ul className="mt-auto flex shrink-0 flex-col pb-3 pt-4">
+                onClose={() => setThread(null)}
+                fillBeside={postColumnRight}
+                rows={
+                  <>
                     {renderRow(
                       messageOf(threadRoot),
                       { head: true, tail: true, afterLabel: false, threadPlace: 'root' },
@@ -1576,10 +1476,9 @@ export function Comments(props: CommentsProps): ReactElement {
                             )
                           : null,
                     )}
-                  </ul>
-                </div>
-                <ThreadViewFill loading={false} failed={false} onRetry={() => void loadAll()} />
-                <div data-comment-thread-composer="">
+                  </>
+                }
+                composer={
                   <Composer
                     {...(threadRoot.id === props.guideReplyCommentId
                       ? { sendAnchor: INDUCTION_KEYS.postReplyPost }
@@ -1601,26 +1500,8 @@ export function Comments(props: CommentsProps): ReactElement {
                     {...composerShared}
                     {...editingHere(threadRoot.id)}
                   />
-                </div>
-              </ThreadViewFrame>
-            );
-            return laptop ? (
-              <SidePanel
-                open
-                bare
-                title={THREAD_TITLE}
-                onClose={() => setThread(null)}
-                fillBeside={postColumnRight}
-              >
-                {frame}
-              </SidePanel>
-            ) : (
-              createPortal(
-                <div data-comment-thread-layer="" className="fixed inset-0 z-sheet">
-                  {frame}
-                </div>,
-                document.body,
-              )
+                }
+              />
             );
           })()
         : null}
@@ -1659,9 +1540,9 @@ export function Comments(props: CommentsProps): ReactElement {
 
       {forwardFor !== null ? (
         <CommentForwardLayer
-          row={forwardFor}
+          body={() => resolveMentionText(forwardFor.body, nameOf)}
+          attachmentIds={forwardFor.attachment_asset_ids ?? []}
           files={files}
-          nameOf={nameOf}
           newTrace={newTrace}
           onClose={() => setForwardFor(null)}
         />
@@ -1783,50 +1664,6 @@ function CommentMenu(props: {
         if (failedSend) props.onDiscard(m.id);
         else if (row !== null) props.onDelete(row);
       }}
-    />
-  );
-}
-
-/**
- * Forward a comment (Thread polish 2): chat's ForwardPicker, then one chat
- * message per picked chat with the comment's text and its files as stored
- * (forwardComment, shared with catch up). Mounted only while open; file
- * details the screen does not hold yet are read after Send, never on the tap.
- * Success and failure feedback are the picker's own.
- */
-function CommentForwardLayer(props: {
-  row: CommentRow;
-  files: ReadonlyMap<string, CommentFile>;
-  nameOf: ReturnType<typeof profileNameOf>;
-  newTrace: () => string;
-  onClose: () => void;
-}): ReactElement {
-  const roster = useRosterSafe();
-  const { row } = props;
-  return (
-    <ForwardPicker
-      historyStep
-      open
-      onClose={props.onClose}
-      channels={roster}
-      onSend={(chats) =>
-        forwardComment({
-          targets: chats,
-          load: async () => {
-            const attachments = await commentForwardFiles(
-              supabase,
-              row.attachment_asset_ids ?? [],
-              props.files,
-            );
-            if (attachments === null) return null;
-            return { body: resolveMentionText(row.body, props.nameOf), attachments };
-          },
-          send: (record) => sendMessageRecord({ client: supabase, ...record }),
-          newId: newMessageId,
-          newTrace: props.newTrace,
-        })
-      }
-      onSent={props.onClose}
     />
   );
 }

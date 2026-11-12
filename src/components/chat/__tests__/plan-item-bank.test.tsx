@@ -68,6 +68,7 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
     return env.result;
   },
 }));
+vi.mock('@/components/chat/Composer', async () => import('./composer-stub'));
 
 import {
   BANK_BACK_LABEL,
@@ -198,7 +199,7 @@ describe('the Item screen with no bundle', () => {
     expect($('[data-plan-files]')).not.toBeNull();
     expect($('[data-plan-description-card]')?.textContent).toContain('Monsoon reel');
     expect($('[data-plan-status-post]')).not.toBeNull();
-    expect($('[data-plan-comment-input]')).not.toBeNull();
+    expect($('[data-plan-comments-composer] textarea')).not.toBeNull();
     expect(text()).toContain('Comments show up here.');
   });
 

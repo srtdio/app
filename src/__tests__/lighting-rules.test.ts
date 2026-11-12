@@ -212,7 +212,14 @@ describe('lighting rules', () => {
     const composer = src('chat/Composer.tsx');
     // 8 Nov 2026: the tray opens inside the box, so the bar never joins.
     expect(composer).not.toContain('lit-dock-joined');
-    expect(composer).toContain('border-t bg-panel px-3 py-2 lit-dock');
+    // 12 Nov 2026: the dock is 16 from both screen edges on a phone (px-4),
+    // laptop unchanged (md:px-3); one lit-dock bar either way.
+    const dock = /className="([^"]*\bborder-t\b[^"]*\blit-dock\b[^"]*)"/.exec(composer)?.[1] ?? '';
+    const dockClasses = dock.split(/\s+/);
+    expect(dockClasses).toEqual(
+      expect.arrayContaining(['border-t', 'bg-panel', 'px-4', 'md:px-3', 'py-2', 'lit-dock']),
+    );
+    expect(dockClasses).not.toContain('px-3');
     const tray = src('chat/ComposerTray.tsx');
     // The boxed tray: a hairline under the tiles, the box's fill, no light.
     expect(tray).toMatch(/data-tray-boxed=""[\s\S]*?className="border-b pb-2 pt-2"/);

@@ -117,6 +117,7 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
   readItemBuckets: async () => ({ ok: true, data: {} }),
   planItemRead: async () => env.read,
 }));
+vi.mock('@/components/chat/Composer', async () => import('./composer-stub'));
 
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
 import { usePlanIt } from '@/components/pages/plan-tab/BankList';

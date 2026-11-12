@@ -81,7 +81,7 @@ describe('composer buttons', () => {
     // No schedule chevron: Send is one plain round button.
     expect(src).not.toContain('Schedule options');
     // The composer dock is lit, its neutral top border colour dropped.
-    expect(src).toContain('border-t bg-panel px-3 py-2 lit-dock');
+    expect(src).toContain('border-t bg-panel px-4 py-2 lit-dock md:px-3');
     expect(src).not.toMatch(/size="lg"/);
   });
 });

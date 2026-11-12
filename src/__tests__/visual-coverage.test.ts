@@ -218,6 +218,13 @@ const REQUIRED: readonly string[] = [
   'plan-item-notes',
   'plan-item-thread',
   'plan-item-thread-approver',
+  // 12 Nov 2026: Plan item and Bank idea comments as threads (laptop dark too).
+  'plan-item-comment-threads',
+  'plan-item-thread-open',
+  'bank-idea-comment-threads',
+  'bank-idea-thread-open',
+  'plan-comment-files',
+  'plan-thread-unread-dot',
   'plan-picker',
   'plan-screen',
   'plan-screen-today',
