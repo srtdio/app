@@ -201,6 +201,8 @@ export const AREAS: Area[] = [
       'post-open-media-cover',
       // A long caption edited mid-text never moves the page (Textarea fit, reveal).
       'post-caption-long-edit',
+      // One pop-up at a time, 12 under the bar (Copy link on the post).
+      'toast-one-under-bar',
     ].map(t),
   },
   {
