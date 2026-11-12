@@ -215,7 +215,7 @@ describe('11. FN7 / FN9 / FN11 copy', () => {
     expect(VERSION_HISTORY).toContain("import { formatAgo } from '@/lib/time';");
     expect(VERSION_HISTORY).not.toContain('toLocaleString()');
     expect(PAGE).toContain('{isTouchDevice() ? (');
-    expect(PAGE).toContain('onPointerDown={(event) => event.preventDefault()}');
+    expect(PAGE).toContain('onMouseDown={(event) => event.preventDefault()}');
     expect(DETAILS).not.toContain('Create them in Settings');
     expect(DETAILS).not.toContain('Workspace settings');
   });

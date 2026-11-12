@@ -51,12 +51,12 @@ describe('MentionPicker', () => {
     expect(rows).toHaveLength(2);
     const second = rows[1]?.props as {
       onClick: () => void;
-      onPointerDown: (e: { preventDefault: () => void }) => void;
+      onMouseDown: (e: { preventDefault: () => void }) => void;
     };
     second.onClick();
     expect(onPick).toHaveBeenCalledWith(MEMBERS[1]);
     const preventDefault = vi.fn();
-    second.onPointerDown({ preventDefault });
+    second.onMouseDown({ preventDefault });
     expect(preventDefault).toHaveBeenCalled();
   });
 });
