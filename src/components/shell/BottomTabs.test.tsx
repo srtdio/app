@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -447,7 +447,7 @@ describe('tabClass: the flat pill tab', () => {
   });
 });
 
-const source = readFileSync(fileURLToPath(new URL('./BottomTabs.tsx', import.meta.url)), 'utf8');
+const source = readFileSync(join(process.cwd(), 'src/components/shell/BottomTabs.tsx'), 'utf8');
 
 describe('BottomTabs: the nav never reacts to scroll (guard)', () => {
   it('source has no scroll listener, no useDockShrunk, no data-dock, no translate-y-1', () => {
