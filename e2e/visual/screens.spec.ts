@@ -283,6 +283,9 @@ function anyOverlay(page: Page): Locator[] {
 
 const isLaptop = (page: Page): boolean => (page.viewportSize()?.width ?? 0) >= 768;
 
+/** Catch up's open thread: the window on a phone, the sheet on a laptop (12 Nov 2026). */
+const CATCH_UP_THREAD_LAYER = '[data-catch-up-thread-window], [data-catch-up-thread-sheet]';
+
 /** Long-press on touch, right-click with a mouse: both open the same menu. */
 async function openMenuGesture(page: Page, target: Locator): Promise<void> {
   await target.scrollIntoViewIfNeeded();
@@ -2474,8 +2477,9 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // The reply's text tapped: the thread sheet over the card (scrim, "<",
-    // Thread over the title, the root, 4 replies, the box, Keep unread | Mark as read).
+    // The reply's text tapped: phone, the full-screen thread window (12 Nov
+    // 2026: no scrim, "<", Thread over the title, the root, 4 replies from the
+    // top, the box at the bottom, keyboard down); laptop, the sheet as before.
     name: 'catch-up-thread-sheet',
     seed: creator,
     extra: (network) => seedCatchUpThreadReply(network, NOW),
@@ -2490,7 +2494,7 @@ const SCREENS: Screen[] = [
         ],
         'reply text',
       );
-      await waitFor([page.locator('[data-catch-up-thread-sheet]')], 'thread sheet');
+      await waitFor([page.locator(CATCH_UP_THREAD_LAYER)], 'thread window');
       await waitFor(
         [page.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
         'replies',
@@ -2516,13 +2520,9 @@ const SCREENS: Screen[] = [
         ],
         'reply text',
       );
-      await waitFor(
-        [page.locator('[data-catch-up-thread-sheet] [data-catch-up-reply-input]')],
-        'sheet box',
-      );
-      await expect(
-        page.locator('[data-catch-up-thread-sheet] [data-catch-up-reply-input]'),
-      ).toHaveValue('Looks good');
+      const box = page.locator(CATCH_UP_THREAD_LAYER).locator('[data-catch-up-reply-input]');
+      await waitFor([box], 'thread box');
+      await expect(box).toHaveValue('Looks good');
     },
   },
   {
@@ -2906,12 +2906,15 @@ const SCREENS: Screen[] = [
         ],
         'reply text',
       );
-      const sheet = page.locator('[data-catch-up-thread-sheet]');
+      const sheet = page.locator(CATCH_UP_THREAD_LAYER);
       await waitFor(
         [sheet.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
         'replies',
       );
-      await expect(sheet.locator('[data-catch-up-thread-title]')).toHaveText('Replies');
+      // Phone: the window reads "Thread"; laptop's sheet keeps "Replies".
+      await expect(sheet.locator('[data-catch-up-thread-title]')).toHaveText(
+        isLaptop(page) ? 'Replies' : 'Thread',
+      );
       for (const key of ['tasks', 'forward', 'more'])
         await waitFor([sheet.locator(`[data-thread-root-action="${key}"]`)], `${key} key`);
     },
@@ -8513,7 +8516,7 @@ async function bootPhone(
   return network;
 }
 
-const CATCH_UP_THREAD_SHEET = '[data-catch-up-thread-sheet]';
+const CATCH_UP_THREAD_SHEET = '[data-catch-up-thread-window]';
 
 test('catch up: one finger tap on a message opens its thread', async ({ page }) => {
   const network = await bootPhone(
@@ -8622,6 +8625,102 @@ test('chat: a tap that rolls sideways still opens the thread', async ({ page }) 
     fire('pointerup', 14);
   });
   await expect(page.locator('[data-thread-view]')).toBeVisible();
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+// Catch up, Slack way (12 Nov 2026): a tap opens a full-screen thread window
+// (no scrim, no keyboard), every card's messages open threads, "more" unfolds
+// in place, the long-press sheet opens without a focus ring. Phone only.
+const words = (n: number): string => Array.from({ length: n }, (_, i) => `word${i + 1}`).join(' ');
+
+async function expectThreadWindow(page: Page): Promise<void> {
+  const layer = page.locator('[data-catch-up-thread-window]');
+  await expect(layer).toBeVisible();
+  const box = await layer.boundingBox();
+  const view = page.viewportSize();
+  if (box === null || view === null) throw new Error('thread window has no box');
+  expect(box.x).toBeLessThanOrEqual(1);
+  expect(box.y).toBeLessThanOrEqual(1);
+  expect(box.x + box.width).toBeGreaterThanOrEqual(view.width - 1);
+  expect(box.y + box.height).toBeGreaterThanOrEqual(view.height - 1);
+  await expect(page.locator('[data-catch-up-scrim]')).toHaveCount(0);
+  const typing = await page.evaluate(() => {
+    const tag = document.activeElement?.tagName;
+    return tag === 'TEXTAREA' || tag === 'INPUT';
+  });
+  expect(typing, 'the keyboard stays down until the box is tapped').toBe(false);
+}
+
+test('catch up: one finger tap opens the thread window, no black layer, no keyboard', async ({
+  page,
+}) => {
+  const network = await bootPhone(
+    page,
+    (n) => seedCatchUp(n, { lines: true }),
+    `/activity?catchup=${CATCH_UP_COMMENT}`,
+  );
+  await catchUpReady(page);
+  const open = page.locator('[data-catch-up-open-thread]').first();
+  await waitFor([open], 'message');
+  await fingerTap(page, open);
+  await expectThreadWindow(page);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('catch up: plan comment opens its thread', async ({ page }) => {
+  const network = await bootPhone(
+    page,
+    (n) => seedCatchUpPlanItem(n, NOW),
+    `/activity?catchup=${CU_PLAN_ENTRY}`,
+  );
+  await catchUpReady(page);
+  const open = page.locator('[data-catch-up-open-thread]').first();
+  await waitFor([open], 'plan comment');
+  await fingerTap(page, open);
+  await expectThreadWindow(page);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('catch up: more expands in place', async ({ page }) => {
+  const network = await bootPhone(
+    page,
+    (n) => {
+      seedCatchUp(n, { lines: true });
+      for (const row of n.world.tables.comments ?? []) {
+        if (row.id === CATCH_UP_COMMENT_ID) row.body = words(300);
+        if (row.body === CATCH_UP_LINE_COMMENTS[1].body) row.body = words(120);
+      }
+    },
+    `/activity?catchup=${CATCH_UP_COMMENT}`,
+  );
+  await catchUpReady(page);
+  const long = page.locator(`[data-catch-up-message="${CATCH_UP_COMMENT_ID}"]`);
+  const more = long.locator('[data-catch-up-more]');
+  await waitFor([more], 'more');
+  await expect(long).not.toContainText('word300');
+  // The 120-word message shows whole, with no "more".
+  const short = page.locator('[data-catch-up-message]', { hasText: 'word120' });
+  await expect(short.locator('[data-catch-up-more]')).toHaveCount(0);
+  await fingerTap(page, more);
+  await expect(long).toContainText('word300');
+  await expect(page.locator('[data-catch-up-thread-window]')).toHaveCount(0);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('action sheet: no clipped ring on touch open', async ({ page }) => {
+  const network = await bootPhone(
+    page,
+    (n) => seedCatchUp(n, { lines: true }),
+    `/activity?catchup=${CATCH_UP_COMMENT}`,
+  );
+  await catchUpReady(page);
+  const message = page.locator(`[data-catch-up-message="${CATCH_UP_COMMENT_ID}"]`);
+  await waitFor([message], 'comment');
+  await openMenuGesture(page, message.locator('[data-catch-up-open-thread]'));
+  const tile = page.locator('[data-menu-tile]').first();
+  await waitFor([tile], 'first tile');
+  const ring = await tile.evaluate((el) => el.matches(':focus-visible'));
+  expect(ring, 'no focus ring on a touch open').toBe(false);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 

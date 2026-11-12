@@ -64,6 +64,35 @@ export function overClampLines(text: string, lines = CLAMP_LINES): boolean {
   return text.split('\n').length > lines;
 }
 
+/** A message is long above this many words... (12 Nov 2026, Slack way) */
+export const LONG_WORDS = 250;
+/** ...or above this many lines. */
+export const LONG_LINES = 30;
+
+/**
+ * A long message's head: its first LONG_WORDS words, at most LONG_LINES
+ * lines, then "more" (which unfolds the rest in place). `long` false: the
+ * whole text shows and `head` is the text. Whitespace inside the head is
+ * kept as written. Pure.
+ */
+export function cutLongText(text: string): { long: boolean; head: string } {
+  const lines = text.split('\n');
+  const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+  if (words <= LONG_WORDS && lines.length <= LONG_LINES) return { long: false, head: text };
+  let head = lines.slice(0, LONG_LINES).join('\n');
+  // Cut after the LONG_WORDS-th word, keeping the text's own spacing.
+  const word = /\S+/g;
+  let count = 0;
+  for (let m = word.exec(head); m !== null; m = word.exec(head)) {
+    count += 1;
+    if (count === LONG_WORDS) {
+      head = head.slice(0, m.index + m[0].length);
+      break;
+    }
+  }
+  return { long: true, head: head.trimEnd() };
+}
+
 /** The local day key (YYYY-MM-DD) of a time in `timeZone` (src/lib/time.ts). Pure. */
 export function dayKey(at: string, timeZone?: string): string {
   return civilDay(at, timeZone);

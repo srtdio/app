@@ -6,7 +6,13 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DayNewLine, dividersAt, EventRow, MessageRow } from '@/components/catch-up/CatchUpRows';
+import {
+  DayNewLine,
+  dividersAt,
+  EventRow,
+  MessageRow,
+  NewLine,
+} from '@/components/catch-up/CatchUpRows';
 import type { CatchUpEventRow, CatchUpMessageRow } from '@/lib/catch-up/body';
 import { dayBreaks } from '@/lib/catch-up/text';
 
@@ -57,7 +63,7 @@ describe('DayNewLine', () => {
     document.body.innerHTML = '';
   });
 
-  it('one separator: day left, one ink hairline, ink "New" right', () => {
+  it('one separator: day left, one thin bad rule, "NEW" (bad, meta, no pill) right', () => {
     act(() =>
       root?.render(
         <ul>
@@ -74,16 +80,34 @@ describe('DayNewLine', () => {
     expect(parts.map((p) => Object.keys(p.dataset)[0])).toEqual([
       'catchUpDayLabel',
       'newRule',
-      'newPill',
+      'newWord',
     ]);
     expect(parts[0]?.textContent).not.toBe('');
     expect(parts[2]?.textContent).toBe('New');
     expect(line.querySelectorAll('[data-new-rule]')).toHaveLength(1);
-    // Ink, never coloured; tokens only, so light and dark flip together.
-    expect(parts[1]?.className).toContain('bg-fg');
-    expect(parts[2]?.className).toContain('bg-fg');
-    expect(line.innerHTML).not.toMatch(/\b(bg|text)-(good|accent|bad|amber|green)/);
+    expect(line.querySelector('[data-new-pill]')).toBeNull();
+    // The bad token, rule and word alike; tokens only, so light and dark flip together.
+    expect(parts[1]?.className.split(' ')).toEqual(expect.arrayContaining(['h-px', 'bg-bad']));
+    expect(parts[2]?.className.split(' ')).toEqual(
+      expect.arrayContaining(['text-bad', 'uppercase', 'font-semibold', 'font-mono']),
+    );
+    expect(parts[2]?.className).not.toMatch(/\b(bg-|rounded-full)/);
     expect(line.innerHTML).not.toMatch(/dark:/);
+  });
+
+  it('the New line alone: the same rule and word, data-new-line kept', () => {
+    act(() =>
+      root?.render(
+        <ul>
+          <NewLine />
+        </ul>,
+      ),
+    );
+    const line = host.querySelector('[data-new-line]') as HTMLElement;
+    const parts = [...line.children] as HTMLElement[];
+    expect(parts.map((p) => Object.keys(p.dataset)[0])).toEqual(['newRule', 'newWord']);
+    expect(parts[0]?.className).toContain('bg-bad');
+    expect(parts[1]?.className).toContain('text-bad');
   });
 });
 
@@ -188,6 +212,30 @@ describe('message family rows', () => {
     const line = (name?.parentElement?.className ?? '').split(' ');
     expect(line).toContain('items-baseline');
     expect(line.filter((c) => /^(min-h|h|py|pt|pb)-/.test(c))).toEqual([]);
+  });
+
+  it('long text: the head, then "more" outside the open-thread button; "more" unfolds in place', () => {
+    const long = { ...message, text: Array.from({ length: 300 }, (_, k) => `w${k}`).join(' ') };
+    const onOpen = vi.fn();
+    setWidth(false);
+    act(() =>
+      root?.render(
+        <ul>
+          <MessageRow row={long} selfName={null} timeZone="UTC" onOpenThread={onOpen} />
+        </ul>,
+      ),
+    );
+    const more = host.querySelector<HTMLButtonElement>('[data-catch-up-more]');
+    expect(more).not.toBeNull();
+    expect(more?.closest('[data-catch-up-open-thread]')).toBeNull();
+    expect(host.textContent).not.toContain('w299');
+    act(() => more?.click());
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-catch-up-more]')).toBeNull();
+    expect(host.textContent).toContain('w299');
+    // In place: no inner scroll box, no window.
+    expect(host.querySelector('[data-catch-up-more-window]')).toBeNull();
+    expect(host.innerHTML).not.toContain('overflow-y-auto');
   });
 
   it('an event line takes the same text token', () => {
