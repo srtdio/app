@@ -129,6 +129,9 @@ describe('thread lanes (ui/layout)', () => {
     expect(LANE_TOP).toContain('top-2');
     expect(LANE_BOTTOM).toContain('bottom-3');
     expect(LANE_BOTTOM).toContain('right-3');
+    // Phone: the key sits on the 16 page edge (R5); md+ keeps the 12 chat edge.
+    expect(LANE_BOTTOM.split(' ')).toContain('max-md:right-4');
+    expect(LANE_BOTTOM).not.toMatch(/(^|\s)md:right-/);
     expect(LANE_STRIP).not.toMatch(/absolute|fixed/);
     const tip = document.createElement('div');
     tip.innerHTML = renderToStaticMarkup(holdTipView(() => {}));

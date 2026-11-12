@@ -53,8 +53,8 @@ export const CONTROL_IN_LINE = '-my-3';
  *
  * - LANE_TOP: the unread pill ("2 unread"), centred, 8 under the header.
  *   44 tall, so the lane is 8 + 44 + 12 = 64 (LANE_TOP_CLEAR).
- * - LANE_BOTTOM: jump-to-latest, on the trailing edge (the chat edge, 12),
- *   12 above the composer. The lane is 12 + 44 + 8 = 64 (LANE_BOTTOM_CLEAR).
+ * - LANE_BOTTOM: jump-to-latest, on the trailing edge: 16 on phone (the page
+ *   edge), 12 on md+ (the chat edge); 12 above the composer. The lane is 12 + 44 + 8 = 64 (LANE_BOTTOM_CLEAR).
  * - LANE_STRIP: the tip strip sits in flow between the list and the composer,
  *   never over the list, so it has its own lane and can meet neither of the
  *   above (the list ends where it begins).
@@ -67,7 +67,7 @@ export const LANE_TOP = 'pointer-events-none absolute inset-x-0 top-2 z-raised f
 /** The list's scroll padding under LANE_TOP: rows land below the pill's lane. */
 export const LANE_TOP_CLEAR = 'scroll-pt-16';
 
-export const LANE_BOTTOM = 'absolute bottom-3 right-3 z-raised flex';
+export const LANE_BOTTOM = 'absolute bottom-3 right-3 z-raised flex max-md:right-4';
 
 /** The list's scroll padding over LANE_BOTTOM: rows land above the button's lane. */
 export const LANE_BOTTOM_CLEAR = 'scroll-pb-16';
