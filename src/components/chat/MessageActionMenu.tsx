@@ -949,7 +949,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
         if (moveMenuFocus(containerRef.current, event.key)) event.preventDefault();
       }}
       // The reactions row stays put; a long list scrolls under it (data-menu-list).
-      className={cn('flex min-h-0 flex-col focus:outline-none', isLaptop && '-m-2')}
+      className={cn(
+        'flex min-h-0 flex-col focus:outline-none focus-visible:lit-focus-inset',
+        isLaptop && '-m-2',
+      )}
       style={
         isLaptop
           ? { width: MENU_WIDTH_PX, maxHeight: menuMaxHeight(viewport) }
