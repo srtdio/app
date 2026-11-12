@@ -67,7 +67,7 @@ export const LANE_TOP = 'pointer-events-none absolute inset-x-0 top-2 z-raised f
 /** The list's scroll padding under LANE_TOP: rows land below the pill's lane. */
 export const LANE_TOP_CLEAR = 'scroll-pt-16';
 
-export const LANE_BOTTOM = 'absolute bottom-3 right-3 z-raised flex';
+export const LANE_BOTTOM = 'absolute bottom-3 right-3 z-raised flex max-md:right-4';
 
 /** The list's scroll padding over LANE_BOTTOM: rows land above the button's lane. */
 export const LANE_BOTTOM_CLEAR = 'scroll-pb-16';

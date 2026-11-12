@@ -891,8 +891,8 @@ export async function assertThreadHeader(page: Page, screenName: string): Promis
 }
 
 /**
- * Thread polish 1: the open comment thread (phone and laptop) landed at its
- * end before anything scrolled it, the last row 12 above the reply box.
+ * 13 Nov 2026: the open comment thread (phone and laptop) opens at its first
+ * message; scrolled to the end, its last row clears the floating reply box by 12.
  */
 export async function assertCommentThreadEnd(page: Page, screenName: string): Promise<void> {
   const geom = await page.evaluate((): CommentThreadEndGeom => {
@@ -900,7 +900,9 @@ export async function assertCommentThreadEnd(page: Page, screenName: string): Pr
       '[data-thread-view] [data-comment-thread]',
     );
     const last = scroller?.querySelector('ul')?.lastElementChild ?? null;
-    const box = document.querySelector('[data-comment-thread-composer]');
+    const box =
+      document.querySelector('[data-comment-thread-composer] form') ??
+      document.querySelector('[data-comment-thread-composer]');
     return {
       scrollHeight: scroller?.scrollHeight ?? 0,
       scrollTop: scroller?.scrollTop ?? 0,
@@ -950,38 +952,27 @@ export interface ThreadOnBoxGeom {
 }
 
 /**
- * 12 Nov 2026, pure: the thread's content sits on the reply box. The last row
- * ends today's gap (the list's own bottom padding, +-1) above the box; a
- * thread shorter than its pane keeps its spare room at the top (never under
- * the last row); a longer one is at its end; on touch the reply box is not
- * focused after open; the last placeholder ends where the last reply will.
+ * 13 Nov 2026 (Slack), pure: a thread opens at its first message. The scroller
+ * is at the top, the first row starts its own top gap (+-1) under the
+ * scroller's top, a short thread keeps its spare room under its last row (never
+ * above the main message), the reply box never overlaps the thread, on touch
+ * the reply box is not focused after open, and the last placeholder ends where
+ * the last reply will.
  */
 export function threadOnBoxViolations(geom: ThreadOnBoxGeom, touch: boolean): string[] {
   const out: string[] = [];
-  if (!geom.anchored) return ['no bottom-anchored thread scroller ([data-thread-anchor-bottom])'];
+  if (!geom.anchored) return ['no top-opened thread scroller ([data-thread-open-top])'];
   if (geom.lastRowBottom === null || geom.firstRowTop === null || geom.floorTop === null) {
     return ['no thread rows or no reply box'];
   }
   if (geom.boxTop === null) out.push('no reply box under the thread');
   else if (geom.boxTop < geom.floorTop - 1) out.push('the reply box overlaps the thread');
-  const short = geom.scrollHeight <= geom.clientHeight + geom.hangOverflow + 1;
-  const unseen = geom.scrollHeight - geom.scrollTop - geom.clientHeight;
-  if (!short && unseen > 1) out.push(`the thread sits ${Math.round(unseen)}px above its end`);
-  const gap = geom.floorTop - geom.lastRowBottom;
-  if (Math.abs(gap - geom.wantBottomGap) > 1) {
-    out.push(
-      `the last row ends ${Math.round(gap)}px above the reply box (want ${Math.round(geom.wantBottomGap)})`,
-    );
+  if (geom.scrollTop > 1) {
+    out.push(`the thread opened ${Math.round(geom.scrollTop)}px down, not at its first message`);
   }
-  if (short) {
-    const rows = geom.lastRowBottom - geom.firstRowTop;
-    const spare = geom.clientHeight - rows - geom.wantBottomGap - geom.wantTopGap;
-    const top = geom.firstRowTop - geom.scrollerTop - geom.wantTopGap;
-    if (Math.abs(top - spare) > 1) {
-      out.push(
-        `a short thread's spare room (${Math.round(spare)}px) is not above its main message (${Math.round(top)}px there)`,
-      );
-    }
+  const top = geom.firstRowTop - geom.scrollerTop - geom.wantTopGap;
+  if (Math.abs(top) > 1) {
+    out.push(`the main message starts ${Math.round(top)}px under the thread's top (want 0)`);
   }
   if (touch && geom.boxFocused) out.push('the reply box is focused after open on touch');
   if (geom.fillGap !== null && geom.fillWantGap !== null) {
@@ -995,8 +986,8 @@ export function threadOnBoxViolations(geom: ThreadOnBoxGeom, touch: boolean): st
 }
 
 /**
- * 12 Nov 2026: the open thread view (chat and comment threads, phone and
- * laptop, light and dark) sits on its reply box (threadOnBoxViolations).
+ * 13 Nov 2026: the open thread view (chat and comment threads, phone and
+ * laptop, light and dark) opens at its first message (threadOnBoxViolations).
  * Measured, never scrolled by the check.
  */
 export async function assertThreadSitsOnBox(
@@ -1006,7 +997,7 @@ export async function assertThreadSitsOnBox(
 ): Promise<void> {
   const geom = await page.evaluate((): ThreadOnBoxGeom => {
     const view = document.querySelector('[data-thread-view]');
-    const scroller = view?.querySelector<HTMLElement>('[data-thread-anchor-bottom]') ?? null;
+    const scroller = view?.querySelector<HTMLElement>('[data-thread-open-top]') ?? null;
     const list =
       scroller === null || scroller.matches('ul') ? scroller : scroller.querySelector('ul');
     const px = (value: string): number => Number.parseFloat(value) || 0;
@@ -1021,7 +1012,9 @@ export async function assertThreadSitsOnBox(
       return own + inner + margin;
     };
     const box =
-      view?.querySelector('[data-comment-thread-composer]') ?? view?.querySelector('form') ?? null;
+      view?.querySelector('[data-comment-thread-composer] form') ??
+      view?.querySelector('form') ??
+      null;
     const fill = view?.querySelector('[data-thread-fill]') ?? null;
     const fillRows = fill !== null ? [...fill.querySelectorAll('[data-thread-fill-row]')] : [];
     const lastFill = fillRows[fillRows.length - 1] ?? null;
@@ -1066,7 +1059,7 @@ export async function assertThreadSitsOnBox(
     screenName,
     threadOnBoxViolations(geom, touch).map((message) => ({
       check: 'thread-end' as const,
-      message: `sits on box: ${message}`,
+      message: `opens at top: ${message}`,
     })),
   );
 }
@@ -1355,7 +1348,8 @@ export async function assertRootReactionKey(page: Page, screenName: string): Pro
       }
     });
     if (!measure) return out;
-    // Phone: a normal head row on the family's 64 text column.
+    // Phone (13 Nov 2026, Slack): the stacked head (36 photo, name over time on
+    // 64), the text and its reaction row full width on 16.
     const x0 = view.getBoundingClientRect().left;
     const textLeft = (el: Element | null): number | null => {
       if (!shown(el)) return null;
@@ -1370,8 +1364,8 @@ export async function assertRootReactionKey(page: Page, screenName: string): Pro
       if (x === null) out.push(`no root ${label} to measure`);
       else if (Math.abs(x - x0 - want) > 1) out.push(`root ${label} x ${r1(x - x0)}, want ${want}`);
     };
-    if (root.querySelector('[data-thread-root-head]') !== null) {
-      out.push('the root draws the stacked head ([data-thread-root-head]) on a phone');
+    if (root.querySelector('[data-thread-root-head]') === null) {
+      out.push('the root does not draw the stacked head ([data-thread-root-head]) on a phone');
     }
     const photo = root.querySelector('[data-avatar-role]');
     if (!shown(photo)) out.push('no root photo');
@@ -1384,7 +1378,7 @@ export async function assertRootReactionKey(page: Page, screenName: string): Pro
     }
     col('name', textLeft(root.querySelector('[data-sender-name]')), 64);
     const body = root.querySelector('[data-msg-body]');
-    if ((body?.textContent ?? '').trim() !== '') col('text', textLeft(body), 64);
+    if ((body?.textContent ?? '').trim() !== '') col('text', textLeft(body), 16);
     const chips = root.querySelector('[data-reaction-chips]');
     const bubble = root.querySelector('[data-bubble]');
     const strip = view.querySelector('[data-thread-separator]');
@@ -1396,7 +1390,7 @@ export async function assertRootReactionKey(page: Page, screenName: string): Pro
     const row = lone && key !== undefined ? key.getBoundingClientRect() : c;
     const top = row.top;
     const bottom = row.bottom;
-    col('reaction row', row.left, 64);
+    col('reaction row', row.left, 16);
     if (!shown(bubble)) out.push('no root message to measure from ([data-bubble])');
     else {
       const gap = top - bubble.getBoundingClientRect().bottom;
@@ -2488,7 +2482,7 @@ export async function assertAlignment(
         } else f.gaps.push({ label: 'no root photo', gap: -1, min: 0 });
         const text = textOf(root);
         const t = text !== null && shown(text) ? textBox(text) : null;
-        if (t !== null) at('root text', t.left, headRoot ? replyCol : 16);
+        if (t !== null) at('root text', t.left, 16);
         else f.gaps.push({ label: 'no root text', gap: -1, min: 0 });
         const rootName = headRoot ? root.querySelector('[data-sender-name]') : null;
         const n = shown(rootName) ? textBox(rootName) : null;

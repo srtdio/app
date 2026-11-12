@@ -314,25 +314,27 @@ export interface CommentThreadEndGeom {
 }
 
 /**
- * Thread polish 1: a comment thread opens at its end (a short one at the
- * top, nothing to scroll), its last row (reaction chips included) at least
- * 12 above the reply box. Pure.
+ * 13 Nov 2026 (Slack): a comment thread opens at its first message (the
+ * scroller at the top), and its end clears the floating reply box: scrolled to
+ * the end, the last row (reaction chips included) sits at least 12 above the
+ * box's top. Pure.
  */
 export function commentThreadEndViolations(geom: CommentThreadEndGeom): string[] {
   const out: string[] = [];
-  const unseen = geom.scrollHeight - geom.scrollTop - geom.clientHeight;
-  if (geom.scrollHeight > geom.clientHeight + 1 && unseen > 1) {
-    out.push(`the thread opened ${Math.round(unseen)}px above its end`);
-  }
-  if (geom.scrollHeight <= geom.clientHeight + 1 && geom.scrollTop > 1) {
-    out.push('a thread shorter than its pane does not start at the top');
+  if (geom.scrollTop > 1) {
+    out.push(`the thread opened ${Math.round(geom.scrollTop)}px down, not at its first message`);
   }
   if (geom.lastRowBottom === null || geom.replyBoxTop === null) {
     out.push('no last row or no reply box');
-  } else if (geom.replyBoxTop - geom.lastRowBottom < 12 - 1) {
-    out.push(
-      `the last row ends ${Math.round(geom.replyBoxTop - geom.lastRowBottom)}px above the reply box (want >= 12)`,
-    );
+  } else {
+    // Where the last row lands once scrolled to the end.
+    const unseen = Math.max(0, geom.scrollHeight - geom.scrollTop - geom.clientHeight);
+    const atEnd = geom.lastRowBottom - unseen;
+    if (geom.replyBoxTop - atEnd < 12 - 1) {
+      out.push(
+        `scrolled to the end, the last row ends ${Math.round(geom.replyBoxTop - atEnd)}px above the reply box (want >= 12)`,
+      );
+    }
   }
   return out;
 }

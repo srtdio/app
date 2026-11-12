@@ -1,17 +1,18 @@
 // The comment thread's layer, lifted out of comments/Comments.tsx (12 Nov
 // 2026) unchanged so post / brief comments and Plan item / Bank idea comments
 // draw one thread: chat's ThreadViewFrame (phone: a portal over the page with
-// "<"; laptop: the side panel), the bottom-anchored scroller, ThreadViewFill
-// and the reply box docked under it. useCommentThreadStick keeps the open
-// thread at its latest reply (chat's stick-to-bottom decisions, no second
-// scroll core). CommentForwardLayer is chat's Forward picker for one comment's
+// "<"; laptop: the side panel), the scroller (opens at the first message,
+// Slack, 13 Nov 2026), ThreadViewFill and the reply box docked under it.
+// useCommentThreadStick follows the end once the viewer is there or sends
+// (chat's stick-to-bottom decisions, no second scroll core). CommentForwardLayer is chat's Forward picker for one comment's
 // text and stored files (forwardComment). Pure render plus the scroller's own
 // listeners: no read on paint.
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
+import { LatestButton } from '@/components/chat/ReadingLayer';
 import { ThreadViewFill, ThreadViewFrame } from '@/components/chat/ThreadView';
 import { commentForwardFiles, type CommentFile } from '@/components/comments/comment-files';
 import { SidePanel } from '@/components/ui/SidePanel';
@@ -31,7 +32,8 @@ import { supabase } from '@/lib/supabase';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
 /**
- * A comment thread opens at the latest reply (Thread polish 1, 11 Nov 2026):
+ * A comment thread opens at its first message (Slack, 13 Nov 2026; was the
+ * latest reply):
  * chat's stick-to-bottom decisions (src/lib/chat/stick-to-bottom.ts, no
  * second scroll core) on the thread's scroller. On open it is set in a layout
  * effect, before the first paint (a thread shorter than the pane stays at the
@@ -61,8 +63,10 @@ export function useCommentThreadStick(input: {
   // Open: at the end before the first paint.
   useLayoutEffect(() => {
     if (rootId === null) return;
-    intentRef.current = landing ? false : openingIntent();
-    if (intentRef.current) pin();
+    // 13 Nov 2026 (Slack): a thread opens at its first message, for context;
+    // it follows the end only once the viewer is there or sends.
+    intentRef.current = false;
+    if (!landing) scrollRef.current?.scrollTo({ top: 0 });
     // Only a new thread re-opens; a landing change inside it does not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootId, pin]);
@@ -115,6 +119,32 @@ export function useCommentThreadStick(input: {
 }
 
 /**
+ * True while the thread has rows below the fold (13 Nov 2026): the thread
+ * opens at its first message, so chat's round down arrow (LatestButton) shows
+ * there is more and takes the reader to the latest reply. Scroll and size
+ * listeners only: no read, no timer.
+ */
+function useMoreBelow(scrollRef: RefObject<HTMLDivElement>, rootId: string): boolean {
+  const [below, setBelow] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el === null) return;
+    const check = (): void => setBelow(distanceFromBottom(el) > 1);
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(check) : null;
+    observer?.observe(el);
+    const list = el.firstElementChild;
+    if (list !== null) observer?.observe(list);
+    return () => {
+      el.removeEventListener('scroll', check);
+      observer?.disconnect();
+    };
+  }, [scrollRef, rootId]);
+  return below;
+}
+
+/**
  * The open thread: chat's ThreadViewFrame with the bottom-anchored scroller
  * (its rows: the root, chat's "N replies" strip, the replies), ThreadViewFill
  * and the reply box under it. Laptop: the side panel (fillBeside: beside the
@@ -139,6 +169,7 @@ export function CommentThreadLayer(props: {
   scrollerData?: { [hook: `data-${string}`]: string | undefined } | undefined;
 }): ReactElement {
   const laptop = useIsLaptop();
+  const below = useMoreBelow(props.scrollRef, props.rootId);
   const frame = (
     <ThreadViewFrame
       title={props.title}
@@ -146,18 +177,28 @@ export function CommentThreadLayer(props: {
       selecting={false}
       onClosed={props.onClosed}
     >
-      <div
-        ref={props.scrollRef}
-        data-comment-thread={props.rootId}
-        data-thread-anchor-bottom=""
-        {...props.scrollerData}
-        // 12 Nov 2026: the content sits on the reply box. A flex column
-        // whose list takes margin-top auto: a short thread's spare room
-        // is at the top; on overflow the margin is 0 (CSS only).
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
-      >
-        {/* pb-3: 12 between the last row (its chips included) and the reply box. */}
-        <ul className="mt-auto flex shrink-0 flex-col pb-3 pt-4">{props.rows}</ul>
+      {/* The arrow's lane sits over the scroller's bottom edge (13 Nov 2026). */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={props.scrollRef}
+          data-comment-thread={props.rootId}
+          data-thread-open-top=""
+          {...props.scrollerData}
+          // 13 Nov 2026 (Slack): the first message at the top; a short
+          // thread's spare room sits above the reply box.
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+        >
+          {/* pb-3: 12 between the last row (its chips included) and the reply box. */}
+          <ul className="flex shrink-0 flex-col pb-3 pt-4">{props.rows}</ul>
+        </div>
+        <LatestButton
+          visible={below}
+          count={0}
+          onTap={() => {
+            const el = props.scrollRef.current;
+            el?.scrollTo({ top: el.scrollHeight });
+          }}
+        />
       </div>
       <ThreadViewFill loading={false} failed={false} onRetry={props.onRetry} />
       <div data-comment-thread-composer="">{props.composer}</div>

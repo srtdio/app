@@ -1371,7 +1371,9 @@ async function openPlanCommentThread(page: Page): Promise<void> {
   await expect(page.locator('[data-thread-view] [data-thread-separator]')).toHaveText(
     `${PLAN_THREAD_REPLIES} replies`,
   );
-  await expect(page.locator('[data-thread-view] [data-thread-view-title]')).toHaveText('Thread');
+  await expect(page.locator('[data-thread-view] [data-thread-view-title]')).toHaveText(
+    /^(Plan|Bank idea) comment reply$/,
+  );
   await waitFor(
     [page.locator('[data-comment-thread-composer]').getByPlaceholder('Reply', { exact: true })],
     'thread reply box',
@@ -1940,7 +1942,7 @@ const SCREENS: Screen[] = [
       // 12 Nov 2026: a message with no replies known waits on nothing: no
       // placeholder rows, the main message sits on the reply box.
       await waitFor(
-        [page.locator('[data-thread-view] [data-thread-anchor-bottom] [data-bubble]')],
+        [page.locator('[data-thread-view] [data-thread-open-top] [data-bubble]')],
         'main message',
       );
       await expect(page.locator('[data-thread-view] [data-thread-fill]')).toHaveCount(0);
@@ -6492,7 +6494,7 @@ SCREENS.push(
       await postConversationReady(page);
       await openCommentThread(page);
       await expect(page.locator('[data-thread-view] [data-thread-view-title]')).toHaveText(
-        'Thread',
+        'Post comment reply',
       );
     },
     after: async (page) => {

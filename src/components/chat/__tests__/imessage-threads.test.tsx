@@ -376,22 +376,17 @@ describe("the thread's main message: a head row on phone, stacked on laptop (12 
   const liClass = (out: string): string[] =>
     (/<li[^>]*class="([^"]*)"/.exec(out)?.[1] ?? '').split(' ');
 
-  it('phone: the 36 photo, the normal name line, text beside it on the 64 column', () => {
+  it('phone (13 Nov 2026, Slack): the 36 photo head stacked over full-width text', () => {
     const out = root('touch');
     expect(out).toContain('data-thread-root=""');
-    expect(out).not.toContain('data-thread-root-head');
+    expect(out).toContain('data-thread-root-head=""');
+    // The family's 36 photo, so the name over the time starts on 64 (16 + 36 + 12).
     expect(out).toContain('data-avatar-role="message"');
     expect(out).not.toContain('data-avatar-role="row"');
-    // A row, photo 12 from the text: 16 + 36 + 12 = 64.
-    expect(liClass(out)).toEqual(expect.arrayContaining(['flex-row', 'gap-3', 'pt-3']));
-    expect(liClass(out)).not.toContain('flex-col');
-    // One name line carrying the time, inside the text column.
-    expect(out.match(/data-sender-line=""/g)?.length).toBe(1);
-    // Phone: a baseline row, so the name gives way and the time stays whole.
-    expect(out).toMatch(
-      /data-sender-line=""[^>]*class="block min-w-0 max-w-full truncate max-md:flex max-md:items-baseline"/,
+    expect(liClass(out)).toEqual(
+      expect.arrayContaining(['relative', 'flex-col', 'items-stretch', 'gap-2']),
     );
-    expect(out).toMatch(/data-sender-time=""[^>]*class="[^"]*\bml-2\b/);
+    expect(liClass(out)).not.toContain('flex-row');
   });
 
   it('phone: the add-reaction key stays, in the text column, ending on the strip 12', () => {
