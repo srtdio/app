@@ -518,7 +518,7 @@ describe('ActivityCard titles and previews', () => {
       item({ title: 'Q3', actorName: 'Dev', body: 'Looks good', readAt: null }),
     ]);
     const button = /<button[^>]*data-activity-lead=""[^>]*>/.exec(html)?.[0] ?? '';
-    // Named outright: the preview on screen can be cut ("… more"), the name never is.
+    // Named outright: the preview on screen can be cut (the more toggle), the name never is.
     expect(button).toContain('aria-label="Q3, Dev: Looks good, Unread"');
     expect(button).not.toContain('aria-labelledby');
   });

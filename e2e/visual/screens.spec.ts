@@ -2181,7 +2181,7 @@ const SCREENS: Screen[] = [
       await page.locator('[data-activity-load-more]').scrollIntoViewIfNeeded();
     },
   },
-  // Part 6: Activity previews, 2 lines cut at a whole word with "… more"
+  // Part 6: Activity previews, 2 lines cut at a whole word with "… Show more"
   // (long) and one line, no marker (short); more unfolds, less folds.
   {
     name: 'activity-preview-more-cozy',
@@ -2189,7 +2189,7 @@ const SCREENS: Screen[] = [
     extra: seedPreviewRows,
     url: '/activity',
     steps: async (page: Page) => {
-      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
+      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… Show more');
       await assertActivityPreviews(page, 'activity-preview-more-cozy', {
         long: 'morning shot',
         short: PREVIEW_SHORT,
@@ -2202,7 +2202,7 @@ const SCREENS: Screen[] = [
     extra: seedPreviewRows,
     url: '/activity',
     steps: async (page: Page) => {
-      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… more');
+      await waitFor([page.locator('[data-activity-preview-toggle="more"]')], '… Show more');
       await page
         .locator('[data-activity-list] [data-list-card]', { hasText: 'morning shot' })
         .locator('[data-activity-preview-toggle]')

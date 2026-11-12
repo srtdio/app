@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { cutPreview, PREVIEW_MORE, stripCutEnd } from '@/components/pages/activity/preview-cut';
+import {
+  cutPreview,
+  PREVIEW_LESS_LABEL,
+  PREVIEW_MORE,
+  PREVIEW_MORE_LABEL,
+  stripCutEnd,
+} from '@/components/pages/activity/preview-cut';
 
 // One unit per character: a 20 wide line holds 20 characters.
 const measure = (s: string): number => s.length;
@@ -19,7 +25,7 @@ describe('cutPreview', () => {
     expect(cutPreview(text, 20, measure)).toEqual({ text, cut: false, lines: 2 });
   });
 
-  it('longer text: cut at the last whole word that fits 2 lines with "… more"', () => {
+  it('longer text: cut at the last whole word that fits 2 lines with "… Show more"', () => {
     const text = 'aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj';
     const got = cutPreview(text, 20, measure);
     expect(got.cut).toBe(true);
@@ -27,7 +33,8 @@ describe('cutPreview', () => {
     // Whole words only: the cut ends on a full word of the text.
     expect(text.startsWith(got.text)).toBe(true);
     expect(text.charAt(got.text.length)).toBe(' ');
-    expect(got.text).toBe('aaaa bbbb cccc dddd eeee ffff gggg');
+    // Line 2 holds "eeee ffff… Show more" (20): the marker takes the room "gggg" had.
+    expect(got.text).toBe('aaaa bbbb cccc dddd eeee ffff');
     expect(`${got.text}${PREVIEW_MORE}`.length).toBeLessThanOrEqual(20 + 1 + 20);
   });
 
@@ -51,5 +58,14 @@ describe('cutPreview', () => {
     expect(got.cut).toBe(true);
     expect(got.lines).toBe(2);
     expect(`${got.text}${PREVIEW_MORE}`.length).toBeLessThanOrEqual(40);
+  });
+});
+
+describe('toggle words (12 Nov 2026)', () => {
+  it('reads "Show more" / "Show less", never a bare "more" / "less" glued to the text', () => {
+    expect(PREVIEW_MORE_LABEL).toBe('Show more');
+    expect(PREVIEW_LESS_LABEL).toBe('Show less');
+    // The cut is measured with the whole marker, so the words never wrap to a third line.
+    expect(PREVIEW_MORE).toBe('… Show more');
   });
 });
