@@ -257,20 +257,19 @@ export function ReadByLine(props: {
   );
 }
 
-/** The numbers of a Read by label in mono. */
+/**
+ * The numbers of a Read by label in mono. Every part is its own span, so the
+ * wrapper holds no loose text whose box would span the numbers (phone rule R1).
+ */
 function readByWithMono(label: string): ReactElement {
-  const parts = label.split(/(\d+)/);
+  const parts = label.split(/(\d+)/).filter((part) => part !== '');
   return (
     <span data-read-by-words="">
-      {parts.map((part, i) =>
-        /^\d+$/.test(part) ? (
-          <span key={`part-${i}`} className="font-mono">
-            {part}
-          </span>
-        ) : (
-          part
-        ),
-      )}
+      {parts.map((part, i) => (
+        <span key={`part-${i}`} className={/^\d+$/.test(part) ? 'font-mono' : undefined}>
+          {part}
+        </span>
+      ))}
     </span>
   );
 }
