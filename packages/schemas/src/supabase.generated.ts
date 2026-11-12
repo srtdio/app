@@ -8339,8 +8339,48 @@ export type Database = {
           },
         ]
       }
+      plan_item_comment_thread_reads: {
+        Row: {
+          last_read_at: string
+          root_comment_id: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          last_read_at: string
+          root_comment_id: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          last_read_at?: string
+          root_comment_id?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_item_comment_thread_reads_root_comment_id_fkey"
+            columns: ["root_comment_id"]
+            isOneToOne: false
+            referencedRelation: "plan_item_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_comment_thread_reads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_item_comments: {
         Row: {
+          attachment_asset_ids: string[] | null
           author_user_id: string | null
           body: string
           created_at: string
@@ -8348,10 +8388,12 @@ export type Database = {
           edited_at: string | null
           id: string
           item_id: string
+          parent_comment_id: string | null
           visibility: string
           workspace_id: string
         }
         Insert: {
+          attachment_asset_ids?: string[] | null
           author_user_id?: string | null
           body: string
           created_at?: string
@@ -8359,10 +8401,12 @@ export type Database = {
           edited_at?: string | null
           id?: string
           item_id: string
+          parent_comment_id?: string | null
           visibility: string
           workspace_id: string
         }
         Update: {
+          attachment_asset_ids?: string[] | null
           author_user_id?: string | null
           body?: string
           created_at?: string
@@ -8370,6 +8414,7 @@ export type Database = {
           edited_at?: string | null
           id?: string
           item_id?: string
+          parent_comment_id?: string | null
           visibility?: string
           workspace_id?: string
         }
@@ -8386,6 +8431,13 @@ export type Database = {
             columns: ["item_id"]
             isOneToOne: false
             referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "plan_item_comments"
             referencedColumns: ["id"]
           },
           {
@@ -10887,6 +10939,21 @@ export type Database = {
       }
       plan_item_comment_reaction_remove: {
         Args: { p_comment_id: string; p_emoji: string; p_trace_id: string }
+        Returns: undefined
+      }
+      plan_item_comment_send: {
+        Args: {
+          p_attachment_version_ids: string[]
+          p_body: string
+          p_item_id: string
+          p_parent_comment_id: string
+          p_trace_id: string
+          p_visibility: string
+        }
+        Returns: string
+      }
+      plan_item_comment_thread_read_set: {
+        Args: { p_root_id: string; p_trace_id: string }
         Returns: undefined
       }
       plan_item_from_bank: {
