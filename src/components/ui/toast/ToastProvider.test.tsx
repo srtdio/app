@@ -13,6 +13,7 @@ import {
   EXIT_MS,
   MAX_VISIBLE,
   TOAST_MS,
+  TOAST_VIEWPORT_CLASS,
 } from '@/components/ui/toast/ToastProvider';
 
 describe('createToastStore', () => {
@@ -79,14 +80,16 @@ describe('createToastStore', () => {
     const store = createToastStore();
     const short = vi.fn();
     store.show({ title: 'Short', tone: 'error', durationMs: 2000, onExpire: short });
-    store.show({ title: 'Sticky', tone: 'error', durationMs: null });
     vi.advanceTimersByTime(ERROR_TOAST_MS - 1);
     expect(short).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(short).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(1_000_000);
-    expect(store.getSnapshot().find((t) => t.title === 'Sticky')!.leaving).toBe(false);
     store.dispose();
+    const sticky = createToastStore();
+    sticky.show({ title: 'Sticky', tone: 'error', durationMs: null });
+    vi.advanceTimersByTime(1_000_000);
+    expect(sticky.getSnapshot().find((t) => t.title === 'Sticky')!.leaving).toBe(false);
+    sticky.dispose();
   });
 
   it('hold pauses the countdown; release resumes with the time left', () => {
@@ -177,12 +180,14 @@ describe('createToastStore', () => {
   });
 
   it('stays sticky when durationMs is 0 or null', () => {
-    const store = createToastStore();
-    store.show({ title: 'Sticky zero', durationMs: 0 });
-    store.show({ title: 'Sticky null', durationMs: null });
-    vi.advanceTimersByTime(1_000_000);
-    expect(store.getSnapshot()).toHaveLength(2);
-    store.dispose();
+    for (const durationMs of [0, null]) {
+      const store = createToastStore();
+      store.show({ title: 'Sticky', durationMs });
+      vi.advanceTimersByTime(1_000_000);
+      expect(store.getSnapshot()).toHaveLength(1);
+      expect(store.getSnapshot()[0]!.leaving).toBe(false);
+      store.dispose();
+    }
   });
 
   it('dismiss() cancels the auto-dismiss timer and removes after the exit', () => {
@@ -198,15 +203,109 @@ describe('createToastStore', () => {
     store.dispose();
   });
 
-  it('caps the stack at MAX_VISIBLE, newest first', () => {
+  it('cap is 1: after 3 shows only the newest is up; the two older ran onExpire once each', () => {
+    expect(MAX_VISIBLE).toBe(1);
     const store = createToastStore();
-    for (let i = 1; i <= MAX_VISIBLE + 2; i += 1) {
-      store.show({ title: `t${i}`, durationMs: 0 });
+    const expires = [vi.fn(), vi.fn(), vi.fn()];
+    for (const [i, onExpire] of expires.entries()) {
+      store.show({ title: `t${i + 1}`, durationMs: 0, onExpire });
     }
     const toasts = store.getSnapshot();
-    expect(toasts).toHaveLength(MAX_VISIBLE);
-    expect(toasts[0]!.title).toBe(`t${MAX_VISIBLE + 2}`);
+    expect(toasts.map((t) => t.title)).toEqual(['t3']);
+    expect(expires[0]).toHaveBeenCalledTimes(1);
+    expect(expires[1]).toHaveBeenCalledTimes(1);
+    expect(expires[2]).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1_000_000);
+    expect(expires[0]).toHaveBeenCalledTimes(1);
+    expect(expires[1]).toHaveBeenCalledTimes(1);
     store.dispose();
+  });
+
+  it('a replaced card is removed at once, never left leaving', () => {
+    const store = createToastStore();
+    const a = store.show({ title: 'A', durationMs: 0 });
+    store.show({ title: 'B', durationMs: 0 });
+    expect(store.getSnapshot().find((t) => t.id === a)).toBeUndefined();
+    expect(store.getSnapshot()).toHaveLength(1);
+    // A card already leaving is removed at once too: two cards never overlap.
+    const b = store.getSnapshot()[0]!.id;
+    store.dismiss(b);
+    store.show({ title: 'C', durationMs: 0 });
+    expect(store.getSnapshot().map((t) => t.title)).toEqual(['C']);
+    store.dispose();
+  });
+
+  it('live error + new non-error: the error stays; the card shows with full duration once the error is dismissed', () => {
+    const store = createToastStore();
+    const err = store.show({ title: "Couldn't send.", tone: 'error', durationMs: 0 });
+    const onExpire = vi.fn();
+    store.show({ title: 'Mention', durationMs: 4000, onExpire });
+    expect(store.getSnapshot().map((t) => t.title)).toEqual(["Couldn't send."]);
+    vi.advanceTimersByTime(10_000);
+    expect(onExpire).not.toHaveBeenCalled();
+    store.expire(err);
+    vi.advanceTimersByTime(EXIT_MS);
+    expect(store.getSnapshot().map((t) => t.title)).toEqual(['Mention']);
+    vi.advanceTimersByTime(4000 - 1);
+    expect(onExpire).not.toHaveBeenCalled();
+    expect(store.getSnapshot()[0]!.leaving).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('the waiting card shows when the error times out (ERROR_TOAST_MS ceiling)', () => {
+    const store = createToastStore();
+    store.show({ title: 'Err', tone: 'error' });
+    store.show({ title: 'Saved' });
+    vi.advanceTimersByTime(ERROR_TOAST_MS + EXIT_MS);
+    expect(store.getSnapshot().map((t) => t.title)).toEqual(['Saved']);
+    store.dispose();
+  });
+
+  it('two non-errors while an error is live: only the newest shows after; the older ran onExpire once', () => {
+    const store = createToastStore();
+    const err = store.show({ title: 'Err', tone: 'error', durationMs: 0 });
+    const older = vi.fn();
+    const newer = vi.fn();
+    store.show({ title: 'Older', durationMs: 0, onExpire: older });
+    store.show({ title: 'Newer', durationMs: 0, onExpire: newer });
+    expect(older).toHaveBeenCalledTimes(1);
+    expect(newer).not.toHaveBeenCalled();
+    store.dismiss(err);
+    vi.advanceTimersByTime(EXIT_MS);
+    expect(store.getSnapshot().map((t) => t.title)).toEqual(['Newer']);
+    expect(older).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('a new error replaces a live error', () => {
+    const store = createToastStore();
+    const first = vi.fn();
+    store.show({ title: 'Err 1', tone: 'error', durationMs: 0, onExpire: first });
+    store.show({ title: 'Err 2', tone: 'error', durationMs: 0 });
+    expect(store.getSnapshot().map((t) => t.title)).toEqual(['Err 2']);
+    expect(first).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('a waiting card dismissed by its caller never shows', () => {
+    const store = createToastStore();
+    const err = store.show({ title: 'Err', tone: 'error', durationMs: 0 });
+    const wait = store.show({ title: 'Wait', durationMs: 0 });
+    store.dismiss(wait);
+    store.dismiss(err);
+    vi.advanceTimersByTime(EXIT_MS);
+    expect(store.getSnapshot()).toEqual([]);
+    store.dispose();
+  });
+
+  it('the viewport sits 12 under the 56 top bar, safe area added, never top-0', () => {
+    expect(TOAST_VIEWPORT_CLASS).toContain('top-14');
+    expect(TOAST_VIEWPORT_CLASS).toContain('pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]');
+    expect(TOAST_VIEWPORT_CLASS).not.toMatch(/(^|\s)top-0(\s|$)/);
+    expect(TOAST_VIEWPORT_CLASS).toContain('md:right-4');
+    expect(TOAST_VIEWPORT_CLASS).toContain('items-center');
   });
 
   it('notifies subscribers and stops after unsubscribe', () => {
@@ -234,8 +333,9 @@ describe('createToastStore', () => {
     const store = createToastStore();
     const onPress = vi.fn();
     store.show({ title: 'Plain' });
+    const plain = store.getSnapshot()[0];
     store.show({ title: 'Slot approved', action: { label: 'Undo', onPress } });
-    const [withAction, plain] = store.getSnapshot();
+    const [withAction] = store.getSnapshot();
     expect(withAction!.action?.label).toBe('Undo');
     withAction!.action?.onPress();
     expect(onPress).toHaveBeenCalledTimes(1);
