@@ -8203,7 +8203,7 @@ const LAPTOP_DARK_SCREENS = new Set([
   'activity-solid-rows',
   'activity-threads-new',
   'activity-catch-up-menu',
-  'threads-stack-card',
+  'activity-threads-list',
 ]);
 
 // --- Activity's solid rows: Catch up, then Threads (11 Nov 2026) -----------
@@ -8338,9 +8338,9 @@ SCREENS.push(
     },
   },
   {
-    // Threads tapped: the same catch up, threads only (one card per unread
-    // thread), its first card.
-    name: 'threads-stack-card',
+    // Threads tapped: the Threads list (/activity?threads=1), only threads
+    // with something new; this seed has exactly one.
+    name: 'activity-threads-list',
     seed: creator,
     extra: (network) => {
       seedOneThreadNew(network);
@@ -8351,10 +8351,16 @@ SCREENS.push(
       await activityReady(page);
       await activitySolidRowsAt(page, { catchUp: false, threads: true });
       await tap([page.locator('[data-shell="lead"] [data-topbar-threads]')], 'Threads');
-      await catchUpReady(page);
-      await expect(page.locator('[data-catch-up-left]')).toHaveText('1 left');
+      const screen = page.locator('[data-threads-screen]');
+      await waitFor([screen.locator('[data-threads-block]').first()], 'threads list block');
+      expect(new URL(page.url()).searchParams.get('threads')).toBe('1');
+      const blocks = screen.locator('[data-threads-block]');
+      await expect(blocks).toHaveCount(1);
+      await expect(screen.locator('[data-threads-block]:not([data-unread])')).toHaveCount(0);
     },
-    after: async (page) => assertCatchUpLayout(page, 'threads-stack-card'),
+    // Check 14 threads-list: header lines and every message's name and text on
+    // one column, one right edge, text off the band hairlines.
+    after: async (page) => assertAlignment(page, 'activity-threads-list', 'threads-list'),
   },
 );
 for (const screen of SCREENS) {

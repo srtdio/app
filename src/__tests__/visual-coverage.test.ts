@@ -401,7 +401,7 @@ const REQUIRED: readonly string[] = [
   'activity-threads-new',
   'activity-catch-up-menu',
   'activity-solid-rows',
-  'threads-stack-card',
+  'activity-threads-list',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
