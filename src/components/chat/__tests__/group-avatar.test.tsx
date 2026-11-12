@@ -138,10 +138,10 @@ describe('group info page pure helpers', () => {
     expect(member).not.toContain('Change group photo');
   });
 
-  it('reads "Group · n members · workspace"', () => {
-    expect(groupInfoSubtitle(4, 'Acme')).toBe('Group · 4 members · Acme');
-    expect(groupInfoSubtitle(1, 'Acme')).toBe('Group · 1 member · Acme');
-    expect(groupInfoSubtitle(null, undefined)).toBe('Group');
+  it('reads "Group · n members", never the workspace name', () => {
+    expect(groupInfoSubtitle(4)).toBe('Group · 4 members');
+    expect(groupInfoSubtitle(1)).toBe('Group · 1 member');
+    expect(groupInfoSubtitle(null)).toBe('Group');
   });
 
   it('crops the largest centred square, exported at the user avatar size', () => {

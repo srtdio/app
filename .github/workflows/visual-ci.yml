@@ -10,7 +10,8 @@ name: Visual CI
 #   The whole set renders once a night on main (visual-nightly.yml, 02:30 IST), which refreshes the baselines and the map through one bot PR
 #   (branch bot/visual-baselines, "Visual baselines refresh").
 # visual-shard: renders the selected screens (iPhone 13 light and dark, 1280x800 light, four ipad-* tablet projects; WebKit, harness, no DB, no secrets)
-#   plus the parts gallery screens (gallery-<Part>) in Chromium on a Pixel 7 (chrome-phone);
+#   plus the parts gallery screens (gallery-<Part>) in Chromium on a Pixel 7 (chrome-phone); the same screens also run in phone-360 and
+#   phone-320 (iPhone 13 at 360 and 320 wide), which run the layout checks only: no screenshot, no baseline, nothing to refresh or upload;
 #   and compares each with its committed baseline in e2e/visual/__screenshots__/. Any screen over 0.2% different fails; the diff, actual
 #   and expected images upload as the visual-diffs-1 artifact.
 # visual: the one required check. Passes when the shard succeeded, or when nothing was selected (no shard runs).

@@ -222,8 +222,23 @@ function dockStyle(dock: DockAt): { className: string; style: Record<string, num
   return { className: 'left-4 right-4', style: vertical };
 }
 
-/** Layout added to every guide control (each is a <Button>: 44 tall, 8px radius, 14 / 500). */
+/** Layout added to every guide control (each is a <Button>: 44 tall, 8px radius, label type). */
 const GUIDE_ACTION = 'min-w-11 shrink-0';
+
+/*
+ * The bar under 768 (12 Nov 2026, phone type 17): the words and the buttons
+ * share one row only while the words keep 128 (basis-32); below that the
+ * buttons move to their own row under the words, on the bar's right edge, and
+ * wrap again among themselves if they are wider than the bar. So no button
+ * label is cut or pushed past the bar's edge at 320, and the words get the
+ * bar's full width (fewer lines, a shorter bar). The bar may grow: its side is
+ * picked from its measured height (barSide), so it stays clear of the control
+ * it points at. From 768 up: one row, as before.
+ */
+export const GUIDE_BAR_ROW = 'flex items-center gap-2 px-3 py-2 max-md:flex-wrap';
+export const GUIDE_BAR_WORDS = 'min-w-0 flex-1 max-md:basis-32';
+export const GUIDE_BAR_BUTTONS =
+  'flex shrink-0 items-center gap-1 max-md:ml-auto max-md:max-w-full max-md:flex-wrap max-md:justify-end';
 
 export const GuideBar = forwardRef<
   HTMLElement,
@@ -270,8 +285,8 @@ export const GuideBar = forwardRef<
           style={{ width: `${Math.round(progress * 1000) / 10}%` }}
         />
       </div>
-      <div className="flex items-center gap-2 px-3 py-2">
-        <div className="min-w-0 flex-1">
+      <div data-induction-bar-row="" className={GUIDE_BAR_ROW}>
+        <div className={GUIDE_BAR_WORDS}>
           <PhaseRow copy={copy} />
           {copy.why !== '' ? (
             <p className="text-base text-fg [text-wrap:pretty]">{copy.why}</p>
@@ -305,7 +320,7 @@ function PhaseRow({ copy }: { copy: BarCopy }): ReactElement {
 
 function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): ReactElement {
   return (
-    <div className="flex shrink-0 items-center gap-1">
+    <div data-induction-bar-buttons="" className={GUIDE_BAR_BUTTONS}>
       {actions.onNext !== undefined ? (
         <Button
           type="button"

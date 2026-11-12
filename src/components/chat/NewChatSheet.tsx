@@ -1,3 +1,5 @@
+import { PHONE_PAD_FLUSH } from '@/components/ui/layout';
+import { cn } from '@/lib/cn';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
@@ -385,7 +387,10 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
           <div className="flex flex-col divide-y divide-border border-y border-border">
             <PressableRow
               flat
-              className="flex items-center gap-3 px-1 text-base font-medium text-fg"
+              className={cn(
+                'flex items-center gap-3 px-1 text-base font-medium text-fg',
+                PHONE_PAD_FLUSH,
+              )}
               onClick={() => setMode('dm')}
             >
               <IconUser size={ICON_SIZE.inline} />
@@ -393,7 +398,10 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
             </PressableRow>
             <PressableRow
               flat
-              className="flex items-center gap-3 px-1 text-base font-medium text-fg disabled:cursor-not-allowed disabled:text-fg-2"
+              className={cn(
+                'flex items-center gap-3 px-1 text-base font-medium text-fg disabled:cursor-not-allowed disabled:text-fg-2',
+                PHONE_PAD_FLUSH,
+              )}
               disabled={blocked}
               aria-describedby={blocked ? 'group-limit-note' : undefined}
               data-new-group-row=""

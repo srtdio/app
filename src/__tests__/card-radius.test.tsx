@@ -34,9 +34,9 @@ import { IconPipeline } from '@/components/ui/icons';
 // border, the 72 row bled 16 each side;
 // their picture is rounded-picture (10).
 
-/** A flat list row: no radius and no border on the frame; the h-18 row (72) bled -mx-4 / px-4. */
+/** A flat list row: no radius and no border on the frame; the md:h-18 row (72; h-15, 60, under 768) bled -mx-4 / px-4. */
 function expectFlatRow(cls: string[]): void {
-  expect(cls).toEqual(expect.arrayContaining(['h-18']));
+  expect(cls).toEqual(expect.arrayContaining(['h-15', 'md:h-18']));
   expect(cls).toEqual(expect.arrayContaining(['-mx-4', 'px-4']));
   expect(cls.filter((c) => /^rounded/.test(c))).toEqual([]);
   expect(cls.filter((c) => /^border/.test(c))).toEqual([]);

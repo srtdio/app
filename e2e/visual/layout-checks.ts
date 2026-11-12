@@ -2,8 +2,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   NEW_CHIP_HEIGHT,
   ROW_HEIGHT,
+  ROW_HEIGHT_PHONE,
   ROW_INSET,
   ROW_PICTURE,
+  ROW_PICTURE_PHONE,
 } from '../../src/components/ui/layout';
 import {
   alignmentViolations,
@@ -78,7 +80,9 @@ import {
 //     Chat list, Activity, the Plan tab and its Bank): every card on the screen
 //     is the same height (within 1px) and ROW_HEIGHT (72) on every screen, so
 //     all seven lists match; each picture is the 48 square (ROW_PICTURE), left,
-//     16 inside the bled row (x) and ROW_INSET (12) from its top (y), 12 to the
+//     16 inside the bled row (x) and ROW_INSET (12) from its top (y); under 768
+//     the row is ROW_HEIGHT_PHONE (60), the picture the 36 square 8 from the
+//     row top (the title line's top), the text at screen x 64; 12 to the
 //     text (flat look 7 Nov; one size 10 Nov 2026);
 //   7 post screens (after the shot, so the baseline never moves): the pinned
 //     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll)
@@ -491,6 +495,7 @@ async function readPage(page: Page): Promise<RawPage> {
         unread: card.querySelector('[data-list-card-unread]') !== null,
         lines2: card.getAttribute('data-list-card-lines') === '2',
         unfolded: card.querySelector('[data-activity-preview-toggle="less"]') !== null,
+        solid: card.hasAttribute('data-list-card-solid'),
       });
     }
 
@@ -630,8 +635,8 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
     }
   }
 
-  // List rows (ROW_HEIGHT 72) and chips (CHIP_FACE 36): one size.
-  for (const message of listCardViolations(raw.listCards)) {
+  // List rows (ROW_HEIGHT 72; ROW_HEIGHT_PHONE 60 under 768) and chips (CHIP_FACE 36): one size per width.
+  for (const message of listCardViolations(raw.listCards, raw.viewportWidth < 768)) {
     violations.push({ check: 'list-card', message });
   }
 
@@ -1659,7 +1664,7 @@ const CATCH_UP_ROW_KEY_WIDTH_PX = 36;
  *   e the tip ([data-catch-up-tip], 12 Nov 2026) is a plain row: a 1px top
  *     hairline only (no other border, no radius), its top on the scroll
  *     body's end ([data-catch-up-body], +-1), its words
- *     ([data-catch-up-tip-text]) on the row photos' x and 15px under 768,
+ *     ([data-catch-up-tip-text]) on the row photos' x and 17px under 768,
  *     "Got it" ([data-catch-up-tip-dismiss]) at least 44 tall;
  *   f no card surface (.catch-up-card) carries a shadow, light or dark.
  * The end screen (no card) runs (a) only.
@@ -1860,7 +1865,7 @@ export async function assertCatchUpLayout(page: Page, screenName: string): Promi
             out.push(`tip: words x ${r1(left)}, not on the photos' x ${r1(want)}`);
           }
           const size = getComputedStyle(words).fontSize;
-          if (window.innerWidth < 768 && size !== '15px') out.push(`tip: words ${size}, want 15px`);
+          if (window.innerWidth < 768 && size !== '17px') out.push(`tip: words ${size}, want 17px`);
         }
         const key = tip.querySelector('[data-catch-up-tip-dismiss]');
         const keyHeight = key !== null ? hitBox(key).height : 0;
@@ -2212,14 +2217,15 @@ export async function assertAlignment(
             rightEdges: [],
             gaps: [],
           };
-          const at = (label: string, x: number | null, want = 60): void => {
+          // Message family (11 Nov 2026): a reply's text column is 16 + photo
+          // + 12: 64 under 768 (36 photo), 60 from 768 (32 photo). The block's
+          // header, more and buttons sit on that same column (12 Nov 2026:
+          // 64 under 768 too, ThreadsListScreen THREADS_TEXT_INSET).
+          const msgCol = window.innerWidth >= 768 ? 60 : 64;
+          const at = (label: string, x: number | null, want = msgCol): void => {
             if (x === null) f.gaps.push({ label: `no ${label}`, gap: -1, min: 0 });
             else f.gaps.push({ label: `${label} x`, gap: x - b.left, equals: want });
           };
-          // Message family (11 Nov 2026): a reply's text column is 16 + photo
-          // + 12: 64 under 768 (36 photo), 60 from 768 (32 photo). The block's
-          // header, more and buttons keep their 60 inset (ThreadsListScreen).
-          const msgCol = window.innerWidth >= 768 ? 60 : 64;
           const header = block.querySelector('[data-threads-header]');
           for (const line of Array.from(header?.children ?? []).filter(shown)) {
             at('header line', textBox(line)?.left ?? null);
@@ -2393,7 +2399,14 @@ export async function assertAlignment(
       if (shown(glyph)) {
         f.gaps.push({
           label: 'last key glyph to the strip edge',
-          gap: s.right - glyph.getBoundingClientRect().right,
+          // Under 768 the pull slides the glyph by its ink inset (--ink-r), so
+          // the ink, not the glyph box, is 16 from the edge.
+          gap:
+            s.right -
+            glyph.getBoundingClientRect().right +
+            (window.innerWidth < 768
+              ? parseFloat(getComputedStyle(glyph).getPropertyValue('--ink-r')) || 0
+              : 0),
           equals: 16,
         });
       }
@@ -2602,6 +2615,8 @@ export interface ListTwinGeom {
   ink: { bg: string; fg: string };
   /** Retired Activity hooks still in the DOM (lines, bucket heads, the catch-up bar). */
   oldHooks: number;
+  /** The page width the list was read at (window.innerWidth): under 768 a row is 60, else 72. */
+  viewport?: number;
 }
 
 /** Read the Plan tab's or Activity's list geometry (check 15). */
@@ -2709,6 +2724,7 @@ export async function readListTwin(page: Page, kind: 'plan' | 'activity'): Promi
       oldHooks: document.querySelectorAll(
         '[data-activity-line], [data-activity-bucket-head], [data-activity-catch-up-bar]',
       ).length,
+      viewport: window.innerWidth,
     };
   }, kind);
 }
@@ -2742,6 +2758,23 @@ export function activityTwinViolations(
   };
   if (plan.row === null) out.push('Plan shows no row to measure');
   if (activity.row === null) out.push('Activity shows no row to measure');
+  // The row height at this width: 60 under 768 (ROW_HEIGHT_PHONE), 72 from it.
+  // Plan's row is that height, and a one-line Activity row equals Plan's (below).
+  const width = plan.viewport ?? activity.viewport;
+  if (width !== undefined) {
+    const want = width < 768 ? ROW_HEIGHT_PHONE : ROW_HEIGHT;
+    for (const [name, row] of [
+      ['Plan', plan.row],
+      ['Activity', activity.row],
+    ] as const) {
+      if (row !== null && !same(row.height, want) && !same(row.height, want + 20)) {
+        out.push(`${name}'s first row is ${r1(row.height)} tall, not ${want} (or ${want + 20})`);
+      }
+    }
+    if (plan.row !== null && !same(plan.row.height, want)) {
+      out.push(`a Plan row is ${r1(plan.row.height)} tall, not ${want}`);
+    }
+  }
   if (plan.row !== null && activity.row !== null) {
     // An Activity row with a 2-line preview is one 20 line taller (Part 6).
     const rowH = activity.row.height;
@@ -2844,9 +2877,10 @@ export function assertActivityTwinsPlan(
 // solid list rows (ui/ListCard solid + count) in ListScreen's lead slot, 12
 // under the filter chips: Catch up first, then Threads, each only while its
 // count is above 0 (both at 0: no lead slot at all, the content 16 under the
-// chips). A row is a list row: 72 tall, the 48 tile, the title 12 after it on
-// the list rows' text column, the count pill on the list rows' right edge,
-// vertically centred; ink fill, accent-fg text. Phone: the rows run edge to
+// chips). A row is a list row: 72 tall, the 48 tile (under 768: 60 tall, the
+// 36 tile, tile and count pill both on the row's centre), the title 12 after
+// it on the list rows' text column, the count pill on the list rows' right
+// edge, vertically centred; ink fill, accent-fg text. Phone: the rows run edge to
 // edge, stacked and touching. md and up: each row is a cell of the list
 // cards' grid (first column, then the second; stacked on a one-column
 // tablet), side-by-side cells touching. The seam is each row's ::before: a
@@ -2872,7 +2906,7 @@ interface SolidRowGeom {
   top: number;
   bottom: number;
   titleLeft: number | null;
-  picture: { right: number; width: number; height: number } | null;
+  picture: { right: number; width: number; height: number; centre: number } | null;
   badge: { right: number; centre: number; tone: string; text: string } | null;
   /** A time, tag or unread dot in the row (a solid row has none). */
   extras: number;
@@ -2988,7 +3022,12 @@ async function readActivitySolidRows(page: Page): Promise<SolidRowsGeom> {
         picture:
           picture === undefined
             ? null
-            : { right: picture.right, width: picture.width, height: picture.height },
+            : {
+                right: picture.right,
+                width: picture.width,
+                height: picture.height,
+                centre: picture.top + picture.height / 2,
+              },
         badge:
           badge === null || badgeBox === undefined
             ? null
@@ -3115,6 +3154,9 @@ function activitySolidRowsFindings(got: SolidRowsGeom, want: ActivitySolidRowsWa
   const { rows } = got;
   const phone = got.viewport < 768;
   const NAMES = { 'catch-up': 'Catch up', threads: 'Threads', other: 'A solid row' } as const;
+  // The row and its tile at this width: 60 / 36 under 768, 72 / 48 from it.
+  const rowHeight = phone ? ROW_HEIGHT_PHONE : ROW_HEIGHT;
+  const tile = phone ? ROW_PICTURE_PHONE : ROW_PICTURE;
 
   // Which rows show: exactly the ones the screen expects, Catch up first.
   for (const [key, expected] of [
@@ -3185,7 +3227,7 @@ function activitySolidRowsFindings(got: SolidRowsGeom, want: ActivitySolidRowsWa
   rows.forEach((row, i) => {
     const name = NAMES[row.key];
     const height = row.bottom - row.top;
-    if (!same(height, ROW_HEIGHT)) out.push(`${name} is ${r1(height)} tall, not ${ROW_HEIGHT}`);
+    if (!same(height, rowHeight)) out.push(`${name} is ${r1(height)} tall, not ${rowHeight}`);
     if (!(row.count > 0)) out.push(`${name} shows at count ${row.count} (a row at 0 is absent)`);
     if (row.key !== 'other') {
       const line = row.key === 'catch-up' ? `${row.count} unread` : `${row.count} new`;
@@ -3199,11 +3241,15 @@ function activitySolidRowsFindings(got: SolidRowsGeom, want: ActivitySolidRowsWa
     if (row.extras > 0) out.push(`${name} carries a time, tag or unread dot`);
     if (row.picture === null) out.push(`${name} has no picture tile`);
     else {
-      if (!same(row.picture.width, ROW_PICTURE) || !same(row.picture.height, ROW_PICTURE)) {
+      if (!same(row.picture.width, tile) || !same(row.picture.height, tile)) {
         out.push(
-          `${name}'s tile is ${r1(row.picture.width)}x${r1(row.picture.height)}, not ${ROW_PICTURE}x${ROW_PICTURE}`,
+          `${name}'s tile is ${r1(row.picture.width)}x${r1(row.picture.height)}, not ${tile}x${tile}`,
         );
       }
+      // The tile sits on the row's centre at every width (a solid row never hangs it).
+      const tileOff = row.picture.centre - (row.top + row.bottom) / 2;
+      if (Math.abs(tileOff) > 1)
+        out.push(`${name}'s tile is ${r1(tileOff)}px off the row's centre`);
       if (row.titleLeft !== null && !same(row.titleLeft - row.picture.right, ROW_INSET)) {
         out.push(
           `${name}'s title starts ${r1(row.titleLeft - row.picture.right)} after the tile, not ${ROW_INSET}`,
@@ -3406,6 +3452,10 @@ export async function assertActivityLoadMoreBand(page: Page, screenName: string)
  * link's name holds the full text); the short row's preview is 1 line with
  * no marker. "more" unfolds without leaving the page and becomes "less";
  * "less" folds it back. Leaves the page as it found it (folded).
+ * Heights (12 Nov 2026): the short row is the row height (60 under 768, 72
+ * from it), the folded long row one 20 line more (80 / 92); every preview
+ * line, "… more" included, ends inside its preview box and inside the row's
+ * bottom inset, so the marker never hangs out of the row.
  */
 export async function assertActivityPreviews(
   page: Page,
@@ -3425,6 +3475,7 @@ export async function assertActivityPreviews(
       const rects = preview === null ? [] : Array.from(preview.getClientRects());
       // Lines = distinct tops of the text's own boxes (4px apart or more).
       const tops: number[] = [];
+      let textBottom = Number.NEGATIVE_INFINITY;
       if (preview !== null) {
         const walk = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT);
         for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
@@ -3432,11 +3483,23 @@ export async function assertActivityPreviews(
           range.selectNodeContents(n);
           for (const r of Array.from(range.getClientRects())) {
             if (r.width > 0 && !tops.some((t) => Math.abs(t - r.top) < 4)) tops.push(r.top);
+            if (r.width > 0) textBottom = Math.max(textBottom, r.bottom);
           }
         }
       }
+      const rowBox = row.getBoundingClientRect();
       return {
-        height: row.getBoundingClientRect().height,
+        viewport: window.innerWidth,
+        // How far the preview's last text line runs past its own box, and
+        // past the row's bottom inset (0 or less: inside).
+        spillBox:
+          preview === null || !Number.isFinite(textBottom)
+            ? 0
+            : textBottom - preview.getBoundingClientRect().bottom,
+        spillRow: Number.isFinite(textBottom)
+          ? textBottom - (rowBox.bottom - (parseFloat(getComputedStyle(row).paddingBottom) || 0))
+          : 0,
+        height: rowBox.height,
         // The row's own content height: its body plus its padding (what the
         // height must settle on once an unfold is done).
         natural: (() => {
@@ -3461,6 +3524,25 @@ export async function assertActivityPreviews(
     }, needle);
   const long = await read(marks.long);
   const short = await read(marks.short);
+  const rowPx = (viewport: number): number => (viewport < 768 ? ROW_HEIGHT_PHONE : ROW_HEIGHT);
+  for (const [name, got, extra] of [
+    ['long', long, 20],
+    ['short', short, 0],
+  ] as const) {
+    if (got === null) continue;
+    const want = rowPx(got.viewport) + extra;
+    if (Math.abs(got.height - want) > 1) {
+      out.push(`the ${name} preview row is ${got.height} tall, not ${want}`);
+    }
+    if (got.spillBox > 1) {
+      out.push(`the ${name} preview's last line runs ${got.spillBox}px out of its preview box`);
+    }
+    if (got.spillRow > 1) {
+      out.push(
+        `the ${name} preview's last line runs ${got.spillRow}px into the row's bottom inset`,
+      );
+    }
+  }
   if (long === null) out.push('no long preview row');
   else {
     if (long.lines !== 2) out.push(`the long preview takes ${long.lines} lines, not 2`);

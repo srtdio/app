@@ -2,6 +2,8 @@
 // CLAUDE.md (Design and Layout rules). They live in theme (not extend), so
 // Tailwind's defaults are gone and only these values exist as classes.
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import tailwindConfig from '../../tailwind.config';
 
@@ -13,9 +15,10 @@ describe('design tokens: type and radius scales', () => {
     expect(theme.fontSize).toEqual({
       xs: ['11px', '14px'],
       sm: ['12px', '16px'],
-      md: ['13px', '18px'],
-      base: ['14px', '20px'],
-      lg: ['15px', '20px'],
+      // md, base and lg read the type variables (phone and laptop values below).
+      md: ['var(--type-md)', 'var(--type-md-line)'],
+      base: ['var(--type-base)', '20px'],
+      lg: ['var(--type-lg)', '20px'],
       xl: ['17px', '22px'],
       '2xl': ['20px', '26px'],
       '3xl': ['28px', '34px'],
@@ -24,6 +27,34 @@ describe('design tokens: type and radius scales', () => {
       msg: ['17px', '20px'],
     });
     expect(extend).not.toHaveProperty('fontSize');
+  });
+
+  it('the type variables: thread sizes under 768, the old sizes from 768', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
+    const start = css.indexOf('/* TYPE VARIABLES');
+    expect(start).toBeGreaterThan(-1);
+    const block = css.slice(start, css.indexOf('@layer base', start));
+    const [phone = '', laptop = ''] = block.split('@media (min-width: 768px)');
+    const read = (part: string): Record<string, string> =>
+      Object.fromEntries(
+        [...part.matchAll(/(--type-[a-z-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2]]),
+      );
+    // Phone: md 15/20, base 17/20, lg 17/20 (the message family's sizes).
+    expect(read(phone)).toEqual({
+      '--type-md': '15px',
+      '--type-md-line': '20px',
+      '--type-base': '17px',
+      '--type-lg': '17px',
+    });
+    // From 768: md 13/18, base 14/20, lg 15/20, exactly as before.
+    expect(read(laptop)).toEqual({
+      '--type-md': '13px',
+      '--type-md-line': '18px',
+      '--type-base': '14px',
+      '--type-lg': '15px',
+    });
+    // One place: no other rule sets a type variable.
+    expect(css.split('--type-').length - 1).toBe(8);
   });
 
   it('borderRadius is 8 for controls and cards, 12 popovers, 16 sheets', () => {

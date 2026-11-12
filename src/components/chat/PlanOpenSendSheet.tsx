@@ -6,6 +6,7 @@
 // Cancel sends nothing. Used by the plan card's Forward (PlanCard.tsx) and
 // the Plan screen's send into its chat (PlanScreen.tsx).
 
+import { PHONE_PAD_TIGHT } from '@/components/ui/layout';
 import type { ReactElement } from 'react';
 import { chatPlanShare, planShareWithClient, type Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
@@ -86,6 +87,8 @@ export function PlanOpenSendSheet(props: {
             variant="primary"
             type="button"
             data-plan-open-send-go=""
+            // Phone: 8 side padding, so the label stays whole in its half at 320.
+            className={PHONE_PAD_TIGHT}
             // Busy disables the button too, so a double tap never sends twice.
             busy={props.busy === true}
             onClick={() => {

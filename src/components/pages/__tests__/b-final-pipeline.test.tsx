@@ -67,7 +67,7 @@ describe('Pipeline card is ui/ListCard', () => {
     const out = card({ viewer: { role: 'agency', approverFirstNames: [] } });
     expect(out).toContain('data-list-card=""');
     expect(out).toMatch(
-      /data-list-card=""[^>]*class="relative -mx-4 flex h-18 min-w-0 px-4 py-3\b/,
+      /data-list-card=""[^>]*class="relative -mx-4 flex h-15 min-w-0 px-4 py-2 md:h-18 md:py-3\b/,
     );
     expect(out).not.toContain('lit-card');
     expect(out).not.toContain('rounded-xl');

@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { textRole } from '@/components/ui/Text';
 import { ICON_SIZE, IconChevronRight } from '@/components/ui/icons';
-import { CHAT_GUTTER } from '@/components/ui/layout';
+import { CHAT_GUTTER, INK_TRAILING_CHILD } from '@/components/ui/layout';
 
 /**
  * The tap surface's own attributes (pointer, key and context-menu handlers,
@@ -144,7 +144,10 @@ export function Row({
       ) : null}
       {trailing?.kind === 'node' ? (
         // The trailing rule for a caller's IconButton (a 44 box, pulled out by 12).
-        <span data-row-trailing="" className={cn('flex shrink-0 [&>button]:-mr-3', trailingInset)}>
+        <span
+          data-row-trailing=""
+          className={cn('flex shrink-0 [&>button]:-mr-3', INK_TRAILING_CHILD, trailingInset)}
+        >
           {trailing.node}
         </span>
       ) : null}

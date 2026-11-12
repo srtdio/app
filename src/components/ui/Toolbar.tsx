@@ -45,7 +45,14 @@ export function Toolbar({
       )}
       {iconCount > 0 ? (
         // gap 0: two bare 44 boxes touch, so their 20 glyphs sit 24 apart.
-        <div data-toolbar-icons="" className="-mr-2 flex shrink-0 items-center gap-0 last:-mr-3">
+        <div
+          data-toolbar-icons=""
+          // Last in the bar: pulled out by 12, and on phone the last key's ink sits on the edge.
+          className={cn(
+            '-mr-2 flex shrink-0 items-center gap-0 last:-mr-3',
+            'max-md:last:[&>button:last-child>svg]:translate-x-[var(--ink-r,0px)]',
+          )}
+        >
           {icons}
         </div>
       ) : null}

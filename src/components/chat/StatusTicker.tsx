@@ -26,6 +26,7 @@ import type {
   ReactNode,
 } from 'react';
 import { ICON_SIZE, IconCheck, IconChevronDown } from '@/components/ui/icons';
+import { INK_TRAILING } from '@/components/ui/layout';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { LIST_CARD_UNREAD_DOT } from '@/components/ui/ListCard';
 import {
@@ -400,9 +401,12 @@ export function StatusTickerBar(props: {
       >
         <span
           data-status-chevron-icon={open ? 'up' : 'down'}
-          // The chevron flips 180deg (mv-turn), never a fade.
-          className="flex mv-turn"
-          style={open ? { transform: 'rotate(180deg)' } : undefined}
+          // The chevron flips 180deg (mv-turn), never a fade. The flip is about
+          // the x axis, so left and right keep their sides and the phone ink
+          // slide (INK_TRAILING: the glyph's ink ends on the bar's 16 edge)
+          // holds open and closed.
+          className={cn('flex mv-turn', INK_TRAILING)}
+          style={open ? { transform: 'rotateX(180deg)' } : undefined}
         >
           <IconChevronDown size={ICON_SIZE.inline} />
         </span>

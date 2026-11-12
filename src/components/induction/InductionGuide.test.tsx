@@ -348,6 +348,25 @@ describe('the guide bar', () => {
     const skip = q<HTMLButtonElement>('[data-induction-bar] [data-induction-skip]');
     expect(skip.textContent).toBe('Skip tour');
     expect(skip.className).toContain('min-h-11');
+    // Its label is never squeezed: the button keeps its width (shrink-0).
+    expect(skip.className.split(' ')).toContain('shrink-0');
+    // Under 768 the buttons drop under the words (right edge) before any label
+    // is cut or pushed past the bar; the words keep at least 128 beside them.
+    const row = q('[data-induction-bar] [data-induction-bar-row]');
+    expect(row.className.split(' ')).toContain('max-md:flex-wrap');
+    expect(row.firstElementChild?.className.split(' ')).toEqual(
+      expect.arrayContaining(['min-w-0', 'flex-1', 'max-md:basis-32']),
+    );
+    const buttons = q('[data-induction-bar] [data-induction-bar-buttons]');
+    expect(buttons.className.split(' ')).toEqual(
+      expect.arrayContaining([
+        'max-md:ml-auto',
+        'max-md:max-w-full',
+        'max-md:flex-wrap',
+        'max-md:justify-end',
+      ]),
+    );
+    expect(buttons.contains(skip)).toBe(true);
     act(() => skip.click());
     expect(d.finish).toHaveBeenCalledWith('c_skipped');
     expect(d.setStep).not.toHaveBeenCalled();

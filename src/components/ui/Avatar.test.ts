@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  AVATAR_CARD_PHONE_PX,
+  AVATAR_CARD_SIZE,
   AVATAR_PX,
   Avatar,
   avatarFillFor,
@@ -33,7 +35,7 @@ describe('initialsFor', () => {
 });
 
 describe('Avatar roles', () => {
-  it('has exactly these roles: inline 20, message 36 (a message row on phone), header 32, row 40, card 48 (the list row picture; 40 in Compact), profile 72', () => {
+  it('has exactly these roles: inline 20, message 36 (a message row on phone), header 32, row 40, card 48 (the list row picture from 768; 36 under it by classes), profile 72', () => {
     expect(AVATAR_PX).toEqual({
       inline: 20,
       stack: 32,
@@ -43,15 +45,26 @@ describe('Avatar roles', () => {
       card: 48,
       profile: 72,
     });
+    // Under 768 the card is the message photo's 36 (ROW_PICTURE_PHONE).
+    expect(AVATAR_CARD_PHONE_PX).toBe(36);
+    expect(AVATAR_CARD_PHONE_PX).toBe(AVATAR_PX.message);
   });
 
-  it('the card role draws its initials at text-base (the row size), never text-lg', () => {
+  it('the card role draws its initials at text-base from 768 and at the 36 message size (text-sm) under it, never text-lg', () => {
     const html = renderToStaticMarkup(createElement(Avatar, { role: 'card', name: 'Priya Shah' }));
-    expect(html).toContain('text-base');
+    const classes = html.split(/[\s"]/);
+    expect(classes).toContain('md:text-base');
+    expect(classes).toContain('text-sm');
+    expect(classes).not.toContain('text-base');
     expect(html).not.toContain('text-lg');
+    // The phone initials are the 36 'message' photo's own size.
+    const message = renderToStaticMarkup(
+      createElement(Avatar, { role: 'message', name: 'Priya Shah' }),
+    );
+    expect(message.split(/[\s"]/)).toContain('text-sm');
   });
 
-  it('renders each role at its size (inline style; card by its h-12 w-12 classes)', () => {
+  it('renders each role at its size (inline style; card by its AVATAR_CARD_SIZE classes)', () => {
     for (const role of Object.keys(AVATAR_PX) as AvatarRole[]) {
       const html = renderToStaticMarkup(createElement(Avatar, { role, name: 'Priya Shah' }));
       const px = AVATAR_PX[role];
@@ -65,17 +78,19 @@ describe('Avatar roles', () => {
     }
   });
 
-  it('card is 48 through classes (h-12 w-12, ROW_PICTURE), no inline size', () => {
+  it('card is 48 from 768 and 36 under it through classes (ROW_PICTURE, ROW_PICTURE_PHONE), no inline size', () => {
+    expect(AVATAR_CARD_SIZE).toBe('h-9 w-9 md:h-12 md:w-12');
     for (const props of [
       { role: 'card' as const, name: 'Priya Shah' },
       { role: 'card' as const, name: 'Priya Shah', src: 'https://cdn/p.png' },
     ]) {
       const html = renderToStaticMarkup(createElement(Avatar, props));
-      expect(html).toContain('h-12 w-12');
+      expect(html).toContain(AVATAR_CARD_SIZE);
       expect(html).not.toContain('style="width');
     }
     const row = renderToStaticMarkup(createElement(Avatar, { role: 'row', name: 'A B' }));
-    expect(row).not.toContain('h-12 w-12');
+    expect(row).not.toContain('h-12');
+    expect(row).not.toContain('h-9');
   });
 });
 

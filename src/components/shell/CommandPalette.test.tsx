@@ -736,6 +736,13 @@ describe('CommandPalette Recent from the device', () => {
       'Remove Recent post 2',
       'Remove Recent post 3',
     ]);
+    // Under 768 the remove glyph slides 8 inside its 44 box (ink 16 from the
+    // screen edge); the box keeps its place and nothing moves from 768 up.
+    for (const el of removes) {
+      const cls = (el.props as { className: string }).className;
+      expect(cls).toContain('max-md:[&>svg]:translate-x-2');
+      expect(cls).not.toMatch(/(^|\s)-m[rx]-/);
+    }
     // The field keeps focus: X and Clear all never take it.
     for (const el of [...removes, ...clear]) {
       const prevent = vi.fn();

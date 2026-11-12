@@ -25,10 +25,13 @@ export function holdTipView(onDismiss: () => void, layout: ChatLayout = 'touch')
       data-lane="strip"
       className={cn(
         LANE_STRIP,
-        'flex items-center gap-3 border-t border-border py-1 pl-3 pr-1 text-base text-fg-2',
+        'flex items-center gap-3 border-t border-border py-1 pr-1 text-base text-fg-2',
+        // Phone (12 Nov 2026): the words start on the 16 page edge (the strip's
+        // 12 + 4) and wrap to a second line; "Got it" stays whole. Laptop: as before.
+        layout === 'laptop' ? 'pl-3' : 'pl-1',
       )}
     >
-      <p className="min-w-0 flex-1 truncate">
+      <p className={cn('min-w-0 flex-1', layout === 'laptop' && 'truncate')}>
         {layout === 'laptop' ? HOLD_TIP_TEXT_LAPTOP : HOLD_TIP_TEXT}
       </p>
       <Button type="button" variant="link" onClick={onDismiss} className="min-w-11 shrink-0">

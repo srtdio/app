@@ -15,6 +15,7 @@
 // blocks read once stay held for the app load, re-read when a thread's newest
 // reply changes.
 
+import { SUB_ROW_TEXT_INSET } from '@/components/ui/layout';
 import {
   Fragment,
   useCallback,
@@ -124,6 +125,14 @@ const REPLY_ROWS_CAP = 1000;
 /** The 44 tap of a one-line text control, from a pseudo-element (no visible padding). */
 const LINE_HIT =
   "relative min-h-0 before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-['']";
+
+/**
+ * The block's header, "N more replies" and buttons start on its messages'
+ * text column inside the 16 side padding: 16 + 44 = 60 from 768 (the 32
+ * photo + 12); under 768 16 + 48 = 64 (the 36 photo + 12), so nothing sits 4
+ * off the replies under it.
+ */
+const THREADS_TEXT_INSET = SUB_ROW_TEXT_INSET;
 
 /** One block's messages: its root and its newest replies (oldest first), and who is in it. */
 export interface ThreadBlockData {
@@ -459,7 +468,7 @@ export function ThreadBlock(props: {
           data-threads-header=""
           aria-label={`Open thread in ${header.name || 'chat'}`}
           onClick={open}
-          className={`${LINE_HIT} flex flex-col pl-11`}
+          className={`${LINE_HIT} flex flex-col ${THREADS_TEXT_INSET}`}
         >
           <Text role="heading" className={thread.unread ? 'truncate' : 'truncate text-fg-2'}>
             {header.name || '\u00a0'}
@@ -476,7 +485,7 @@ export function ThreadBlock(props: {
           {block.root !== null ? bubble(block.root) : null}
           {hidden > 0 ? (
             <li className="flex px-4 pt-2">
-              <span className="flex pl-11">
+              <span className={`flex ${THREADS_TEXT_INSET}`}>
                 <PressableRow
                   inline
                   data-threads-more=""
@@ -494,7 +503,7 @@ export function ThreadBlock(props: {
         </ul>
       )}
       <div data-threads-actions="" className="flex px-4 pt-3">
-        <span className="flex gap-2 pl-11">
+        <span className={`flex gap-2 ${THREADS_TEXT_INSET}`}>
           {thread.unread && wiring.onMarkRead !== undefined ? (
             <Button
               variant="primary"

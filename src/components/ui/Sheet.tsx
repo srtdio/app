@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
-import { LEADING_PULL } from '@/components/ui/layout';
+import { BAR_TITLE_AFTER_KEY, LEADING_PULL } from '@/components/ui/layout';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
@@ -310,7 +310,19 @@ export function Sheet({
           {...(handle ? {} : drag)}
         >
           {backButton()}
-          <h2 className={textRole('heading', 'min-w-0 flex-1 truncate')}>{title}</h2>
+          <h2
+            className={textRole(
+              'heading',
+              cn(
+                'min-w-0 flex-1 truncate',
+                // Phone: a long title wraps to two lines inside the 56 header instead of cutting.
+                'max-md:line-clamp-2 max-md:whitespace-normal',
+                BAR_TITLE_AFTER_KEY,
+              ),
+            )}
+          >
+            {title}
+          </h2>
           {busy ? (
             <span role="status" className="sr-only">
               {busyLabel}

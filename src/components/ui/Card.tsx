@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode, Ref } from 'react
 import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
 import { PRESSABLE_ROW_BASE, PressableRow } from '@/components/ui/PressableRow';
-import { CONTROL_IN_LINE } from '@/components/ui/layout';
+import { CONTROL_IN_LINE, INK_TRAILING_CHILD } from '@/components/ui/layout';
 
 /**
  * The whole card as one tap surface (a board card that opens its post): a
@@ -214,6 +214,7 @@ export function Card({
                   // A bare IconButton here (a remove X) takes the trailing rule
                   // too; an ActionMenu trigger applies it itself.
                   'flex shrink-0 [&>button]:-mr-3',
+                  INK_TRAILING_CHILD,
                   CONTROL_IN_LINE,
                   // Above the press surface, live inside the pass-through body.
                   tapped && 'pointer-events-auto relative z-raised',

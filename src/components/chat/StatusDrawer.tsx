@@ -129,7 +129,9 @@ const ROW_RULE = '[&+&]:border-t [&+&]:border-border';
 const ROW_BASE = 'flex items-center gap-3 py-1 mv-tint';
 const ROW = `${ROW_BASE} -mx-3 px-3 ${ROW_RULE}`;
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm tabular-nums text-fg-3';
-const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base text-fg';
+// Phone (12 Nov 2026): one line ending in "…" (17px titles no longer wrap a
+// row to two lines); from 768 up two lines, as before.
+const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base text-fg max-md:line-clamp-1';
 const ROW_SUB = 'block truncate text-sm text-fg-3';
 const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold lit-pill';
 

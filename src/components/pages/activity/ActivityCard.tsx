@@ -280,7 +280,7 @@ const PERSON_EVENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The picture (48), never blank: the thing the event is about (the post's
+ * The picture (48; 36 under 768), never blank: the thing the event is about (the post's
  * picture, else its "Aa" / play placeholder; the brief, plan or alert icon;
  * the first deleted file; a retired type's glyph), or, for a mention or a
  * person event, that person's photo (initials on their colour when none);
@@ -435,7 +435,7 @@ function itemTitleNode(name: string, unread: number): ReactNode {
 
 /**
  * One item as one ui/ListCard row, exactly as Plan and Chat use it (Activity
- * twins Plan, 10 Nov 2026): the 72 row (ROW_HEIGHT).
+ * twins Plan, 10 Nov 2026): the 72 row (ROW_HEIGHT; 60 under 768, ROW_HEIGHT_PHONE).
  * - A chat row (isChatRow, or a chat task alert), and a row with no item
  *   (deleted files, an invite, the welcome row): the who-did-what title
  *   ("Priya mentioned you"), its preview, its tag; no "N new".
@@ -621,8 +621,8 @@ function ActivityPreview({
       </>
     );
   }
-  // Folded at 2 lines: one fixed two-line box (36), so a taller glyph line
-  // (emoji) never makes the row taller than 72 + 20.
+  // Folded at 2 lines: one fixed two-line box (36; 40 under 768), so a taller
+  // glyph line (emoji) never makes the row taller than 72 + 20 (60 + 20).
   if (cut !== null && cut.cut) {
     return (
       <>
@@ -652,8 +652,14 @@ function ActivityPreview({
   );
 }
 
-/** The folded 2-line preview: two 18 lines, fixed, so the row is exactly 72 + 20. */
-const PREVIEW_FOLD = 'block h-9';
+/**
+ * The folded 2-line preview: two lines of the secondary role, fixed. From 768
+ * two 18 lines (36), so the row is exactly 72 + 20. Under 768 the role is
+ * 15 / 20, so two 20 lines (40) and the row is exactly 60 + 20: at 36 the
+ * second line ("… more" and its 44 hit) hung 4 out of the box, onto the
+ * row's own tap target below it.
+ */
+const PREVIEW_FOLD = 'block h-10 md:h-9';
 
 /** "… more" / " less": fg-3 words in the line, a 44 x 44 hit centred on them (::before). */
 const PREVIEW_TOGGLE =

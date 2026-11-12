@@ -2,7 +2,7 @@
 // Pipeline, Briefs, Assets, the Chat list (Personal notes, Groups, People),
 // Activity and the Plan tab (plans and the Bank) renders
 // through ui/ListCard, and every card has the identical height structure
-// (the flat 72 row bled 16 each side: h-18; the 48 picture; a 20 title + time
+// (the flat 72 row bled 16 each side: md:h-18, the 48 picture; under 768 the 60 row: h-15, the 36 picture; a 20 title + time
 // line, a 20 preview + tag + unread line; one size since 10 Nov 2026). The page lists sit in LIST_CARD_GRID (one
 // column on phone, auto-fill on laptop); the chat list in LIST_CARD_STACK.
 // The old hand-built layouts (the PostCard frame, AssetCard / AssetGrid,
@@ -294,9 +294,9 @@ describe('Pipeline, Briefs, Assets, Chat, Activity and the Plan tab render throu
 
   it('every card has the identical height structure', () => {
     const base = heightShape(SCREENS.briefs ?? '');
-    expect(base[0]).toEqual(expect.arrayContaining(['-mx-4', 'h-18', 'px-4']));
+    expect(base[0]).toEqual(expect.arrayContaining(['-mx-4', 'h-15', 'md:h-18', 'px-4']));
     expect(base[1]).not.toContain('p-3');
-    expect(base[2]).toEqual(expect.arrayContaining(['h-12', 'w-12']));
+    expect(base[2]).toEqual(expect.arrayContaining(['h-9', 'w-9', 'md:h-12', 'md:w-12']));
     expect(base[3]).toContain('h-5');
     expect(base[4]).toContain('h-5');
     for (const [name, html] of Object.entries(SCREENS)) {
@@ -518,9 +518,9 @@ describe('equal height: the 72 row on every list (Pipeline, Briefs, Assets, Chat
   });
 });
 
-describe('S3: the picture box is 48x48 whatever the picture, before and after it arrives', () => {
-  it('every picture kind keeps h-12 w-12 shrink-0 on the slot', () => {
-    const slot = ['h-12', 'w-12', 'shrink-0'];
+describe('S3: the picture box is 48x48 (36x36 under 768) whatever the picture, before and after it arrives', () => {
+  it('every picture kind keeps h-9 w-9 md:h-12 md:w-12 shrink-0 on the slot', () => {
+    const slot = ['h-9', 'w-9', 'md:h-12', 'md:w-12', 'shrink-0'];
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(expect.arrayContaining(slot));
     for (const [name, html] of Object.entries(SCREENS)) {
       expect(classOf(html, 'data-list-card-picture='), name).toEqual(expect.arrayContaining(slot));
@@ -538,7 +538,9 @@ describe('S3: the picture box is 48x48 whatever the picture, before and after it
     const pending = slot(<span data-pending="" />);
     const arrived = slot(<img src="https://cdn/x.png" alt="" width={1600} height={400} />);
     expect(arrived).toEqual(pending);
-    expect(pending).toEqual(expect.arrayContaining(['h-12', 'w-12', 'shrink-0']));
+    expect(pending).toEqual(
+      expect.arrayContaining(['h-9', 'w-9', 'md:h-12', 'md:w-12', 'shrink-0']),
+    );
   });
 
   it('zero layout shift: the image fills the box and never sizes it (a 1600x400 picture stays 48)', () => {

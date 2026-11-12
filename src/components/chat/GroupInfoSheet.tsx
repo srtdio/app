@@ -209,7 +209,7 @@ interface GroupInfoSheetProps {
   open: boolean;
   onClose: () => void;
   workspaceId: string;
-  /** The workspace's name for the "Group · n members · <workspace>" line. */
+  /** The workspace's name (kept for callers; the sub-line no longer shows it). */
   workspaceName: string | undefined;
   groupId: string;
   groupName: string;
@@ -235,12 +235,14 @@ interface GroupInfoSheetProps {
   tabs: GroupInfoTabsWiring;
 }
 
-/** "Group · <n> members · <workspace>"; the count only once the member list is in. Pure. */
-export function groupInfoSubtitle(memberCount: number | null, workspaceName?: string): string {
+/**
+ * "Group · <n> members"; the count only once the member list is in. No
+ * workspace name (12 Nov 2026): the line stays whole on a 320 phone. Pure.
+ */
+export function groupInfoSubtitle(memberCount: number | null): string {
   const parts = ['Group'];
   if (memberCount !== null)
     parts.push(`${memberCount} ${memberCount === 1 ? 'member' : 'members'}`);
-  if (workspaceName !== undefined && workspaceName !== '') parts.push(workspaceName);
   return parts.join(' · ');
 }
 
@@ -768,7 +770,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
       <GroupHero
         name={props.groupName}
         photoUrl={photoUrl}
-        subtitle={groupInfoSubtitle(memberCount, props.workspaceName)}
+        subtitle={groupInfoSubtitle(memberCount)}
         canEdit={canEditInfo}
         busy={busy}
         onPhoto={() => setPhotoOptionsOpen(true)}

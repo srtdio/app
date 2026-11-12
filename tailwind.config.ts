@@ -25,9 +25,11 @@ export default {
     fontSize: {
       xs: ['11px', '14px'],
       sm: ['12px', '16px'],
-      md: ['13px', '18px'],
-      base: ['14px', '20px'],
-      lg: ['15px', '20px'],
+      // md, base and lg read the type variables in src/index.css: the thread sizes
+      // under 768 (md 15/20, base 17/20, lg 17/20), 13/18, 14/20, 15/20 from 768.
+      md: ['var(--type-md)', 'var(--type-md-line)'],
+      base: ['var(--type-base)', '20px'],
+      lg: ['var(--type-lg)', '20px'],
       xl: ['17px', '22px'],
       '2xl': ['20px', '26px'],
       '3xl': ['28px', '34px'],

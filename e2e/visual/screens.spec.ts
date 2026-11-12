@@ -46,6 +46,7 @@ import {
   readActivityBoxes,
   readListTwin,
 } from './layout-checks';
+import { assertPhoneRules } from './layout-checks-phone';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import { recordScreenFiles, settle, stabilise } from './shared';
 import type { Row } from '../fixtures/postgrest';
@@ -7506,6 +7507,9 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   // A writing box screen: the row's keys are 44 tall, the send ends inside the box.
   if (WRITING_BOX_SCREENS.has(screen.name)) await assertWritingBox(page, screen.name);
   await checkLayout(page, screen.name);
+  // The phone rules (R1, R3, R5, R7 to R13; layout-checks-phone.ts): every
+  // screen under 768 wide, at 390 (iphone-*), 360 and 320 (phone-*).
+  await assertPhoneRules(page, screen.name);
   // Alignment (CLAUDE.md, 9 Nov 2026): one text column, one right edge, hung
   // photos, text off hairlines; measured on the screens that carry them.
   const align = ALIGN_SCREENS[screen.name];
@@ -7523,12 +7527,15 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   // The reply at rest: the pill's field centred, its left on the photo column.
   if (CATCH_UP_REST_SCREENS.has(screen.name)) await checkCatchUpComposer(page, screen.name);
   // Soft: a layout failure above and a pixel diff here both report in one run.
-  await expect.soft(page).toHaveScreenshot(`${screen.name}.png`, {
-    maxDiffPixelRatio: 0.002,
-    animations: 'disabled',
-    caret: 'hide',
-    ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
-  });
+  // The phone-* projects run the checks only: no shot, no baseline.
+  if (!test.info().project.name.startsWith('phone-')) {
+    await expect.soft(page).toHaveScreenshot(`${screen.name}.png`, {
+      maxDiffPixelRatio: 0.002,
+      animations: 'disabled',
+      caret: 'hide',
+      ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
+    });
+  }
   await screen.after?.(page);
   map.write(screen.name);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);

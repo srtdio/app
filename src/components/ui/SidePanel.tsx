@@ -202,7 +202,8 @@ export function SidePanel({
             <IconButton label="Back" onClick={onClose} className={LEADING_PULL}>
               <IconChevronLeft size={ICON_SIZE.control} />
             </IconButton>
-            <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>
+            {/* Phone: 4 more, so the title starts on the 64 text column (4 + 44 + 12 + 4). */}
+            <h2 className="min-w-0 truncate text-lg font-semibold max-md:ml-1">{title}</h2>
             {headerExtra}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>

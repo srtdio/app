@@ -2,7 +2,8 @@ name: Visual nightly
 
 # The whole visual set on main, once a night (21:00 UTC = 02:30 IST) or on demand (Run workflow).
 # render: 4 shards (weights 26:26:26:22, as visual-ci.yml ran ALL) render every screen in every project and compare each with its baseline
-#   (0.2% threshold, playwright.visual.config.ts). capture() records each screen's src/ and packages/ files (scripts/ci/visual-map.ts) as
+#   (0.2% threshold, playwright.visual.config.ts); phone-360 and phone-320 run the layout checks only (no screenshot, no baseline, so nothing of
+#   theirs is ever re-rendered, collected or published). capture() records each screen's src/ and packages/ files (scripts/ci/visual-map.ts) as
 #   fragments; they upload as visual-map-<N>. A shard whose compare failed re-renders the baselines that differ (--update-snapshots=changed, new ones too),
 #   compares again on the same tree (must pass: a layout failure or a flaky screen fails the night, no PR), and uploads the new images.
 # publish: merges every shard's fragments into e2e/visual/screen-files.json (the per-screen map visual-select.ts reads) and lays the new

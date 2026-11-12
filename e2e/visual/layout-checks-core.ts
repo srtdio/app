@@ -6,9 +6,13 @@ import {
   CHIP_FACE,
   CHIP_TAP,
   ROW_HEIGHT,
+  ROW_HEIGHT_PHONE,
   ROW_INSET,
+  ROW_INSET_PHONE,
   ROW_PICTURE,
+  ROW_PICTURE_PHONE,
   ROW_TEXT_START,
+  ROW_TEXT_START_PHONE,
   SCREEN_CHIPS_TOP,
   SCREEN_CONTENT_TOP,
   SCREEN_GUTTER_LAPTOP,
@@ -406,23 +410,32 @@ export function boxText(box: Box): string {
   return `${r(box.x)},${r(box.y)} ${r(box.width)}x${r(box.height)}`;
 }
 
-/** ui/ListCard's picture (ROW_PICTURE 48, src/components/ui/layout.ts). */
+/** ui/ListCard's picture from 768 (ROW_PICTURE 48, src/components/ui/layout.ts). */
 export const LIST_CARD_PICTURE_PX = ROW_PICTURE;
+/** ui/ListCard's picture under 768 (ROW_PICTURE_PHONE 36). */
+export const LIST_CARD_PICTURE_PHONE_PX = ROW_PICTURE_PHONE;
 /**
  * The picture's left inset inside the row box: the row bleeds -mx-4 past the
  * gutter and pads px-4 back, so the picture sits 16 inside the bled row (on
  * the page gutter). No border.
  */
 export const LIST_CARD_INSET_X_PX = 16;
-/** The picture's top inset (ROW_INSET): centred in the 72 row, 12 above and below the 48. */
+/** The picture's top inset from 768 (ROW_INSET): centred in the 72 row, 12 above and below the 48. */
 export const LIST_CARD_INSET_Y_PX = ROW_INSET;
+/**
+ * The picture's top inset under 768 (ROW_INSET_PHONE): 8, the title line's
+ * top, in the 60 row; never centred (a solid row's tile is: 12 above and below).
+ */
+export const LIST_CARD_INSET_Y_PHONE_PX = ROW_INSET_PHONE;
 /** Picture to text column. */
 export const LIST_CARD_GAP_PX = 12;
 /*
  * Every ui/ListCard in all seven lists (Pipeline, Briefs, Assets, the Chat list,
- * Activity, the Plan tab and its Bank) is ROW_HEIGHT: the flat h-18 row, 12 +
- * the 48 picture + 12 (the two 20 lines and the 4 between, 44, centre inside
- * it). No border, no radius.
+ * Activity, the Plan tab and its Bank) is ROW_HEIGHT from 768: the flat h-18
+ * row, 12 + the 48 picture + 12 (the two 20 lines and the 4 between, 44,
+ * centre inside it). Under 768 it is ROW_HEIGHT_PHONE: the flat h-15 row, 8 +
+ * the 44 text column + 8, the 36 picture on the title line's top. No border,
+ * no radius.
  */
 /** Cards are the same height (on a screen, and ROW_HEIGHT) within this many px. */
 export const LIST_CARD_HEIGHT_TOLERANCE_PX = 1;
@@ -450,6 +463,23 @@ export interface ListCardGeom {
   lines2?: boolean;
   /** That row unfolded ("less" shows): taller than the 2-line row. */
   unfolded?: boolean;
+  /** A solid row (Activity's Catch up and Threads): under 768 its tile is centred. */
+  solid?: boolean;
+}
+
+/** The row's numbers at one width: under 768 (phone) or from 768. Pure. */
+export function listCardGeometry(phone: boolean): {
+  height: number;
+  picture: number;
+  insetY: number;
+} {
+  return phone
+    ? {
+        height: ROW_HEIGHT_PHONE,
+        picture: LIST_CARD_PICTURE_PHONE_PX,
+        insetY: LIST_CARD_INSET_Y_PHONE_PX,
+      }
+    : { height: ROW_HEIGHT, picture: LIST_CARD_PICTURE_PX, insetY: LIST_CARD_INSET_Y_PX };
 }
 
 /** An Activity row with a 2-line preview is one 20 line taller (Part 6, 10 Nov 2026). */
@@ -463,14 +493,19 @@ const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean
  * and that height is ROW_HEIGHT (72) on every screen, so the seven lists'
  * rows are one height across the app; each row's picture is the 48 square
  * (ROW_PICTURE), on the left, 16 inside the bled row (x) and ROW_INSET (12)
- * from its top (y), with the text column 12 after it. Pure.
+ * from its top (y), with the text column 12 after it.
+ * `phone` (the page is under 768 wide): the row is ROW_HEIGHT_PHONE (60), the
+ * picture the 36 square (ROW_PICTURE_PHONE) at 16 and ROW_INSET_PHONE (8)
+ * from the row top on every row, however tall (top-aligned with the title
+ * line); a solid row's tile is centred (12). Text still 12 after it, so the
+ * text column is screen x 64 (76 from 768). Pure.
  */
-export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
+export function listCardViolations(cards: readonly ListCardGeom[], phone = false): string[] {
   const out: string[] = [];
-  // Activity's 2-line rows (72 + 20; taller only unfolded) are checked on
-  // their own; every other row is one height, ROW_HEIGHT.
+  // Activity's 2-line rows (72 + 20, 60 + 20 on phone; taller only unfolded)
+  // are checked on their own; every other row is one height.
   const first = cards.find((c) => c.lines2 !== true);
-  const geom = { height: ROW_HEIGHT, picture: ROW_PICTURE, insetY: ROW_INSET };
+  const geom = listCardGeometry(phone);
   for (const c of cards) {
     const extra = c.lines2 === true ? c.card.height - geom.height : 0;
     if (c.lines2 === true) {
@@ -479,7 +514,7 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
         c.unfolded === true ? c.card.height < want - 1 : Math.abs(c.card.height - want) > 1;
       if (off) {
         out.push(
-          `${c.label} is ${c.card.height}px tall, not ${want} (a 2-line preview row is 72 + 20)`,
+          `${c.label} is ${c.card.height}px tall, not ${want} (a 2-line preview row is ${geom.height} + 20)`,
         );
       }
     } else {
@@ -507,8 +542,14 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
     }
     const left = p.x - c.card.x - c.borderLeft;
     const top = p.y - c.card.y - c.borderTop;
-    // A taller (2-line) row keeps its picture centred.
-    const wantTop = geom.insetY + extra / 2;
+    // From 768 a taller (2-line) row keeps its picture centred. Under 768 the
+    // picture hangs from the title line (the inset) on every row; only a
+    // solid row's tile is centred in its row.
+    const wantTop = !phone
+      ? geom.insetY + extra / 2
+      : c.solid === true
+        ? (c.card.height - geom.picture) / 2
+        : geom.insetY;
     if (!near(left, LIST_CARD_INSET_X_PX) || Math.abs(top - wantTop) > 1) {
       out.push(
         `${c.label} picture sits ${left},${top} inside the row, not ${LIST_CARD_INSET_X_PX},${wantTop} (left, top)`,
@@ -1170,7 +1211,11 @@ export const LIST_SCREEN_AXIS_KEYS: readonly ListScreenAxisKey[] = [
   'rightInset',
 ];
 
-/** What the shell draws: the SCREEN_* constants at the phone or laptop gutter. Pure. */
+/**
+ * What the shell draws: the SCREEN_* constants at the phone or laptop gutter.
+ * The row's text starts after its picture and the 12 gap: 16 + 48 = 64 on a
+ * phone (the 36 picture), 24 + 60 = 84 on a laptop (the 48). Pure.
+ */
 export function listScreenAxisExpected(laptop: boolean): Record<ListScreenAxisKey, number> {
   const gutter = laptop ? SCREEN_GUTTER_LAPTOP : SCREEN_GUTTER_PHONE;
   return {
@@ -1179,7 +1224,7 @@ export function listScreenAxisExpected(laptop: boolean): Record<ListScreenAxisKe
     contentTop: SCREEN_CONTENT_TOP,
     // A heading's 16 step to its rows is the same 16 (Plan's list frame).
     rowTop: SCREEN_CONTENT_TOP,
-    textX: gutter + ROW_TEXT_START,
+    textX: gutter + (laptop ? ROW_TEXT_START : ROW_TEXT_START_PHONE),
     rightInset: gutter,
   };
 }

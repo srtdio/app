@@ -42,6 +42,12 @@ describe('date helpers', () => {
   it('formats a display label', () => {
     expect(formatDisplay('2026-06-16')).toBe('June 16, 2026');
   });
+
+  it('formats the short month form through time.ts', () => {
+    expect(formatDisplay('2026-10-25', true)).toBe('25 Oct 2026');
+    expect(formatDisplay('2026-10-19', true)).toBe('19 Oct 2026');
+    expect(formatDisplay('nope', true)).toBe('nope');
+  });
 });
 
 describe('dayCells', () => {

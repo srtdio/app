@@ -405,7 +405,10 @@ export function BankPickSheet(props: {
                     <IconStarFilled size={ICON_SIZE.inline} />
                   </span>
                 ) : null}
-                <span className="truncate text-base font-medium text-fg">{idea.title ?? ''}</span>
+                {/* Phone: an idea's title wraps to two lines; one line from 768. */}
+                <span className="min-w-0 truncate text-base font-medium text-fg max-md:line-clamp-2 max-md:whitespace-normal max-md:break-words">
+                  {idea.title ?? ''}
+                </span>
               </span>
               <span className="truncate text-sm text-fg-2">{ideaFormatLine(idea)}</span>
             </span>
@@ -463,7 +466,9 @@ export function BankPickSheet(props: {
           />
         }
       >
-        <div data-plan-from-bank="" className="flex flex-col gap-3 px-4 pb-4">
+        {/* Phone: the sheet's own 16 is the edge (rows, thumbs and the zero
+            line sit on it); from 768 the list keeps its extra 16. */}
+        <div data-plan-from-bank="" className="flex flex-col gap-3 pb-4 md:px-4">
           {body}
         </div>
       </Sheet>

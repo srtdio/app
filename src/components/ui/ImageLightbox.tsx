@@ -44,6 +44,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
+import { INK_LEADING, INK_TRAILING_LAST } from '@/components/ui/layout';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
@@ -541,17 +542,25 @@ function BackBar(props: {
   return (
     <div
       data-lightbox-back-bar=""
-      className={cn('relative flex shrink-0 items-center gap-1 px-1', SAFE_TOP_BAR_CLASS)}
+      // Phone (12 Nov 2026): the keys' 44 boxes sit 4 in, so their 20 glyph
+      // boxes start and end on 16; the ink slides onto the 16 edge (Back by
+      // INK_LEADING, the last key by INK_TRAILING_LAST) and the title starts
+      // on the 64 column (4 + 44 + 4 + 12).
+      className={cn(
+        'relative flex shrink-0 items-center gap-1 px-1',
+        SAFE_TOP_BAR_CLASS,
+        INK_TRAILING_LAST,
+      )}
     >
       <ViewerBackButton
         buttonRef={props.closeRef}
         onClick={props.onClose}
-        className={TOOLBAR_BUTTON}
+        className={cn(TOOLBAR_BUTTON, INK_LEADING)}
       />
       <p
         data-lightbox-title=""
         title={props.title}
-        className="min-w-0 flex-1 truncate text-base font-medium text-overlay-fg"
+        className="min-w-0 flex-1 truncate text-base font-medium text-overlay-fg max-md:ml-3"
       >
         {props.title}
       </p>
@@ -886,7 +895,8 @@ export function ImageLightbox({
               type="button"
               aria-label="Previous image"
               onClick={() => go(-1)}
-              className={cn(ARROW_BUTTON, 'left-2 z-raised')}
+              // Phone: the chip sits on the 16 edge; laptop 8, as before.
+              className={cn(ARROW_BUTTON, 'left-2 z-raised max-md:left-4')}
             >
               <IconChevronLeft size={ICON_SIZE.control} />
             </button>
@@ -894,7 +904,7 @@ export function ImageLightbox({
               type="button"
               aria-label="Next image"
               onClick={() => go(1)}
-              className={cn(ARROW_BUTTON, 'right-2 z-raised')}
+              className={cn(ARROW_BUTTON, 'right-2 z-raised max-md:right-4')}
             >
               <IconChevronRight size={ICON_SIZE.control} />
             </button>

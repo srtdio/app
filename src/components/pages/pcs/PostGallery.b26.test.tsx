@@ -123,8 +123,17 @@ describe('#26 gallery tools row', () => {
     const cls = (el: ReactElement | undefined) => (el?.props as { className?: string }).className;
     expect(cls(add)).toContain(LEADING_PULL);
     expect(cls(add)).toContain('px-3');
-    expect(cls(versions)).toContain(TRAILING_PULL);
+    // The trailing pull's margin; its phone ink slide is off here, since the
+    // text (not the clock glyph) is what ends on the edge.
+    expect(cls(versions)).toContain(TRAILING_PULL.split(' ')[0]);
+    expect(cls(versions)).toContain('max-md:[&>svg]:translate-x-0');
+    expect(cls(versions)).not.toContain('--ink-r');
     expect(cls(versions)).toContain('px-3');
+    // Phone: the approved lock's ink sits on the page edge (no 44 box, no pull).
+    const lockRow = renderToStaticMarkup(
+      galleryToolsRow(toolsModel({ canEdit: false, locked: true }))!,
+    );
+    expect(lockRow).toMatch(/data-gallery-lock=""[^>]*class="[^"]*max-md:ml-0 max-md:w-auto/);
     expect(cls(byData(tree, 'data-gallery-replace'))).not.toContain(LEADING_PULL);
   });
 

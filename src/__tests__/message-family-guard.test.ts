@@ -241,3 +241,44 @@ describe('message family: Catch up, Seen / Read by and the phone thread root (12
     expect(BUBBLE).not.toMatch(/rootPlace \? 'relative flex-col/);
   });
 });
+
+describe('message family: phone edges and columns (12 Nov 2026)', () => {
+  const THREAD = read('components/chat/MessageThread.tsx');
+
+  it('the conversation bar: back ink on 16, the photo on the 64 column; laptop untouched', () => {
+    // 16 gutter - 12 pull = the 44 box at 4, its 20 glyph box at 16 (the pull
+    // slides the ink onto 16); 4 + 44 + 4 + the bar's 12 gap = 64.
+    expect(THREAD).toContain(
+      "return layout === 'touch' && !selecting ? 'px-4' : sized(HEADER_PAD, layout);",
+    );
+    expect(THREAD).toMatch(/layout === 'touch' \? `\$\{LEADING_PULL\} mr-1` : undefined;/);
+    expect(THREAD.match(/className=\{threadBackKey\(layout\)\}/g)?.length).toBe(2);
+  });
+
+  it('a long name gives way on a phone; the time beside it is never cut', () => {
+    expect(BUBBLE).toContain(
+      "'block min-w-0 max-w-full truncate max-md:flex max-md:items-baseline'",
+    );
+    expect(BUBBLE).toContain("export const SENDER_NAME_GIVES = 'max-md:min-w-0 max-md:truncate';");
+    expect(BUBBLE).toMatch(
+      /data-sender-time=""\s+className=\{cn\('ml-2 text-fg-3 max-md:shrink-0'/,
+    );
+  });
+
+  it('the chat tip starts on 16 and wraps on a phone; "Got it" keeps its 44 box', () => {
+    const tip = read('components/chat/ThreadHoldTip.tsx');
+    expect(tip).toContain("layout === 'laptop' ? 'pl-3' : 'pl-1'");
+    expect(tip).toContain("cn('min-w-0 flex-1', layout === 'laptop' && 'truncate')");
+    expect(tip).toContain('className="min-w-11 shrink-0"');
+  });
+
+  it('thread strip and root head: "Reply in thread" and the root name start on 64', () => {
+    const rail = read('components/chat/ThreadRail.tsx');
+    // 16 + the 36 icon column + 12.
+    expect(rail).toContain("chat: { x: 'px-4', gap: 'gap-2 max-md:gap-3' }");
+    // 16 + the 40 root photo + 8.
+    expect(rail).toContain('className="flex min-w-0 items-center gap-3 max-md:gap-2"');
+    // The strip's last key: its ink ends on the 16 edge.
+    expect(rail).toContain("cn('flex shrink-0 items-center', TRAILING_PULL, INK_TRAILING_LAST)");
+  });
+});

@@ -13,6 +13,8 @@
 // Works outside a chat (the Plan tab, the bank idea route): the open-chat
 // parts are optional.
 
+import { PHONE_PAD_TIGHT } from '@/components/ui/layout';
+import { cn } from '@/lib/cn';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { bankIdeaSet, chatPlanItemShare, planShareWithClient, type Result } from '@srtdio/rpc';
@@ -410,7 +412,8 @@ export function IdeaShareFlow(props: {
               variant="primary"
               type="button"
               data-idea-share-show=""
-              className="md:order-3"
+              // Phone: 8 side padding, so the label stays whole in its half at 320.
+              className={cn(PHONE_PAD_TIGHT, 'md:order-3')}
               busy={busy}
               onClick={() => {
                 if (ask !== null && !busy) void showAndSend(ask.channel, ask.messageId);

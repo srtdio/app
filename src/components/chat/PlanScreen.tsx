@@ -86,7 +86,7 @@ import { postUpdate, type PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { SECTION_LABEL_INK, Text, TEXT_ROLE } from '@/components/ui/Text';
-import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
+import { CONTROL_IN_LINE, GUTTER, PHONE_PAD_TIGHT } from '@/components/ui/layout';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -2981,7 +2981,7 @@ const LINE_LABEL = `w-9 shrink-0 ${TEXT_ROLE.section}`;
 
 /**
  * The PLAN switch: "OK" and "Not OK" joined, each the shared 44px Button
- * (min 84px, 1px border-strong, bg-panel; the inner corners square so the two
+ * (min 80px from 768, 1px border-strong, bg-panel; the inner corners square so the two
  * read as one control). Reopened from the pill, the current answer is
  * highlighted (good-soft / bad-soft). Not full width.
  */
@@ -2993,7 +2993,9 @@ export function PlanSwitch(props: {
   onOk: () => void;
   onNotOk: () => void;
 }): ReactElement {
-  const segment = 'min-w-20 border';
+  // Phone: 8 side padding and no 80 floor, so "PLAN", OK and Not OK fit one
+  // line at 320 with both labels whole; from 768 the segments are unchanged.
+  const segment = cn('border md:min-w-20', PHONE_PAD_TIGHT);
   return (
     <span
       role="group"
@@ -3164,7 +3166,9 @@ function PlanStatusLines(props: {
         <div
           data-plan-line="plan"
           className={cn(
-            'flex min-h-11 items-center gap-3',
+            // Phone: should the control ever not fit, it wraps under the label
+            // instead of running off the screen.
+            'flex min-h-11 items-center gap-3 max-md:flex-wrap',
             control.kind === 'text' && CONTROL_IN_LINE,
           )}
         >

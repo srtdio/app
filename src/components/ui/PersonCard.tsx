@@ -262,8 +262,14 @@ export function PersonMessageCard(props: PersonMessageCardProps): ReactElement {
           {props.showHeader ? (
             <p className="truncate text-base font-medium text-fg">{data.name}</p>
           ) : null}
-          {/* Reserved line: an unheld username or role fills in place, no jump. */}
-          <p className="h-5 truncate py-1 text-sm text-fg-2" data-person-meta="">
+          {/* Reserved line: an unheld username or role fills in place, no jump.
+              Under 768 it is the row's only line: its own 16 line box (no 4 pad
+              pushing the words 2 under the photo's centre), so the words and
+              the photo's initials share one centre line. */}
+          <p
+            className="h-5 truncate py-1 text-sm text-fg-2 max-md:h-4 max-md:py-0"
+            data-person-meta=""
+          >
             {meta}
           </p>
         </div>

@@ -16,7 +16,7 @@ import { createPortal } from 'react-dom';
 import { buttonClass } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconAlertTriangle, IconChevronLeft, ICON_SIZE } from '@/components/ui/icons';
-import { LEADING_PULL } from '@/components/ui/layout';
+import { BAR_TITLE_AFTER_KEY, LEADING_PULL } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { dimFor, riseIn, riseOut, usePresence } from '@/lib/motion';
@@ -150,7 +150,10 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             </IconButton>
             <h2
               id="unsafe-link-title"
-              className="flex min-w-0 flex-1 items-center gap-2 text-lg font-semibold text-warn-ink"
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-2 text-lg font-semibold text-warn-ink',
+                BAR_TITLE_AFTER_KEY,
+              )}
             >
               <IconAlertTriangle size={ICON_SIZE.tray} />
               Check before opening

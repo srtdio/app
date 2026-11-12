@@ -163,7 +163,8 @@ interface SelectBarProps {
 
 /**
  * The bottom bar while selecting: Cancel, "N selected", then one 44
- * IconButton per action (Delete last, bad ink). Fixed above the tab bar on
+ * IconButton per action (Delete last, bad ink; on a phone the actions take
+ * their own line when the bar is full). Fixed above the tab bar on
  * phone (its inset measured, the safe area kept when nothing is under it);
  * the same bar on laptop. A spacer keeps the last card uncovered. It comes in
  * on translateY only (mv-slide); instant under Reduce Motion.
@@ -182,7 +183,8 @@ export function SelectBar({
   const inset = useBottomInset(ref);
   return (
     <>
-      <div aria-hidden="true" className="h-20" />
+      {/* Phone: room for the bar at its tallest (the actions on their own lines). */}
+      <div aria-hidden="true" className="h-20 max-md:h-40" />
       <div
         ref={ref}
         {...hooks}
@@ -193,35 +195,54 @@ export function SelectBar({
         style={{ bottom: inset }}
         className={cn(
           'lit-dock fixed inset-x-0 z-dock flex items-center gap-1 border-t bg-panel pt-3',
+          // Phone: nothing is cut or covered. When Cancel, the count, the
+          // extra and the actions do not fit one line, the actions drop to
+          // their own line(s), on the trailing edge. From 768: one line.
+          'max-md:flex-wrap',
           'pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]',
           inset > 0 ? 'pb-3' : 'pb-[max(12px,env(safe-area-inset-bottom))]',
           MOVE_CLASS.slide,
         )}
       >
-        <Button variant="ghost" type="button" data-select-bar-cancel="" onClick={onCancel}>
+        <Button
+          variant="ghost"
+          type="button"
+          data-select-bar-cancel=""
+          onClick={onCancel}
+          className="shrink-0"
+        >
           Cancel
         </Button>
         <span
           data-select-bar-count=""
           aria-live="polite"
-          className={textRole('heading', 'min-w-0 flex-1 truncate')}
+          // Phone: a count is never cut (its own width is its floor).
+          className={textRole('heading', 'min-w-0 flex-1 truncate max-md:min-w-max')}
         >
           {selectCountLabel(count)}
         </span>
         {extra}
-        {actions.map((action) => (
-          <IconButton
-            key={action.id}
-            label={action.label}
-            data-select-bar-action={action.id}
-            {...action.hooks}
-            disabled={action.disabled === true || count === 0}
-            className={action.tone === 'bad' ? 'text-bad hover:text-bad' : undefined}
-            onClick={action.onSelect}
-          >
-            <action.icon size={ICON_SIZE.control} />
-          </IconButton>
-        ))}
+        {/* From 768 the group is not a box (contents): the keys sit in the bar
+            as before. Phone: one group, 44 keys touching, wrapping from the
+            trailing edge. */}
+        <div
+          data-select-bar-actions=""
+          className="flex items-center justify-end max-md:ml-auto max-md:flex-wrap md:contents"
+        >
+          {actions.map((action) => (
+            <IconButton
+              key={action.id}
+              label={action.label}
+              data-select-bar-action={action.id}
+              {...action.hooks}
+              disabled={action.disabled === true || count === 0}
+              className={action.tone === 'bad' ? 'text-bad hover:text-bad' : undefined}
+              onClick={action.onSelect}
+            >
+              <action.icon size={ICON_SIZE.control} />
+            </IconButton>
+          ))}
+        </div>
       </div>
     </>
   );

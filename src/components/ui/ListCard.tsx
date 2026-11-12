@@ -23,8 +23,9 @@ import { useSelectGesture, type SelectGesture } from '@/components/ui/useLongPre
 export type ListCardHooks = { [hook: `data-${string}`]: string | undefined };
 
 /**
- * The picture slot (48x48, 40x40 in Compact; left, vertically centred, 12 to the text):
- * - person: the person's photo, a rounded square (ui/Avatar 'card', 48 / 40; initials on their colour when none);
+ * The picture slot (48x48 from 768, vertically centred; 36x36 under 768, its
+ * top on the title line's top; left, 12 to the text):
+ * - person: the person's photo, a rounded square (ui/Avatar 'card', 48 / 36; initials on their colour when none);
  *   `node` replaces the Avatar with a caller's square filling the slot;
  * - image: a caller's picture (a thumbnail, a group photo or mark) in the rounded-picture (10) squircle;
  * - icon: a 20 glyph in fg-2 on the panel-2 squircle (a brief, an activity kind);
@@ -79,8 +80,8 @@ export interface ListCardProps {
   previewHooks?: ListCardHooks;
   /**
    * Activity only (10 Nov 2026): 2 when the preview wraps to two lines (or
-   * more, unfolded). The row grows by one line (72 + 20) and the
-   * preview wraps instead of truncating; the caller cuts the text. Default 1:
+   * more, unfolded). The row grows by one line (72 + 20; 60 + 20 under 768)
+   * and the preview wraps instead of truncating; the caller cuts the text. Default 1:
    * every other list is unchanged.
    */
   previewLines?: 1 | 2;
@@ -141,18 +142,24 @@ export interface ListCardProps {
  * The row frame (flat look, 7 Nov 2026): no border, no radius, no lit height.
  * It bleeds -mx-4 / px-4 so the selected, chosen and pressed fill runs edge to
  * edge on phone, never boxed inside the 16 gutter. Selected: the panel-2 fill.
- * One size: 12 + 48 + 12 = 72 (ROW_INSET, ROW_PICTURE, ROW_HEIGHT in ui/layout).
+ * From 768: 12 + 48 + 12 = 72 (ROW_INSET, ROW_PICTURE, ROW_HEIGHT in ui/layout).
+ * Under 768 (12 Nov 2026): 8 + 44 + 8 = 60 (ROW_INSET_PHONE, ROW_HEIGHT_PHONE):
+ * the two 20 lines and their 4 fill the row, the 36 picture (ROW_PICTURE_PHONE)
+ * hangs from the title line's top.
  */
 export function listCardFrame(selected = false): string {
-  return cn('relative -mx-4 flex h-18 min-w-0 px-4 py-3', selected && 'bg-panel-2');
+  return cn('relative -mx-4 flex h-15 min-w-0 px-4 py-2 md:h-18 md:py-3', selected && 'bg-panel-2');
 }
 
 /**
- * The inner row: picture then text, 12 apart, vertically centred (the frame
- * carries the 16 side padding). No text selection, callout or magnifier on a
- * hold (iOS long-press selects).
+ * The inner row: picture then text, 12 apart (the frame carries the 16 side
+ * padding). From 768 vertically centred; under 768 top-aligned, so the
+ * picture's top is the title line's top (8 from the row top) on every row,
+ * one line or more. No text selection, callout or magnifier on a hold (iOS
+ * long-press selects).
  */
-export const LIST_CARD_BODY = 'pointer-events-none relative flex min-w-0 flex-1 items-center gap-3';
+export const LIST_CARD_BODY =
+  'pointer-events-none relative flex min-w-0 flex-1 items-start gap-3 md:items-center';
 
 /**
  * The solid row's look: ink fill, accent-fg text, the laptop hover step, the
@@ -168,11 +175,24 @@ export const LIST_CARD_SOLID =
 /** The solid row's picture tile: bg-panel with an fg icon (rounded-picture from the box). */
 export const LIST_CARD_SOLID_TILE = 'bg-panel text-fg';
 
-/** The count slot: the row's right edge, vertically centred by the body. */
-export const LIST_CARD_COUNT = 'flex shrink-0 items-center';
+/**
+ * The solid row's tile under 768: centred in the 60 row (12 above and below
+ * the 36), not hung from the title line. A solid row is a button-like fill
+ * with a centred count pill, so a tile 8 from the top and 16 from the bottom
+ * would look dropped; centred it sits like the pill. From 768 the body
+ * centres every picture, so this changes nothing there.
+ */
+export const LIST_CARD_SOLID_PICTURE = 'self-center';
 
-/** The picture box: 48 (ROW_PICTURE), never shrinks. */
-export const LIST_CARD_PICTURE = 'relative flex h-12 w-12 shrink-0 items-center justify-center';
+/**
+ * The count slot: the row's right edge, vertically centred in the row (its
+ * own self-center: under 768 the body is top-aligned).
+ */
+export const LIST_CARD_COUNT = 'flex shrink-0 items-center self-center';
+
+/** The picture box: 48 from 768 (ROW_PICTURE), 36 under it (ROW_PICTURE_PHONE); never shrinks. */
+export const LIST_CARD_PICTURE =
+  'relative flex h-9 w-9 shrink-0 items-center justify-center md:h-12 md:w-12';
 
 /** The rounded-picture (10) squircle a non-person picture sits in; flat. */
 const PICTURE_BOX = 'overflow-hidden rounded-picture';
@@ -194,11 +214,12 @@ export const LIST_CARD_PREVIEW = textRole('secondary', 'min-w-0 flex-1 truncate'
 
 /**
  * previewLines 2 (Activity): the row grows with its preview, never under the
- * row height; line 2 is two lines tall at least, so the row is 72 + 20 = 92:
- * 44 for the preview line under the 20 title line and its 4 step.
+ * row height; line 2 is two lines tall at least, so the row is 72 + 20 = 92
+ * from 768 (44 for the preview line under the 20 title line and its 4 step)
+ * and 60 + 20 = 80 under 768 (two 20 lines of the 15 preview: 8 + 20 + 4 + 40 + 8).
  */
-export const LIST_CARD_FRAME_2 = 'h-auto min-h-18';
-export const LIST_CARD_LINE2_2 = 'flex min-h-11 min-w-0 items-start gap-2';
+export const LIST_CARD_FRAME_2 = 'h-auto min-h-15 md:h-auto md:min-h-18';
+export const LIST_CARD_LINE2_2 = 'flex min-h-10 min-w-0 items-start gap-2 md:min-h-11';
 // The secondary role's look without its truncate (a cut preview wraps; it never ellipsizes in CSS).
 export const LIST_CARD_PREVIEW_2 = 'min-w-0 flex-1 break-words text-md font-normal text-fg-2';
 
@@ -214,9 +235,10 @@ export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full 
 
 /**
  * Rows a card shows under itself (Activity's one line per notification) start on the
- * card's text column: the picture plus its 12 gap (48 + 12 = 60, ROW_TEXT_START).
+ * card's text column: the picture plus its 12 gap (48 + 12 = 60, ROW_TEXT_START;
+ * 36 + 12 = 48 under 768, ROW_TEXT_START_PHONE).
  */
-export const LIST_CARD_SUB_INSET = 'pl-15';
+export const LIST_CARD_SUB_INSET = 'pl-12 md:pl-15';
 
 /** The list the rows stack in: rows touching, no divider (phone, and the chat list pane). */
 export const LIST_CARD_STACK = 'flex flex-col';
@@ -284,7 +306,11 @@ function Picture({
 }): ReactElement {
   const kind = picture.kind;
   return (
-    <span data-list-card-picture={kind} {...hooks} className={LIST_CARD_PICTURE}>
+    <span
+      data-list-card-picture={kind}
+      {...hooks}
+      className={cn(LIST_CARD_PICTURE, solid && LIST_CARD_SOLID_PICTURE)}
+    >
       <span
         data-list-card-picture-box=""
         className={cn(
@@ -339,14 +365,15 @@ function clickCover(event: MouseEvent<HTMLElement>): void {
  * The one list row (Pipeline, Briefs, Assets, the Chat list, Activity, the
  * Plan tab and Bank), flat Slack style (7 Nov 2026): no border, no radius, rows
  * touching with no divider, the whole row one tap target that sinks when
- * pressed. Left: the 40 picture, vertically centred. Right, two lines:
+ * pressed. Left: the picture (48 centred from 768; 36 on the title line's top
+ * under 768). Right, two lines:
  *   1. title (heading, bold unread, regular read, one line) ... time (meta,
  *      right, the bad token when late);
  *   2. preview (secondary, one line) then the one grey Tag then the unread dot;
  *      with no preview the tag sits on the right end, under the time.
  * No third line and no ⋮: a card's actions live on its list's select bar
- * (long-press / right-click selects). Every row is exactly ROW_HEIGHT (ui/layout); line 2 stays even when it
- * is empty.
+ * (long-press / right-click selects). Every row is exactly ROW_HEIGHT from 768
+ * and ROW_HEIGHT_PHONE under it (ui/layout); line 2 stays even when it is empty.
  */
 export function ListCard({
   picture,

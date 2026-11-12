@@ -15,7 +15,7 @@ import {
 // hairline. Floating layers (lit-float, lit-overlay) keep their soft shadow:
 // the flat block never names them. List rows (ui/ListCard) are flat frames:
 // no border, radius, lit height or clip, bled -mx-4 / px-4, the 72 height
-// (h-18).
+// (md:h-18; 60 under 768, h-15).
 const CSS = readFileSync(fileURLToPath(new URL('../index.css', import.meta.url)), 'utf8');
 
 const FLAT_OPEN = /(^|\n):root,\s*\n?\s*\.dark \{/;
@@ -141,12 +141,12 @@ describe('flat look: the list row frame (ui/ListCard)', () => {
     ['listCardFrame()', listCardFrame()],
     ['listCardFrame(true)', listCardFrame(true)],
   ] as const) {
-    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4, px-4, h-18`, () => {
+    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4, px-4, h-15 md:h-18`, () => {
       expect(frame).not.toMatch(/border/);
       expect(frame).not.toMatch(/rounded/);
       expect(frame).not.toMatch(/lit-/);
       expect(frame).not.toContain('overflow-hidden');
-      expect(tokens(frame)).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-18']));
+      expect(tokens(frame)).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-15', 'md:h-18']));
     });
   }
 

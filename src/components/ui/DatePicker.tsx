@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { centreOf, menuMoves } from '@/components/ui/popover-classes';
 import { useDismissLayer, useModalScopeNode } from '@/lib/modal-focus';
-import { formatSpokenDate } from '@/lib/time';
+import { formatDateWithYear, formatSpokenDate } from '@/lib/time';
 import { usePresence } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { Button, ClearButton } from '@/components/ui/Button';
@@ -80,10 +80,15 @@ export function monthGrid(year: number, monthIndex: number): (number | null)[] {
   return cells;
 }
 
-/** Human-readable label for the trigger (e.g. "June 16, 2026"). */
-export function formatDisplay(value: string): string {
+/**
+ * Human-readable label for the trigger: "June 16, 2026", or with `short` the
+ * time.ts short month form "16 Jun 2026" (two pickers side by side, where the
+ * long form does not fit).
+ */
+export function formatDisplay(value: string, short = false): string {
   const parsed = parseISO(value);
   if (parsed === null) return value;
+  if (short) return formatDateWithYear(value);
   return `${MONTHS[parsed.monthIndex]} ${parsed.day}, ${parsed.year}`;
 }
 
@@ -225,6 +230,8 @@ interface DatePickerProps {
   actions?: boolean;
   /** The trigger's id (a Field label points at it). */
   id?: string;
+  /** The trigger shows the short month form "25 Oct 2026". Default: "October 25, 2026". */
+  short?: boolean;
 }
 
 export function DatePicker({
@@ -236,6 +243,7 @@ export function DatePicker({
   min,
   actions = false,
   id,
+  short = false,
 }: DatePickerProps): ReactElement {
   const [open, setOpen] = useState(false);
   const now = new Date();
@@ -340,7 +348,7 @@ export function DatePicker({
             value !== '' ? 'text-fg' : 'text-fg-3',
           )}
         >
-          {value !== '' ? formatDisplay(value) : placeholder}
+          {value !== '' ? formatDisplay(value, short) : placeholder}
         </span>
       </button>
 

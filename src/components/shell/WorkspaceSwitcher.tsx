@@ -314,7 +314,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
       >
         {/* The one header bar (ui/HeaderBar, 56): the "<" back leading (the
             part applies the leading pull), then the title. */}
-        <HeaderBar compact title={title} onBack={requestClose} />
+        <HeaderBar compact title={title} titleWraps onBack={requestClose} />
 
         {mode === 'list' ? (
           <div className="flex flex-col overflow-y-auto p-1">

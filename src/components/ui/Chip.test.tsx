@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import {
   Chip,
   CHIP_FACE_SIZE,
+  CHIP_HIT,
+  CHIP_LABEL,
   CHIP_PICKED_EDGE,
   CHIP_REST_EDGE,
   chipStateAria,
@@ -138,6 +140,15 @@ describe('Chip visible 36, 44 tap box', () => {
     expect(renderToStaticMarkup(<Chip label="Open" size="tap" />)).toMatch(
       /data-chip-face=""[^>]*justify-center/,
     );
+  });
+
+  it('under 768 the tap box never shrinks in its row, so the label stays whole (one line)', () => {
+    expect(CHIP_HIT.split(' ')).toEqual(expect.arrayContaining(['max-md:shrink-0', 'max-w-full']));
+    // Phone only: from 768 up the box keeps its default shrink.
+    expect(CHIP_HIT.split(' ')).not.toContain('shrink-0');
+    expect(CHIP_LABEL.split(' ')).toContain('whitespace-nowrap');
+    const html = renderToStaticMarkup(<Chip label="Posts & approvals" selected={false} />);
+    expect(/<button[^>]*>/.exec(html)?.[0] ?? '').toContain('max-md:shrink-0');
   });
 
   it('the add chip is a plain "+" pill: the rest hairline, fg ink, no dashed box, flat (no lit-chip)', () => {
