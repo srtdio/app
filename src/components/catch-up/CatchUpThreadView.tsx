@@ -25,6 +25,7 @@ import {
   type RootActions,
 } from '@/components/chat/ThreadRail';
 import { cn } from '@/lib/cn';
+import type { ReactionsApi } from '@/lib/reactions/use-reactions';
 import { threadWhen } from '@/lib/time';
 import {
   CatchUpRowReactions,
@@ -55,7 +56,9 @@ export function CatchUpThreadView(props: {
   /** The strip's keys on the root (to-do, forward, more): the one message action layer. */
   actions?: RootActions | undefined;
   /** Long-press / right-click a reply: the same layer. */
-  onHold?: ((row: CatchUpMessageRow, from: HTMLElement) => void) | undefined;
+  onHold?:
+    | ((row: CatchUpMessageRow, from: HTMLElement, reactions: ReactionsApi) => void)
+    | undefined;
 }): ReactElement {
   const replies = props.thread !== null && props.thread !== 'error' ? props.thread.replies : [];
   const source = props.reactionsOf;
@@ -121,7 +124,9 @@ export function CatchUpThreadView(props: {
                 threadTime
                 reactions={rowReactions(row.id)}
                 onHold={
-                  props.onHold !== undefined ? (from) => props.onHold?.(row, from) : undefined
+                  props.onHold !== undefined
+                    ? (from) => props.onHold?.(row, from, reactions)
+                    : undefined
                 }
               />
             ))}

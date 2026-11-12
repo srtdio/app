@@ -367,6 +367,7 @@ import {
   type RowHold,
   createRowHold,
   DateLine,
+  swipeTapOpens,
 } from '@/components/chat/MessageBubble';
 
 // MessageBubble and its pieces live in MessageBubble.tsx; re-exported here so
@@ -1560,6 +1561,13 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       onReply: () => latest.current.onSwipeReply(latest.current.message),
       onLeft: () => latest.current.onSwipeDelete?.(latest.current.message),
       takes: (side) => side !== 'right' || latest.current.replyBlocked !== true,
+      // A tap that rolled sideways locked as a swipe: it still opens the thread.
+      onTap: (target) => {
+        const p = latest.current;
+        if (p.selection !== undefined || p.selectingText === true) return;
+        if (p.replyBlocked === true || p.message.deleted === true) return;
+        if (swipeTapOpens(target, bubbleRef.current)) p.onTapOpenThread(p.message);
+      },
       canTrigger: (side) => {
         const ok = rowSwipeCanTrigger(side, latest.current.message, latest.current.canSwipeDelete);
         swipeIconShownRef.current = ok;

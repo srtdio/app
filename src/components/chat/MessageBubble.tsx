@@ -1321,6 +1321,18 @@ export function bubbleTapOpens(input: {
   return picked === undefined || picked === '';
 }
 
+/**
+ * A tap the swipe core recovered (a finger that rolled sideways; no click
+ * follows): it opens the thread when it landed on the bubble itself, not on a
+ * kept child (link, media, card, chip, control).
+ */
+export function swipeTapOpens(target: EventTarget | null, bubble: Element | null): boolean {
+  if (bubble === null || !(target instanceof Node) || !bubble.contains(target)) return false;
+  const el = target instanceof Element ? target : target.parentElement;
+  const keep = el?.closest(BUBBLE_TAP_KEEP) ?? null;
+  return keep === null || keep === bubble;
+}
+
 export function MessageBubble(props: {
   message: ThreadMessage;
   /** Notes only: a saved copy's "Saved from" line replaces "Forwarded". */

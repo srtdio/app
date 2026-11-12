@@ -48,7 +48,7 @@ import { entityHref } from '@/components/pages/activity/data';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { personAvatar, personName } from '@/lib/people-names';
 import { createComment } from '@srtdio/comments';
-import { planItemCommentCreate } from '@srtdio/rpc';
+import { sendPlanComment } from '@/lib/chat/plans';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { newMessageId } from '@/lib/chat/message-id';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
@@ -163,7 +163,7 @@ export function cardReplyTarget(item: CatchUpItem): CatchUpReplyTarget {
         parentCommentId: null,
       };
     default:
-      return { kind: 'plan-comment', itemId: item.entityId };
+      return { kind: 'plan-comment', itemId: item.entityId, parentCommentId: null };
   }
 }
 
@@ -242,7 +242,7 @@ interface Drag {
 interface OpenThread {
   cardKey: string;
   root: CatchUpMessageRow;
-  kind: 'chat' | 'comment';
+  kind: 'chat' | 'comment' | 'plan';
   target: CatchUpReplyTarget;
   data: CatchUpThread | null | 'error';
 }
@@ -311,6 +311,18 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     side,
     timeZone: props.timeZone,
     linkOf: (item) => entityHref(item.lead, props.workspaceKey ?? null, side),
+    // Reply in the long-press sheet: the thread opens with its box focused
+    // (inside an open thread, the box takes focus).
+    onReply: (target) => {
+      if (threadOpenRef.current) threadInputRef.current?.focus({ preventScroll: true });
+      else
+        openRowThreadRef.current(
+          target.row.kind === 'message' && target.row.threadRoot !== undefined
+            ? target.row.threadRoot
+            : target.row,
+          true,
+        );
+    },
   });
 
   // Open: phone rises from the bottom, laptop grows from the centre (no fade).
@@ -411,20 +423,28 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
   // A new card starts with an empty box (the old card's draft stays behind).
   useEffect(() => setDraft(EMPTY_DRAFT), [current?.key]);
 
-  // The thread sheet: rises (Y only) over the card on a phone, instant on a
-  // laptop; it paints at once (Bone rows) and its reply field takes focus in
-  // the same tap (iOS opens the keyboard only then).
+  // The thread: on a phone a full-screen window over the card (12 Nov 2026,
+  // Slack way: no scrim, starts at the top, the keyboard stays down until the
+  // box is tapped; Reply from the long-press sheet focuses the box); on a
+  // laptop the sheet as before, its field focused. It paints at once (Bone
+  // rows); focus lands in the same tap (iOS opens the keyboard only then).
   const openThread = useCallback(
-    (root: CatchUpMessageRow, kind: 'chat' | 'comment', target: CatchUpReplyTarget): void => {
+    (
+      root: CatchUpMessageRow,
+      kind: 'chat' | 'comment' | 'plan',
+      target: CatchUpReplyTarget,
+      focus = false,
+    ): void => {
       if (current === null) return;
       flushSync(() => setThread({ cardKey: current.key, root, kind, target, data: null }));
-      threadInputRef.current?.focus({ preventScroll: true });
+      if (laptop || focus) threadInputRef.current?.focus({ preventScroll: true });
       dropTip();
       void readCatchUpThread(supabase, {
         workspaceId,
         kind,
         root,
-        channelId: current.kind === 'chat-main' ? current.entityId : null,
+        channelId:
+          current.kind === 'chat-main' || current.kind === 'chat-thread' ? current.entityId : null,
       }).then((data) =>
         setThread((prev) =>
           prev !== null && prev.root.id === root.id ? { ...prev, data: data ?? 'error' } : prev,
@@ -432,30 +452,14 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [current, workspaceId],
+    [current, workspaceId, laptop],
   );
-  useLayoutEffect(() => {
-    if (thread !== null && thread.data === null && !laptop) riseIn(threadRef.current);
-    // Only when a thread opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.root.id]);
-  const closeThread = useCallback(
-    (then?: () => void): void => {
-      const finish = (): void => {
-        setThread(null);
-        then?.();
-      };
-      if (laptop) {
-        finish();
-        return;
-      }
-      const played = riseOut(threadRef.current);
-      if (played.instant) finish();
-      else void played.done.then(finish);
-    },
-    [laptop],
-  );
-  // Phone system Back closes the sheet: one history step.
+  // The window (phone) and the sheet (laptop) open and close in place.
+  const closeThread = useCallback((then?: () => void): void => {
+    setThread(null);
+    then?.();
+  }, []);
+  // Phone system Back closes the window: one history step.
   useHistoryStep(!laptop && thread !== null, 'catchUpThread', () => closeThread());
 
   const retryThread = (): void => {
@@ -463,6 +467,62 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     const { root, kind, target } = thread;
     openThread(root, kind, target);
   };
+
+  // Where a tapped row's thread lives on the current card. A chat-thread card
+  // has one thread: any row opens it (its root). Plan items and Bank ideas
+  // read plan_item_comments replies and send through plan_item_comment_send.
+  const openRowThread = (row: CatchUpMessageRow, focus = false): void => {
+    if (current === null) return;
+    const raw = bodies.get(current.key);
+    const ready = raw !== undefined && raw !== 'skip' && raw !== 'error' ? raw : null;
+    switch (current.kind) {
+      case 'chat-main':
+        openThread(
+          row,
+          'chat',
+          { kind: 'chat', channelId: current.entityId, threadRootId: row.id },
+          focus,
+        );
+        return;
+      case 'chat-thread': {
+        const root = ready?.cardRoot ?? row;
+        openThread(
+          root,
+          'chat',
+          {
+            kind: 'chat',
+            channelId: current.entityId,
+            threadRootId: current.threadRootId ?? root.id,
+          },
+          focus,
+        );
+        return;
+      }
+      case 'post':
+      case 'brief':
+        openThread(
+          row,
+          'comment',
+          {
+            kind: 'comment',
+            entityType: current.kind,
+            entityId: current.entityId,
+            parentCommentId: row.id,
+          },
+          focus,
+        );
+        return;
+      default:
+        openThread(
+          row,
+          'plan',
+          { kind: 'plan-comment', itemId: current.entityId, parentCommentId: row.id },
+          focus,
+        );
+    }
+  };
+  const openRowThreadRef = useRef(openRowThread);
+  openRowThreadRef.current = openRowThread;
 
   // Keys: left Keep unread, right Mark as read (laptop); Escape closes the
   // menu (its own handler), then the thread, then catch up.
@@ -632,11 +692,14 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
               ...(files.length > 0 ? { attachment_asset_ids: files } : {}),
               trace_id: traceId,
             }).then((res) => res.ok)
-          : planItemCommentCreate(supabase, {
-              p_item_id: target.itemId,
-              p_body: send.text,
-              p_visibility: 'everyone',
-              p_trace_id: traceId,
+          : // Plan item and Bank idea: a main comment or a reply in its thread.
+            sendPlanComment(supabase, {
+              itemId: target.itemId,
+              parentId: target.parentCommentId,
+              body: send.text,
+              visibility: 'everyone',
+              attachmentVersionIds: [],
+              traceId,
             }).then((res) => res.ok);
     void outcome.then((ok) => {
       if (!ok) logger.warn('catch-up: reply not sent', { trace_id: traceId, key: sentKey });
@@ -849,23 +912,12 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
                 ? { text: tipText(wordsFamily(current.kind), laptop), onDismiss: dropTip }
                 : null
             }
-            onHoldMessage={(row, from) => actions.hold({ item: current, row }, from)}
+            onHoldMessage={(row, from, reactions) =>
+              actions.hold({ item: current, row, reactions }, from)
+            }
             onRetrySend={(id) => retrySend(key, id)}
             onRetryLoad={() => retryLoad(current)}
-            onOpenThread={(root) =>
-              openThread(
-                root,
-                current.kind === 'chat-main' ? 'chat' : 'comment',
-                current.kind === 'chat-main'
-                  ? { kind: 'chat', channelId: current.entityId, threadRootId: root.id }
-                  : {
-                      kind: 'comment',
-                      entityType: current.kind === 'brief' ? 'brief' : 'post',
-                      entityId: current.entityId,
-                      parentCommentId: root.id,
-                    },
-              )
-            }
+            onOpenThread={(root) => openRowThread(root)}
             onOpenPoint={(pointId, row) => {
               if (row.kind !== 'points') return;
               const point = row.points.find((p) => p.id === pointId);
@@ -908,8 +960,8 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             }}
           />
         </div>
-        {inThread ? (
-          // The scrim covers the whole page (the top bar too); a tap closes the sheet.
+        {inThread && laptop ? (
+          // Laptop: the scrim covers the whole page (the top bar too); a tap closes the sheet.
           <div
             aria-hidden="true"
             data-catch-up-scrim=""
@@ -917,16 +969,63 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             onClick={() => closeThread()}
           />
         ) : null}
+        {inThread && !laptop && thread !== null ? (
+          // Phone (12 Nov 2026, Slack way): a full-screen window over the card,
+          // no scrim, no rounded top; "<" (and system Back) returns to the card.
+          <div
+            data-catch-up-thread-window=""
+            className="absolute inset-0 z-nav flex flex-col bg-bg pb-[env(safe-area-inset-bottom)]"
+          >
+            <div className={CATCH_UP_BAR_CLASS}>
+              <IconButton
+                label="Back to the card"
+                data-catch-up-thread-back=""
+                onClick={() => closeThread()}
+                className={CATCH_UP_ROUND_KEY}
+              >
+                <IconChevronLeft size={ICON_SIZE.control} />
+              </IconButton>
+              <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+                <Text role="label" as="h2" data-catch-up-thread-title="">
+                  Thread
+                </Text>
+                <Text role="secondary" className="max-w-full truncate text-fg-3">
+                  {menuTitle()}
+                </Text>
+              </div>
+              <span aria-hidden="true" className="w-12 shrink-0" />
+            </div>
+            <CatchUpThreadView
+              root={thread.root}
+              thread={thread.data}
+              sent={sent.get(threadKey) ?? []}
+              selfName={props.selfName}
+              timeZone={props.timeZone}
+              reply={replyFor(
+                thread.target,
+                threadKey,
+                replyHint(current, true, thread.root.author.name),
+              )}
+              onRetryLoad={retryThread}
+              onRetrySend={(id) => retrySend(threadKey, id)}
+              reactionsOf={current}
+              actions={actions.rootActions({ item: current, row: thread.root })}
+              onHold={(row, from, reactions) =>
+                actions.hold({ item: current, row, reactions, inThread: true }, from)
+              }
+            />
+          </div>
+        ) : null}
         <div
           ref={threadRef}
-          data-catch-up-thread-sheet={inThread ? '' : undefined}
+          data-catch-up-thread-sheet={inThread && laptop ? '' : undefined}
           className={
-            inThread
+            inThread && laptop
               ? 'catch-up-card absolute inset-x-0 bottom-0 top-16 z-nav flex flex-col rounded-t-2xl border-t'
               : 'contents'
           }
         >
-          {inThread && thread !== null ? (
+          {inThread && laptop && thread !== null ? (
             <>
               {/* Phone: the round key sits on the sheet's 16 edge; laptop: 8, as before. */}
               <div className="flex h-14 shrink-0 items-center gap-2 px-4 md:px-2">
@@ -963,15 +1062,17 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
                 onRetrySend={(id) => retrySend(threadKey, id)}
                 reactionsOf={current}
                 actions={actions.rootActions({ item: current, row: thread.root })}
-                onHold={(row, from) => actions.hold({ item: current, row }, from)}
+                onHold={(row, from, reactions) =>
+                  actions.hold({ item: current, row, reactions, inThread: true }, from)
+                }
               />
             </>
           ) : null}
-          {!phoneTyping ? (
+          {!phoneTyping && (laptop || !inThread) ? (
             <div
               data-catch-up-actions=""
               className={cn(
-                'grid shrink-0 grid-cols-2 gap-3 pb-[max(16px,env(safe-area-inset-bottom))]',
+                'grid shrink-0 grid-cols-2 gap-4 pb-[max(16px,env(safe-area-inset-bottom))]',
                 CATCH_UP_EDGE,
               )}
             >
@@ -979,6 +1080,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
                 type="button"
                 variant="secondary"
                 data-catch-up-keep=""
+                className="h-12"
                 disabled={flying}
                 onClick={() => decide('keep')}
               >
@@ -993,6 +1095,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
                 type="button"
                 variant="primary"
                 data-catch-up-read=""
+                className="h-12"
                 disabled={flying}
                 {...allRead.handlers}
                 onContextMenu={(event) => event.preventDefault()}

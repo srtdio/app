@@ -134,15 +134,30 @@ const q = (sel: string): Element | null => document.querySelector(sel);
 const block = (id: string): Element | null => q(`[data-threads-block="${id}"]`);
 
 describe('Threads list screen', () => {
-  it('unread block: New line, Mark as read, Reply; read block: Reply only', () => {
+  it('unread block: New line, Mark as read, Reply; a read thread never shows', () => {
     mount([thread('r1', true), thread('r2', false)]);
     expect(block('r1')?.querySelector('[data-new-line]')).not.toBeNull();
     expect(block('r1')?.querySelector('[data-threads-mark-read]')).not.toBeNull();
     expect(block('r1')?.querySelector('[data-threads-reply]')).not.toBeNull();
-    expect(block('r2')?.querySelector('[data-new-line]')).toBeNull();
-    expect(block('r2')?.querySelector('[data-threads-mark-read]')).toBeNull();
-    expect(block('r2')?.querySelector('[data-threads-reply]')).not.toBeNull();
+    expect(block('r2')).toBeNull();
     expect(q('[data-threads-unread]')?.textContent).toBe('1 unread');
+  });
+
+  it('replies draw no quote of the root (no "Member" box)', () => {
+    // A reply quoting its root whose sender is not loaded: it read "Member".
+    holdThreadBlock('r1', {
+      root: msg('r1', 'u1', '2026-11-09T06:00:00Z'),
+      replies: [
+        msg('r1-b', 'u2', '2026-11-10T09:00:00Z', {
+          reply: { id: 'r1', authorUserId: 'u-unknown', preview: 'root text' },
+        }),
+      ],
+      people: ['u1', 'u2'],
+      lastReplyId: 'r1-b',
+    });
+    mount([thread('r1', true)]);
+    expect(block('r1')?.textContent).not.toContain('Member');
+    expect(block('r1')?.textContent).not.toContain('root text');
   });
 
   it('"N unread" is hidden at 0', () => {
@@ -179,7 +194,7 @@ describe('Threads list screen', () => {
   });
 
   it('a reaction chip tap toggles through the chat reaction write, optimistically', () => {
-    mount([thread('r2', false)]);
+    mount([thread('r2', true)]);
     const chip = block('r2')?.querySelector('[data-reaction-chip]') as HTMLElement | null;
     expect(chip).not.toBeNull();
     act(() => chip?.click());

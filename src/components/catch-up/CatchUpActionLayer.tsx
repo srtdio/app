@@ -4,7 +4,10 @@
 // row open the existing sheets: chat's Add to Tasks (TaskSheet), the Forward
 // picker, the long-press sheet (MessageActionMenu); a comment's To-do opens
 // CommentTaskSheet. Nothing is read on a tap: the sheets mount only while open
-// and read what they always read. Read only: no edit, no delete here.
+// and read what they always read. Read only: no edit, no delete here. The
+// sheet's emoji row reacts through the row's own reactions api (the card's or
+// the thread view's useCatchUpReactions, optimistic like a chip tap); its Reply
+// hands the target to the screen (onReply: the thread window, reply box focused).
 
 import { useState } from 'react';
 import type { ReactElement } from 'react';
@@ -37,11 +40,27 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { safeTimeZone } from '@/lib/time';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import type { CatchUpMessageRow } from '@/lib/catch-up/body';
+import type { ReactionsApi } from '@/lib/reactions/use-reactions';
 
 /** What a message's actions act on: the row and the card it sits on. */
 export interface CatchUpActionTarget {
   item: CatchUpItem;
   row: CatchUpMessageRow;
+  /**
+   * The reactions api the row's chips read (the card's or the thread view's
+   * useCatchUpReactions): the sheet's emoji row writes through it, so the chips
+   * update at once. Absent: the sheet shows no emoji row.
+   */
+  reactions?: ReactionsApi | undefined;
+  /** Held inside the thread window: every row is already in the thread, so no Reply (CLAUDE.md Thread view). */
+  inThread?: boolean | undefined;
+}
+
+/** The viewer's own reaction on a row (the sheet's pressed circle), or null. Pure. */
+export function ownReactionOf(target: CatchUpActionTarget | null): string | null {
+  const api = target?.reactions;
+  if (target === null || api === undefined) return null;
+  return api.of(target.row.id).find((chip) => chip.mine)?.emoji ?? null;
 }
 
 type Open =
@@ -184,6 +203,8 @@ export function useCatchUpActions(input: {
   timeZone: string | undefined;
   /** The card's place link (the menu's Copy link); null: none. */
   linkOf: (item: CatchUpItem) => string | null;
+  /** The sheet's Reply: open the row's thread window with the reply box focused (the screen's). */
+  onReply: (target: CatchUpActionTarget) => void;
 }): {
   rootActions: (target: CatchUpActionTarget) => RootActions;
   hold: (target: CatchUpActionTarget, from: HTMLElement) => void;
@@ -217,11 +238,17 @@ export function useCatchUpActions(input: {
         onClose={close}
         anchor={open?.kind === 'more' ? open.rect : null}
         mine={t?.row.author.id === input.currentUserId}
-        currentReaction={null}
-        canReact={false}
-        onReact={() => undefined}
-        canReply={false}
-        onReply={() => undefined}
+        currentReaction={ownReactionOf(t)}
+        canReact={t?.reactions !== undefined}
+        onReact={(emoji) => {
+          // The chip tap's path: optimistic, rolled back with a toast on a failed write.
+          const api = t?.reactions;
+          if (t !== null && api !== undefined) api.toggle(t.row.id, emoji);
+        }}
+        canReply={t !== null && t.inThread !== true}
+        onReply={() => {
+          if (t !== null) input.onReply(t);
+        }}
         canCopy={t !== null && t.row.text.trim() !== ''}
         onCopy={() => {
           if (t !== null)

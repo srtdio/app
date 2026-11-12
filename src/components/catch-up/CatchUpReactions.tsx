@@ -2,13 +2,15 @@
 // (or the catch-up thread view) shows carries its chips under the text, the
 // smiley pill last (ui/ReactionChips). With none yet, the smiley alone rides
 // the row's top-right corner, out of the flow, so a row with no reactions
-// keeps today's geometry. One batched read per card body (one query per card
+// keeps today's geometry; a card row on a phone (phoneKey false) draws no
+// corner smiley at all: a plain message reacts from the long-press sheet. One batched read per card body (one query per card
 // per kind: post / brief comments, plan comments, or chat messages), started
 // after paint. Reacting writes only the reaction: it never marks the card
 // read and never advances the stack.
 
 import { useState } from 'react';
 import type { ReactElement } from 'react';
+import { cn } from '@/lib/cn';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconSmile } from '@/components/ui/icons';
 import { AddReactionSheet, ReactionChips } from '@/components/ui/ReactionChips';
@@ -62,6 +64,8 @@ export function CatchUpRowReactions(props: {
   workspaceId: string;
   /** A parent that already spaces its children 8 (the thread root's stack): no extra top room. */
   flush?: boolean;
+  /** False: with no reactions, the corner smiley shows from md only (card rows on a phone). */
+  phoneKey?: boolean;
 }): ReactElement {
   const { id, api } = props;
   const [drawer, setDrawer] = useState(false);
@@ -94,7 +98,7 @@ export function CatchUpRowReactions(props: {
         data-reaction-add=""
         aria-haspopup="dialog"
         onClick={() => setDrawer(true)}
-        className={CATCH_UP_REACT_CLASS}
+        className={cn(CATCH_UP_REACT_CLASS, props.phoneKey === false && 'max-md:hidden')}
       >
         <IconSmile size={ICON_SIZE.inline} />
       </IconButton>

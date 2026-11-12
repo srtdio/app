@@ -38,7 +38,6 @@ import {
   IconPlan,
   type IconProps,
 } from '@/components/ui/icons';
-import { UnreadDivider } from '@/components/chat/ReadingLayer';
 import type { PresignCache } from '@/lib/asset-presign';
 import { KEEP_UNREAD, MARK_AS_READ } from '@/lib/catch-up/copy';
 import { dayBreaks, fillScrollTop } from '@/lib/catch-up/text';
@@ -55,8 +54,10 @@ import {
   dividersAt,
   EventRow,
   MessageRow,
+  NewLine,
   PointsRow,
 } from '@/components/catch-up/CatchUpRows';
+import type { ReactionsApi } from '@/lib/reactions/use-reactions';
 
 /** A message the person sent from this card: pending, sent, or Not sent (Retry). */
 export interface SentMessage extends CatchUpMessageRow {
@@ -91,8 +92,14 @@ export interface CatchUpCardProps {
   onRetryLoad: () => void;
   /** Open a message's or comment's thread full screen (null rows open none). */
   onOpenThread: (root: CatchUpMessageRow) => void;
-  /** Long-press / right-click a message: the one message action layer. */
-  onHoldMessage?: ((row: CatchUpMessageRow, from: HTMLElement) => void) | undefined;
+  /**
+   * Long-press / right-click a message: the one message action layer. `reactions`
+   * is the card's reactions api (pass it on the action target, so the sheet's
+   * emoji row writes through the same optimistic path as the chips).
+   */
+  onHoldMessage?:
+    | ((row: CatchUpMessageRow, from: HTMLElement, reactions: ReactionsApi) => void)
+    | undefined;
   /** Open a feedback point's thread. */
   onOpenPoint: (pointId: string, row: CatchUpRow) => void;
   /** Scroll near the top: load older rows (the screen ignores repeats). */
@@ -280,7 +287,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
         />,
       );
     } else if (dividers === 'new') {
-      drawn.push(<UnreadDivider key="new" count={1} />);
+      drawn.push(<NewLine key="new" />);
     }
     if (row.kind === 'message') {
       drawn.push(
@@ -295,11 +302,18 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           family={wordsFamily(item.kind)}
           onHold={
             props.onHoldMessage !== undefined
-              ? (from) => props.onHoldMessage?.(row, from)
+              ? (from) => props.onHoldMessage?.(row, from, reactions)
               : undefined
           }
+          // Phone: no corner smiley on a row with no reactions (the long-press sheet reacts).
+          phoneKey={false}
           reactions={
-            <CatchUpRowReactions id={row.id} api={reactions} workspaceId={item.workspaceId} />
+            <CatchUpRowReactions
+              id={row.id}
+              api={reactions}
+              workspaceId={item.workspaceId}
+              phoneKey={false}
+            />
           }
         />,
       );

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   clockLength,
+  cutLongText,
+  LONG_LINES,
+  LONG_WORDS,
   dayBreaks,
   fillScrollTop,
   foldNewlines,
@@ -36,6 +39,22 @@ describe('catch-up text hygiene', () => {
   it('clamps past 6 lines', () => {
     expect(overClampLines('1\n2\n3\n4\n5\n6')).toBe(false);
     expect(overClampLines('1\n2\n3\n4\n5\n6\n7')).toBe(true);
+  });
+
+  it('long only above 250 words or 30 lines; the head is the first 250 words', () => {
+    const words = (n: number): string => Array.from({ length: n }, (_, i) => `w${i + 1}`).join(' ');
+    expect(cutLongText(words(250))).toEqual({ long: false, head: words(250) });
+    const cut = cutLongText(words(251));
+    expect(cut.long).toBe(true);
+    expect(cut.head).toBe(words(250));
+    expect(cutLongText(words(120)).long).toBe(false);
+    const lines = (n: number): string => Array.from({ length: n }, (_, i) => `l${i}`).join('\n');
+    expect(cutLongText(lines(30)).long).toBe(false);
+    const tall = cutLongText(lines(31));
+    expect(tall.long).toBe(true);
+    expect(tall.head.split('\n')).toHaveLength(30);
+    expect(LONG_WORDS).toBe(250);
+    expect(LONG_LINES).toBe(30);
   });
 
   it('day lines only when the card spans more than one day', () => {

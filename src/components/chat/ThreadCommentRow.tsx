@@ -21,6 +21,7 @@ import {
   isLinkTarget,
   paintRowSwipe,
   rowSwipeCanTrigger,
+  swipeTapOpens,
   type BubbleMentions,
   type BubblePointerHandlers,
   type BubbleSwipe,
@@ -100,6 +101,11 @@ export function ThreadCommentRow(props: ThreadCommentRowProps): ReactElement {
   const rowHold = rowHoldRef.current;
   swipeRef.current ??= createSwipeReplyController({
     direction: 'both',
+    // A tap that rolled sideways locked as a swipe: it still opens the thread.
+    onTap: (target) => {
+      const tapOpen = latest.current.onTapOpen;
+      if (tapOpen !== undefined && swipeTapOpens(target, bubbleRef.current)) tapOpen();
+    },
     onReply: () => latest.current.onReply?.(),
     onLeft: () => latest.current.onDelete?.(),
     canTrigger: (side) => {

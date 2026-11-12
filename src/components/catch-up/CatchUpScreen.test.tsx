@@ -449,13 +449,13 @@ describe('catch up swipe never swallows the next tap (12 Nov 2026)', () => {
       pointer(text, 'pointermove', 114);
       pointer(text, 'pointerup', 114);
       await settle();
-      expect(document.querySelector('[data-catch-up-thread-sheet]')).toBeNull();
+      expect(document.querySelector('[data-catch-up-thread-window]')).toBeNull();
       // The next clean tap: pointerdown, then its click.
       pointer(open, 'pointerdown', 100);
       pointer(open, 'pointerup', 100);
       act(() => open.click());
       await settle();
-      expect(document.querySelector('[data-catch-up-thread-sheet]')).not.toBeNull();
+      expect(document.querySelector('[data-catch-up-thread-window]')).not.toBeNull();
     } finally {
       if (width !== undefined) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', width);
     }

@@ -535,6 +535,55 @@ export function focusFirstMenuItem(root: MenuRoot | null): boolean {
   return true;
 }
 
+/**
+ * How the last interaction came in: a key (true) or a pointer / touch (false).
+ * Read when the menu opens, so a long-press or tap open never lands focus on
+ * a row with its ring showing (iOS WebKit matches :focus-visible on a
+ * programmatic focus after a touch); a keyboard open still lands on Reply.
+ */
+let lastInputKeyboard = false;
+let modalityWatched = false;
+
+/** Install the one capture listener pair (idempotent; no-op without a document). */
+export function watchInputModality(): void {
+  if (modalityWatched || typeof document === 'undefined') return;
+  modalityWatched = true;
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.metaKey || event.altKey || event.ctrlKey) return;
+      lastInputKeyboard = true;
+    },
+    true,
+  );
+  const pointer = (): void => {
+    lastInputKeyboard = false;
+  };
+  document.addEventListener('pointerdown', pointer, true);
+  document.addEventListener('touchstart', pointer, { capture: true, passive: true });
+}
+
+/** Whether the menu opened from the keyboard (Enter / Space on a bubble, a shortcut). */
+export function openedByKeyboard(): boolean {
+  return lastInputKeyboard;
+}
+
+/**
+ * Where focus lands when the menu opens: the first action row when the open
+ * came from the keyboard; otherwise the menu box itself (tabIndex -1, no
+ * outline), so a touch or long-press open shows no ring on the first tile and
+ * Tab still starts at Reply. Returns whether focus moved.
+ */
+export function focusMenuOnOpen(
+  root: (MenuRoot & { focus: (options?: FocusOptions) => void }) | null,
+  keyboard: boolean,
+): boolean {
+  if (root === null) return false;
+  if (keyboard) return focusFirstMenuItem(root);
+  root.focus({ preventScroll: true });
+  return true;
+}
+
 /** A row's box: full-bleed, at least 44px, 16px side padding, 12px to the label. */
 export const MENU_ROW = 'flex min-h-11 w-full items-center gap-3 px-4';
 
@@ -550,6 +599,8 @@ export function MenuRow(props: {
   return (
     <PressableRow
       flat
+      // Full-bleed in a scrolling list: the focus line sits inside the edge, never clipped.
+      insetFocus
       type="button"
       role="menuitem"
       data-menu-item={item.key}
@@ -583,6 +634,9 @@ export function MenuTile(props: {
   return (
     <PressableRow
       card
+      // The first tile sits on the list's left edge (overflow clips outside it):
+      // the keyboard focus line is drawn inside the tile, never cut.
+      insetFocus
       type="button"
       role="menuitem"
       data-menu-item={item.key}
@@ -778,7 +832,8 @@ export function menuClosesOnViewport(
  * one ⋯ container rule (ui/ActionMenu): phone (useIsLaptop false) a ui/Sheet,
  * laptop a shell/MenuPopover anchored under the bubble on its side (lifted to
  * stay on screen). The quick reactions sit on top (hairline under them), then
- * the rows, one page, a hairline between the groups that show (menuEntries). It focuses the first row on open and hands focus back on close.
+ * the rows, one page, a hairline between the groups that show (menuEntries). It focuses the first row on a keyboard open (the menu box itself on a
+ * touch or long-press open: no ring) and hands focus back on close.
  * The laptop popover also closes on scroll or resize (never while the emoji
  * picker is open). Tokens only, so light and dark stay at parity.
  */
@@ -811,11 +866,15 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     setLift(overflow > 0 ? Math.min(overflow, Math.max(0, anchor.bottom - 8)) : 0);
   }, [open, isLaptop, anchor]);
 
-  // Focus the first row on open; hand it back on close.
+  watchInputModality();
+
+  // Focus on open (the first row from the keyboard, else the menu box: no ring
+  // after a touch or long-press); hand it back on close.
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement;
-    const raf = requestAnimationFrame(() => focusFirstMenuItem(containerRef.current));
+    const keyboard = openedByKeyboard();
+    const raf = requestAnimationFrame(() => focusMenuOnOpen(containerRef.current, keyboard));
     return () => {
       cancelAnimationFrame(raf);
       // Only when nothing else took focus (Reply may focus the composer).
@@ -828,7 +887,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   }, [open]);
   useEffect(() => {
     if (!open) return;
-    focusFirstMenuItem(containerRef.current);
+    focusMenuOnOpen(containerRef.current, openedByKeyboard());
   }, [open]);
 
   useEffect(() => {
@@ -883,12 +942,17 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
       role="menu"
       aria-label="Message actions"
       data-menu-items=""
+      // Takes programmatic focus on a touch / long-press open; never a Tab stop.
+      tabIndex={-1}
       onKeyDown={(event) => {
         // FB2: arrow keys move between items.
         if (moveMenuFocus(containerRef.current, event.key)) event.preventDefault();
       }}
       // The reactions row stays put; a long list scrolls under it (data-menu-list).
-      className={cn('flex min-h-0 flex-col', isLaptop && '-m-2')}
+      className={cn(
+        'flex min-h-0 flex-col focus:outline-none focus-visible:lit-focus-inset',
+        isLaptop && '-m-2',
+      )}
       style={
         isLaptop
           ? { width: MENU_WIDTH_PX, maxHeight: menuMaxHeight(viewport) }

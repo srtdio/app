@@ -30,7 +30,8 @@ export type CatchUpReplyTarget =
       entityId: string;
       parentCommentId: string | null;
     }
-  | { kind: 'plan-comment'; itemId: string };
+  /** A Plan item or Bank idea: a main comment (parentCommentId null) or a reply in its thread. */
+  | { kind: 'plan-comment'; itemId: string; parentCommentId: string | null };
 
 /** A reply box's movable draft (text + @ picks); it moves into the thread sheet and back. */
 export interface CatchUpDraft {

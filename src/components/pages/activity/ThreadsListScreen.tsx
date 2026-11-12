@@ -90,7 +90,7 @@ import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 export const THREADS_LIST_TITLE = 'Threads';
 
 /** The zero state ("{Things} show up here."). */
-export const THREADS_LIST_EMPTY = 'Threads show up here.';
+export const THREADS_LIST_EMPTY = 'New threads show up here.';
 
 /** The Undo strip's label after Mark as read (failure: "Couldn't mark as read. {reason}"). */
 export const MARKED_AS_READ = 'Marked as read';
@@ -149,6 +149,19 @@ export function orderThreads(threads: readonly ThreadForMeAll[]): ThreadForMeAll
   return [...threads].sort(
     (a, b) => Number(b.unread) - Number(a.unread) || b.lastReplyAt.localeCompare(a.lastReplyAt),
   );
+}
+
+/**
+ * Only threads with something new (12 Nov 2026): a read thread never shows.
+ * One marked read here stays (`kept`) until the screen closes, so its Undo
+ * still has a place. Adds every unread root to `kept`. Pure but for `kept`.
+ */
+export function newThreadsOnly(
+  threads: readonly ThreadForMeAll[],
+  kept: Set<string>,
+): ThreadForMeAll[] {
+  for (const t of threads) if (t.unread) kept.add(t.rootId);
+  return threads.filter((t) => kept.has(t.rootId));
 }
 
 /** "A", "A and B", "A, B, and C", "A, B, and N others". Pure. */
@@ -451,6 +464,9 @@ export function ThreadBlock(props: {
         viewerUserId={wiring.currentUserId}
         workspaceId={wiring.workspaceId}
         threadPlace="reply"
+        // Every reply answers the root shown above it: no quote box (it read
+        // "Member" with an empty line before the root's sender loaded).
+        threadMember={m !== block?.root}
         timeLabel={labelOf.get(m.id) ?? 'clock'}
         reactionChips={chipsOf(m)}
         onTapOpen={open}
@@ -582,7 +598,9 @@ export function ThreadsListScreen(props: {
     () => peekThreads(workspaceId),
     () => peekThreads(workspaceId),
   );
-  const threads = useMemo(() => orderThreads(held ?? []), [held]);
+  // Only threads with something new; one marked read here stays until close.
+  const keptRef = useRef(new Set<string>());
+  const threads = useMemo(() => newThreadsOnly(orderThreads(held ?? []), keptRef.current), [held]);
   const { roster } = useChatStore();
   const chatOf = useCallback(
     (channelId: string) => roster.find((c) => c.channelId === channelId),

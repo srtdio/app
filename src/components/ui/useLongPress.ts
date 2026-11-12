@@ -121,6 +121,9 @@ export function createLongPressController({
 
   function onPointerDown(event: PointerSample): void {
     cancel();
+    // A hold on touch may end with no click: a flag left from it must never
+    // swallow this new press's tap.
+    suppressClick = false;
     pointerType = event.pointerType ?? '';
     if (ignoreMouse && pointerType === 'mouse') return;
     startX = event.clientX;

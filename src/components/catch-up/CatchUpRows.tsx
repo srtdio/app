@@ -6,12 +6,14 @@
 // Name to text is one 4 step (a MessageBubble head row's), the same for a one
 // line and a two line comment: the text that opens its thread adds no height
 // (its 44 tap is a hit area, OPEN_THREAD_HIT), and the corner reaction key is
-// out of the flow. Then the
+// out of the flow (on a phone only once the row has reactions: a plain
+// message reacts from the long-press sheet). Then the
 // feedback points (CheckpointCircle in the photo column, centred on the first
 // text line), the event rows (actor, time, the line without the name), the
-// day lines (DateLine, only when the card spans more than one day), long text
-// (>6 lines clamps with a quiet "more" that opens a bordered window that
-// scrolls itself), tappable short links, my @name lit (MENTION_ME_PEER), the
+// day lines (DateLine, only when the card spans more than one day), the New
+// line (a thin bad rule, "NEW" in meta at the right), long text (over 250
+// words or 30 lines shows its head, then a quiet "more" that unfolds the rest
+// in place and never opens the thread), tappable short links, my @name lit (MENTION_ME_PEER), the
 // context strip (closed by default, a reading window when open; read only)
 // and the error state. Tokens only; light and dark at parity.
 
@@ -48,7 +50,7 @@ import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import type { PresignCache } from '@/lib/asset-presign';
 import { segmentSelfMentions } from '@/components/pages/activity/data';
 import { formatDayLabel, formatTime, threadWhen } from '@/lib/time';
-import { linkRuns, overClampLines } from '@/lib/catch-up/text';
+import { cutLongText, linkRuns } from '@/lib/catch-up/text';
 import { defaultPointOpen } from '@/lib/catch-up/body';
 import type {
   CatchUpAuthor,
@@ -63,9 +65,6 @@ export const WRAP_ANYWHERE: CSSProperties = { overflowWrap: 'anywhere' };
 
 /** The rows' side padding: the card's photo column starts here (the composer lines up with it). */
 export const CATCH_UP_ROW_X = 'px-4';
-
-/** Characters past which a single-paragraph text clamps even under 6 lines. */
-const CLAMP_CHARS = 420;
 
 /** A clip reveal (axis clip, 200 ms ease-ios): the strip and "more" windows open. */
 export function clipReveal(el: Element | null): void {
@@ -152,45 +151,45 @@ export function RichText(props: {
 }
 
 /**
- * Long text: over 6 lines it clamps with a quiet "more" (secondary, fg-2, 44
- * hit); "more" opens the whole text in a bordered window (max-h-64) that
- * scrolls itself. Never clipped without "more".
+ * Long text (cutLongText: over 250 words or 30 lines): the head (the first
+ * 250 words, at most 30 lines), then a quiet "more" (secondary, fg-2, 44 hit).
+ * "more" unfolds the whole text in place: no inner scroll box, no window, and
+ * never the thread (its press never reaches the open-thread button). Short
+ * text renders whole.
  */
-export function LongText(props: { text: string; selfName: string | null }): ReactElement {
-  const long = overClampLines(props.text) || props.text.length > CLAMP_CHARS;
+export function LongText(props: {
+  text: string;
+  selfName: string | null;
+  /** Wraps the text (the open-thread button); "more" always sits outside it. */
+  wrap?: ((text: ReactElement) => ReactElement) | undefined;
+}): ReactElement {
+  const cut = cutLongText(props.text);
   const [open, setOpen] = useState(false);
-  const windowRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (open) clipReveal(windowRef.current);
-  }, [open]);
-  if (!long) return <RichText text={props.text} selfName={props.selfName} />;
-  if (open) {
-    return (
-      <div
-        ref={windowRef}
-        data-catch-up-more-window=""
-        className="lit-well max-h-64 overflow-y-auto overscroll-contain rounded-lg border border-border bg-panel-2 p-3"
-      >
-        <RichText text={props.text} selfName={props.selfName} />
-      </div>
-    );
+  const wrap = props.wrap ?? ((text: ReactElement) => text);
+  if (!cut.long || open) {
+    return wrap(<RichText text={props.text} selfName={props.selfName} />);
   }
   return (
-    <div className="flex flex-col items-start">
-      <RichText text={props.text} selfName={props.selfName} className="line-clamp-6" />
+    <>
+      {wrap(<RichText text={cut.head} selfName={props.selfName} />)}
       <PressableRow
         inline
         type="button"
         data-catch-up-more=""
-        onClick={() => setOpen(true)}
+        // Keep focus (and the keyboard) where it is; the click still lands.
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
         className={textRole(
           'secondary',
-          'min-h-11 min-w-11 text-left text-fg-2 focus-visible:lit-focus',
+          'min-h-11 min-w-11 self-start text-left text-fg-2 focus-visible:lit-focus',
         )}
       >
         more
       </PressableRow>
-    </div>
+    </>
   );
 }
 
@@ -212,6 +211,8 @@ function RowFrame(props: {
   when?: string | undefined;
   /** The row's reactions (catch-up/CatchUpReactions): chips under the text, or the corner smiley. */
   reactions?: ReactNode;
+  /** False: the corner smiley shows from md only (a phone card row with no reactions). */
+  phoneKey?: boolean | undefined;
 }): ReactElement {
   const reacts = props.reactions !== undefined && props.reactions !== null;
   const layout = useChatLayout();
@@ -229,7 +230,12 @@ function RowFrame(props: {
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {/* With reactions wired, the head line ends clear of the corner smiley (40 + 4). */}
-        <div className={cn('flex min-w-0 items-baseline gap-2', reacts && 'pr-11')}>
+        <div
+          className={cn(
+            'flex min-w-0 items-baseline gap-2',
+            reacts && (props.phoneKey === false ? 'md:pr-11' : 'pr-11'),
+          )}
+        >
           <Text
             role="label"
             className={cn(
@@ -341,6 +347,8 @@ export function MessageRow(props: {
   family?: 'chat' | 'comment' | undefined;
   /** Long-press / right-click: the one message action layer, anchored on the row. */
   onHold?: ((from: HTMLElement) => void) | undefined;
+  /** False: no corner smiley on a phone (its reactions part hides it there too). */
+  phoneKey?: boolean | undefined;
 }): ReactElement {
   const { row } = props;
   const rowRef = useRef<HTMLDivElement>(null);
@@ -349,10 +357,34 @@ export function MessageRow(props: {
   };
   const press = useLongPress(hold, { ignoreMouse: true });
   const link = firstLinkOf(row.text);
-  const text = <LongText text={row.text} selfName={props.selfName} />;
+  const onOpenThread = props.onOpenThread;
+  const text = (
+    <LongText
+      text={row.text}
+      selfName={props.selfName}
+      wrap={
+        onOpenThread !== null
+          ? (inner) => (
+              <PressableRow
+                type="button"
+                data-catch-up-open-thread=""
+                // Keep focus (and the keyboard) in the reply box: mouse down is swallowed
+                // so no blur reflows the card and the click lands.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onOpenThread}
+                className={cn('text-left focus-visible:lit-focus', OPEN_THREAD_HIT)}
+              >
+                <span className={OPEN_THREAD_TEXT}>{inner}</span>
+              </PressableRow>
+            )
+          : undefined
+      }
+    />
+  );
   return (
     <RowFrame
       reactions={props.reactions}
+      phoneKey={props.phoneKey}
       author={row.author}
       createdAt={row.createdAt}
       timeZone={props.timeZone}
@@ -396,21 +428,7 @@ export function MessageRow(props: {
         }}
         className="flex min-w-0 flex-col gap-1"
       >
-        {props.onOpenThread !== null ? (
-          <PressableRow
-            type="button"
-            data-catch-up-open-thread=""
-            // Keep focus (and the keyboard) in the reply box: mouse down is swallowed
-            // so no blur reflows the card and the click lands.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={props.onOpenThread}
-            className={cn('text-left focus-visible:lit-focus', OPEN_THREAD_HIT)}
-          >
-            <span className={OPEN_THREAD_TEXT}>{text}</span>
-          </PressableRow>
-        ) : (
-          text
-        )}
+        {text}
         {link !== null ? (
           // relative: above the text's hit area, so its top edge keeps its own tap.
           <LinkPreviewCard
@@ -577,12 +595,47 @@ export function DayLine(props: {
   );
 }
 
+/** The New line's rule: one thin line in the bad token. */
+const NEW_RULE_CLASS = 'h-px flex-1 bg-bad';
+
+/** The New line's word: "NEW" in the bad token, uppercase, semibold, meta size. No pill. */
+function NewWord(): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      data-new-word=""
+      className={textRole('meta', 'shrink-0 font-semibold uppercase text-bad')}
+    >
+      New
+    </span>
+  );
+}
+
+/**
+ * A card's New line (the first unread row): a thin rule in the bad token with
+ * "NEW" in the same token at the right; no pill. data-new-line: the fill rule
+ * scrolls to it. Tokens only, so light and dark flip together.
+ */
+export function NewLine(): ReactElement {
+  return (
+    <li
+      role="separator"
+      aria-label="New"
+      data-new-line=""
+      data-catch-up-new=""
+      className="flex select-none items-center gap-2 px-4 pb-1 pt-3"
+    >
+      <span aria-hidden="true" data-new-rule="" className={NEW_RULE_CLASS} />
+      <NewWord />
+    </li>
+  );
+}
+
 /**
  * The day line and the New line when they fall at the same row (the first
  * unread row starts a new day): ONE line, Slack's way. The day on the left, one
- * ink hairline, the ink "New" pill on the right; never two stacked dividers.
- * Keeps data-new-line, so the fill rule scrolls to it like the New line. Ink
- * tokens only (bg-fg / text-bg), so light and dark flip together.
+ * thin bad rule, "NEW" (bad, meta) on the right; never two stacked dividers.
+ * Keeps data-new-line, so the fill rule scrolls to it like the New line.
  */
 export function DayNewLine(props: { at: string; timeZone: string | undefined }): ReactElement {
   const label = formatDayLabel(props.at, new Date(), props.timeZone);
@@ -597,14 +650,8 @@ export function DayNewLine(props: { at: string; timeZone: string | undefined }):
       <span data-catch-up-day-label="" className={textRole('label', 'shrink-0 text-fg-2')}>
         {label}
       </span>
-      <span aria-hidden="true" data-new-rule="" className="h-px flex-1 bg-fg" />
-      <span
-        aria-hidden="true"
-        data-new-pill=""
-        className="flex h-5 shrink-0 items-center rounded-full bg-fg px-2 text-xs font-semibold text-bg"
-      >
-        New
-      </span>
+      <span aria-hidden="true" data-new-rule="" className={NEW_RULE_CLASS} />
+      <NewWord />
     </li>
   );
 }

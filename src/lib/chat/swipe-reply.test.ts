@@ -14,6 +14,8 @@ import {
   SWIPE_LOCK_PX,
   SWIPE_MAX_PX,
   SWIPE_REST,
+  SWIPE_TAP_MS,
+  SWIPE_TAP_SLOP_PX,
   SWIPE_TRIGGER_PX,
   SWIPE_VIBRATE_MS,
   swipeRubberBand,
@@ -798,5 +800,45 @@ describe('scroll rule: only a scroll that moves the press ends the swipe', () =>
     dragLeft(c, { currentTarget: { id: 'x' } });
     w.scroll(thread);
     expect(c.swiping()).toBe(false);
+  });
+});
+
+describe('a tap that rolled sideways (12 Nov 2026)', () => {
+  // On touch a locked swipe ends with no click: a short, quick one is a tap.
+  it('locks, stays within the slop, lifts quickly: onTap once with the press target', () => {
+    const onTap = vi.fn();
+    const { c, onReply } = setup({ direction: 'both', onTap });
+    const target = { id: 'text' } as unknown as EventTarget;
+    c.handlers.onPointerDown({ ...touch(0, 0, 0), target });
+    c.handlers.onPointerMove(touch(SWIPE_LOCK_PX + 1, 0, 40));
+    expect(c.swiping()).toBe(true);
+    c.handlers.onPointerUp({ timeStamp: 80 });
+    expect(onTap).toHaveBeenCalledTimes(1);
+    expect(onTap).toHaveBeenCalledWith(target);
+    expect(onReply).not.toHaveBeenCalled();
+    // The trailing click (if any) stays swallowed: the tap acts once.
+    expect(c.consumeClickSuppression()).toBe(true);
+  });
+
+  it('past the slop or held too long: a swipe, not a tap', () => {
+    const onTap = vi.fn();
+    const { c } = setup({ direction: 'both', onTap });
+    c.handlers.onPointerDown(touch(0, 0, 0));
+    c.handlers.onPointerMove(touch(SWIPE_TAP_SLOP_PX + 1, 0, 200));
+    c.handlers.onPointerUp({ timeStamp: 260 });
+    c.handlers.onPointerDown(touch(0, 0, 1000));
+    c.handlers.onPointerMove(touch(SWIPE_LOCK_PX + 1, 0, 1040));
+    c.handlers.onPointerUp({ timeStamp: 1000 + SWIPE_TAP_MS + 1 });
+    expect(onTap).not.toHaveBeenCalled();
+  });
+
+  it('a plain tap (never locked) leaves the click to the browser', () => {
+    const onTap = vi.fn();
+    const { c } = setup({ direction: 'both', onTap });
+    c.handlers.onPointerDown(touch(0, 0, 0));
+    c.handlers.onPointerMove(touch(2, 0, 20));
+    c.handlers.onPointerUp({ timeStamp: 60 });
+    expect(onTap).not.toHaveBeenCalled();
+    expect(c.consumeClickSuppression()).toBe(false);
   });
 });
