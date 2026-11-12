@@ -460,33 +460,65 @@ export function WritingBox(props: WritingBoxProps) {
   // shrink for an iOS keyboard, so the box is then lifted by whatever the
   // visible band still leaves under the keyboard: the whole box, or for a box
   // taller than half the band, its bottom row (the caret line sits over it).
-  // A scroll after paint, never a hold on the tap.
+  // A scroll after paint, never a hold on the tap. Never while a range is
+  // selected or a finger / pointer is down on the box (selecting resizes the
+  // iOS keyboard; a move then would grow the selection under the finger). A
+  // tall box lifts its bottom row only while the caret is at the end of the
+  // text; anywhere else the browser reveals the caret itself.
+  const fieldRef = useRef(field);
+  fieldRef.current = field;
   useEffect(() => {
     if (!focused || phoneExpanded) return undefined;
     const el = rootRef.current;
     if (el === null || typeof el.scrollIntoView !== 'function') return undefined;
     const vv = typeof window !== 'undefined' ? (window.visualViewport ?? null) : null;
     let raf = 0;
+    let pressed = false;
     const reveal = (): void => {
       window.cancelAnimationFrame(raf);
       raf = window.requestAnimationFrame(() => {
+        if (pressed) return;
+        const f = fieldRef.current();
+        const sel = f !== null ? fieldSelection(f) : null;
+        if (sel !== null && sel.start !== sel.end) return;
         const top = vv?.offsetTop ?? 0;
         const bottom = vv !== null ? vv.offsetTop + vv.height : window.innerHeight;
         if (el.getBoundingClientRect().height <= (bottom - top) / 2) {
           el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        } else if (sel === null || sel.end !== sel.text.length) {
+          return;
         }
         const over = el.getBoundingClientRect().bottom - bottom + REVEAL_GAP_PX;
         if (over > 0) scrollUpBy(el, over);
       });
     };
+    const down = (): void => {
+      pressed = true;
+      window.cancelAnimationFrame(raf);
+    };
+    const up = (): void => {
+      pressed = false;
+    };
     reveal();
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(reveal) : null;
     ro?.observe(el);
     vv?.addEventListener('resize', reveal);
+    el.addEventListener('pointerdown', down, { passive: true });
+    el.addEventListener('touchstart', down, { passive: true });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    window.addEventListener('touchend', up);
+    window.addEventListener('touchcancel', up);
     return () => {
       window.cancelAnimationFrame(raf);
       ro?.disconnect();
       vv?.removeEventListener('resize', reveal);
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('touchstart', down);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      window.removeEventListener('touchend', up);
+      window.removeEventListener('touchcancel', up);
     };
   }, [focused, phoneExpanded]);
 
