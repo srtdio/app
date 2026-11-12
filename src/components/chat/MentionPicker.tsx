@@ -85,8 +85,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
             role="option"
             aria-selected={index === props.active}
             data-mention-option={member.userId}
-            // Keep focus (and the touch keyboard) in the textarea.
-            onPointerDown={(event) => event.preventDefault()}
+            // Keep focus (and the touch keyboard) in the textarea: mouse down is swallowed.
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => props.onPick(member)}
             className={cn(

@@ -144,8 +144,8 @@ export function PersonMessageInput(props: PersonMessageInputProps): ReactElement
                     type="button"
                     label={`Send ${emoji}`}
                     data-person-reaction={emoji}
-                    // Keep the keyboard up: the press never takes focus from the box.
-                    onPointerDown={(event) => event.preventDefault()}
+                    // Keep the keyboard up: mouse down never takes focus from the box.
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => send(emoji)}
                     className="shrink-0 text-2xl"
                   >
@@ -164,7 +164,7 @@ export function PersonMessageInput(props: PersonMessageInputProps): ReactElement
               disabled={false}
               data-person-send=""
               icon={<IconSend size={ICON_SIZE.control} />}
-              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
             />
           ) : undefined
         }

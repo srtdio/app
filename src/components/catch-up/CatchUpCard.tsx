@@ -167,8 +167,8 @@ export function TypingCheck(props: { onPress: () => void }): ReactElement {
       aria-label={MARK_AS_READ}
       data-catch-up-typing-read=""
       className="h-12 w-12"
-      // Keep the keyboard until the press lands.
-      onPointerDown={(event) => event.preventDefault()}
+      // Keep the keyboard: mouse down is swallowed until the press lands.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={props.onPress}
     >
       <IconCheck size={ICON_SIZE.nav} />
@@ -378,7 +378,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
               type="button"
               label="Hide keyboard"
               data-catch-up-hide-keyboard=""
-              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={props.typing.onHideKeyboard}
               className="h-12 w-12 rounded-full bg-fg/10"
             >

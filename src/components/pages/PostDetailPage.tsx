@@ -1724,13 +1724,13 @@ export function PostDetailPage({
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
-                    // visible. pointerdown is swallowed so the input's blur-save never
+                    // visible. mouse down is swallowed so the input's blur-save never
                     // runs ahead of (or instead of) the tapped button.
                     <div className="flex items-center gap-2">
                       <Button
                         variant="primary"
                         disabled={savingMeta}
-                        onPointerDown={(event) => event.preventDefault()}
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
                           suppressTitleBlur.current = true;
                           void saveTitle();
@@ -1741,7 +1741,7 @@ export function PostDetailPage({
                       <Button
                         variant="ghost"
                         disabled={savingMeta}
-                        onPointerDown={(event) => event.preventDefault()}
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
                           suppressTitleBlur.current = true;
                           setEditingTitle(false);

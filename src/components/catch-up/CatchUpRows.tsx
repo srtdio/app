@@ -287,7 +287,7 @@ function RepliesLink(props: {
       inline
       type="button"
       data-catch-up-replies=""
-      onPointerDown={(event) => event.preventDefault()}
+      onMouseDown={(event) => event.preventDefault()}
       onClick={props.onOpen}
       className="relative flex min-h-11 min-w-11 max-w-full items-center gap-2 self-start text-left focus-visible:lit-focus"
     >
@@ -400,9 +400,9 @@ export function MessageRow(props: {
           <PressableRow
             type="button"
             data-catch-up-open-thread=""
-            // Keep focus (and the keyboard) in the reply box until the press
-            // lands: a blur here reflows the card and the click would miss.
-            onPointerDown={(event) => event.preventDefault()}
+            // Keep focus (and the keyboard) in the reply box: mouse down is swallowed
+            // so no blur reflows the card and the click lands.
+            onMouseDown={(event) => event.preventDefault()}
             onClick={props.onOpenThread}
             className={cn('text-left focus-visible:lit-focus', OPEN_THREAD_HIT)}
           >
