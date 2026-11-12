@@ -450,11 +450,25 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     }
   }, [live, value]);
 
+  // Measure at 'auto', then set the content height. The 'auto' instant makes
+  // a long text's page shorter, so the window and any scrolled ancestor would
+  // be clamped: their scroll is held across the measure and put back in the
+  // same call (before paint). An unchanged height writes nothing new.
   const fit = useCallback((): void => {
     const el = ref.current;
     if (el === null) return;
+    const held: { node: Element; top: number }[] = [];
+    for (let at = el.parentElement; at !== null; at = at.parentElement) {
+      if (at.scrollTop > 0) held.push({ node: at, top: at.scrollTop });
+    }
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+    const before = el.style.height;
     el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
+    const next = `${el.scrollHeight}px`;
+    el.style.height = next === before ? before : next;
+    for (const h of held) if (h.node.scrollTop !== h.top) h.node.scrollTop = h.top;
+    if (window.scrollX !== sx || window.scrollY !== sy) window.scrollTo(sx, sy);
   }, []);
 
   // On open and on every value change (controlled input): re-fit synchronously

@@ -199,6 +199,8 @@ export const AREAS: Area[] = [
       // The comment bar's To-do: New task sheet, comment_task_create, tag.
       'comment-to-task',
       'post-open-media-cover',
+      // A long caption edited mid-text never moves the page (Textarea fit, reveal).
+      'post-caption-long-edit',
     ].map(t),
   },
   {
