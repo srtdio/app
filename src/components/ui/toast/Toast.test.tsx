@@ -59,9 +59,10 @@ describe('Toast', () => {
       (el) => (el.props as { 'data-toast-title'?: string })['data-toast-title'] === '',
     );
     const cls = (title!.props as { className: string }).className;
-    expect(cls).toContain('truncate');
+    // From 768 one line, cut; a phone wraps to two lines at most.
+    expect(cls.split(' ')).toContain('md:truncate');
+    expect(cls.split(' ')).not.toContain('truncate');
     expect(cls).toContain('max-md:line-clamp-2');
-    expect(cls).toContain('max-md:whitespace-normal');
   });
 
   it('fires onPress when the content area is tapped', () => {

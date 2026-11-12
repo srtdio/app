@@ -438,11 +438,11 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           className="flex shrink-0 items-center justify-between gap-2 border-t border-border pl-4 pr-1"
         >
           <Text
-            role="secondary"
+            role="body"
             data-catch-up-tip-text=""
-            // Phone: the words wrap to a second line (never cut, never under
-            // "Got it"); laptop keeps the one line.
-            className={cn('min-w-0', sized(TIP_LINE_TYPE, layout), 'max-md:whitespace-normal')}
+            // The secondary look (fg-2). Phone: the words wrap to a second
+            // line (never cut, never under "Got it"); from 768 one line, cut.
+            className={cn('min-w-0 text-fg-2 md:truncate', sized(TIP_LINE_TYPE, layout))}
           >
             {props.tip.text}
           </Text>

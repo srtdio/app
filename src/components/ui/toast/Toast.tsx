@@ -53,7 +53,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
             short of its words; from 768 it stays one line. */}
         <span
           data-toast-title=""
-          className={`truncate text-base font-medium max-md:line-clamp-2 max-md:whitespace-normal max-md:break-words ${error ? 'text-accent-fg' : 'text-fg'}`}
+          className={`text-base font-medium max-md:line-clamp-2 max-md:break-words md:truncate ${error ? 'text-accent-fg' : 'text-fg'}`}
         >
           {title}
         </span>

@@ -393,7 +393,7 @@ export function IdeaShareFlow(props: {
         title={IDEA_SHOW_TITLE}
         busy={busy}
         footer={
-          <div className="grid w-full grid-cols-2 gap-2 md:flex md:justify-end">
+          <div className="grid w-full grid-cols-2 gap-2 max-[359.98px]:grid-cols-1 md:flex md:justify-end">
             <Button
               variant="secondary"
               type="button"

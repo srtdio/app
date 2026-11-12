@@ -406,7 +406,7 @@ export function BankPickSheet(props: {
                   </span>
                 ) : null}
                 {/* Phone: an idea's title wraps to two lines; one line from 768. */}
-                <span className="min-w-0 truncate text-base font-medium text-fg max-md:line-clamp-2 max-md:whitespace-normal max-md:break-words">
+                <span className="min-w-0 text-base font-medium text-fg max-md:line-clamp-2 md:truncate max-md:break-words">
                   {idea.title ?? ''}
                 </span>
               </span>

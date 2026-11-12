@@ -142,7 +142,7 @@ export function Topbar({
           className="min-w-0 text-left max-md:h-auto max-md:min-h-11 max-md:py-1"
         >
           <IconPlus size={ICON_SIZE.inline} className="shrink-0 text-fg" />
-          <span className="truncate max-md:whitespace-normal">Create your workspace</span>
+          <span className="md:truncate">Create your workspace</span>
         </Button>
       ) : workspaceName === null ? (
         <Bone lit="flat" className="md:hidden h-4 w-24 rounded" />
@@ -206,12 +206,12 @@ export function Topbar({
         {inWorkspace ? <TopbarSlots /> : null}
 
         {/* A press starts the Settings chunk and the members read it shows. Below
-            md a 36 strip, 4 in from the gutter, so the 32 photo's right edge
-            stays where it was (6 in from the gutter edge). */}
+            md a 36 strip on the gutter, the 32 photo at its right end, so the
+            photo ends on the 16 right edge with every row's time and dot. */}
         <IconButton
           type="button"
           label="Account menu"
-          className={cn(TOPBAR_KEY, 'max-md:mr-1')}
+          className={cn(TOPBAR_KEY, 'max-md:justify-end')}
           onClick={onOpenAvatar}
           {...settingsPrefetchProps()}
         >

@@ -36,7 +36,7 @@ import {
   IDENTITY_MAP,
   type FrameMap,
 } from '@/components/pages/pcs/pin-annotations';
-import { LEADING_PULL, TRAILING_PULL } from '@/components/ui/layout';
+import { LEADING_PULL, PHONE_TOOLS_SCROLL, TRAILING_PULL } from '@/components/ui/layout';
 import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
 /** The gesture handlers a tile spreads for long-press + right-click. */
@@ -592,7 +592,12 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
   return (
     <div data-gallery-tools="" className="mt-2 flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center">
+        {/* Phone: with the version key the three tools can outgrow a 360 or
+            320 screen; they scroll, every label whole (PHONE_TOOLS_SCROLL). */}
+        <div
+          data-gallery-tool-keys=""
+          className={cn('flex min-w-0 flex-1 items-center', PHONE_TOOLS_SCROLL)}
+        >
           {locked ? (
             <span
               aria-hidden

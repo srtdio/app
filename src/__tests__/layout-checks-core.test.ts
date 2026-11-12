@@ -747,22 +747,22 @@ describe('top bar, chip-row Select and upload checks', () => {
 
   it('topbarViolations (phone): 36x44 strips touching, 36 apart, the outlined 22 "+"', async () => {
     const { topbarViolations } = await import('../../e2e/visual/layout-checks-core');
-    // 390 wide: the avatar strip ends 20 in, its 32 photo 22 in (main's edge).
+    // 390 wide: the avatar strip ends on the 16 gutter, its 32 photo at its right end (16 in).
     const ok = {
       viewportWidth: 390,
-      search: box(226, 6, 36, 44),
-      sort: box(262, 6, 36, 44),
-      primary: box(298, 6, 36, 44),
-      avatar: box(334, 6, 36, 44),
-      avatarFace: box(336, 12, 32, 32),
+      search: box(230, 6, 36, 44),
+      sort: box(266, 6, 36, 44),
+      primary: box(302, 6, 36, 44),
+      avatar: box(338, 6, 36, 44),
+      avatarFace: box(342, 12, 32, 32),
       plus: {
         face: 'phone' as const,
-        box: box(305, 17, 22, 22),
+        box: box(309, 17, 22, 22),
         borderWidth: 1.75,
         radius: 7,
         background: 'rgba(0, 0, 0, 0)',
         accent: 'rgb(1, 2, 3)',
-        glyph: box(309, 21, 14, 14),
+        glyph: box(313, 21, 14, 14),
       },
     };
     expect(topbarViolations(ok)).toEqual([]);
@@ -787,11 +787,11 @@ describe('top bar, chip-row Select and upload checks', () => {
     // The operator's Cockpit dot is one more 36 key between Search and sort.
     const cockpit = {
       ...ok,
-      search: box(190, 6, 36, 44),
-      cockpit: box(226, 6, 36, 44),
+      search: box(194, 6, 36, 44),
+      cockpit: box(230, 6, 36, 44),
     };
     expect(topbarViolations(cockpit)).toEqual([]);
-    expect(topbarViolations({ ...cockpit, cockpit: box(226, 6, 44, 44) })).not.toEqual([]);
+    expect(topbarViolations({ ...cockpit, cockpit: box(230, 6, 44, 44) })).not.toEqual([]);
   });
 
   it('topbarDriftViolations: slots hold one x across screens', async () => {

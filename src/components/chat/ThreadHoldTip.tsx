@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { ChatLayout } from '@/components/chat/chat-type';
 import { Button } from '@/components/ui/Button';
-import { LANE_STRIP } from '@/components/ui/layout';
+import { LANE_STRIP, PHONE_PAD_FLUSH, TEXT_KEY_PULL } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import {
   HOLD_TIP_DISMISS,
@@ -26,15 +26,22 @@ export function holdTipView(onDismiss: () => void, layout: ChatLayout = 'touch')
       className={cn(
         LANE_STRIP,
         'flex items-center gap-3 border-t border-border py-1 pr-1 text-base text-fg-2',
-        // Phone (12 Nov 2026): the words start on the 16 page edge (the strip's
-        // 12 + 4) and wrap to a second line; "Got it" stays whole. Laptop: as before.
+        // Phone (12 Nov 2026): the strip and its words on the 16 page edge, the
+        // words wrap to a second line; "Got it" whole, its words ending 16 from
+        // the right (TEXT_KEY_PULL). Laptop: as before.
         layout === 'laptop' ? 'pl-3' : 'pl-1',
+        PHONE_PAD_FLUSH,
       )}
     >
       <p className={cn('min-w-0 flex-1', layout === 'laptop' && 'truncate')}>
         {layout === 'laptop' ? HOLD_TIP_TEXT_LAPTOP : HOLD_TIP_TEXT}
       </p>
-      <Button type="button" variant="link" onClick={onDismiss} className="min-w-11 shrink-0">
+      <Button
+        type="button"
+        variant="link"
+        onClick={onDismiss}
+        className={cn('min-w-11 shrink-0', TEXT_KEY_PULL)}
+      >
         {HOLD_TIP_DISMISS}
       </Button>
     </div>

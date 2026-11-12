@@ -63,10 +63,18 @@ function badgeRing(active: boolean): string {
   return active ? 'border-2 border-panel-3' : 'border-2 border-surface-top';
 }
 
-/** The open tab's name; nothing on any other tab. */
+/**
+ * The open tab's name; nothing on any other tab.
+ * Under 360 wide (a 320 phone) the name hides too, so the dock (five 44 tabs,
+ * the Chat circle) fits with 16 at both edges instead of running off the
+ * screen; the open tab keeps its panel-3 fill.
+ */
+export const TAB_NAME_CLASS =
+  'shrink-0 whitespace-nowrap text-md font-medium max-[359.98px]:hidden';
+
 function TabLabel({ show, label }: { show: boolean; label: string }) {
   return show ? (
-    <span data-tab-name="" className="shrink-0 whitespace-nowrap text-md font-medium">
+    <span data-tab-name="" className={TAB_NAME_CLASS}>
       {label}
     </span>
   ) : null;

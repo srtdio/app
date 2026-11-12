@@ -222,8 +222,12 @@ function dockStyle(dock: DockAt): { className: string; style: Record<string, num
   return { className: 'left-4 right-4', style: vertical };
 }
 
-/** Layout added to every guide control (each is a <Button>: 44 tall, 8px radius, label type). */
-const GUIDE_ACTION = 'min-w-11 shrink-0';
+/**
+ * Layout added to every guide control (each is a <Button>: 44 tall, 8px radius,
+ * label type). Phone: 8 side padding, so three keys ("Invite later", "Back",
+ * "Skip tour") share one row at 320 instead of stacking on two.
+ */
+const GUIDE_ACTION = 'min-w-11 shrink-0 max-md:px-2';
 
 /*
  * The bar under 768 (12 Nov 2026, phone type 17): the words and the buttons

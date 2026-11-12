@@ -156,8 +156,7 @@ export function ComposerSheet({
       >
         <div
           data-composer-header=""
-          // Phone: the save buttons keep whole labels; only when they cannot
-          // sit beside the "<" (320 wide) they drop to their own line, right.
+          // Phone: the save buttons keep whole labels on their own line, right.
           className="flex min-w-0 items-center gap-2 border-b border-border px-4 py-2 max-md:flex-wrap sm:gap-3"
         >
           {/* The one exit: "<" back leading, pulled out by 12 (LEADING_PULL). */}
@@ -183,7 +182,12 @@ export function ComposerSheet({
           >
             {title}
           </Text>
-          <div className="flex shrink-0 items-center gap-2 max-md:ml-auto sm:gap-3">{actions}</div>
+          {/* Phone: the buttons take their own line, right-aligned, so the
+              title is never squeezed to a letter and both labels stay whole;
+              at 320 they may stack. From 768 they sit beside the title. */}
+          <div className="flex shrink-0 items-center gap-2 max-md:basis-full max-md:flex-wrap max-md:justify-end sm:gap-3">
+            {actions}
+          </div>
         </div>
         <div className="overflow-y-auto px-4 py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
           {children}

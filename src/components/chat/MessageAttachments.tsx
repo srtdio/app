@@ -33,6 +33,7 @@
 // Every tile is a real button that opens the lightbox at its index; non-image
 // attachments render below the album as before.
 
+import { PHONE_PAD_FLUSH } from '@/components/ui/layout';
 import { Bone } from '@/lib/motion';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -816,7 +817,8 @@ function MessageAttachmentsBody({
             {...(albumCorners !== undefined ? { corners: albumCorners } : {})}
           />
           {hasBelow ? (
-            <div className="flex flex-col items-start gap-2 px-2 pb-1 pt-2">
+            // Phone: no side inset, so the caption starts on the message text column (64).
+            <div className={cn('flex flex-col items-start gap-2 px-2 pb-1 pt-2', PHONE_PAD_FLUSH)}>
               {caption}
               {others.map((attachment, index) => (
                 <AttachmentItem

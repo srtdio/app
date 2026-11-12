@@ -2154,10 +2154,9 @@ export async function assertAlignment(
             });
           } else {
             // Under 768 the comments sit on the message family's column (16 +
-            // 36 photo + 12 = 64, 11 Nov 2026); the caption header keeps its
-            // own 32 photo + 8 (40 from the block's left) until PostDetailPage
-            // moves onto the family sizes.
-            column.gaps.push({ label: 'caption header name x', gap: h.left - c.left, equals: 40 });
+            // 36 photo + 12 = 64, 11 Nov 2026); the caption header's name is
+            // on it too: its 32 photo + 16 (48 from the block's left, 12 Nov 2026).
+            column.gaps.push({ label: 'caption header name x', gap: h.left - c.left, equals: 48 });
           }
         }
         out.push(column);

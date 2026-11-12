@@ -269,7 +269,9 @@ describe('message family: phone edges and columns (12 Nov 2026)', () => {
     const tip = read('components/chat/ThreadHoldTip.tsx');
     expect(tip).toContain("layout === 'laptop' ? 'pl-3' : 'pl-1'");
     expect(tip).toContain("cn('min-w-0 flex-1', layout === 'laptop' && 'truncate')");
-    expect(tip).toContain('className="min-w-11 shrink-0"');
+    // Phone: the strip and words on 16 (PHONE_PAD_FLUSH), "Got it"'s words on the right edge.
+    expect(tip).toContain('PHONE_PAD_FLUSH');
+    expect(tip).toContain("className={cn('min-w-11 shrink-0', TEXT_KEY_PULL)}");
   });
 
   it('thread strip and root head: "Reply in thread" and the root name start on 64', () => {

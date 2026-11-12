@@ -7,6 +7,7 @@
 // action; a failure toasts "Couldn't forward to [chat name]. Try again." and keeps the
 // sheet open. Design tokens only, so light and dark stay at parity.
 
+import { PHONE_PAD_FLUSH } from '@/components/ui/layout';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
@@ -175,7 +176,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
       }
     >
       {listed.length === 0 ? (
-        <p className="px-1 py-3 text-base text-fg-3">Chats show up here.</p>
+        <p className={cn('px-1 py-3 text-base text-fg-3', PHONE_PAD_FLUSH)}>Chats show up here.</p>
       ) : (
         <ul className="flex flex-col divide-y divide-border border-y border-border">
           {listed.map((channel) => {
@@ -191,6 +192,8 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
                   }
                   className={cn(
                     'group/notes-row flex items-center gap-3 px-1 py-2 mv-tint',
+                    // Phone: the photo on the sheet's 16 edge.
+                    PHONE_PAD_FLUSH,
                     isSelected ? 'bg-panel-2 text-fg' : 'text-fg-2',
                   )}
                 >

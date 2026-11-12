@@ -314,8 +314,11 @@ export const WRITING_FIELD_DISABLED = 'has-[textarea:disabled]:border-border-str
 
 // The field inside the box drops its own look: the box draws the line, the
 // fill and the focus line. Tokens only.
+// Phone (12 Nov 2026): the field is a block, so no line-box gap sits under it
+// (it made the box 6 taller than its 44 keys: the words rode 3 above the row's
+// centre and a bottom-aligned Send 3 below it).
 const BOX_OWNS_FIELD =
-  '[&_textarea]:border-0 [&_textarea]:bg-transparent [&_textarea]:px-0 [&_textarea]:[--lit-well:none] [&_textarea]:[--sel-edge:transparent]';
+  '[&_textarea]:border-0 [&_textarea]:bg-transparent [&_textarea]:px-0 [&_textarea]:[--lit-well:none] [&_textarea]:[--sel-edge:transparent] max-md:[&_textarea]:block';
 
 export interface WritingBoxProps {
   mode: WritingMode;
@@ -1014,7 +1017,11 @@ export function WritingBox(props: WritingBoxProps) {
       >
         {phoneExpanded ? null : overlay}
         {phoneExpanded ? (
-          <div data-expanded-bar="" className="wb-safe-top flex min-h-11 items-center gap-2">
+          <div
+            data-expanded-bar=""
+            // The key's box sits on 16 and the title on the 64 column (12 + 4 + 36 + 12).
+            className="wb-safe-top flex min-h-11 items-center gap-2 max-md:gap-3 max-md:pl-1"
+          >
             <RowKey label="Collapse" onPress={() => setExpanded(false)}>
               <IconCollapse size={ICON_SIZE.control} />
             </RowKey>

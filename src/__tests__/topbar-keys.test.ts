@@ -52,7 +52,9 @@ describe('top bar keys: the 36 strip stays in the top bar, below md only', () =>
     // Search and the avatar: 36 only below md (their IconButton stays 44 tall).
     expect(src).toContain("export const TOPBAR_KEY = 'max-md:w-topbar-key max-md:min-w-0';");
     expect(src).toMatch(/label="Search"\s+className=\{cn\('md:hidden', TOPBAR_KEY\)\}/);
-    expect(src).toMatch(/label="Account menu"\s+className=\{cn\(TOPBAR_KEY, 'max-md:mr-1'\)\}/);
+    expect(src).toMatch(
+      /label="Account menu"\s+className=\{cn\(TOPBAR_KEY, 'max-md:justify-end'\)\}/,
+    );
     // The slots: a 44 tall strip, 36 below md; sort 44 and primary 112 from md.
     expect(src).toContain("'inline-flex h-11 w-topbar-key shrink-0 items-center justify-center'");
     expect(src).toContain("'md:w-auto md:min-w-11 max-md:[&_button]:w-topbar-key");

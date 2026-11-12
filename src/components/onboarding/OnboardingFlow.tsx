@@ -1085,7 +1085,8 @@ export function OnboardingFlow({
             card and the Back key's ink (LEADING_PULL: -12 + the 44 box's 12 to
             its 20 glyph, less the glyph's ink inset) all start on it. */}
         <div className={cn('mx-auto flex w-full max-w-md flex-1 flex-col', GUTTER)}>
-          <header className="flex min-h-14 items-center justify-between pt-2">
+          {/* mt-2, not pt-2: the 8 sits outside the 56 strip, so the Back key and the wordmark sit on its centre. */}
+          <header className="mt-2 flex min-h-14 items-center justify-between">
             {canGoBack ? (
               <IconButton type="button" onClick={back} label="Back" className={LEADING_PULL}>
                 <IconChevronLeft size={ICON_SIZE.control} className="text-fg" />
