@@ -48,7 +48,7 @@ export function Composer(props: ComposerProps): ReactElement {
           formRef.current?.requestSubmit();
         }}
       />
-      <button type="submit" aria-label="Send" disabled={props.disabled} />
+      <input type="submit" aria-label="Send" disabled={props.disabled} />
     </form>
   );
 }

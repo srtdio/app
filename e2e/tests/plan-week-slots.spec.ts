@@ -269,12 +269,13 @@ test('client: OK shows the pill with Undo; Not OK opens the item with the note b
   await concept.locator('[data-plan-not-ok]').click();
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
-  await expect(page.getByLabel('Comment', { exact: true })).toBeFocused();
+  // 12 Nov 2026: the note box is chat's Composer docked at the page's foot.
+  const noteBox = item.locator('[data-plan-comments-composer]').getByRole('textbox', {
+    name: 'Message',
+  });
+  await expect(noteBox).toBeFocused();
   await expect(item.locator('[data-plan-ask-hint]')).toBeVisible();
-  await expect(page.getByLabel('Comment', { exact: true })).toHaveAttribute(
-    'placeholder',
-    'What should change?',
-  );
+  await expect(noteBox).toHaveAttribute('placeholder', 'What should change?');
   // Not OK flushed the pending OK first; the changes are written only on Send.
   await expect
     .poll(

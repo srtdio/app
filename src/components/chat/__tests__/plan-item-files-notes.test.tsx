@@ -19,7 +19,10 @@ const env = vi.hoisted(() => ({
   coarse: false,
   reads: 0,
   result: null as unknown,
-  comment: vi.fn(async (..._args: unknown[]) => ({ ok: true, data: 'cm-new' })),
+  comment: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; data: string }>>(async () => ({
+    ok: true,
+    data: 'cm-new',
+  })),
 }));
 
 vi.mock('agora-chat', () => ({

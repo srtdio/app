@@ -149,7 +149,6 @@ import {
 } from '@/components/chat/PlanMoveSheet';
 import { Composer } from '@/components/chat/Composer';
 import { profileNameOf } from '@/components/chat/MessageBubble';
-import { THREAD_REPLY_PLACEHOLDER } from '@/components/chat/MessageThread';
 import {
   fetchCommentFiles,
   idsToRead,
@@ -158,6 +157,7 @@ import {
 import {
   MENTION_TEAM_NOTE,
   PlanItemThread,
+  THREAD_REPLY_PLACEHOLDER,
   blockedMentions,
   isInvalidMention,
   mentionsRestricted,

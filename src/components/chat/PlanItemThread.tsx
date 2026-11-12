@@ -36,6 +36,7 @@ import {
   type BubbleMentions,
 } from '@/components/chat/MessageBubble';
 import { ThreadCommentRow } from '@/components/chat/ThreadCommentRow';
+import { THREAD_REPLY_PLACEHOLDER } from '@/components/chat/MessageThread';
 import { RepliesRow, RepliesSeparatorRow } from '@/components/chat/ThreadRail';
 import {
   CommentForwardLayer,
@@ -75,12 +76,7 @@ import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-pri
 import { supabase } from '@/lib/supabase';
 import { rowWhen } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
-import {
-  useCoarsePointer,
-  useHoverPointer,
-  useIsLaptop,
-  usePrefersReducedMotion,
-} from '@/lib/use-is-laptop';
+import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
 import { useReactions, type ReactionsApi } from '@/lib/reactions/use-reactions';
 import type { ReactionSummary } from '@/lib/reactions/model';
@@ -150,6 +146,9 @@ function authorLeft(
   if (held === null) return false;
   return !held.rows.some((r) => r.user_id === userId && r.active === true && r.removed_at === null);
 }
+
+/** The thread reply box's hint (chat's word), for the screen's reply box. */
+export { THREAD_REPLY_PLACEHOLDER };
 
 /** Comments this close together from one author are one run: chat's own group gap. */
 export const PLAN_RUN_GAP_MS = SENDER_GROUP_MS;
@@ -692,7 +691,6 @@ export function PlanItemThread(props: {
   openReplyId?: string | null;
 }): ReactElement {
   const layout = useChatLayout();
-  const laptop = useIsLaptop();
   const hoverMenu = useHoverPointer();
   const coarsePointer = useCoarsePointer();
   const reducedMotion = usePrefersReducedMotion();
@@ -788,8 +786,6 @@ export function PlanItemThread(props: {
     const first = seenNewest.current === null;
     seenNewest.current = newestOpenReply;
     if (!first) markRead(openRootId);
-    // markRead is stable in effect (state setter + a fire-and-forget write).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRootId, newestOpenReply]);
   // A link to a reply opens its thread at that reply, once per id.
   const landedReply = useRef<string | null>(null);
@@ -896,7 +892,6 @@ export function PlanItemThread(props: {
     });
     threadLayer = (
       <CommentThreadLayer
-        laptop={laptop}
         title={THREAD_TITLE}
         subtitle={
           props.threadSubtitle !== undefined && props.threadSubtitle !== ''

@@ -53,7 +53,7 @@ function fakeRpc(answer: { data: unknown; error: { message: string; details?: st
   client: Client;
   rpc: ReturnType<typeof vi.fn>;
 } {
-  const rpc = vi.fn(async (..._args: unknown[]) => answer);
+  const rpc = vi.fn<(...args: unknown[]) => Promise<typeof answer>>(async () => answer);
   return { client: { rpc } as unknown as Client, rpc };
 }
 

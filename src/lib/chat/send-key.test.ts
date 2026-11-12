@@ -32,7 +32,9 @@ describe('isSendKeydown (moved from Composer, U10)', () => {
     const composer = read('components/chat/Composer.tsx');
     expect(composer).toContain("import { isSendKeydown } from '@/lib/chat/send-key';");
     expect(composer).not.toContain('export function isSendKeydown');
+    // 12 Nov 2026: the Plan item comment box is chat's Composer, so it sends by the same rule.
     const item = read('components/chat/PlanItemScreen.tsx');
-    expect(item).toContain("import { isSendKeydown } from '@/lib/chat/send-key';");
+    expect(item).toMatch(/from '@\/components\/chat\/Composer'/);
+    expect(item).not.toContain('isSendKeydown');
   });
 });

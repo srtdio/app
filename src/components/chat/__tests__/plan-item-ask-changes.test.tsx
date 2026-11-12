@@ -67,8 +67,8 @@ describe('Not OK on a row: the item screen asks changes at once', () => {
       /props\.askChanges === true\s*\?\s*slotSide\(side, bundle\.plan\.audience\)/,
     );
     expect(src).toContain('p_side: reviewSide,');
-    // A post item shows the note form while asking.
-    expect(src).toContain("item.kind === 'post' && !askingChanges ? undefined : (");
+    // A post item shows the note box while asking (the docked Composer).
+    expect(src).toContain('{askingChanges ? commentDock : null}');
     const screen = read('PlanScreen.tsx');
     expect(screen).toMatch(
       /const planNotOk = [\s\S]*?undoable\.flush\(\);\s*setAskChanges\(true\);\s*setRowHighlight\(null\);\s*setItemId\(item\.id\);/,

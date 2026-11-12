@@ -47,7 +47,6 @@ describe('format rules', () => {
 
   it.each([
     'components/chat/Composer.tsx',
-    'components/chat/PlanItemScreen.tsx',
     'components/chat/ConceptSheet.tsx',
     'components/pages/pcs/use-post-decisions.tsx',
     'components/pages/CreateBriefSheet.tsx',
@@ -67,8 +66,9 @@ describe('format rules', () => {
     expect(modes('components/pages/CreateBriefSheet.tsx')).toEqual(['field']);
     expect(modes('components/chat/ConceptSheet.tsx')).toEqual(['field']);
     expect(modes('components/pages/plan-tab/BankAddSheet.tsx')).toEqual(['field']);
-    // The plan comment box is the chat composer's box: comment mode, send in its row.
-    expect(modes('components/chat/PlanItemScreen.tsx')).toEqual(['comment']);
+    // The plan comment box is chat's Composer itself (12 Nov 2026): no box of its own.
+    expect(modes('components/chat/PlanItemScreen.tsx')).toEqual([]);
+    expect(read('components/chat/PlanItemScreen.tsx')).toContain('<Composer');
   });
 
   it('the comment composer MentionInput formats', () => {

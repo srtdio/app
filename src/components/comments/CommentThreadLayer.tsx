@@ -28,6 +28,7 @@ import {
   type ScrollSource,
 } from '@/lib/chat/stick-to-bottom';
 import { supabase } from '@/lib/supabase';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 
 /**
  * A comment thread opens at the latest reply (Thread polish 1, 11 Nov 2026):
@@ -120,7 +121,6 @@ export function useCommentThreadStick(input: {
  * post column); phone: a portal over the page.
  */
 export function CommentThreadLayer(props: {
-  laptop: boolean;
   title: string;
   subtitle: string | undefined;
   rootId: string;
@@ -138,6 +138,7 @@ export function CommentThreadLayer(props: {
   /** Extra data hooks on the scroller (a Plan thread marks itself). */
   scrollerData?: { [hook: `data-${string}`]: string | undefined } | undefined;
 }): ReactElement {
+  const laptop = useIsLaptop();
   const frame = (
     <ThreadViewFrame
       title={props.title}
@@ -162,7 +163,7 @@ export function CommentThreadLayer(props: {
       <div data-comment-thread-composer="">{props.composer}</div>
     </ThreadViewFrame>
   );
-  return props.laptop ? (
+  return laptop ? (
     <SidePanel
       open
       bare

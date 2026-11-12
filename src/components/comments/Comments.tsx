@@ -1413,7 +1413,6 @@ export function Comments(props: CommentsProps): ReactElement {
             const offer = commentMenuOffer({ row: threadRoot, me, viewerIsAgency });
             return (
               <CommentThreadLayer
-                laptop={laptop}
                 title={THREAD_TITLE}
                 subtitle={
                   props.whereLabel !== undefined && props.whereLabel !== ''

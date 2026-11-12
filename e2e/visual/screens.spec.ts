@@ -1385,6 +1385,7 @@ async function planThreadChecks(page: Page): Promise<void> {
 
 const PLAN_FILES_COMMENT = '0190d300-0000-7000-8000-00000000d521';
 const PLAN_FILES_ONLY_COMMENT = '0190d300-0000-7000-8000-00000000d522';
+const PLAN_PHOTO_COMMENT = '0190d300-0000-7000-8000-00000000d523';
 const PLAN_FILES = [
   { n: 1, mime: 'image/png', kind: 'image', name: 'Grid mock.png', w: 1200, h: 900 },
   { n: 2, mime: 'application/pdf', kind: 'file', name: 'Shot list.pdf', w: null, h: null },
@@ -1395,8 +1396,9 @@ const planFileVersion = (n: number): string => `0190e800-0000-7000-8000-00000000
 /**
  * Files on plan comments, read from asset_versions with the post comment
  * columns (COMMENT_FILE_COLUMNS: the name through the !asset_id embed): Leo's
- * main comment with a photo and a PDF over its text, then a files-only main
- * comment (a PDF, no text) from another colleague.
+ * main comment with a PDF under its text, a photo-only comment (chat's album
+ * insets a caption by 8, so the photo goes alone, as chat's photo screens
+ * show it), then a files-only main comment (a PDF, no text).
  */
 function seedPlanCommentFiles(network: HarnessNetwork): void {
   seedChatPlan(network);
@@ -1425,8 +1427,11 @@ function seedPlanCommentFiles(network: HarnessNetwork): void {
       COLLEAGUE_A,
       'The grid and the shot list for Thursday.',
       NOW - 50 * 60_000,
-      { attachment_asset_ids: [planFileVersion(1), planFileVersion(2)] },
+      { attachment_asset_ids: [planFileVersion(2)] },
     ),
+    planComment(PLAN_PHOTO_COMMENT, COLLEAGUE_A, '', NOW - 49 * 60_000, {
+      attachment_asset_ids: [planFileVersion(1)],
+    }),
     planComment(PLAN_FILES_ONLY_COMMENT, COLLEAGUE_B, '', NOW - 30 * 60_000, {
       attachment_asset_ids: [planFileVersion(3)],
     }),
@@ -3243,7 +3248,8 @@ const SCREENS: Screen[] = [
       const list = page.locator('[data-plan-page="item"] [data-plan-thread]');
       const files = list.locator(`li[data-plan-comment-id="${PLAN_FILES_COMMENT}"]`);
       const only = list.locator(`li[data-plan-comment-id="${PLAN_FILES_ONLY_COMMENT}"]`);
-      await waitFor([files.locator('img')], 'comment photo');
+      const photo = list.locator(`li[data-plan-comment-id="${PLAN_PHOTO_COMMENT}"]`);
+      await waitFor([photo.locator('img')], 'comment photo');
       await waitFor(
         [files.getByRole('button', { name: `Open ${PLAN_FILES[1].name}`, exact: true })],
         'comment PDF card',

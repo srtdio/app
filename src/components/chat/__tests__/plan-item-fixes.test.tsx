@@ -105,10 +105,10 @@ describe('F4: Move and Remove land only on the item still open', () => {
 });
 
 describe('F5: a failed comment says so on its own row, never under the box', () => {
-  it("the comment input's onChange sets the text; no send error line is kept", () => {
-    expect(item()).toMatch(
-      /ref=\{commentRef\}\s*compact\s*rows=\{1\}\s*value=\{text\}\s*onChange=\{\(e\) => \{\s*setText\(e\.target\.value\);/,
-    );
+  it("the comment box is chat's Composer; no send error line is kept", () => {
+    // 12 Nov 2026: the box is chat's Composer (its own text state), handed the field ref.
+    expect(item()).toMatch(/<PlanCommentBox[\s\S]*?inputRef=\{commentRef\}/);
+    expect(item()).toContain('<Composer');
     // Chat's rule: "Not sent" + Retry per message (PlanItemThread), no box-level error.
     expect(item()).not.toContain('setSendError');
     expect(item()).toContain('failed: true');

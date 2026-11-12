@@ -461,10 +461,7 @@ describe('Remove from plan: only in the More menu', () => {
     );
     expect(concept).not.toContain('RemoveFromPlanButton');
     expect(concept).not.toContain('data-plan-remove-row');
-    // Only the reply box's hint word comes from chat's thread file.
-    expect(src).toMatch(
-      /import \{ THREAD_REPLY_PLACEHOLDER \} from '@\/components\/chat\/MessageThread'/,
-    );
+    expect(src).not.toMatch(/from '@\/components\/chat\/MessageThread'/);
     expect(src).toMatch(/from '@\/components\/chat\/Composer'/);
     expect(src).not.toContain('MentionInput');
   });
