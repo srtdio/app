@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -38,10 +40,8 @@ import {
   BottomTabs,
   PHONE_BAR_OFFSETS,
   chatTabLabel,
-  dockShrinkNext,
   planTabLabel,
   tabClass,
-  useDockShrunk,
 } from '@/components/shell/BottomTabs';
 import { MOVE_CLASS } from '@/lib/motion';
 import { PRIMARY_NAV } from '@/components/shell/nav';
@@ -438,169 +438,74 @@ describe('tabClass: the flat pill tab', () => {
     }
   });
 
-  it('active while shrunk: the fill in the 44 box, no name room', () => {
-    const cls = tabClass(true, true).split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'bg-panel-3', 'text-fg']));
-    expect(cls).not.toContain('px-3');
-    expect(cls).not.toContain('gap-2');
+  it('inactive: the icon alone in fg-2 in the 44 box', () => {
+    const cls = tabClass(false).split(' ');
+    expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'text-fg-2']));
+    for (const c of ['px-3', 'gap-2', 'bg-panel-3', 'bg-accent', 'lit-pill']) {
+      expect(cls).not.toContain(c);
+    }
+  });
+});
+
+const source = readFileSync(fileURLToPath(new URL('./BottomTabs.tsx', import.meta.url)), 'utf8');
+
+describe('BottomTabs: the nav never reacts to scroll (guard)', () => {
+  it('source has no scroll listener, no useDockShrunk, no data-dock, no translate-y-1', () => {
+    expect(source).not.toMatch(/addEventListener\(\s*['"]scroll['"]/);
+    expect(source).not.toMatch(/['"]scroll['"]/);
+    expect(source).not.toContain('useDockShrunk');
+    expect(source).not.toContain('data-dock');
+    expect(source).not.toContain('translate-y-1');
   });
 
-  it('inactive: the icon alone in fg-2 in the 44 box, shrunk or not', () => {
-    for (const cls of [tabClass(false).split(' '), tabClass(false, true).split(' ')]) {
-      expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'text-fg-2']));
-      for (const c of ['px-3', 'gap-2', 'bg-panel-3', 'bg-accent', 'lit-pill']) {
-        expect(cls).not.toContain(c);
+  function snapshot(container: HTMLElement): string[] {
+    const tabs = [...pillLinks(container), chatLink(container)];
+    return [
+      nav(container).getAttribute('class') ?? '',
+      container.querySelector('[data-tab-pill]')?.getAttribute('class') ?? '',
+      ...tabs.map((a) => a.getAttribute('class') ?? ''),
+      ...Array.from(container.querySelectorAll('[data-tab-name]')).map((n) => n.textContent ?? ''),
+    ];
+  }
+
+  function scrollTo(el: Element, top: number): void {
+    Object.defineProperty(el, 'scrollTop', { configurable: true, writable: true, value: top });
+    act(() => {
+      el.dispatchEvent(new Event('scroll'));
+    });
+  }
+
+  it.each(['/briefs', '/chat', '/notifications'])(
+    'on %s: scrolling the document or an inner scroller changes nothing',
+    (path) => {
+      const container = render(path);
+      const before = snapshot(container);
+      expect(container.querySelectorAll('[data-tab-name]')).toHaveLength(1);
+      const scroller = document.createElement('div');
+      document.body.appendChild(scroller);
+      const page = document.scrollingElement ?? document.documentElement;
+      for (const top of [100, 300, 600, 250, 10, 0]) {
+        scrollTo(page, top);
+        act(() => {
+          document.dispatchEvent(new Event('scroll'));
+        });
+        scrollTo(scroller, top);
+        expect(snapshot(container)).toEqual(before);
       }
-    }
-  });
-});
+      scroller.remove();
+      scrollTo(page, 0);
+    },
+  );
 
-describe('dockShrinkNext: one scroll step decides the dock (pure)', () => {
-  it.each([
-    // [shrunk, prevTop, top, next]
-    // Near the top (<= 24) the dock always rests, whatever the step.
-    [true, 0, 24, false],
-    [true, 200, 10, false],
-    [false, 0, 24, false],
-    [true, 20, 24, false],
-    [false, 0, 20, false],
-    // A step down past 8 shrinks.
-    [false, 100, 109, true],
-    [false, 100, 300, true],
-    [true, 100, 200, true],
-    // A step up past 8 grows.
-    [true, 300, 291, false],
-    [true, 300, 100, false],
-    [false, 300, 100, false],
-    // A step of 8 or less either way keeps the state.
-    [true, 100, 108, true],
-    [false, 100, 108, false],
-    [true, 100, 92, true],
-    [false, 100, 92, false],
-    [true, 100, 100, true],
-    [false, 100, 100, false],
-  ] as const)('shrunk=%s, %s -> %s gives %s', (shrunk, prevTop, top, next) => {
-    expect(dockShrinkNext(shrunk, prevTop, top)).toBe(next);
-  });
-});
-
-/** Sets el.scrollTop (jsdom keeps it 0) and fires one non-bubbling scroll on it. */
-function scrollTo(el: HTMLElement, top: number): void {
-  Object.defineProperty(el, 'scrollTop', { configurable: true, writable: true, value: top });
-  act(() => {
-    el.dispatchEvent(new Event('scroll'));
-  });
-}
-
-describe('useDockShrunk: one passive capture scroll listener on document', () => {
-  function Probe() {
-    const shrunk = useDockShrunk();
-    return <span data-probe={shrunk ? 'shrunk' : 'rest'} />;
-  }
-
-  function mountProbe(): HTMLDivElement {
-    host = document.createElement('div');
-    document.body.appendChild(host);
-    root = createRoot(host);
-    act(() => root?.render(<Probe />));
-    return host;
-  }
-
-  it('adds exactly one scroll listener ({capture, passive}) and removes the same one on unmount', () => {
-    const add = vi.spyOn(document, 'addEventListener');
-    const remove = vi.spyOn(document, 'removeEventListener');
-    try {
-      mountProbe();
-      const added = add.mock.calls.filter(([type]) => type === 'scroll');
-      expect(added).toHaveLength(1);
-      const handler = added[0]?.[1];
-      expect(handler).toBeTypeOf('function');
-      expect(added[0]?.[2]).toEqual({ capture: true, passive: true });
-      expect(remove.mock.calls.filter(([type]) => type === 'scroll')).toHaveLength(0);
-      act(() => root?.unmount());
-      root = null;
-      const removed = remove.mock.calls.filter(([type]) => type === 'scroll');
-      expect(removed).toHaveLength(1);
-      expect(removed[0]?.[1]).toBe(handler);
-      expect(removed[0]?.[2]).toEqual({ capture: true, passive: true });
-    } finally {
-      add.mockRestore();
-      remove.mockRestore();
-    }
-  });
-
-  it('flips on an inner scroller: down shrinks, small steps keep, up grows, the top rests', () => {
-    const view = mountProbe();
-    const state = (): string | null =>
-      view.querySelector('[data-probe]')?.getAttribute('data-probe') ?? null;
-    const scroller = document.createElement('div');
-    document.body.appendChild(scroller);
-    expect(state()).toBe('rest');
-    scrollTo(scroller, 100); // first read: no step yet
-    expect(state()).toBe('rest');
-    scrollTo(scroller, 200); // down 100
-    expect(state()).toBe('shrunk');
-    scrollTo(scroller, 195); // up 5: kept
-    expect(state()).toBe('shrunk');
-    scrollTo(scroller, 150); // up 45
-    expect(state()).toBe('rest');
-    scrollTo(scroller, 300); // down 150
-    expect(state()).toBe('shrunk');
-    scrollTo(scroller, 10); // near the top
-    expect(state()).toBe('rest');
-    scroller.remove();
-  });
-});
-
-describe('BottomTabs: the dock shrinks on scroll down', () => {
-  it('rest: data-dock="rest", 52 pill and Chat circle, the open tab named', () => {
+  it('rest look: 52 pill, Chat 52 circle, the open tab named, no dock attribute', () => {
     const container = render('/briefs');
     const bar = nav(container);
-    expect(bar.getAttribute('data-dock')).toBe('rest');
+    expect(bar.hasAttribute('data-dock')).toBe(false);
+    expect(classes(bar)).toContain(MOVE_CLASS.dock);
     expect(classes(bar)).not.toContain('translate-y-1');
     const pill = container.querySelector('[data-tab-pill]');
     expect(classes(pill ?? bar)).toEqual(expect.arrayContaining(['h-13', 'px-1']));
     expect(classes(chatLink(container))).toEqual(expect.arrayContaining(['h-13', 'w-13']));
     expect(pillLinks(container).map((a) => a.textContent)).toEqual(['', 'Briefs', '', '', '']);
-  });
-
-  it('shrunk: data-dock="shrunk", 44 pill, every tab and Chat 44, no name anywhere, icons stay', () => {
-    const container = render('/briefs');
-    const scroller = document.createElement('div');
-    document.body.appendChild(scroller);
-    scrollTo(scroller, 100);
-    scrollTo(scroller, 300);
-    const bar = nav(container);
-    expect(bar.getAttribute('data-dock')).toBe('shrunk');
-    expect(classes(bar)).toEqual(expect.arrayContaining(['translate-y-1', MOVE_CLASS.dock]));
-    const pill = container.querySelector('[data-tab-pill]');
-    expect(classes(pill ?? bar)).toContain('h-11');
-    expect(classes(pill ?? bar)).not.toContain('h-13');
-    const chat = classes(chatLink(container));
-    expect(chat).toEqual(expect.arrayContaining(['h-11', 'w-11']));
-    expect(chat).not.toContain('h-13');
-    expect(container.querySelectorAll('[data-tab-name]')).toHaveLength(0);
-    for (const a of pillLinks(container)) {
-      expect(classes(a)).toEqual(expect.arrayContaining(['h-11', 'w-11']));
-      expect(classes(a)).not.toContain('px-3');
-    }
-    // The icon and the fill stay on the active tab.
-    expect(pillLinks(container)[1]?.querySelector('svg')).not.toBeNull();
-    expect(classes(pillLinks(container)[1] ?? bar)).toContain('bg-panel-3');
-    scroller.remove();
-  });
-
-  it('shrunk on /chat: Chat is the 44 ink circle, its name hidden', () => {
-    const container = render('/chat');
-    const scroller = document.createElement('div');
-    document.body.appendChild(scroller);
-    scrollTo(scroller, 100);
-    scrollTo(scroller, 300);
-    const chat = chatLink(container);
-    expect(classes(chat)).toEqual(expect.arrayContaining(['h-11', 'w-11', 'bg-accent']));
-    expect(classes(chat)).not.toContain('px-4');
-    expect(container.querySelectorAll('[data-tab-name]')).toHaveLength(0);
-    expect(chat.querySelector('svg')).not.toBeNull();
-    scroller.remove();
   });
 });
