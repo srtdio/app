@@ -10,6 +10,7 @@ import {
   MESSAGE_PHOTO_COL,
   MESSAGE_PHOTO_GAP,
   REPLIES_ROW_PAD,
+  SEEN_LINE_PAD,
   SENDER_NAME_TYPE,
 } from '@/components/chat/chat-type';
 import { AVATAR_PX } from '@/components/ui/Avatar';
@@ -197,5 +198,46 @@ describe('message family: typed text and sent text share one token', () => {
     // Important, so it wins over the compact Textarea's inline default.
     expect(COMPOSER_INPUT_TYPE.touch.startsWith('!text-')).toBe(true);
     expect(COMPOSER_INPUT_TYPE.laptop).toBe('!text-lg font-normal');
+  });
+});
+
+describe('message family: Catch up, Seen / Read by and the phone thread root (12 Nov 2026)', () => {
+  it('a Catch up row names and writes in the family tokens', () => {
+    const rows = read('components/catch-up/CatchUpRows.tsx');
+    expect(rows, 'the name takes the family name token').toContain(
+      'sized(SENDER_NAME_TYPE, layout)',
+    );
+    // RichText (comments, messages) and the event line both take the body token.
+    expect(
+      rows.split('sized(BUBBLE_BODY_TYPE, layout)').length - 1,
+      'every row text takes the family body token',
+    ).toBeGreaterThanOrEqual(2);
+    // The open-thread key never adds height to a one-line row: its 44 is a hit area.
+    const hit = /export const OPEN_THREAD_HIT =\s*"([^"]*)"/.exec(rows)?.[1] ?? '';
+    expect(hit.split(' '), 'the text key has no 44 box of its own').toContain('min-h-0');
+    expect(hit, 'the 44 tap is a hit area').toContain('before:h-11');
+    expect(rows).toMatch(/data-catch-up-open-thread=""[\s\S]{0,400}OPEN_THREAD_HIT/);
+  });
+
+  it('Seen and Read by start on the text column: 64 touch, 56 laptop, tokens only', () => {
+    const layer = read('components/chat/ReadingLayer.tsx');
+    expect(layer, 'no raw left pad in ReadingLayer').not.toMatch(/\bpl-\d/);
+    expect(layer).toContain('sized(SEEN_LINE_PAD, layout)');
+    expect(layer).toContain('sized(REPLIES_ROW_PAD, layout)');
+    expect(stepPx(SEEN_LINE_PAD.touch, 'pl')).toBe(64);
+    expect(stepPx(SEEN_LINE_PAD.laptop, 'pl')).toBe(56);
+    // Read by's button pads 8 inside: 56 + 8 touch, 48 + 8 laptop.
+    expect(stepPx(REPLIES_ROW_PAD.touch, 'pl') + 8).toBe(64);
+    expect(stepPx(REPLIES_ROW_PAD.laptop, 'pl') + 8).toBe(56);
+  });
+
+  it("the thread's main message stacks on laptop only; on phone it is a head row", () => {
+    expect(BUBBLE).toContain("const rootStack = rootPlace && layout === 'laptop';");
+    // Every stacked-geometry branch reads rootStack, never rootPlace.
+    expect(BUBBLE).toContain("rootStack ? 'relative flex-col items-stretch gap-2' : 'flex-row'");
+    expect(BUBBLE).toContain('const senderLine = rootStack ? null : showMeta ?');
+    expect(BUBBLE).toContain('const photo = rootStack ? (');
+    expect(BUBBLE).not.toMatch(/rootPlace && 'absolute/);
+    expect(BUBBLE).not.toMatch(/rootPlace \? 'relative flex-col/);
   });
 });

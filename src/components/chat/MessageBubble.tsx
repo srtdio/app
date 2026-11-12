@@ -1363,8 +1363,10 @@ export function MessageBubble(props: {
   /** A member of a card's thread: the rail stands in for its quote and chip (selection too). */
   threadMember?: boolean | undefined;
   /**
-   * The thread view's rows (9 Nov 2026): 'root' = 40 photo with the name over
-   * the time beside it and the text full width below on the 16 gutter;
+   * The thread view's rows (9 Nov 2026): 'root' on laptop = 40 photo with the
+   * name over the time beside it and the text full width below on the 16
+   * gutter; 'root' on phone (12 Nov 2026) = a normal head row (36 photo, the
+   * name line, text on the 64 column), still carrying the add-reaction key;
    * 'reply' = 32 photo, 12 to the name and text (x60), 16 between heads.
    * Absent: the main chat's row (photo 32, 8 gap), unchanged.
    */
@@ -1438,7 +1440,11 @@ export function MessageBubble(props: {
   const showMeta = head;
   const gutter = !head;
   // The thread view's root (always its list's first row, so a head) and replies.
+  // rootPlace is the root's behaviour (the add-reaction key, the chips' end
+  // spacing); rootStack is its stacked geometry, laptop only: on phone the
+  // root is a normal head row on the message family's 64 text column.
   const rootPlace = props.threadPlace === 'root' && head;
+  const rootStack = rootPlace && layout === 'laptop';
   const replyPlace = props.threadPlace === 'reply';
   const hasReactions = message.reactions.length > 0;
   // The chips take a reaction: a recorded row, wired, not in selection mode.
@@ -1543,7 +1549,7 @@ export function MessageBubble(props: {
       node
     );
   const headTick = mine ? metaTick(fullMeta.status) : null;
-  const senderLine = rootPlace ? null : showMeta ? (
+  const senderLine = rootStack ? null : showMeta ? (
     // One block line, its parts inline: the name trigger stays an inline
     // control in running text (its hit area is the trigger's 44 box), and the
     // whole line truncates.
@@ -1585,15 +1591,16 @@ export function MessageBubble(props: {
     railRowClass(rail, false),
     NO_TOUCH_SELECT,
     head ? (props.afterLabel === true ? 'pt-0' : replyPlace ? 'pt-4' : 'pt-3') : 'pt-1',
-    // Thread view: the root stacks its head over the full-width text; replies sit 12 from the photo.
-    // The root's head-to-text step stays 8 on both layouts (not part of the family change).
-    rootPlace ? 'relative flex-col items-stretch gap-2' : 'flex-row',
+    // Thread view, laptop only: the root stacks its head over the full-width
+    // text (head-to-text step 8); on phone it is a head row like any other.
+    // Replies sit 12 from the photo.
+    rootStack ? 'relative flex-col items-stretch gap-2' : 'flex-row',
     replyPlace && 'gap-3',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
   );
-  const photo = rootPlace ? (
-    // The thread view's root head: 40 photo, 12 to the name over the time.
+  const photo = rootStack ? (
+    // The thread view's root head, laptop only: 40 photo, 12 to the name over the time.
     <div data-thread-root-head="" className="flex min-w-0 items-center gap-3">
       {asPerson(
         <Avatar name={headerName(message, profiles)} {...senderAvatar} role="row" decorative />,
@@ -1635,7 +1642,9 @@ export function MessageBubble(props: {
         />,
         'block',
       ),
-      rail,
+      // The phone thread root is a head row now, but it never drew a photo
+      // rail piece (its stacked head had none): it still draws none.
+      rootPlace ? undefined : rail,
       railEdge,
     )
   ) : null;
@@ -1653,6 +1662,7 @@ export function MessageBubble(props: {
         data-msg-id={message.id}
         data-state={message.state}
         data-deleted=""
+        data-thread-root={rootPlace ? '' : undefined}
         className={cn(rowClass, tombSwipe?.handlers !== undefined && SWIPE_ROW_TOUCH)}
         onContextMenu={selecting ? undefined : rowContextMenu}
         {...rowSwipeProps(tombSwipe)}
@@ -1753,6 +1763,7 @@ export function MessageBubble(props: {
       data-state={message.state}
       data-selection={selection?.role}
       data-checked={checked ? '' : undefined}
+      data-thread-root={rootPlace ? '' : undefined}
       className={cn(
         rowClass,
         checked && 'isolate',
@@ -2073,8 +2084,8 @@ export function MessageBubble(props: {
             'shrink-0 self-center text-fg-3 opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
             // An own row's tick passes under the smiley; the page fill keeps the glyph clear.
             rail?.role != null && mine && 'bg-bg',
-            // The thread root's stack: the smiley rides its head line, out of the flow.
-            rootPlace && 'absolute right-4 top-3',
+            // The thread root's stack (laptop): the smiley rides its head line, out of the flow.
+            rootStack && 'absolute right-4 top-3',
           )}
         >
           <SmileyGlyph />
@@ -2085,7 +2096,7 @@ export function MessageBubble(props: {
         <span
           aria-hidden="true"
           data-react-slot=""
-          className={cn('h-11 w-11 shrink-0', rootPlace && 'absolute right-4 top-3')}
+          className={cn('h-11 w-11 shrink-0', rootStack && 'absolute right-4 top-3')}
         />
       ) : null}
       {failed && mine && message.filesMissing === true ? (

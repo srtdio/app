@@ -129,6 +129,41 @@ describe('catch-up guards', () => {
     expect(dark.card).not.toBe(dark.page);
   });
 
+  it('the dark card has no shadow (it fell on Keep unread / Mark as read under the card)', () => {
+    const css = readFileSync(join(SRC, 'index.css'), 'utf8');
+    const block = /\.dark \.catch-up-card\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(block).toContain('background-color: var(--panel-3);');
+    expect(block).toContain('border-color: var(--border-strong);');
+    expect(block).not.toMatch(/box-shadow|lit-overlay|lit-float/);
+    const light = /\n {2}\.catch-up-card\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(light).not.toBe('');
+    expect(light).not.toMatch(/box-shadow/);
+  });
+
+  it('the thread tip is a plain row with a top hairline, never an outlined box', () => {
+    const card = FILES.find((f) => f.rel === 'components/catch-up/CatchUpCard.tsx')?.src ?? '';
+    const from = card.indexOf('data-catch-up-tip=""');
+    const to = card.indexOf('data-catch-up-tip-dismiss=""');
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const tip = card.slice(from, to);
+    expect(tip).toContain('border-t border-border');
+    expect(tip).toContain('pl-4 pr-1');
+    expect(tip).not.toMatch(/rounded-xl border|rounded-|mx-3|mb-2/);
+    expect(tip).toContain('data-catch-up-tip-text=""');
+    expect(tip).toContain('sized(TIP_LINE_TYPE, layout)');
+  });
+
+  it('rows use the message family type; the open-thread text adds no height', () => {
+    const rows = FILES.find((f) => f.rel === 'components/catch-up/CatchUpRows.tsx')?.src ?? '';
+    expect(rows).toContain('sized(SENDER_NAME_TYPE, layout)');
+    expect(rows).toContain('sized(BUBBLE_BODY_TYPE, layout)');
+    expect(rows.match(/data-catch-up-text=""/g)?.length).toBe(2);
+    const hit = /OPEN_THREAD_HIT =\s*"([^"]*)"/.exec(rows)?.[1] ?? '';
+    expect(hit.split(' ')).toEqual(expect.arrayContaining(['relative', 'min-h-0', 'before:h-11']));
+    expect(rows).toContain("cn('text-left focus-visible:lit-focus', OPEN_THREAD_HIT)");
+  });
+
   it('CLAUDE.md carries the rule', () => {
     const md = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
     expect(md).toContain('Catch up: one card per item; card swipe = X axis + rotate only.');

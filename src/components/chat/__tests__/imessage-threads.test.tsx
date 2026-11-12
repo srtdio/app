@@ -318,8 +318,10 @@ describe('thread controls', () => {
   });
 
   it('Seen keeps the rail through it inside a run', () => {
-    expect(html(<SeenLine readAt={AT} timeZone="UTC" rail />)).toContain('data-rail="through"');
-    expect(html(<SeenLine readAt={AT} timeZone="UTC" />)).not.toContain('data-rail');
+    expect(html(<SeenLine readAt={AT} timeZone="UTC" layout="touch" rail />)).toContain(
+      'data-rail="through"',
+    );
+    expect(html(<SeenLine readAt={AT} timeZone="UTC" layout="touch" />)).not.toContain('data-rail');
   });
 
   it('rail pieces use tokens only', () => {
@@ -349,5 +351,73 @@ describe('thread view frame', () => {
     expect(threadView.escapeCloses({ ...base, defaultPrevented: true })).toBe(false);
     expect(threadView.escapeCloses({ ...base, overlayOpen: true })).toBe(false);
     expect(threadView.escapeCloses({ ...base, selecting: true })).toBe(false);
+  });
+});
+
+describe("the thread's main message: a head row on phone, stacked on laptop (12 Nov 2026)", () => {
+  const root = (layout: 'touch' | 'laptop', rail?: RowRail): string =>
+    html(
+      <MessageBubble
+        message={msg('root')}
+        profiles={PROFILES}
+        cache={cache}
+        presignEnabled={false}
+        showTicks={false}
+        isGroup
+        head
+        tail
+        timeZone="UTC"
+        layout={layout}
+        threadPlace="root"
+        rail={rail}
+        reactionChips={{ onToggle: vi.fn(), onPick: vi.fn() }}
+      />,
+    );
+  const liClass = (out: string): string[] =>
+    (/<li[^>]*class="([^"]*)"/.exec(out)?.[1] ?? '').split(' ');
+
+  it('phone: the 36 photo, the normal name line, text beside it on the 64 column', () => {
+    const out = root('touch');
+    expect(out).toContain('data-thread-root=""');
+    expect(out).not.toContain('data-thread-root-head');
+    expect(out).toContain('data-avatar-role="message"');
+    expect(out).not.toContain('data-avatar-role="row"');
+    // A row, photo 12 from the text: 16 + 36 + 12 = 64.
+    expect(liClass(out)).toEqual(expect.arrayContaining(['flex-row', 'gap-3', 'pt-3']));
+    expect(liClass(out)).not.toContain('flex-col');
+    // One name line carrying the time, inside the text column.
+    expect(out.match(/data-sender-line=""/g)?.length).toBe(1);
+    expect(out).toMatch(/data-sender-line=""[^>]*class="block min-w-0 max-w-full truncate"/);
+    expect(out).toMatch(/data-sender-time=""[^>]*class="[^"]*\bml-2\b/);
+  });
+
+  it('phone: the add-reaction key stays, in the text column, ending on the strip 12', () => {
+    const out = root('touch');
+    expect(out.match(/data-reaction-add/g)?.length).toBe(1);
+    expect(out).toMatch(/data-reaction-chips=""[^>]*class="[^"]*\bmt-1\b/);
+    expect(out).not.toMatch(/data-reaction-chips=""[^>]*class="[^"]*\bmb-2\b/);
+    // The chips come after the bubble, inside the same column (never under the photo).
+    expect(out.indexOf('data-reaction-chips')).toBeGreaterThan(out.indexOf('data-bubble=""'));
+  });
+
+  it('phone: the root draws no photo rail piece (it never did)', () => {
+    const out = root('touch', railFor('last', { isGroup: true, photo: true }));
+    expect(out).not.toContain('data-rail-target');
+  });
+
+  it('laptop: unchanged, the 40 photo head stacked over full-width text', () => {
+    const out = root('laptop');
+    expect(out).toContain('data-thread-root=""');
+    expect(out).toContain('data-thread-root-head=""');
+    expect(out).toContain('data-avatar-role="row"');
+    expect(liClass(out)).toEqual(
+      expect.arrayContaining(['relative', 'flex-col', 'items-stretch', 'gap-2']),
+    );
+    expect(liClass(out)).not.toContain('flex-row');
+    expect(out).toMatch(/data-sender-time=""[^>]*class="block truncate/);
+  });
+
+  it('a reply and a main chat row carry no root mark', () => {
+    expect(bubble(msg('m'))).not.toContain('data-thread-root');
   });
 });

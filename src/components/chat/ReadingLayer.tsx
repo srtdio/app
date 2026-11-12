@@ -26,7 +26,15 @@ import { cn } from '@/lib/cn';
 import { LANE_BOTTOM, LANE_TOP } from '@/components/ui/layout';
 import { civilDay, formatAgo, formatTime } from '@/lib/time';
 import { dayPillLabel } from '@/components/chat/day-separators';
-import { BUBBLE_META_TYPE, EMOJI_PICK_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import {
+  BUBBLE_META_TYPE,
+  EMOJI_PICK_TYPE,
+  NO_TOUCH_SELECT,
+  REPLIES_ROW_PAD,
+  SEEN_LINE_PAD,
+  sized,
+  type ChatLayout,
+} from '@/components/chat/chat-type';
 import { RailThrough } from '@/components/chat/ThreadRail';
 import { FORMER_MEMBER, type MentionMember } from '@/lib/chat/mentions';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -169,26 +177,33 @@ export function LatestButton(props: {
 /**
  * "Seen <time>" under the last own message the DM peer has read; the time is
  * when they read it (read_at), and with none known the line reads "Seen"
- * alone. `rail`: a card thread's rail runs on past it (its through line at the left).
+ * alone. Its words start on the message text column (SEEN_LINE_PAD: 64 touch,
+ * 56 laptop). `rail`: a card thread's rail runs on past it (its through line
+ * at the left).
  */
 export function SeenLine(props: {
   readAt: string | null;
+  /** The size table: the left pad follows the message family's text column. */
+  layout: ChatLayout;
   /** For tests: the zone times render in. The app passes none (the viewer's device zone). */
   timeZone?: string | undefined;
   rail?: boolean;
 }): ReactElement {
+  const { layout } = props;
   return (
     <li
       data-seen-line=""
       className={cn(
-        // L1: left-aligned under the last own message's text (photo 32 + gap 8).
-        'flex justify-start pl-14 pr-4 pt-1',
+        // L1: left-aligned under the last own message's text (the message
+        // family's text column: 16 + photo + gap).
+        'flex justify-start pr-4 pt-1',
+        sized(SEEN_LINE_PAD, layout),
         props.rail === true && 'relative',
         NO_TOUCH_SELECT,
       )}
     >
       {props.rail === true ? <RailThrough /> : null}
-      <span className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>
+      <span data-seen-words="" className={cn(BUBBLE_META_TYPE, 'text-fg-3')}>
         Seen
         {props.readAt !== null ? (
           <>
@@ -205,18 +220,24 @@ export function SeenLine(props: {
 
 /**
  * "Read by X of Y" (or "Read by all") under the last own group message; a 44px
- * button. `rail`: a card thread's rail runs on past it.
+ * button whose 8 inner pad lands the words on the message text column
+ * (REPLIES_ROW_PAD: 56 + 8 touch, 48 + 8 laptop). `rail`: a card thread's rail
+ * runs on past it.
  */
 export function ReadByLine(props: {
   label: string;
+  /** The size table: the left pad follows the message family's text column. */
+  layout: ChatLayout;
   onOpen: () => void;
   rail?: boolean;
 }): ReactElement {
+  const { layout } = props;
   return (
     <li
       data-read-by-line=""
       className={cn(
-        'flex justify-start pl-12 pr-2',
+        'flex justify-start pr-2',
+        sized(REPLIES_ROW_PAD, layout),
         props.rail === true && 'relative',
         NO_TOUCH_SELECT,
       )}
@@ -240,7 +261,7 @@ export function ReadByLine(props: {
 function readByWithMono(label: string): ReactElement {
   const parts = label.split(/(\d+)/);
   return (
-    <span>
+    <span data-read-by-words="">
       {parts.map((part, i) =>
         /^\d+$/.test(part) ? (
           <span key={`part-${i}`} className="font-mono">
