@@ -172,7 +172,7 @@ const LOADING_ROWS = 3;
 const GRID = 'grid grid-cols-4 gap-1 min-[1180px]:grid-cols-6';
 
 /** A list row: one 64px tap target, no text selection and no iOS callout on hold. */
-const ROW = cn('flex min-h-16 min-w-0 items-center gap-3 px-2 py-2', NO_TOUCH_SELECT);
+const ROW = cn('flex min-h-16 min-w-0 items-center gap-3 px-2 py-2 max-md:px-0', NO_TOUCH_SELECT);
 
 /** The 44px leading box of a file or link row (the chat info Files and Links rows). */
 const ROW_ICON =
@@ -569,7 +569,7 @@ function VoiceRowItem(props: {
     <div
       ref={ref}
       data-media-row={item.key}
-      className={cn('flex min-w-0 flex-col gap-1 px-2 py-2', NO_TOUCH_SELECT)}
+      className={cn('flex min-w-0 flex-col gap-1 px-2 py-2 max-md:px-0', NO_TOUCH_SELECT)}
       onContextMenu={noCallout}
     >
       <div className="flex min-h-11 min-w-0 items-center gap-3">
@@ -879,7 +879,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     ) : (
       <ul data-media-skeleton="" className="flex flex-col">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li key={`bone-${i}`} className="flex items-center gap-3 px-2 py-2">
+          <li key={`bone-${i}`} className="flex items-center gap-3 px-2 py-2 max-md:px-0">
             <Bone lit="lit-media" as="div" className="h-11 w-11 shrink-0 rounded-lg" />
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
