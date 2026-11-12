@@ -376,9 +376,8 @@ test(
 
     // Flat look (7 Nov 2026): the dock is centred, only as wide as its tabs
     // (never edge to edge), 16px above the bottom (no home indicator inset
-    // here), at rest (52) at the top of the page.
+    // here), always 52.
     const nav = page.locator('nav[data-undo-anchor]');
-    await expect(nav).toHaveAttribute('data-dock', 'rest');
     const row = await nav.boundingBox();
     const pill = await page.locator('[data-tab-pill]').boundingBox();
     const chat = await page.locator('[data-chat-tab]').boundingBox();
@@ -406,9 +405,9 @@ test(
     await expect(page.locator('nav [data-tab-name]')).toHaveCount(1);
     expect((await tab.boundingBox())?.width).toBeCloseTo(44, 0);
 
-    // Scroll down: the dock shrinks, every tab and Chat are 44, no name shows.
-    // Back at the top the name returns. A small scroller of its own drives the
-    // dock (useDockShrunk hears every scroller), so the page's length never matters.
+    // Scroll down and back up: the nav never reacts (12 Nov 2026). The nav,
+    // the pill, Chat and the open tab's name stay put (within 0.5px). A small
+    // scroller of its own scrolls, so the page's length never matters.
     const scrollProbe = async (top: number): Promise<void> => {
       await page.evaluate(async (to) => {
         let el = document.querySelector<HTMLElement>('[data-dock-probe]');
@@ -428,16 +427,34 @@ test(
         );
       }, top);
     };
+    const name = page.locator('nav [data-tab-name]');
+    const dockBoxes = async () =>
+      Promise.all([
+        nav.boundingBox(),
+        page.locator('[data-tab-pill]').boundingBox(),
+        page.locator('[data-chat-tab]').boundingBox(),
+        name.boundingBox(),
+      ]);
+    const expectSameBoxes = async (
+      before: Awaited<ReturnType<typeof dockBoxes>>,
+    ): Promise<void> => {
+      const after = await dockBoxes();
+      for (const [i, box] of before.entries()) {
+        const now = after[i];
+        if (box === null || now === null || now === undefined) throw new Error('dock box missing');
+        for (const k of ['x', 'y', 'width', 'height'] as const) {
+          expect(Math.abs(now[k] - box[k])).toBeLessThanOrEqual(0.5);
+        }
+      }
+    };
+    const rest = await dockBoxes();
     await scrollProbe(100);
     await scrollProbe(400);
-    await expect(nav).toHaveAttribute('data-dock', 'shrunk');
-    await expect(page.locator('nav [data-tab-name]')).toHaveCount(0);
-    for (const link of await page.locator('[data-tab-pill] a, [data-chat-tab]').all()) {
-      await expect.poll(async () => (await link.boundingBox())?.width).toBeCloseTo(44, 0);
-    }
+    await expect(name).toHaveText('Pipeline');
+    await expectSameBoxes(rest);
     await scrollProbe(0);
-    await expect(nav).toHaveAttribute('data-dock', 'rest');
-    await expect(page.locator('nav [data-tab-name]')).toHaveText('Pipeline');
+    await expect(name).toHaveText('Pipeline');
+    await expectSameBoxes(rest);
 
     // The tab opens Activity, which now carries its own name.
     await tab.click();
