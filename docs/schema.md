@@ -353,7 +353,7 @@ RLS on. comment_thread_reads_own (SELECT to authenticated) USING user_id = auth.
 
 Backfill at apply time: every active member got a read row (last_read_at = now()) for every top-level comment that had replies (2348 rows, 480 threads).
 
-- comment_threads_for_me_all(p_workspace_id uuid, p_trace_id uuid) RETURNS TABLE (kind text, entity_type text, entity_id uuid, root_comment_id uuid, reply_count bigint, last_reply_at timestamptz, last_reply_id uuid, last_reply_author uuid, last_reply_body text (first 140 chars), unread boolean), plpgsql STABLE SECURITY INVOKER, search_path '', EXECUTE to authenticated only (20261112110000_plan_item_comment_files_and_threads_for_me (applied 12 Nov 2026)): comment threads I am in across the workspace, post and brief threads (kind 'comment', read point comment_thread_reads) plus plan item, concept and bank idea threads (kind 'plan_comment', entity_type 'plan_item', entity_id = item id, read point plan_item_comment_thread_reads). In = I wrote the root or a reply, or am mentioned in either (@[uuid] in the body; post/brief comments also the mentions array). Live root on a live post, brief or plan item only; unread = the latest reply is someone else's and newer than my read point. Replies of the last 90 days, unread first then newest reply, max 50. 'not authenticated' with no caller, 'not a member of this workspace' otherwise.
+- comment_threads_for_me_all(p_workspace_id uuid, p_trace_id uuid) RETURNS TABLE (kind text, entity_type text, entity_id uuid, root_comment_id uuid, reply_count bigint, last_reply_at timestamptz, last_reply_id uuid, last_reply_author uuid, last_reply_body text, unread boolean), plpgsql STABLE SECURITY INVOKER, search_path '', EXECUTE to authenticated only (revoked from public, anon) (20261112110000_plan_item_comment_files_and_threads_for_me, applied 12 Nov 2026): the caller's comment threads across post / brief comments (kind 'comment') and plan item comments (kind 'plan_comment', entity_type 'plan_item', entity_id = item id). A thread counts when the caller wrote or is mentioned (mentions jsonb or @[uuid] in the body; plan comments by body tag only) in the root or a live reply, the root is live and its post / brief / plan item is not deleted; replies from the last 90 days only. last_reply_body is the latest reply's first 140 characters; unread = the latest reply is from someone else and newer than the caller's comment_thread_reads / plan_item_comment_thread_reads mark. Ordered unread first, then last_reply_at desc, limit 50. Raises 'not authenticated' with no caller and 'not a member of this workspace' for a non-member. RLS applies (invoker).
 
 ## 4. Briefs
 
@@ -435,8 +435,7 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 - plans_rename_notify: AFTER UPDATE OF title ON plans FOR EACH ROW WHEN the title changed and the plan is not deleted, runs _plans_rename_notify() (internal, no EXECUTE for anyone). Sends plan_updated kind renamed {from, to}.
 - plan_items_post_once: a post appears at most once per plan among live post items (partial unique on plan_id, post_id).
 - plan_items_select_member: not deleted, and for a post item its post readable (so a draft post item stays hidden from a client, via posts_select_member); then either plan_id set and its plan readable, or plan_id null (bank idea) and the caller is an active member of the workspace and (show_to_client or is_agency_side_member). Bank branch added 6 Nov (20261106010000_plan_bank).
-- Concept files: asset_attachments rows with entity_type plan_item; asset_attachments_select_member checks the plan item is readable.
-- Plan comment files: asset_attachments rows with entity_type plan_item_comment; asset_attachments_select_member checks the plan_item_comments row is readable (20261112110000_plan_item_comment_files_and_threads_for_me (applied 12 Nov 2026)).
+- Concept files: asset_attachments rows with entity_type plan_item; asset_attachments_select_member checks the plan item is readable. Plan comment files: entity_type plan_item_comment (entity_id = comment id); asset_attachments_select_member checks the plan_item_comments row is readable (20261112110000).
 
 ### plan_item_reviews
 
@@ -469,7 +468,7 @@ Applied 6 Nov 2026 (idea bank), migration 20261106010000_plan_bank.sql. Links an
 Applied 9 Oct 2026 (step 3b plan comments), restated in migration 20261009205500_plan_item_comments.sql. RLS on; authenticated has SELECT only.
 
 - Columns: id uuid PK default uuidv7(); workspace_id FK workspaces.id CASCADE; item_id FK plan_items.id CASCADE; author_user_id nullable FK users.id SET NULL.
-- Content: body text, trimmed length at most 5000 and at least 1 unless attachment_asset_ids holds a file (plan_item_comments_body_check, widened by 20261112110000_plan_item_comment_files_and_threads_for_me (applied 12 Nov 2026)); visibility text 'everyone' / 'team' (plan_item_comments_visibility_check).
+- Content: body text, trimmed length at most 5000 and at least 1 unless attachment_asset_ids has one or more entries (plan_item_comments_body_check, widened 12 Nov 2026 in 20261112110000_plan_item_comment_files_and_threads_for_me so a files-only comment is valid); visibility text 'everyone' / 'team' (plan_item_comments_visibility_check).
 - Timestamps: created_at default now(); edited_at / deleted_at nullable.
 - Threads (20261112100000_plan_item_comment_threads, applied 12 Nov 2026): parent_comment_id uuid nullable FK plan_item_comments.id ON DELETE CASCADE (null = top level; a reply points at its root, one level); attachment_asset_ids uuid[] nullable (the asset_version ids sent with the comment, in order; null when none).
 - Indexes: (item_id, created_at) where not deleted; workspace_id; author_user_id where not null; plan_item_comments_parent_idx (parent_comment_id, created_at) where parent_comment_id is not null and not deleted.
@@ -568,7 +567,7 @@ Workspace rules: storage, delete guards, purge list (20261017120000_workspace_ru
 
 - workspace_bytes_used(p_workspace_id uuid) RETURNS bigint, SQL STABLE (service_role only): sum of asset_versions.size_bytes + asset_renditions.size_bytes for the workspace.
 - workspace_storage(p_workspace_id uuid) RETURNS TABLE (bytes_used, library_bytes, chat_bytes, voice_bytes, deleted_bytes bigint), SQL STABLE (authenticated): bytes_used = workspace_bytes_used; the rest sum asset_versions.size_bytes split by origin library / chat non-audio / chat audio (live assets) and soft-deleted assets. Zero rows unless is_active_workspace_member.
-- asset_in_use(p_asset_id uuid) RETURNS boolean, SQL STABLE (no client EXECUTE): true when a live asset_attachments row points at a non-deleted post, brief, comment or plan_item_comment (plan_item_comment added by 20261112110000_plan_item_comment_files_and_threads_for_me (applied 12 Nov 2026)).
+- asset_in_use(p_asset_id uuid) RETURNS boolean, SQL STABLE (no client EXECUTE): true when a live asset_attachments row points at a non-deleted post, brief, comment or plan_item_comment (plan_item_comment added 12 Nov 2026, 20261112110000).
 - asset_delete(p_asset_id, p_trace_id) / asset_delete_many(p_asset_ids, p_trace_id) (authenticated): raise 'asset_in_use' when asset_in_use is true for the asset (any asset in the set). Other checks and the assets_deleted inbox event as below.
 - Grants (20261018120000_purge_grants_bucket_names.sql, applied 18 Oct): service_role has SELECT on asset_attachments and comments, so the asset-upload Worker's purge routes can re-check asset_in_use before removing files from R2.
 - chat_message_delete(p_message_ids text[], p_channel_id text, p_trace_id uuid) (authenticated): also sets deleted_at (if null) and purge_requested_at = now() on the origin 'chat' assets attached to the messages it deletes.
@@ -598,7 +597,7 @@ NO ACTION on delete: live attachments block asset hard-delete.
 | id | uuid | PK |
 | asset_id | uuid | FK assets.id |
 | asset_version_id | uuid | FK asset_versions.id |
-| entity_type | text | post / comment / chat_message / brief / plan_item / plan_item_comment (asset_attachments_entity_type_check; plan_item_comment added by 20261112110000_plan_item_comment_files_and_threads_for_me (applied 12 Nov 2026)) |
+| entity_type | text | post / comment / chat_message / brief / plan_item / plan_item_comment (asset_attachments_entity_type_check; plan_item_comment added 12 Nov 2026, 20261112110000) |
 | entity_id | text | 1 to 200 |
 | workspace_id | uuid | FK workspaces.id |
 | position | int | default 0 |
