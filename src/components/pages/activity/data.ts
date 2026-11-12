@@ -1098,7 +1098,7 @@ export function shortLine(item: ActivityItem, parts: { name?: boolean } = {}): s
 
 /**
  * A comment body for its line: trimmed ends only (9 Nov 2026: no character
- * cut; the line cuts on screen at 3 lines with "… more").
+ * cut; the line cuts on screen at 3 lines with "… Show more").
  */
 export function trimBody(text: string): string {
   return text.trim();

@@ -528,7 +528,7 @@ export function nudgeIcon(el: Element | null): Played {
   );
 }
 
-// ---------- unfold (Activity "more" / "less", 10 Nov 2026) ----------
+// ---------- unfold (Activity "Show more" / "Show less", 10 Nov 2026) ----------
 
 /**
  * A row's height eases from what it was to what it is now (axis clip: the
@@ -538,9 +538,11 @@ export function nudgeIcon(el: Element | null): Played {
 export const UNFOLD: MoveSpec = { move: 'unfold', axis: ['clip'] };
 
 /**
- * Unfold or fold `el` from `fromPx` to its current height: DUR_SLOW_MS,
- * ease-ios, overflow clipped while it runs. Nothing runs when the height did
- * not change.
+ * Unfold or fold `el` from `fromPx` to its current height: DUR_GROW_MS,
+ * ease-unfold (gentle in and out), overflow clipped while it runs. Nothing
+ * runs when the height did not change. 12 Nov 2026: DUR_SLOW_MS + ease-ios
+ * moved a 160px unfold 56px in one frame, which read as a jerk; ease-move
+ * still peaked at 30px. ease-unfold over DUR_GROW_MS keeps each frame small.
  */
 export function unfold(el: HTMLElement | null, fromPx: number): Played {
   if (el === null) return play(null, UNFOLD, [], { duration: 0, easing: EASE.ios });
@@ -549,8 +551,8 @@ export function unfold(el: HTMLElement | null, fromPx: number): Played {
   const overflow = el.style.overflow;
   el.style.overflow = 'hidden';
   const played = play(el, UNFOLD, [{ height: `${fromPx}px` }, { height: `${toPx}px` }], {
-    duration: DUR_SLOW_MS,
-    easing: EASE.ios,
+    duration: DUR_GROW_MS,
+    easing: EASE.unfold,
   });
   void played.done.then(() => {
     el.style.overflow = overflow;

@@ -23,6 +23,8 @@ export const EASE = {
   ios: 'cubic-bezier(0.32, 0.72, 0, 1)',
   move: 'cubic-bezier(0.77, 0, 0.175, 1)',
   pop: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+  /** A height growing in place (Activity Show more / Show less). */
+  unfold: 'cubic-bezier(0.4, 0, 0.2, 1)',
 } as const;
 
 export type EaseName = keyof typeof EASE;

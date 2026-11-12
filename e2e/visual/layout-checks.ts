@@ -3580,7 +3580,7 @@ export async function assertActivityLoadMoreBand(page: Page, screenName: string)
 
 /**
  * Part 6 (locked 9 Nov 2026): Activity previews. The long row's preview is
- * exactly 2 lines ending "… more" on a whole word of its full text (the row
+ * exactly 2 lines ending "… Show more" on a whole word of its full text (the row
  * link's name holds the full text); the short row's preview is 1 line with
  * no marker. "more" unfolds without leaving the page and becomes "less";
  * "less" folds it back. Leaves the page as it found it (folded).
@@ -3678,11 +3678,16 @@ export async function assertActivityPreviews(
   if (long === null) out.push('no long preview row');
   else {
     if (long.lines !== 2) out.push(`the long preview takes ${long.lines} lines, not 2`);
-    if (!long.text.endsWith('… more'))
-      out.push(`the long preview ends "${long.text.slice(-12)}", not "… more"`);
-    const kept = long.text.slice(0, -'… more'.length);
-    if (!long.name.includes(`${kept} `)) out.push('the long preview is not cut at a whole word');
-    if (long.toggle !== 'more') out.push('the long row has no "more" toggle');
+    if (!long.text.endsWith('… Show more'))
+      out.push(`the long preview ends "${long.text.slice(-12)}", not "… Show more"`);
+    const kept = long.text.slice(0, -'… Show more'.length);
+    // A whole word: the full text goes on after the kept part with a space or
+    // the punctuation the cut strips ("shot," -> "shot… Show more").
+    const at = long.name.indexOf(kept);
+    const next = at < 0 ? '' : long.name.charAt(at + kept.length);
+    if (at < 0 || /[\p{L}\p{N}]/u.test(next))
+      out.push('the long preview is not cut at a whole word');
+    if (long.toggle !== 'more') out.push('the long row has no "Show more" toggle');
   }
   if (short === null) out.push('no short preview row');
   else {

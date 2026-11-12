@@ -68,6 +68,19 @@ describe('motion durations', () => {
     expect(EASE.ios).toBe('cubic-bezier(0.32, 0.72, 0, 1)');
     expect(EASE.move).toBe('cubic-bezier(0.77, 0, 0.175, 1)');
     expect(EASE.pop).toBe('cubic-bezier(0.34, 1.56, 0.64, 1)');
+    expect(EASE.unfold).toBe('cubic-bezier(0.4, 0, 0.2, 1)');
+  });
+
+  it('unfold (Activity Show more) eases on ease-unfold over dur-grow, never ease-ios (the 12 Nov jerk)', () => {
+    const moves = readFileSync(
+      fileURLToPath(new URL('./motion/moves.ts', import.meta.url)),
+      'utf8',
+    );
+    const start = moves.indexOf('export function unfold(');
+    expect(start).toBeGreaterThan(-1);
+    const unfold = moves.slice(start, moves.indexOf('\nexport ', start + 1));
+    expect(unfold).toContain('easing: EASE.unfold');
+    expect(unfold).toContain('duration: DUR_GROW_MS');
   });
 
   it('growFromTrigger (menus, popovers) uses ease-enter; pop() keeps ease-pop', () => {

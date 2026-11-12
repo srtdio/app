@@ -1,18 +1,20 @@
 // Activity previews (locked 9 Nov 2026, Instagram route): line 2 of a row
 // shows up to 2 lines of the newest entry's text. Longer text is cut at the
-// last WHOLE word that fits 2 lines with a muted "… more" after it; never
+// last WHOLE word that fits 2 lines with "… Show more" after it; never
 // mid-word, never CSS line-clamp or text-overflow. Pure: the caller hands the
 // width and a text measure (canvas, the preview's own font).
 
-/** The marker after a cut: one ellipsis glyph, then " more". */
-export const PREVIEW_MORE = '… more';
-/** The marker on an unfolded row. */
-export const PREVIEW_LESS = ' less';
+/** The toggle's words on a cut row (12 Nov 2026: "more" read as part of the comment). */
+export const PREVIEW_MORE_LABEL = 'Show more';
+/** The toggle's words on an unfolded row ("less" glued on read "helpless"). */
+export const PREVIEW_LESS_LABEL = 'Show less';
+/** The marker after a cut, as measured: one ellipsis glyph, a space, then the toggle. */
+export const PREVIEW_MORE = `… ${PREVIEW_MORE_LABEL}`;
 
 export interface PreviewCut {
   /** The text to show (the whole text, or the cut text without the marker). */
   text: string;
-  /** The text was cut: "… more" follows it. */
+  /** The text was cut: "… Show more" follows it. */
   cut: boolean;
   /** Lines the shown text (with its marker) takes: 1 or 2. */
   lines: 1 | 2;
@@ -53,7 +55,7 @@ export function stripCutEnd(text: string): string {
 }
 
 /**
- * Cut `text` to 2 lines of `width` at a whole word, leaving room for "… more"
+ * Cut `text` to 2 lines of `width` at a whole word, leaving room for "… Show more"
  * on the second line. Text that fits 2 lines shows whole (no marker), so a
  * marker never hides a word or two the lines could hold. Pure.
  */

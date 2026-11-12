@@ -167,5 +167,5 @@ export const SHEET_ROW_PHONE = 'max-md:px-0';
 /** The row's leading icon box on phone: 36 wide (the message photo's box), so the label starts on 64. */
 export const SHEET_ROW_ICON_PHONE = 'max-md:w-9 max-md:justify-center';
 
-/** A Button drawn as words inside a line of text ("… more"): no padding, so the line keeps its 20 step. */
+/** A Button drawn as words inside a line of text ("… Show more"): no padding, so the line keeps its 20 step. */
 export const INLINE_TEXT_KEY = 'p-0';

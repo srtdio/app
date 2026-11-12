@@ -3,8 +3,8 @@ import { stripFormat } from '@srtdio/comments';
 import { itemIn, rememberCard, unfold, useMoveOnMount } from '@/lib/motion';
 import {
   cutPreview,
-  PREVIEW_LESS,
-  PREVIEW_MORE,
+  PREVIEW_LESS_LABEL,
+  PREVIEW_MORE_LABEL,
   type PreviewCut,
 } from '@/components/pages/activity/preview-cut';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
@@ -472,7 +472,7 @@ export function ActivityCard({
   const unread = unreadEntries(group).length;
   const name = chat ? activityCardTitle(group, side) : itemCardTitle(lead, side);
   // The preview is plain text (@mentions included), up to 2 lines, cut at a
-  // whole word with "… more" (Part 6, 10 Nov 2026).
+  // whole word with the more toggle (Part 6, 10 Nov 2026).
   const previewText: string = chat
     ? lead.eventType === MENTION_EVENT_TYPE && lead.body !== null
       ? stripFormat(lead.body).replaceAll(ALL_MARK, '')
@@ -544,8 +544,8 @@ function textMeasure(el: Element): ((s: string) => number) | null {
 /**
  * An Activity row's preview (Part 6, locked 9 Nov 2026): first painted as the
  * one truncated line, then measured once per width (ResizeObserver on the
- * preview box) and cut to 2 lines at a whole word with a muted "… more".
- * "more" unfolds THIS row in place (" less" folds it); both stop the tap, so
+ * preview box) and cut to 2 lines at a whole word with a muted the more toggle.
+ * The more toggle unfolds THIS row in place (the less toggle folds it); both stop the tap, so
  * the row never opens from them. Tells the row how many lines it takes.
  */
 function ActivityPreview({
@@ -617,7 +617,8 @@ function ActivityPreview({
     return (
       <>
         {text.replace(/\s+/g, ' ').trim()}
-        {marker(PREVIEW_LESS)}
+        {LESS_GAP}
+        {marker(PREVIEW_LESS_LABEL)}
         {anchor}
       </>
     );
@@ -629,7 +630,8 @@ function ActivityPreview({
       <>
         <span data-activity-preview-fold="" className={PREVIEW_FOLD}>
           {cut.text}
-          {marker(PREVIEW_MORE)}
+          {MORE_LEAD}
+          {marker(PREVIEW_MORE_LABEL)}
         </span>
         {anchor}
       </>
@@ -657,13 +659,18 @@ function ActivityPreview({
  * The folded 2-line preview: two lines of the secondary role, fixed. From 768
  * two 18 lines (36), so the row is exactly 72 + 20. Under 768 the role is
  * 15 / 20, so two 20 lines (40) and the row is exactly 60 + 20: at 36 the
- * second line ("… more" and its 44 hit) hung 4 out of the box, onto the
+ * second line (the more toggle and its 44 hit) hung 4 out of the box, onto the
  * row's own tap target below it.
  */
 const PREVIEW_FOLD = 'block h-10 md:h-9';
 
-/** "… more" / " less": fg-3 words in the line, a 44 x 44 hit centred on them (::before). */
+/** Before the more toggle: the ellipsis and a space (measured with it, PREVIEW_MORE). */
+const MORE_LEAD = '… ';
+/** Before the less toggle: two no-break spaces, so it never reads as one word with the text. */
+const LESS_GAP = '\u00A0\u00A0';
+
+/** The more / less toggle words: semibold fg words in the line (set apart from the grey preview), a 44 x 44 hit centred on them (::before). */
 // INLINE_TEXT_KEY (no padding): the Button's text-only fit pads 12 above and below; in the line that
 // padding made line 2 sit 12 lower than the 20 step (and run out of the
 // two-line box). The 44 hit is the ::before alone.
-const PREVIEW_TOGGLE = `pointer-events-auto relative inline h-auto min-h-0 min-w-0 rounded-none ${INLINE_TEXT_KEY} align-baseline text-md font-normal text-fg-3 hover:text-fg-2 before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2`;
+const PREVIEW_TOGGLE = `pointer-events-auto relative inline h-auto min-h-0 min-w-0 rounded-none ${INLINE_TEXT_KEY} align-baseline text-md font-semibold text-fg before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2`;

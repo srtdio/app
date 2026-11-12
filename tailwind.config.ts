@@ -389,6 +389,7 @@ export default {
         ios: 'var(--ease-ios)',
         move: 'var(--ease-move)',
         pop: 'var(--ease-pop)',
+        unfold: 'var(--ease-unfold)',
       },
     },
   },
