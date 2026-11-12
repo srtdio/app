@@ -77,7 +77,9 @@ export const OWN_CARD_INK = cn(
 );
 
 /** The width every chat card takes: 288, never past the bubble column. */
-export const CHAT_CARD_WIDTH = 'w-72 max-w-full';
+// Phone (12 Nov 2026): the card fills the message column, so it ends on the 16
+// right edge with photos and albums; from 768 the 288 card.
+export const CHAT_CARD_WIDTH = 'w-72 max-w-full max-md:w-full';
 
 /** The card's bubble surface: the bubble radius (chat-type), the card fill and one lit height. */
 export function chatCardSurface(layout: 'touch' | 'laptop', own: boolean): string {

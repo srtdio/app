@@ -7,6 +7,7 @@
 // status strip and info sheets) into the Plan route. MessageThread imports and
 // re-exports these, so every importer keeps its path.
 
+import { PHONE_PAD_FLUSH } from '@/components/ui/layout';
 import { stripFormat } from '@srtdio/comments';
 import {
   Fragment,
@@ -887,11 +888,13 @@ function TombstoneBubble(props: {
 }
 
 /**
- * A link card in a bubble sits 4px inside the bubble edge (the prototype), so it
- * pulls out of BUBBLE_PAD; its 264px width widens a short message's bubble.
+ * A link card in a message. Touch (12 Nov 2026): on the message's text column
+ * (64 on a phone, no pull: rows have no bubble now), 4 under the name like a
+ * stacked line; on a phone it fills the column to the 16 right edge, like a
+ * post or plan card (CHAT_CARD_WIDTH). Laptop: as before.
  */
 const LINK_CARD_INSET: ChatSize = {
-  touch: '-mx-2 -mt-1 mb-2 w-64 max-w-[calc(100%+16px)]',
+  touch: 'mt-1 mb-2 w-64 max-w-full max-md:w-full',
   laptop: '-mx-1 -mt-1 mb-2 w-64 max-w-[calc(100%+8px)]',
 };
 
@@ -1467,7 +1470,9 @@ export function MessageBubble(props: {
   const voiceOnly = isVoiceOnly(message);
   const album = hasAlbum(message);
   // Album bubbles pad 3px around the album; the rest keeps the text inset.
-  const albumInset = 'px-2 pt-1';
+  // Phone (12 Nov 2026): no side inset, so what sits above photos starts on
+  // the message text column (64) with the name.
+  const albumInset = cn('px-2 pt-1', PHONE_PAD_FLUSH);
   const hasBody = message.body.trim() !== '';
   const sharedPlanIds = message.sharedPlanIds ?? NO_PLAN_IDS;
   const hasCards =
@@ -1701,11 +1706,13 @@ export function MessageBubble(props: {
               sliderRef={tombSwipe !== undefined ? bubbleRef : undefined}
             >
               <IconBan size={ICON_SIZE.inline} className="shrink-0" />
-              {/* One line: the label truncates, never wraps; the time sits in flow on its right. */}
+              {/* One line: the label truncates, never wraps; the time sits in flow on its right.
+                  pr-1: the italic's last letter leans past its box; the 4 keeps
+                  it inside the clip, so "deleted" never loses its "d". */}
               <span
                 data-tombstone-label=""
                 className={cn(
-                  'min-w-0 truncate whitespace-nowrap italic',
+                  'min-w-0 truncate whitespace-nowrap pr-1 italic',
                   sized(BUBBLE_BODY_TYPE, layout),
                 )}
               >

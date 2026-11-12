@@ -446,10 +446,15 @@ async function readPhone(page: Page): Promise<PhoneGeom> {
       for (const node of Array.from(el.childNodes)) {
         if (node.nodeType !== Node.TEXT_NODE || !/\S/.test(node.textContent ?? '')) continue;
         text += node.textContent ?? '';
-        range.selectNodeContents(node);
-        for (const q of Array.from(range.getClientRects())) {
-          if (q.width > 0.5 && q.height > 0.5) {
-            raw.push({ l: q.left, t: q.top, r: q.right, b: q.bottom });
+        // Word by word: the space a line wraps at hangs past the box and
+        // draws nothing, so it is never ink.
+        for (const word of (node.textContent ?? '').matchAll(/\S+/g)) {
+          range.setStart(node, word.index);
+          range.setEnd(node, word.index + word[0].length);
+          for (const q of Array.from(range.getClientRects())) {
+            if (q.width > 0.5 && q.height > 0.5) {
+              raw.push({ l: q.left, t: q.top, r: q.right, b: q.bottom });
+            }
           }
         }
       }
@@ -460,7 +465,10 @@ async function readPhone(page: Page): Promise<PhoneGeom> {
       for (const q of raw) {
         const last = merged[merged.length - 1];
         const shared = last === undefined ? 0 : Math.min(last.b, q.b) - Math.max(last.t, q.t);
-        if (last !== undefined && shared > Math.min(tall(last), tall(q)) / 2) {
+        // Same line and touching (a word space at most): one box. A wider gap
+        // is another element's text set inline between (a bold name in a
+        // sentence), so the line splits there and never "overlaps" it.
+        if (last !== undefined && shared > Math.min(tall(last), tall(q)) / 2 && q.l - last.r <= 8) {
           last.l = Math.min(last.l, q.l);
           last.r = Math.max(last.r, q.r);
           last.t = Math.min(last.t, q.t);

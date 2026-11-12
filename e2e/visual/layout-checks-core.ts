@@ -712,8 +712,8 @@ export const TOPBAR_KEY_PX = 36;
 export const TOPBAR_MD_PX = 768;
 /** From md the top bar's controls sit gap-1 apart (4px), plus sub-pixel rounding. */
 export const TOPBAR_GAP_MAX_PX = 4.5;
-/** Phone: the 32 avatar photo's right edge stays 6 in from the 16 gutter (as on main). */
-export const TOPBAR_AVATAR_RIGHT_INSET_PX = 22;
+/** Phone: the 32 avatar photo's right edge is on the 16 right edge (12 Nov 2026), with every row's time. */
+export const TOPBAR_AVATAR_RIGHT_INSET_PX = 16;
 /** The phone "+" face: an outlined 22 square, 1.75 line, radius 7, no fill, a 14 glyph. */
 export const TOPBAR_PLUS_PHONE = { face: 22, line: 1.75, radius: 7, glyph: 14 } as const;
 /** The laptop "+" face: the 112 x 32 Main, radius 8, accent fill. */

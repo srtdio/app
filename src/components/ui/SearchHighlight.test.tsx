@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GLOW_LAYER_CLASS,
+  glowInset,
   GLOW_MS,
   glowTarget,
   JUMP_SETTLE_MS,
@@ -171,5 +172,24 @@ describe('glowTarget (arrival tint)', () => {
     expect(el.hasAttribute('data-jump-glow')).toBe(false);
     expect(layer(el)).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('glowInset: 8 of room around the row content', () => {
+  it('a full-bleed row (16 sides, no top or bottom padding): 8 in from the sides, 8 past top and bottom', () => {
+    expect(glowInset({ top: 0, right: 16, bottom: 0, left: 16 })).toEqual({
+      top: '-8px',
+      right: '8px',
+      bottom: '-8px',
+      left: '8px',
+    });
+  });
+  it('a row with its own 12 padding keeps the mark inside it; never past the row sideways', () => {
+    expect(glowInset({ top: 12, right: 0, bottom: 12, left: 4 })).toEqual({
+      top: '4px',
+      right: '0px',
+      bottom: '4px',
+      left: '0px',
+    });
   });
 });

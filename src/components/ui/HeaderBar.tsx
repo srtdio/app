@@ -156,8 +156,7 @@ export function HeaderBar({
             className={textRole(
               'title',
               cn(
-                'truncate',
-                titleWraps && 'max-md:line-clamp-2 max-md:whitespace-normal',
+                titleWraps ? 'max-md:line-clamp-2 md:truncate' : 'truncate',
                 routeFocus && 'focus:outline-none',
               ),
             )}

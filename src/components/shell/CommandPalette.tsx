@@ -681,11 +681,12 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           role="group"
           aria-label={section.label}
           data-palette-group={section.label}
-          className="px-2 pb-1"
+          // Phone: the bordered rows keep 16 from the screen edges.
+          className="px-2 pb-1 max-md:px-4"
         >
           {section.label === RECENT_LABEL ? (
             <div className="flex min-h-11 items-center justify-between">
-              <Text as="div" role="section" className="px-2 py-1">
+              <Text as="div" role="section" className="px-2 py-1 max-md:px-0">
                 {section.label}
               </Text>
               {props.onClearRecents !== undefined ? (
@@ -701,7 +702,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               ) : null}
             </div>
           ) : (
-            <Text as="div" role="section" className="px-2 py-1">
+            <Text as="div" role="section" className="px-2 py-1 max-md:px-0">
               {section.label}
             </Text>
           )}

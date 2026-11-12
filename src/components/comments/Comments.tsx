@@ -73,7 +73,7 @@ import {
 import { LoadError } from '@/components/ui/LoadError';
 import { ClearButton } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { PAGE_BLEED } from '@/components/ui/layout';
+import { PAGE_BLEED, PHONE_BLEED } from '@/components/ui/layout';
 import { Text, textRole } from '@/components/ui/Text';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
@@ -1377,7 +1377,7 @@ export function Comments(props: CommentsProps): ReactElement {
         </ul>
       )}
       {canComment ? (
-        <div data-comments-composer="" className="mt-6">
+        <div data-comments-composer="" className={cn('mt-6', PHONE_BLEED)}>
           <Composer
             key={`root:${entityKey}`}
             inputRef={rootInputRef}

@@ -2345,7 +2345,7 @@ describe('tombstones, edited label and the neutral selection', () => {
       // time in flow on its right (no absolute meta, no spacer).
       expect(html).not.toContain('data-meta-spacer');
       expect(html).toMatch(
-        /data-tombstone-label=""[^>]*class="[^"]*min-w-0 truncate whitespace-nowrap italic/,
+        /data-tombstone-label=""[^>]*class="[^"]*min-w-0 truncate whitespace-nowrap pr-1 italic/,
       );
       // L1: a head tombstone draws no inline meta (the time is on the name line).
       const meta = /<span[^>]*data-meta="inline"[^>]*>/.exec(html)?.[0] ?? '';

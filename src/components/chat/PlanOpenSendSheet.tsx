@@ -79,7 +79,7 @@ export function PlanOpenSendSheet(props: {
       title={PLAN_OPEN_SEND_TITLE}
       busy={props.busy === true}
       footer={
-        <div className="grid w-full grid-cols-2 gap-2 md:flex md:justify-end">
+        <div className="grid w-full grid-cols-2 gap-2 max-[359.98px]:grid-cols-1 md:flex md:justify-end">
           <Button variant="ghost" type="button" onClick={props.onClose}>
             Cancel
           </Button>

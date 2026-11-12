@@ -1,3 +1,5 @@
+import { cn } from '@/lib/cn';
+import { SHEET_ROW_ICON_PHONE, SHEET_ROW_PHONE } from '@/components/ui/layout';
 import type { ReactNode } from 'react';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { trayIcon } from '@/components/ui/ActionRow';
@@ -15,9 +17,16 @@ export function MenuItem({ label, onClick, icon }: MenuItemProps) {
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="flex items-center gap-3 px-3 text-base text-fg-2 hover:text-fg mv-tint"
+      className={cn(
+        'flex items-center gap-3 px-3 text-base text-fg-2 hover:text-fg mv-tint',
+        SHEET_ROW_PHONE,
+      )}
     >
-      {icon !== undefined ? <span className="text-fg-3 shrink-0">{trayIcon(icon)}</span> : null}
+      {icon !== undefined ? (
+        <span className={cn('flex shrink-0 text-fg-3', SHEET_ROW_ICON_PHONE)}>
+          {trayIcon(icon)}
+        </span>
+      ) : null}
       <span>{label}</span>
     </PressableRow>
   );

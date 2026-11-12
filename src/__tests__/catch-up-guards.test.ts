@@ -170,7 +170,8 @@ describe('catch-up guards', () => {
   it('the tip wraps on a phone (never cut, never under "Got it"); a long card title gives way', () => {
     const card = FILES.find((f) => f.rel === 'components/catch-up/CatchUpCard.tsx')?.src ?? '';
     const from = card.indexOf('data-catch-up-tip-text=""');
-    expect(card.slice(from, from + 400)).toContain('max-md:whitespace-normal');
+    // One line, cut, only from 768 (md:truncate); a phone wraps.
+    expect(card.slice(from, from + 400)).toContain('md:truncate');
     expect(card).toMatch(/data-catch-up-tip-dismiss=""\s+className="min-h-11 shrink-0 px-3"/);
     // The name row's menu wrappers may shrink, so the title truncates inside the card.
     expect(card).toContain('[&>span>span]:min-w-0 [&>span]:min-w-0');

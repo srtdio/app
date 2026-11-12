@@ -47,7 +47,32 @@ export const JUMP_SETTLE_MS = 700;
 export const GLOW_MS = 2000;
 
 /** The arrival layer: the selected look, its 1px edge drawn by the layer's own border. */
-export const GLOW_LAYER_CLASS = 'lit-selected border';
+export const GLOW_LAYER_CLASS = 'lit-selected border rounded-lg';
+
+/** The room the arrival mark keeps around the row's content (12 Nov 2026): 8 on every side. */
+export const GLOW_PAD_PX = 8;
+
+/**
+ * Where the arrival layer sits inside a row, from the row's own padding: 8
+ * outside the content on every side, so the line never touches a photo, a
+ * descender or an emoji. Sideways it never leaves the row (a full-bleed row's
+ * 16 padding gives the 8); up and down it may reach 8 past a row with no
+ * padding of its own. Pure.
+ */
+export function glowInset(pad: { top: number; right: number; bottom: number; left: number }): {
+  top: string;
+  right: string;
+  bottom: string;
+  left: string;
+} {
+  const px = (n: number): string => `${n}px`;
+  return {
+    top: px(pad.top - GLOW_PAD_PX),
+    bottom: px(pad.bottom - GLOW_PAD_PX),
+    left: px(Math.max(0, pad.left - GLOW_PAD_PX)),
+    right: px(Math.max(0, pad.right - GLOW_PAD_PX)),
+  };
+}
 
 /**
  * Tint an arrived-at row for 2s, then wipe the tint away left to right
@@ -74,12 +99,18 @@ export function tintTarget(el: HTMLElement): () => void {
   // The arrival mark is the one selected look (lit-selected: its fill and edge
   // line), never an accent tint.
   layer.className = GLOW_LAYER_CLASS;
+  const cs = getComputedStyle(el);
+  const pad = (v: string): number => Number.parseFloat(v) || 0;
   Object.assign(layer.style, {
     position: 'absolute',
-    inset: '0',
+    ...glowInset({
+      top: pad(cs.paddingTop),
+      right: pad(cs.paddingRight),
+      bottom: pad(cs.paddingBottom),
+      left: pad(cs.paddingLeft),
+    }),
     zIndex: '-1',
     pointerEvents: 'none',
-    borderRadius: 'inherit',
   });
   el.appendChild(layer);
   let wipe: Played | null = null;

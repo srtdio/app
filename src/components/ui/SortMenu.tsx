@@ -1,3 +1,4 @@
+import { SHEET_ROW_ICON_PHONE, SHEET_ROW_PHONE } from '@/components/ui/layout';
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
@@ -37,10 +38,17 @@ export function sortOptionButtons<T extends string>(
         onClick={() => onPick(option.value)}
         className={cn(
           'flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
+          // Phone: the tick's box on the sheet's 16 edge, the label on 64.
+          SHEET_ROW_PHONE,
           selected ? 'lit-selected text-fg' : 'lit-hover text-fg-2',
         )}
       >
-        <span className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">
+        <span
+          className={cn(
+            'flex h-4 w-4 shrink-0 items-center justify-center text-accent',
+            SHEET_ROW_ICON_PHONE,
+          )}
+        >
           {selected ? <IconCheck size={ICON_SIZE.inline} /> : null}
         </span>
         <span className="flex-1">{option.label}</span>

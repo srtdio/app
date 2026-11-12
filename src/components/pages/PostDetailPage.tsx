@@ -20,7 +20,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { Text, textRole } from '@/components/ui/Text';
-import { CONTROL_IN_LINE, GUTTER, TRAILING_PULL } from '@/components/ui/layout';
+import { CONTROL_IN_LINE, GUTTER, TEXT_KEY_PULL, TRAILING_PULL } from '@/components/ui/layout';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
@@ -1869,7 +1869,8 @@ export function PostDetailPage({
               Flow B 27: platform and format live once, in the details row;
               the version button lives in the gallery tools row. */}
             <section data-caption-block="">
-              <div className="flex items-center gap-2">
+              {/* Phone: 16 to the name, so it starts on the 64 text column (16 + 32 + 16). */}
+              <div className="flex items-center gap-2 max-md:gap-4">
                 <Avatar name={workspaceName ?? ''} role="header" kind="group" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-base font-medium text-fg">
@@ -1991,9 +1992,8 @@ export function PostDetailPage({
                           setCaptionTipOpen(false);
                           dismissCaptionTip(userId);
                         }}
-                        // Phone: the words end on the block's right edge (the
-                        // link's 8 side padding slides out).
-                        className="ml-auto shrink-0 max-md:translate-x-2"
+                        // Phone: the words end on the block's right edge (TEXT_KEY_PULL).
+                        className={cn('ml-auto shrink-0', TEXT_KEY_PULL)}
                       >
                         Got it
                       </Button>

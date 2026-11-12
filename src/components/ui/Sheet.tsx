@@ -314,9 +314,9 @@ export function Sheet({
             className={textRole(
               'heading',
               cn(
-                'min-w-0 flex-1 truncate',
-                // Phone: a long title wraps to two lines inside the 56 header instead of cutting.
-                'max-md:line-clamp-2 max-md:whitespace-normal',
+                // Phone: a long title wraps to two lines inside the 56 header
+                // instead of cutting; from 768 one line, cut.
+                'min-w-0 flex-1 max-md:line-clamp-2 md:truncate',
                 BAR_TITLE_AFTER_KEY,
               ),
             )}

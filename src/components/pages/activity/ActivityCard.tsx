@@ -1,3 +1,4 @@
+import { INLINE_TEXT_KEY } from '@/components/ui/layout';
 import { stripFormat } from '@srtdio/comments';
 import { itemIn, rememberCard, unfold, useMoveOnMount } from '@/lib/motion';
 import {
@@ -662,5 +663,7 @@ function ActivityPreview({
 const PREVIEW_FOLD = 'block h-10 md:h-9';
 
 /** "… more" / " less": fg-3 words in the line, a 44 x 44 hit centred on them (::before). */
-const PREVIEW_TOGGLE =
-  'pointer-events-auto relative inline h-auto min-h-0 min-w-0 rounded-none px-0 align-baseline text-md font-normal text-fg-3 hover:text-fg-2 before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2';
+// INLINE_TEXT_KEY (no padding): the Button's text-only fit pads 12 above and below; in the line that
+// padding made line 2 sit 12 lower than the 20 step (and run out of the
+// two-line box). The 44 hit is the ::before alone.
+const PREVIEW_TOGGLE = `pointer-events-auto relative inline h-auto min-h-0 min-w-0 rounded-none ${INLINE_TEXT_KEY} align-baseline text-md font-normal text-fg-3 hover:text-fg-2 before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2`;

@@ -35,6 +35,7 @@
 // controlled by the composer (the text after the hash). Waiting, approved and,
 // only where drafts are allowed, Drafts; search leaves drafts out otherwise.
 
+import { PHONE_PAD_FLUSH } from '@/components/ui/layout';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -473,7 +474,8 @@ interface SearchState {
  * card frame. PressableRow provides the width, 44px minimum, left alignment and
  * press; flat gives square corners. Picked: the panel-2 fill plus the check.
  */
-const ROW_BASE = 'flex gap-3 border-b border-border px-1 py-3 mv-tint';
+// Phone: no inner inset, so the picture and the section labels sit on the sheet's 16 edge.
+const ROW_BASE = `flex gap-3 border-b border-border px-1 py-3 mv-tint ${PHONE_PAD_FLUSH}`;
 
 function rowClass(active: boolean): string {
   return cn(ROW_BASE, 'items-start', active && 'bg-panel-2');
@@ -1041,7 +1043,10 @@ export function PickerSkeleton(): ReactElement {
         <li
           key={`bone-${i}`}
           data-skeleton-row=""
-          className="flex min-h-11 items-center gap-3 border-b border-border px-1 py-3"
+          className={cn(
+            'flex min-h-11 items-center gap-3 border-b border-border px-1 py-3',
+            PHONE_PAD_FLUSH,
+          )}
         >
           <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
           <span className="flex min-w-0 flex-1 flex-col gap-2">
@@ -1069,7 +1074,7 @@ function SectionHeading({ label, mono }: { label: string; mono?: boolean }): Rea
   return (
     <li
       className={cn(
-        `px-1 pt-2 ${TEXT_ROLE.section}`,
+        `px-1 pt-2 ${PHONE_PAD_FLUSH} ${TEXT_ROLE.section}`,
         // A date heading (link mode's day section): font-mono like every date.
         mono === true && 'font-mono tabular-nums',
       )}

@@ -151,14 +151,33 @@ export const PHONE_RULE_EXEMPTIONS: readonly PhoneExemption[] = [
     reason: 'a card (chat card, catch-up card, link preview, quote) has its own inset',
   },
   {
+    rule: 'R11',
+    selector: '[data-shell="chips"]',
+    reason:
+      'the list tabs chip row sits 12 under the top bar on all six tabs (ListScreen axis), not centred in a strip',
+  },
+  {
+    rule: 'R9',
+    selector: '[data-card]',
+    reason:
+      'a ui/Card row (upload, file) sets its own columns from its 44 thumb, not the page columns',
+  },
+  {
+    rule: 'R12',
+    selector: '[data-more-options]',
+    reason:
+      'the chevron centres on the two-line label + hint pair, not on the first line (R11 pair)',
+  },
+  {
+    rule: 'R3',
+    selector: '[data-catch-up-title]',
+    reason:
+      'a Catch up card title is a title in a card (R2): one line, ends in "…" inside the card',
+  },
+  {
     rule: 'R3',
     selector: '[data-topbar-workspace-name]',
     reason: 'the workspace name is a name (R2): it clamps to two lines and ends in "…"',
-  },
-  {
-    rule: 'R8',
-    selector: 'header:not([data-header-bar]) [data-avatar-kind]',
-    reason: 'the top bar avatar photo ends 22 from the edge (TOPBAR_AVATAR_RIGHT_INSET_PX)',
   },
 ];
 

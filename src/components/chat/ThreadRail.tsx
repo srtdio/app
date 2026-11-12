@@ -345,7 +345,7 @@ function StripLead(props: { label: string; empty: boolean }): ReactElement {
     return (
       <span
         data-thread-strip-label=""
-        className={textRole('label', 'min-w-0 truncate font-semibold text-fg')}
+        className={textRole('label', 'min-w-0 font-semibold text-fg md:truncate')}
       >
         {props.label}
       </span>
@@ -360,7 +360,12 @@ function StripLead(props: { label: string; empty: boolean }): ReactElement {
       >
         <IconChat size={ICON_SIZE.control} />
       </span>
-      <span data-thread-strip-label="" className={textRole('label', 'min-w-0 truncate text-fg-2')}>
+      {/* A tap target's words are never cut: on a phone too narrow for one
+          line beside the three keys (320) they wrap to two. */}
+      <span
+        data-thread-strip-label=""
+        className={textRole('label', 'min-w-0 text-fg-2 md:truncate')}
+      >
         {props.label}
       </span>
     </>
@@ -460,7 +465,7 @@ export function ThreadRootHead(props: {
       <span className="flex min-w-0 flex-col">
         <span
           data-sender-name=""
-          className={textRole('label', 'min-w-0 truncate font-semibold text-fg')}
+          className={textRole('label', 'min-w-0 font-semibold text-fg md:truncate')}
         >
           {props.name}
         </span>

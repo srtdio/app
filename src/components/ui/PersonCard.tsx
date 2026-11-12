@@ -245,7 +245,8 @@ export function PersonMessageCard(props: PersonMessageCardProps): ReactElement {
   );
   return (
     <div className="flex flex-col gap-3" data-person-card={data.userId} data-person-card-message="">
-      <div className="flex min-w-0 items-center gap-3">
+      {/* Phone: 8 after the 40 photo, so the name and role start on the 64 column. */}
+      <div className="flex min-w-0 items-center gap-3 max-md:gap-2">
         {props.showHeader ? (
           // The one exit: "<" back leading, pulled out by 12 (LEADING_PULL).
           <IconButton

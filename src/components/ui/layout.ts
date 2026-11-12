@@ -73,7 +73,7 @@ export const LANE_BOTTOM = 'absolute bottom-3 right-3 z-raised flex';
 export const LANE_BOTTOM_CLEAR = 'scroll-pb-16';
 
 /** The tip strip's lane: in flow above the composer, on the chat edge (12). */
-export const LANE_STRIP = 'mx-3 mb-2';
+export const LANE_STRIP = 'mx-3 mb-2 max-md:mx-4';
 
 /*
  * Named sizes (10 Nov 2026: one list size, the former Cozy). px numbers the
@@ -143,3 +143,29 @@ export const PHONE_PAD_EDGE_R = 'max-md:pr-4';
 export const PHONE_PAD_FLUSH = 'max-md:px-0';
 /** Sub rows under a message photo: the 64 column on phone (36 + 12), 44 from 768. */
 export const SUB_ROW_TEXT_INSET = 'pl-12 md:pl-11';
+
+/**
+ * A row of text tools on the page edge that may not fit a narrow phone (the
+ * post gallery's Add / Replace / Reorder beside the version key): under 768
+ * it scrolls sideways with every label whole (R3, R4). The box reaches 12
+ * past the edge and pads it back, so a pulled first tool is not clipped.
+ */
+export const PHONE_TOOLS_SCROLL =
+  'max-md:-ml-3 max-md:overflow-x-auto max-md:pl-3 max-md:[scrollbar-width:none] max-md:[&>*]:shrink-0';
+
+/*
+ * Phone columns (12 Nov 2026, "one right edge, one text column"). Under 768
+ * everything lands on 16 from the left, 64 for text beside a 36 picture or
+ * icon box, and 16 from the right. From 768 nothing moves.
+ */
+/** A trailing text key ("Got it", "Clear"; the link level forces !px-2): no right padding on phone, so its words end on the row edge (the box stays inside it). */
+export const TEXT_KEY_PULL = 'max-md:!pr-0';
+/** A list or composer band that runs edge to edge inside a 16 page gutter. */
+export const PHONE_BLEED = 'max-md:-mx-4';
+/** A sheet or menu row on phone: no inner padding, so its icon box starts on the sheet's 16 edge. */
+export const SHEET_ROW_PHONE = 'max-md:px-0';
+/** The row's leading icon box on phone: 36 wide (the message photo's box), so the label starts on 64. */
+export const SHEET_ROW_ICON_PHONE = 'max-md:w-9 max-md:justify-center';
+
+/** A Button drawn as words inside a line of text ("… more"): no padding, so the line keeps its 20 step. */
+export const INLINE_TEXT_KEY = 'p-0';

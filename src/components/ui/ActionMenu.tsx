@@ -12,7 +12,12 @@ import { centreOf } from '@/components/ui/popover-classes';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
 import { recentRightClick } from '@/lib/motion/overlays';
 import { cn } from '@/lib/cn';
-import { CONTROL_IN_LINE, TRAILING_PULL } from '@/components/ui/layout';
+import {
+  CONTROL_IN_LINE,
+  SHEET_ROW_ICON_PHONE,
+  SHEET_ROW_PHONE,
+  TRAILING_PULL,
+} from '@/components/ui/layout';
 import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
 
 /** One row of a ⋯ menu. */
@@ -288,12 +293,15 @@ export function ActionMenu({
                 onClick={() => select(item)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 mv-tint',
+                  // Phone: icon box on the sheet's 16 edge, label on 64.
+                  SHEET_ROW_PHONE,
                   item.tone === 'danger' ? 'text-bad' : 'text-fg',
                 )}
               >
                 <span
                   className={cn(
                     'flex shrink-0 items-center justify-center',
+                    SHEET_ROW_ICON_PHONE,
                     item.tone === 'danger' ? 'text-bad' : 'text-fg-2',
                   )}
                 >
