@@ -10601,6 +10601,21 @@ export type Database = {
         Args: { p_root_id: string; p_trace_id: string }
         Returns: undefined
       }
+      comment_threads_for_me_all: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          kind: string
+          last_reply_at: string
+          last_reply_author: string
+          last_reply_body: string
+          last_reply_id: string
+          reply_count: number
+          root_comment_id: string
+          unread: boolean
+        }[]
+      }
       dm_channel_ensure: {
         Args: {
           p_other_user_id: string
