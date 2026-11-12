@@ -32,8 +32,14 @@ export const TOAST_MS = 4000;
  * read and act on than a confirmation. Sticky error toasts stay sticky.
  */
 export const ERROR_TOAST_MS = 8000;
-/** Newest-first cap on top cards; older cards beyond this are dropped on show(). */
-export const MAX_VISIBLE = 3;
+/**
+ * One top card at a time (12 Nov 2026): a new card replaces the live one at
+ * once (no exit move, so two cards never overlap) and accepts it (onExpire).
+ * A live error card is never replaced by a non-error card: that card waits
+ * (newest only) and shows, with its full duration, once the error has gone.
+ * A waiting card waits at most ERROR_TOAST_MS unless the error is sticky.
+ */
+export const MAX_VISIBLE = 1;
 /**
  * Exit length; mirrors the edgeStrip exit (stripOut, --dur-sheet-out). A
  * dismissed toast is marked `leaving` and removed this long afterwards so it
@@ -80,6 +86,9 @@ export function createToastStore(): ToastStore {
   // onExpire per live toast; deleted when it fires or the action is pressed, so
   // it runs at most once.
   const expires = new Map<string, () => void>();
+  // The newest non-error card held back by a live error card, with the
+  // countdown it starts once shown. At most one; an older one is accepted.
+  let waiting: { toast: ManagedToast; timedMs: number | null } | null = null;
 
   function emit(): void {
     for (const listener of listeners) listener(toasts);
@@ -100,12 +109,38 @@ export function createToastStore(): ToastStore {
       toasts = next;
       emit();
     }
+    showWaiting();
+  }
+
+  function startTimer(id: string, timedMs: number | null): void {
+    if (timedMs !== null) {
+      timers.set(
+        id,
+        createPausableTimer(() => expire(id), timedMs),
+      );
+    }
+  }
+
+  // The error card is gone and no card is up: the waiting card shows now,
+  // with its full duration.
+  function showWaiting(): void {
+    if (waiting === null || toasts.some((toast) => toast.kind !== 'undo')) return;
+    const { toast, timedMs } = waiting;
+    waiting = null;
+    toasts = [toast, ...toasts];
+    emit();
+    startTimer(toast.id, timedMs);
   }
 
   // Closing phase: flip the toast to `leaving` so its card plays the exit, then
   // remove it after EXIT_MS. Idempotent; the auto-dismiss timer is replaced by
   // the removal timer under the same id.
   function dismiss(id: string): void {
+    // A card still waiting behind an error card just never shows.
+    if (waiting !== null && waiting.toast.id === id) {
+      waiting = null;
+      return;
+    }
     const current = toasts.find((toast) => toast.id === id);
     if (current === undefined || current.leaving) return;
     clearTimer(id);
@@ -175,8 +210,7 @@ export function createToastStore(): ToastStore {
     if (options.onExpire !== undefined) expires.set(id, options.onExpire);
 
     // One strip at a time: a new Undo strip accepts the live one (commit now)
-    // and lets it play its exit. Cards keep their newest-first cap, which never
-    // counts the strip.
+    // and lets it play its exit. The one-card rule never counts the strip.
     if (toast.kind === 'undo') {
       for (const old of toasts) {
         if (old.kind === 'undo' && !old.leaving) {
@@ -187,22 +221,32 @@ export function createToastStore(): ToastStore {
       toasts = [toast, ...toasts];
       emit();
     } else {
-      const cards = [toast, ...toasts.filter((t) => t.kind !== 'undo')];
-      const dropped = cards.slice(MAX_VISIBLE);
-      for (const old of dropped) clearTimer(old.id);
-      const droppedIds = new Set(dropped.map((old) => old.id));
-      toasts = [toast, ...toasts.filter((t) => !droppedIds.has(t.id))];
+      const liveError = toasts.some((t) => t.kind !== 'undo' && !t.leaving && t.tone === 'error');
+      const older = waiting;
+      if (liveError && toast.tone !== 'error') {
+        // The error stays; this card waits (newest only) and the one it
+        // pushes out of the wait is accepted, never shown.
+        waiting = { toast, timedMs };
+        if (older !== null) runExpire(older.toast.id);
+        return id;
+      }
+      // A non-error card shown now is newer than any waiting one: accept it.
+      // A new error keeps the waiting card behind it.
+      if (toast.tone !== 'error') waiting = null;
+      // Replace every card now, a leaving one included: no exit move, so two
+      // cards never overlap. A live card pushed out is accepted.
+      const replaced = toasts.filter((t) => t.kind !== 'undo');
+      for (const old of replaced) clearTimer(old.id);
+      toasts = [toast, ...toasts.filter((t) => t.kind === 'undo')];
       emit();
-      // A toast pushed past the cap can no longer be undone: accept it.
-      for (const old of dropped) runExpire(old.id);
+      for (const old of replaced) {
+        if (old.leaving) expires.delete(old.id);
+        else runExpire(old.id);
+      }
+      if (older !== null && waiting === null) runExpire(older.toast.id);
     }
 
-    if (timedMs !== null) {
-      timers.set(
-        id,
-        createPausableTimer(() => expire(id), timedMs),
-      );
-    }
+    startTimer(id, timedMs);
     return id;
   }
 
@@ -212,6 +256,7 @@ export function createToastStore(): ToastStore {
     expires.clear();
     listeners.clear();
     toasts = [];
+    waiting = null;
   }
 
   return {
@@ -362,10 +407,19 @@ function ToastSlot({
 }
 
 /**
- * Fixed toast containers. Cards: mobile top, below the safe-area; desktop
- * (md+) top-right; newest on top (the store keeps newest first); each drops
- * from the top edge and leaves the same way (ToastSlot). Undo strips: the
- * bottom strip (UndoStrip), one live at a time.
+ * The card container: top-14 is the 56 top bar (the 3.5rem in
+ * --shell-sticky-top), then the safe area plus 12, so the card's top edge sits
+ * 12 under the bar on every width; horizontal placement as before.
+ */
+export const TOAST_VIEWPORT_CLASS =
+  'pointer-events-none fixed inset-x-0 top-14 z-toast flex flex-col items-center px-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] md:inset-x-auto md:right-4 md:items-end';
+
+/**
+ * Fixed toast containers. Cards: one at a time, its top edge 12 under the 56
+ * top bar (top-14 = the bar, as --shell-sticky-top; safe area added), never
+ * over the bar; phone centred, desktop (md+) right; it drops from above and
+ * leaves the same way (ToastSlot). Undo strips: the bottom strip (UndoStrip),
+ * one live at a time.
  */
 export function ToastViewport() {
   const ctx = useContext(ToastContext);
@@ -374,11 +428,7 @@ export function ToastViewport() {
   const strips = ctx.toasts.filter((toast) => toast.kind === 'undo');
   return (
     <>
-      <div
-        role="status"
-        aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 top-0 z-toast flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:inset-x-auto md:right-4 md:items-end"
-      >
+      <div role="status" aria-live="polite" className={TOAST_VIEWPORT_CLASS}>
         {cards.map((toast) => (
           <ToastSlot
             key={toast.id}
