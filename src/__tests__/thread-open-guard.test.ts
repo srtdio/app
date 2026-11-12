@@ -99,20 +99,25 @@ describe('chat thread: focus on open', () => {
   });
 });
 
-describe('chat thread: bottom anchor', () => {
-  it('only the thread view passes anchorBottom', () => {
-    expect(chat.match(/^\s*anchorBottom$/gm)).toHaveLength(1);
-    expect(chat).toMatch(/loadOlderRow\s+anchorBottom\s+\/>/);
+describe('chat thread: opens at the first message (13 Nov 2026, Slack)', () => {
+  it('only the thread view passes openAtTop', () => {
+    expect(chat.match(/^\s*openAtTop$/gm)).toHaveLength(1);
+    expect(chat).toMatch(/loadOlderRow\s+openAtTop\s+\/>/);
+    expect(chat).not.toContain('anchorBottom');
   });
 
-  it('with it the list keeps its spacer (margin-top auto): CSS only', () => {
-    expect(chat).toContain(
-      'props.threads?.viewRootId !== undefined && props.anchorBottom !== true,',
-    );
+  it('with it the list is top aligned and never sticks to the end on open', () => {
+    expect(chat).toContain('            props.openAtTop === true,');
     expect(chat).toContain("className={topAligned ? undefined : 'mt-auto'}");
+    expect(chat).toContain("{...(props.openAtTop === true ? { 'data-thread-open-top': '' } : {})}");
     expect(chat).toContain(
-      "{...(props.anchorBottom === true ? { 'data-thread-anchor-bottom': '' } : {})}",
+      'const stickRef = useRef(props.openAtTop === true ? false : openingIntent());',
     );
+  });
+
+  it('the down arrow shows only while rows are below the fold', () => {
+    expect(chat).toContain('? list !== null && bottomDistance(list) > 1');
+    expect(chat).toContain('props.openAtTop === true ? bottomDistance(el) > 1 : !stickRef.current');
   });
 
   it('the shared scroller class is unchanged (the main chat renders the same)', () => {
@@ -143,12 +148,15 @@ describe('comment thread: focus on open and bottom anchor', () => {
     expect(comments).toMatch(/focusOnMount=\{!coarsePointer\}\s*focusForReply=\{thread\.focus\}/);
   });
 
-  it('the scroller is a flex column whose list takes margin-top auto', () => {
+  it('the scroller opens at the first message, its list top aligned, the arrow over it', () => {
     expect(comments).toContain(
       'className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"',
     );
-    expect(comments).toContain('<ul className="mt-auto flex shrink-0 flex-col pb-3 pt-4">');
-    expect(comments).toContain('data-thread-anchor-bottom=""');
+    expect(comments).toContain('<ul className="flex shrink-0 flex-col pb-3 pt-4">');
+    expect(comments).not.toContain('mt-auto');
+    expect(comments).toContain('data-thread-open-top=""');
+    expect(comments).toContain('if (!landing) scrollRef.current?.scrollTo({ top: 0 });');
+    expect(comments).toContain('<LatestButton');
   });
 
   it("a thread's rows say their day, as chat's threads do", () => {

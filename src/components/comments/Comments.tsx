@@ -133,6 +133,7 @@ import {
   type CommentTaskEmbed,
   type Result,
 } from '@srtdio/comments';
+import { REPLY_TITLE } from '@/lib/chat/thread-rail';
 import { DOMAIN_ERROR_CODES, type DomainErrorCode } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 
@@ -189,8 +190,6 @@ export interface CommentsProps {
 
 /** The comment box's hint (unchanged). */
 export const COMMENT_PLACEHOLDER = 'Write a comment';
-/** The thread's title when it has no card (chat's word). */
-export const THREAD_TITLE = 'Thread';
 /** The toast when comment_create rejects a mention (an Approver on a draft post). */
 export const DRAFT_MENTION_TOAST = "Clients can't see drafts. Tag them once it's in Review.";
 /** The zero state (unchanged words). */
@@ -1413,7 +1412,7 @@ export function Comments(props: CommentsProps): ReactElement {
             const offer = commentMenuOffer({ row: threadRoot, me, viewerIsAgency });
             return (
               <CommentThreadLayer
-                title={THREAD_TITLE}
+                title={REPLY_TITLE[entityType]}
                 subtitle={
                   props.whereLabel !== undefined && props.whereLabel !== ''
                     ? props.whereLabel

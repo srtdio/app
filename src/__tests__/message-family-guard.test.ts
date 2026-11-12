@@ -231,8 +231,8 @@ describe('message family: Catch up, Seen / Read by and the phone thread root (12
     expect(stepPx(REPLIES_ROW_PAD.laptop, 'pl') + 8).toBe(56);
   });
 
-  it("the thread's main message stacks on laptop only; on phone it is a head row", () => {
-    expect(BUBBLE).toContain("const rootStack = rootPlace && layout === 'laptop';");
+  it("the thread's main message stacks on every width (13 Nov 2026, Slack)", () => {
+    expect(BUBBLE).toContain('const rootStack = rootPlace;');
     // Every stacked-geometry branch reads rootStack, never rootPlace.
     expect(BUBBLE).toContain("rootStack ? 'relative flex-col items-stretch gap-2' : 'flex-row'");
     expect(BUBBLE).toContain('const senderLine = rootStack ? null : showMeta ?');

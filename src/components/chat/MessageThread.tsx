@@ -151,7 +151,7 @@ import {
   scheduleWindowBoundary,
 } from '@/components/chat/MessageActionMenu';
 import { useCancelUpload, useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
-import { ideaCardStore, ideaTitleOf } from '@/components/chat/PlanItemCard';
+import { ideaTitleOf } from '@/components/chat/PlanItemCard';
 import { useSharedCardCache, type ThreadCardCache } from '@/components/chat/PostCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
@@ -248,6 +248,7 @@ import {
   isRootCard,
   localReplyCounts,
   rootCardOf,
+  REPLY_TITLE,
   THREAD_TITLE,
   threadTitleOf,
   type RootCardTitles,
@@ -373,10 +374,6 @@ import {
 // MessageBubble and its pieces live in MessageBubble.tsx; re-exported here so
 // every importer keeps its path.
 
-/** No plan card cache (outside a chat): nothing to subscribe to. */
-const noCardSubscribe = (): (() => void) => () => {};
-const noCardVersion = (): number => 0;
-
 /**
  * The card titles the device already holds, by kind: posts from the chip
  * batch, briefs from the chat's card cache, plans from the plan card cache,
@@ -397,32 +394,20 @@ export function heldCardTitles(
 }
 
 /**
- * The thread screen's frame titled by its root card (threadTitleOf) over the
- * chat's name. It alone subscribes to the plan, brief and idea card caches,
- * so a title landing re-renders the header, never the chat; the list and
- * composer are the caller's children (same elements, no re-render).
+ * The thread screen's frame (13 Nov 2026): "Chat reply" over the chat's name,
+ * so the bar says what you reply in. The list and composer are the caller's
+ * children (same elements, no re-render).
  */
 function ThreadViewTitled(props: {
-  root: ThreadMessage | undefined;
-  postTitle: (id: string) => string | null;
   subtitle: string;
   selecting: boolean;
   onClosed: () => void;
   behindRef: RefObject<HTMLElement | null>;
   children: ReactNode;
 }): ReactElement {
-  const plans = usePlanCards();
-  useSyncExternalStore(
-    plans?.cache.subscribe ?? noCardSubscribe,
-    plans?.cache.version ?? noCardVersion,
-  );
-  const briefs = useSharedCardCache();
-  const ideas = ideaCardStore();
-  useSyncExternalStore(ideas.subscribe, ideas.version, ideas.version);
-  const title = threadTitleOf(props.root, heldCardTitles(props.postTitle, briefs, plans));
   return (
     <ThreadViewFrame
-      title={title}
+      title={REPLY_TITLE.chat}
       subtitle={props.subtitle}
       selecting={props.selecting}
       onClosed={props.onClosed}
@@ -1385,9 +1370,8 @@ export function threadListItems(
   /** The last older page failed (FT41): its Retry; the row replaces Load older. */
   retryOlder?: () => void,
   /**
-   * Top aligned: the spacer takes no slack. The thread view was this from
-   * 8 Nov 2026; since 12 Nov 2026 it passes anchorBottom and keeps the bottom
-   * pin like the main chat, so nothing passes true today.
+   * Top aligned: the spacer takes no slack. The thread view (openAtTop,
+   * 13 Nov 2026, Slack): its first message at the top.
    */
   topAligned = false,
 ): ReactElement[] {
@@ -1997,11 +1981,11 @@ function ThreadBody(
     /** A plain tap on a row (12 Nov 2026): opens its thread, keyboard down on touch; absent: as Reply. */
     onOpenThread?: (message: ThreadMessage) => void;
     /**
-     * The thread view (12 Nov 2026): the content sits on the reply box. The
-     * list's first child (the spacer) takes margin-top auto, so a short thread's
-     * spare room is at the top. CSS only; the main chat never passes it.
+     * The thread view (13 Nov 2026, Slack): top aligned, opens at the first
+     * message for context; it follows the end only once the reader is there
+     * or sends. The main chat never passes it.
      */
-    anchorBottom?: boolean;
+    openAtTop?: boolean;
     /** Present while selection mode is on. */
     selection?: { selected: ReadonlySet<string>; onToggle: (id: string) => void };
     /**
@@ -2264,7 +2248,7 @@ function ThreadBody(
   // Stick-to-bottom: the intent to stay on the latest message (true on open,
   // after an own send; only the reader's gestures let go of it), and who moved
   // the list last. The thread remounts per channel, so each chat opens pinned.
-  const stickRef = useRef(openingIntent());
+  const stickRef = useRef(props.openAtTop === true ? false : openingIntent());
   const sourceRef = useRef<ScrollSource>('program');
   // The scroll height before an older page was requested, so the prepended rows
   // do not move what the reader was looking at.
@@ -2714,7 +2698,11 @@ function ThreadBody(
     const last = msgs[msgs.length - 1];
     const prevId = countedNewestRef.current;
     countedNewestRef.current = last?.id ?? null;
-    setShowLatest(!stickRef.current);
+    // A thread (openAtTop, 13 Nov 2026): the arrow means rows below the fold.
+    const list = listRef.current;
+    setShowLatest(
+      props.openAtTop === true ? list !== null && bottomDistance(list) > 1 : !stickRef.current,
+    );
     if (stickRef.current) {
       setNewCount(0);
       return;
@@ -2724,7 +2712,7 @@ function ThreadBody(
     if (at < 0) return;
     const added = msgs.slice(at + 1).filter((m) => !m.mine).length;
     if (added > 0) setNewCount((n) => n + added);
-  }, [props.messages]);
+  }, [props.messages, props.openAtTop, bottomDistance]);
   const toLatest = (): void => {
     pendingJumpRef.current = null;
     stickRef.current = true;
@@ -3112,7 +3100,7 @@ function ThreadBody(
               source: sourceRef.current,
               distanceFromBottom: bottomDistance(el),
             });
-            setShowLatest(!stickRef.current);
+            setShowLatest(props.openAtTop === true ? bottomDistance(el) > 1 : !stickRef.current);
             if (stickRef.current) setNewCount(0);
             updatePill();
             // Near an edge of the window with loaded rows past it: STEP more
@@ -3156,7 +3144,7 @@ function ThreadBody(
               props.onLoadOlder?.();
             }
           }}
-          {...(props.anchorBottom === true ? { 'data-thread-anchor-bottom': '' } : {})}
+          {...(props.openAtTop === true ? { 'data-thread-open-top': '' } : {})}
           className={THREAD_LIST_CLASS}
         >
           {props.loadFailed === true ? threadLoadErrorRow(props.onRetryLoad) : null}
@@ -3380,7 +3368,7 @@ function ThreadBody(
               ? (row) => <TaskEventLine key={row.key} line={row.line} ctx={taskCtx} />
               : undefined,
             olderFailed && props.loadingOlder !== true && win.start === 0 ? retryOlder : undefined,
-            props.threads?.viewRootId !== undefined && props.anchorBottom !== true,
+            props.openAtTop === true,
           )}
         </ul>
         {unread !== undefined && unread !== null && pill !== 'unknown' ? (
@@ -6122,8 +6110,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       {view !== null && viewParts !== null && viewThreads !== undefined ? (
         <ThreadViewTitled
           key={`thread:${view.rootId}`}
-          root={viewRoot}
-          postTitle={viewPostTitle}
           subtitle={viewSubtitle}
           selecting={selecting}
           onClosed={closeThread}
@@ -6148,7 +6134,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               onLoadOlder={threadView.loadOlder}
               olderKey={threadOlderKey(view.rootId)}
               loadOlderRow
-              anchorBottom
+              openAtTop
             />
           </ReactorLoadContext.Provider>
           <ThreadViewFill

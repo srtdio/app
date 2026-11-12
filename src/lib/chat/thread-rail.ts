@@ -163,6 +163,19 @@ export interface RootCardTitles {
 export const THREAD_TITLE = 'Thread';
 
 /**
+ * An open thread's bar title (13 Nov 2026): it says what you are replying in,
+ * so nobody guesses from the screen; the sub-line names the chat or item.
+ */
+export const REPLY_TITLE = {
+  chat: 'Chat reply',
+  post: 'Post comment reply',
+  brief: 'Brief comment reply',
+  plan: 'Plan comment reply',
+  bank: 'Bank idea comment reply',
+} as const;
+export type ReplyPlace = keyof typeof REPLY_TITLE;
+
+/**
  * A thread's title: its root card's title when the device holds it, else
  * "Thread" (also for a root with no card or a deleted root). Pure.
  */

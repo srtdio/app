@@ -66,7 +66,7 @@ import {
   type CommentVisibility,
   type PlanAudience,
 } from '@/lib/chat/plans';
-import { THREAD_TITLE } from '@/lib/chat/thread-rail';
+import { REPLY_TITLE } from '@/lib/chat/thread-rail';
 import { repliesLabel } from '@/lib/chat/thread-signals';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { SENDER_GROUP_MS, breaksRun, type ThreadMessage } from '@/lib/chat/thread';
@@ -892,7 +892,7 @@ export function PlanItemThread(props: {
     });
     threadLayer = (
       <CommentThreadLayer
-        title={THREAD_TITLE}
+        title={props.linkTo?.planId === null ? REPLY_TITLE.bank : REPLY_TITLE.plan}
         subtitle={
           props.threadSubtitle !== undefined && props.threadSubtitle !== ''
             ? props.threadSubtitle

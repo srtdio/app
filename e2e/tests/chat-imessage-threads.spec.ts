@@ -102,8 +102,8 @@ test('DM: the thread screen opens, sends a reply, and shows a refused reply', as
 
   const view = page.locator('[data-thread-view]');
   await expect(view).toBeVisible();
-  // L4: a post-card thread takes the post's title.
-  await expect(view.locator('[data-thread-view-title]')).toContainText('Monday carousel');
+  // 13 Nov 2026: the bar says where the reply goes (REPLY_TITLE.chat).
+  await expect(view.locator('[data-thread-view-title]')).toHaveText('Chat reply');
   await expect(view.locator('[data-thread-separator]')).toHaveText('4 replies');
   const close = view.locator('[data-thread-view-close]');
   expectMinTouchTarget(await close.boundingBox(), { dimension: 'height' });

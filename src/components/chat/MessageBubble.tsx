@@ -1465,10 +1465,10 @@ export function MessageBubble(props: {
   const gutter = !head;
   // The thread view's root (always its list's first row, so a head) and replies.
   // rootPlace is the root's behaviour (the add-reaction key, the chips' end
-  // spacing); rootStack is its stacked geometry, laptop only: on phone the
-  // root is a normal head row on the message family's 64 text column.
+  // spacing); rootStack is its stacked geometry on every width (13 Nov 2026,
+  // Slack): photo with the name over the time, the text full width under it.
   const rootPlace = props.threadPlace === 'root' && head;
-  const rootStack = rootPlace && layout === 'laptop';
+  const rootStack = rootPlace;
   const replyPlace = props.threadPlace === 'reply';
   const hasReactions = message.reactions.length > 0;
   // The chips take a reaction: a recorded row, wired, not in selection mode.
@@ -1632,10 +1632,16 @@ export function MessageBubble(props: {
     selecting && SELECTION_ROW_OFFSET,
   );
   const photo = rootStack ? (
-    // The thread view's root head, laptop only: 40 photo, 12 to the name over the time.
+    // The thread view's root head (Slack, 13 Nov 2026): the photo (laptop 40,
+    // phone the family's 36), 12 to the name over the time (phone: on 64).
     <div data-thread-root-head="" className="flex min-w-0 items-center gap-3">
       {asPerson(
-        <Avatar name={headerName(message, profiles)} {...senderAvatar} role="row" decorative />,
+        <Avatar
+          name={headerName(message, profiles)}
+          {...senderAvatar}
+          role={layout === 'laptop' ? 'row' : MESSAGE_AVATAR_ROLE[layout]}
+          decorative
+        />,
         'block',
       )}
       <span className="flex min-w-0 flex-col">
