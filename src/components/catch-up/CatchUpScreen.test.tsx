@@ -419,3 +419,45 @@ describe('catch up thread sheet (10 Nov 2026)', () => {
     expect(snapToRowTop(40, [])).toBe(40);
   });
 });
+
+describe('catch up swipe never swallows the next tap (12 Nov 2026)', () => {
+  // A touch press that slips sideways locks as a swipe; on touch no click
+  // follows it. The next clean tap must still open the thread.
+  function pointer(el: Element, type: string, clientX: number): void {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX, clientY: 10 });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
+    Object.defineProperty(event, 'pointerType', { value: 'touch' });
+    act(() => {
+      el.dispatchEvent(event);
+    });
+  }
+
+  it('a locked swipe with no click, then pointerdown and a click, opens the thread', async () => {
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get: () => 390,
+    });
+    try {
+      render([card('p1')]);
+      await settle();
+      const open = document.querySelector<HTMLElement>('[data-catch-up-open-thread]');
+      if (open === null) throw new Error('missing [data-catch-up-open-thread]');
+      const text = open.querySelector('span') ?? open;
+      pointer(text, 'pointerdown', 100);
+      pointer(text, 'pointermove', 106);
+      pointer(text, 'pointermove', 114);
+      pointer(text, 'pointerup', 114);
+      await settle();
+      expect(document.querySelector('[data-catch-up-thread-sheet]')).toBeNull();
+      // The next clean tap: pointerdown, then its click.
+      pointer(open, 'pointerdown', 100);
+      pointer(open, 'pointerup', 100);
+      act(() => open.click());
+      await settle();
+      expect(document.querySelector('[data-catch-up-thread-sheet]')).not.toBeNull();
+    } finally {
+      if (width !== undefined) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', width);
+    }
+  });
+});

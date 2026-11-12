@@ -622,7 +622,7 @@ export function CatchUpReply(props: CatchUpReplyProps): ReactElement {
               label="Send"
               disabled={pending === null}
               icon={<IconSend size={ICON_SIZE.control} />}
-              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
             />
           ) : undefined
         }

@@ -503,6 +503,9 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
 
   // The swipe: X only, a lean with it; a press that goes up or down first scrolls.
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    // A touch swipe ends with no click, so the flag would swallow the next
+    // clean tap: every new press starts clear.
+    swipedRef.current = false;
     if (flying || typing) return;
     const target = event.target;
     // A swipe may start on the rows' own tap areas (a message's text, a point);

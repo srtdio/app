@@ -8482,6 +8482,120 @@ test('tab frame: nothing moves across the six list tabs', async ({ page }, testI
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 
+// Finger taps (12 Nov 2026): tap() clicks with a mouse, which never showed
+// that a pointerdown preventDefault stops a finger tap on WebKit, or that a
+// swipe with no click swallowed the next tap. These tap with the touchscreen.
+// Phone projects only. No screenshot.
+async function fingerTap(page: Page, target: Locator): Promise<void> {
+  await target.scrollIntoViewIfNeeded();
+  const box = await target.boundingBox();
+  if (box === null) throw new Error('finger tap target has no box');
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+async function bootPhone(
+  page: Page,
+  extra: (network: HarnessNetwork) => void,
+  url: string,
+): Promise<HarnessNetwork> {
+  test.skip(isLaptop(page), 'phone only (finger taps)');
+  await page.clock.setFixedTime(NOW);
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(page);
+  Object.assign(network.world, buildWorld(NOW));
+  seedAudit(network, creator, NOW);
+  extra(network);
+  await installDeletedRoutes(page, network);
+  await page.goto(url);
+  return network;
+}
+
+const CATCH_UP_THREAD_SHEET = '[data-catch-up-thread-sheet]';
+
+test('catch up: one finger tap on a message opens its thread', async ({ page }) => {
+  const network = await bootPhone(
+    page,
+    (n) => seedCatchUp(n, { lines: true }),
+    `/activity?catchup=${CATCH_UP_COMMENT}`,
+  );
+  await catchUpReady(page);
+  const open = page.locator('[data-catch-up-open-thread]').first();
+  await waitFor([open], 'message');
+  await fingerTap(page, open);
+  await expect(page.locator(CATCH_UP_THREAD_SHEET)).toBeVisible();
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('catch up: a tap after a sideways slip still opens the thread', async ({ page }) => {
+  const network = await bootPhone(
+    page,
+    (n) => seedCatchUp(n, { lines: true }),
+    `/activity?catchup=${CATCH_UP_COMMENT}`,
+  );
+  await catchUpReady(page);
+  const open = page.locator('[data-catch-up-open-thread]').first();
+  await waitFor([open], 'message');
+  // A press that slips 14 sideways locks as a swipe; a touch swipe ends with no click.
+  await open
+    .locator('span')
+    .first()
+    .evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      const fire = (type: string, dx: number): void => {
+        el.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            pointerType: 'touch',
+            isPrimary: true,
+            clientX: x + dx,
+            clientY: y,
+          }),
+        );
+      };
+      fire('pointerdown', 0);
+      fire('pointermove', 6);
+      fire('pointermove', 14);
+      fire('pointerup', 14);
+    });
+  await page.waitForTimeout(500);
+  await fingerTap(page, open);
+  await expect(page.locator(CATCH_UP_THREAD_SHEET)).toBeVisible();
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('catch up: one finger tap on the replies row opens the thread', async ({ page }) => {
+  const network = await bootPhone(
+    page,
+    (n) => seedCatchUpGroupMain(n, NOW),
+    `/activity?catchup=${CU_GROUP_MAIN_ENTRY}`,
+  );
+  await catchUpReady(page);
+  const row = page.locator('[data-catch-up-replies]').first();
+  await waitFor([row], 'replies row');
+  await fingerTap(page, row);
+  await expect(page.locator(CATCH_UP_THREAD_SHEET)).toBeVisible();
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('mention picker: one finger tap picks a person', async ({ page }) => {
+  const network = await bootPhone(page, () => undefined, '/chat');
+  const field = await focusChatBox(page, '', (p) => openChat(p, GROUP_NAME));
+  await page.keyboard.type('@');
+  const option = page.locator('[data-mention-option]').first();
+  await waitFor([option], 'mention list');
+  await fingerTap(page, option);
+  await expect(page.locator('[data-mention-option]')).toHaveCount(0);
+  await expect(field).toHaveValue(/^@\S+/);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
 // Touch tablet page mode (src/lib/scroll-mode.ts TOUCH_TABLET_QUERY): the
 // document scrolls on these screens. Only the ipad-* projects run @tablet
 // (playwright.visual.config.ts); their baselines live in their own folders.

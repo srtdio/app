@@ -226,3 +226,27 @@ describe('detail rules: one long-press duration', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('detail rules: keep focus with mouse down, not pointer down', () => {
+  // On WebKit touch a pointerdown preventDefault stops the click, so a finger
+  // tap opens nothing (12 Nov 2026). Every file under src, tests excluded.
+  const SRC = fileURLToPath(new URL('../', import.meta.url));
+  const ALL: { rel: string; src: string }[] = sourceFiles(SRC)
+    .map((path) => ({ path, rel: relative(SRC, path).split(sep).join('/') }))
+    .filter(({ rel }) => !/\.test\.tsx?$/.test(rel))
+    .map(({ path, rel }) => ({ rel, src: readFileSync(path, 'utf8') }));
+  // onPointerDown={(e) => e.preventDefault()} or with a block body that only prevents.
+  const PREVENT_ONLY =
+    /onPointerDown=\{\s*\(\s*(\w+)\s*(?::[^)]*)?\)\s*=>\s*(?:\1\.preventDefault\(\)|\{\s*\1\.preventDefault\(\);?\s*\})\s*\}/;
+
+  it('no onPointerDown handler whose whole body is event.preventDefault()', () => {
+    const offenders: string[] = [];
+    for (const { rel, src } of ALL) {
+      for (const at of indexesOf(src, PREVENT_ONLY)) offenders.push(`${rel}:${lineOf(src, at)}`);
+    }
+    expect(
+      offenders,
+      'use onMouseDown to keep focus; onPointerDown preventDefault stops finger taps on iPhone',
+    ).toEqual([]);
+  });
+});
