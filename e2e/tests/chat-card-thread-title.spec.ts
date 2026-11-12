@@ -35,7 +35,7 @@ async function openChat(page: Page, name: string): Promise<void> {
 }
 
 test(
-  'a thread on a plan card: the plan title in the bar, the chat name under it, the plan card in the root',
+  'a thread on a plan card: Chat reply in the bar, the chat name under it, the plan card in the root',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
@@ -59,7 +59,7 @@ test(
 
     const view = page.locator('[data-thread-view]');
     await expect(view).toBeVisible();
-    await expect(view.locator('[data-thread-view-title]')).toHaveText(PLAN_TITLE);
+    await expect(view.locator('[data-thread-view-title]')).toHaveText('Chat reply');
     await expect(view.locator('[data-thread-view-subtitle]')).toHaveText(PEER_NAME);
     // The title is one line (truncates, never wraps).
     const lines = await view
