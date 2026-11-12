@@ -21,12 +21,15 @@ import { mark } from '@/lib/perf-marks';
 import type {
   BankIdeaEditArgs,
   Client,
+  DomainError,
+  DomainErrorCode,
   PlanConceptAddArgs,
   PlanConceptEditArgs,
   PlanCreateWithItemsArgs,
   Result,
 } from '@srtdio/rpc';
-import { planDraftRows } from '@srtdio/rpc';
+import { DOMAIN_ERROR_CODES, planDraftRows } from '@srtdio/rpc';
+import type { Database } from '@srtdio/schemas';
 import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import type { Precheck } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
@@ -36,6 +39,7 @@ import { getPrefetchContext } from '@/lib/prefetch-context';
 import { civilDayOf, civilDaysBetween, formatCivilDayHeader } from '@/lib/plan-week';
 import { errorText } from '@/lib/error-copy';
 import { getFillCount } from '@/lib/use-fill-count';
+import { logger } from '@/lib/logger';
 
 /** Ids per IN read (the PostgREST URL stays short). */
 export const PLAN_READ_CHUNK = 100;
@@ -192,6 +196,12 @@ export interface PlanCommentRow {
   body: string;
   visibility: CommentVisibility;
   created_at: string;
+  /** The main comment this one replies to (one level); null or absent on a main comment. */
+  parent_comment_id?: string | null;
+  /** Asset version ids hung on the comment (asset_attachments 'plan_item_comment'). */
+  attachment_asset_ids?: string[] | null;
+  /** A main comment: the viewer's own read point on its thread (null: never opened). */
+  thread_read_at?: string | null;
 }
 
 /** One plan with everything its card and screen show. */
@@ -233,6 +243,15 @@ const ITEM_COLUMNS =
 const BUCKET_COLUMNS = 'item_id, bucket_id';
 const REVIEW_COLUMNS = 'item_id, side, status, reviewed_by, reviewed_at';
 const COMMENT_COLUMNS = 'id, item_id, author_user_id, body, visibility, created_at';
+
+/**
+ * The Item screen's comment read: the rows, their thread and file columns,
+ * and the viewer's own read point per main comment riding in as an embed
+ * (plan_item_comment_thread_reads, RLS: own rows only), so one select answers
+ * all of it, as post comments' COMMENT_SELECT does. No N+1.
+ */
+export const ITEM_COMMENT_COLUMNS =
+  'id, item_id, author_user_id, body, visibility, created_at, parent_comment_id, attachment_asset_ids, plan_item_comment_thread_reads(last_read_at)';
 
 /** Split ids into IN lists of at most PLAN_READ_CHUNK. Pure. */
 export function planChunks(ids: readonly string[]): string[][] {
@@ -736,24 +755,51 @@ export async function readCommentCounts(
   }
 }
 
-/** One item's visible comments, oldest first (newest last). Never throws. */
+/** One plan_item_comments row as ITEM_COMMENT_COLUMNS reads it (the read-point embed raw). */
+export interface PlanCommentRead extends Omit<PlanCommentRow, 'thread_read_at'> {
+  plan_item_comment_thread_reads?: unknown;
+}
+
+/** The read-point embed as a time or null, whatever shape it came in (object, 0..1 array). Pure. */
+export function planThreadReadAt(value: unknown): string | null {
+  const one: unknown = Array.isArray(value) ? value[0] : value;
+  if (one === null || typeof one !== 'object') return null;
+  const at = (one as Record<string, unknown>).last_read_at;
+  return typeof at === 'string' ? at : null;
+}
+
+/** A read row with the embed folded into thread_read_at and null thread columns kept. Pure. */
+export function planCommentOfRead(row: PlanCommentRead): PlanCommentRow {
+  const { plan_item_comment_thread_reads: reads, ...rest } = row;
+  return {
+    ...rest,
+    parent_comment_id: rest.parent_comment_id ?? null,
+    attachment_asset_ids: rest.attachment_asset_ids ?? null,
+    thread_read_at: planThreadReadAt(reads),
+  };
+}
+
+/**
+ * One item's visible comments (main comments and replies), oldest first
+ * (newest last), each main comment with the viewer's read point. Never throws.
+ */
 export async function readItemComments(
   client: Client,
   itemId: string,
   signal?: AbortSignal,
 ): Promise<Result<PlanCommentRow[]>> {
   try {
-    const rows = await selectIn<PlanCommentRow>(
+    const rows = await selectIn<PlanCommentRead>(
       client,
       'plan_item_comments',
-      COMMENT_COLUMNS,
+      ITEM_COMMENT_COLUMNS,
       'item_id',
       [itemId],
       signal,
       (q) => q.is('deleted_at', null).order('created_at', { ascending: true }),
     );
     if (!rows.ok) return rows;
-    return { ok: true, data: sortComments(rows.data) };
+    return { ok: true, data: sortComments(rows.data.map(planCommentOfRead)) };
   } catch (error) {
     return fail(String(error));
   }
@@ -764,6 +810,164 @@ export function sortComments(rows: readonly PlanCommentRow[]): PlanCommentRow[] 
   return [...rows].sort(
     (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Plan comment threads (12 Nov 2026): one level of replies under a main
+// comment, files on any comment, the viewer's read point per thread. Writes
+// go through plan_item_comment_send (the actor is the server's auth.uid(); a
+// reply takes its main comment's visibility there) and
+// plan_item_comment_thread_read_set (fire and forget). Every comment count
+// shown elsewhere (readCommentCounts, withCommentCounts) still counts replies.
+// ---------------------------------------------------------------------------
+
+type Functions = Database['public']['Functions'];
+
+/** One plan_item_comment_send: a main comment (parentId null) or a reply. */
+export interface PlanCommentSend {
+  itemId: string;
+  /** The main comment replied to; null for a main comment. */
+  parentId: string | null;
+  body: string;
+  /** A main comment's audience; a reply's is the server's (its main comment's). */
+  visibility: CommentVisibility;
+  /** Asset version ids from the upload path (empty: text only). */
+  attachmentVersionIds: readonly string[];
+  traceId: string;
+}
+
+/** The proc's arguments for one send (p_parent_comment_id null on a main comment). Pure. */
+export function planCommentSendArgs(
+  send: PlanCommentSend,
+): Functions['plan_item_comment_send']['Args'] {
+  return {
+    p_item_id: send.itemId,
+    // The generated Args type the parent as a string; the proc takes null for a main comment.
+    p_parent_comment_id: send.parentId as string,
+    p_body: send.body,
+    p_visibility: send.visibility,
+    p_attachment_version_ids: [...send.attachmentVersionIds],
+    p_trace_id: send.traceId,
+  };
+}
+
+/** A refusal as the domain error the screens already map (invalid_mention keeps its ids). */
+function sendError(message: string, details: string | null | undefined): Result<never> {
+  const known = (DOMAIN_ERROR_CODES as readonly string[]).includes(message);
+  const error: DomainError = {
+    code: known ? (message as DomainErrorCode) : 'unknown',
+    message,
+  };
+  return { ok: false, error: details ? { ...error, details } : error };
+}
+
+/**
+ * Write one plan comment or reply; the new comment's id. Expected refusals
+ * (invalid_mention, forbidden_role, workspace_member_only, invalid_payload,
+ * 'attachment not available') come back as Result values. Never throws.
+ */
+export async function sendPlanComment(
+  client: Client,
+  send: PlanCommentSend,
+): Promise<Result<string>> {
+  try {
+    const args = planCommentSendArgs(send);
+    const { data, error } = await client.rpc('plan_item_comment_send', args);
+    if (error) return sendError(error.message, error.details);
+    if (typeof data !== 'string') return fail('plan_item_comment_send: no id');
+    return { ok: true, data };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/**
+ * Move the viewer's read point on one thread to its newest reply. Fire and
+ * forget: never awaited on a paint or tap path; a failure only logs. Never throws.
+ */
+export function setPlanCommentThreadRead(client: Client, rootId: string, traceId: string): void {
+  const args: Functions['plan_item_comment_thread_read_set']['Args'] = {
+    p_root_id: rootId,
+    p_trace_id: traceId,
+  };
+  void (async () => {
+    try {
+      const { error } = await client.rpc('plan_item_comment_thread_read_set', args);
+      if (error) {
+        logger.warn('chat: plan comment thread read failed', {
+          trace_id: traceId,
+          error: error.message,
+        });
+      }
+    } catch (error) {
+      logger.warn('chat: plan comment thread read threw', {
+        trace_id: traceId,
+        error: String(error),
+      });
+    }
+  })();
+}
+
+type ThreadFields = Pick<PlanCommentRow, 'id' | 'created_at'> & {
+  parent_comment_id?: string | null;
+};
+
+/** Main comments only (parent null), oldest first (ties by id). Pure. */
+export function planMainComments<T extends ThreadFields>(rows: readonly T[]): T[] {
+  return rows
+    .filter((r) => (r.parent_comment_id ?? null) === null)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+}
+
+/** Replies by their main comment's id, each list oldest first (ties by id). Pure. */
+export function planRepliesByRoot<T extends ThreadFields>(rows: readonly T[]): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const r of rows) {
+    const root = r.parent_comment_id ?? null;
+    if (root === null) continue;
+    const list = out.get(root);
+    if (list) list.push(r);
+    else out.set(root, [r]);
+  }
+  for (const list of out.values())
+    list.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  return out;
+}
+
+/** What a main comment's replies row shows. */
+export interface PlanRepliesInfo {
+  count: number;
+  /** Up to 3 latest distinct repliers, the latest last (next to the count). */
+  repliers: string[];
+  /** The last reply's time; null with no reply. */
+  lastAt: string | null;
+  /** The last reply is not mine and is newer than my read point (none: any reply not mine). */
+  unread: boolean;
+}
+
+/**
+ * The replies row of one thread from its replies (oldest first), my read
+ * point and me. A reply whose author is unknown (null) counts but shows no
+ * photo. Pure.
+ */
+export function planRepliesInfo(
+  replies: readonly Pick<PlanCommentRow, 'author_user_id' | 'created_at'>[],
+  readAt: string | null | undefined,
+  me: string | null,
+): PlanRepliesInfo {
+  const repliers: string[] = [];
+  for (let i = replies.length - 1; i >= 0 && repliers.length < 3; i -= 1) {
+    const id = replies[i]?.author_user_id ?? null;
+    if (id !== null && !repliers.includes(id)) repliers.push(id);
+  }
+  repliers.reverse();
+  const last = replies[replies.length - 1];
+  const at = readAt ?? null;
+  const unread =
+    last !== undefined &&
+    (me === null || last.author_user_id !== me) &&
+    (at === null || last.created_at.localeCompare(at) > 0);
+  return { count: replies.length, repliers, lastAt: last?.created_at ?? null, unread };
 }
 
 /** One concept file: its library version, display name, MIME type and kind. */

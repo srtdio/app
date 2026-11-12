@@ -55,6 +55,8 @@ import {
   tabFrameViolations,
   type UploadBarItem,
   type WritingBoxGeom,
+  replyBoxRestViolations,
+  type ReplyBoxRestGeom,
 } from './layout-checks-core';
 
 // Automatic layout checks on every visual screen (screens.spec.ts capture()
@@ -111,6 +113,10 @@ import {
 //     hit (the bar's keys 48), each checkpoint circle on its text's first
 //     line and the point text on the message text column, no card row over a
 //     sibling, the card on a surface of its own over the page tone.
+//  19 reply boxes at rest (assertReplyBoxAtRest, 12 Nov 2026, every screen
+//     after its shot): chat's Composer unfocused, its field's first line on
+//     the writing frame's and the "+" key's centre; on a phone a docked box
+//     16 from both screen edges with its text on the 64 column.
 // LAYOUT_CHECKS=strict (the default) fails the screen (soft: every check
 // and the screenshot still run, so one run reports every failure); LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
@@ -1522,6 +1528,133 @@ export async function checkCatchUpComposer(page: Page, screenName: string): Prom
         `catch-up reply pill left ${geom.frame.x.toFixed(1)} is not on the photo column ${geom.photo.x.toFixed(1)}`,
       );
     }
+  }
+  settleFindings(screenName, violations);
+}
+
+/** How long check 19 waits for an unfocused box to settle from the card back to the pill. */
+const REPLY_BOX_SETTLE_MS = 1_000;
+
+/** What assertReplyBoxAtRest reads: the boxes at rest, and how many reply boxes show at all. */
+interface ReplyBoxRead {
+  boxes: ReplyBoxRestGeom[];
+  shown: number;
+}
+
+/**
+ * Check 19 (12 Nov 2026): every reply box on the screen (chat's Composer: a
+ * form holding textarea[aria-label="Message"], in chat, chat threads, post
+ * and brief comments and their threads, Plan item and Bank idea comments and
+ * their threads), measured at rest: unfocused, the pill or the line (never the
+ * open card, the phone editor, a recording or an open + tray), its field on
+ * one line (replyBoxRestViolations). A box still settling from the card to
+ * the pill after the blur is waited for (at most REPLY_BOX_SETTLE_MS).
+ * Phone edges and the text column are judged on a docked box only: the post
+ * and brief comment box ([data-comments-composer]) sits in the page column
+ * under the 16 gutter, so it answers to (a) alone. `required`: the screen
+ * must show a reply box (focused or not).
+ */
+export async function assertReplyBoxAtRest(
+  page: Page,
+  screenName: string,
+  required: boolean,
+): Promise<void> {
+  await page
+    .waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll('form textarea[aria-label="Message"]')).every(
+          (field) => {
+            const box = field.closest('[data-writing-box]');
+            const form = field.closest('form');
+            const active = document.activeElement;
+            const focused = active !== null && form !== null && form.contains(active);
+            return box === null || focused || box.getAttribute('data-shape') !== 'card';
+          },
+        ),
+      undefined,
+      { timeout: REPLY_BOX_SETTLE_MS },
+    )
+    .catch(() => undefined);
+  const read = await page.evaluate((): ReplyBoxRead => {
+    const toBox = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height });
+    const px = (v: string): number => Number.parseFloat(v) || 0;
+    const visible = (el: Element): boolean => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 1 || r.height <= 1) return false;
+      const s = getComputedStyle(el);
+      return s.display !== 'none' && s.visibility !== 'hidden';
+    };
+    const lineHeight = (s: CSSStyleDeclaration): number => {
+      const size = px(s.fontSize);
+      const n = Number.parseFloat(s.lineHeight);
+      if (s.lineHeight.endsWith('px') && Number.isFinite(n)) return n;
+      if (/^[\d.]+$/.test(s.lineHeight) && Number.isFinite(n)) return n * size;
+      return size * 1.2;
+    };
+    const SURFACES = [
+      '[data-comment-thread-composer]',
+      '[data-plan-comments-composer]',
+      '[data-comments-composer]',
+      '[data-thread-view]',
+    ];
+    const out: ReplyBoxRead = { boxes: [], shown: 0 };
+    const vw = window.innerWidth;
+    const fields = Array.from(
+      document.querySelectorAll<HTMLTextAreaElement>('form textarea[aria-label="Message"]'),
+    );
+    for (const field of fields) {
+      const form = field.closest('form');
+      const frame = field.closest('[data-writing-frame]');
+      const box = field.closest('[data-writing-box]');
+      if (form === null || frame === null || box === null) continue;
+      if (!visible(frame) || !visible(field)) continue;
+      out.shown += 1;
+      // At rest only: the pill or the line, unfocused, nothing open over the field.
+      const shape = box.getAttribute('data-shape');
+      if (shape !== 'pill' && shape !== 'line') continue;
+      if (box.hasAttribute('data-expanded')) continue;
+      const active = document.activeElement;
+      if (active !== null && active !== document.body && form.contains(active)) continue;
+      if (Array.from(frame.querySelectorAll('[data-tray]')).some(visible)) continue;
+      const s = getComputedStyle(field);
+      const lh = lineHeight(s);
+      const padTop = px(s.paddingTop);
+      const lines = Math.round((field.scrollHeight - padTop - px(s.paddingBottom)) / lh);
+      if (lines > 1) continue;
+      const f = field.getBoundingClientRect();
+      const wrap = field.closest('[data-writing-field]');
+      const plus =
+        Array.from(frame.querySelectorAll('[data-plus]')).find(visible) ??
+        Array.from(frame.querySelectorAll('button')).find(
+          (b) =>
+            visible(b) &&
+            wrap !== null &&
+            !wrap.contains(b) &&
+            (b.compareDocumentPosition(wrap) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+        ) ??
+        null;
+      const surface = SURFACES.find((sel) => form.closest(sel) !== null) ?? 'chat';
+      out.boxes.push({
+        label: `reply box (${surface}, ${shape})`,
+        viewportWidth: vw,
+        frame: toBox(frame.getBoundingClientRect()),
+        lineCentreY: f.top + px(s.borderTopWidth) + padTop + lh / 2,
+        textStartX: f.left + px(s.borderLeftWidth) + px(s.paddingLeft),
+        plus: plus !== null ? toBox(plus.getBoundingClientRect()) : null,
+        docked: form.closest('[data-comments-composer]') === null,
+      });
+    }
+    return out;
+  });
+  const violations: LayoutViolation[] = replyBoxRestViolations(read.boxes).map((message) => ({
+    check: 'reply-box' as const,
+    message,
+  }));
+  if (required && read.shown === 0) {
+    violations.push({
+      check: 'reply-box',
+      message: 'no reply box (form textarea[aria-label="Message"]) on a reply box screen',
+    });
   }
   settleFindings(screenName, violations);
 }

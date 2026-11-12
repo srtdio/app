@@ -384,14 +384,16 @@ test('S6 a plan item comment: a mention chip inside a bullet', async ({ page }) 
   const item = page.locator('[data-plan-page="item"]');
   await expect(item).toBeVisible();
 
-  const comment = item.getByRole('textbox', { name: 'Comment' });
+  // 12 Nov 2026: the Plan comment box is chat's Composer, docked at the page's foot.
+  const dock = item.locator('[data-plan-comments-composer]');
+  const comment = dock.getByRole('textbox', { name: 'Message' });
   await comment.scrollIntoViewIfNeeded();
   await comment.click();
   // `has` is queried inside each box: a page-rooted locator for the field.
-  const box = item.locator('[data-writing-box]', {
-    has: page.getByRole('textbox', { name: 'Comment' }),
+  const box = dock.locator('[data-writing-box]', {
+    has: page.getByRole('textbox', { name: 'Message' }),
   });
-  // The comment box (WritingBox comment mode) keeps its format row behind Aa.
+  // The box (WritingBox chat mode) keeps its format row behind Aa.
   if (!(await key(box, 'Bullet list').isVisible())) await key(box, 'Aa').click();
   await key(box, 'Bullet list').click();
   await expectSaved(comment, '- ');
@@ -400,7 +402,7 @@ test('S6 a plan item comment: a mention chip inside a bullet', async ({ page }) 
   await expect(option).toBeVisible();
   await option.click();
   // The pick puts the caret after the mention on the next frame
-  // (PlanItemScreen.pickMention): type only once that frame has run, or the
+  // (the Composer's pickMention): type only once that frame has run, or the
   // first letters land before the caret moves and the words come out shuffled.
   await expect(option).toBeHidden();
   await page.evaluate(
@@ -408,10 +410,10 @@ test('S6 a plan item comment: a mention chip inside a bullet', async ({ page }) 
       new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
   );
   await page.keyboard.type('can you check the hook?');
-  await item.getByRole('button', { name: 'Send comment', exact: true }).click();
+  await dock.getByRole('button', { name: 'Send', exact: true }).click();
 
   await expect
-    .poll(() => String(lastArgs(network, 'plan_item_comment_create')?.p_body ?? ''))
+    .poll(() => String(lastArgs(network, 'plan_item_comment_send')?.p_body ?? ''))
     .toMatch(/^- /);
   // The plan thread is chat's own bubble (MessageBubble) with chat's mention names.
   const posted = item.locator('[data-plan-comment-id] [data-bubble]', {

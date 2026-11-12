@@ -69,7 +69,9 @@ describe('Guard 1: comments use chat parts, never their own', () => {
   });
 
   it('Comments renders chat Composer, ThreadCommentRow, MessageActionMenu, RepliesRow and ThreadViewFrame', () => {
-    const src = read('components/comments/Comments.tsx');
+    // The thread layer was lifted into CommentThreadLayer (shared with Plan comment threads).
+    const src =
+      read('components/comments/Comments.tsx') + read('components/comments/CommentThreadLayer.tsx');
     for (const part of [
       "from '@/components/chat/Composer'",
       "from '@/components/chat/ThreadCommentRow'",
@@ -147,12 +149,15 @@ describe('Thread polish 1: comment files embed and thread scroll', () => {
     expect(Object.keys(record.attachmentMeta ?? {})).toEqual(['v1', 'v2']);
     expect(record.forwardedFromMessageId).toBeNull();
     // Both callers send a comment through forwardComment; neither builds its own send.
-    const screen = code(read('components/comments/Comments.tsx'));
+    const screen = code(
+      read('components/comments/Comments.tsx') + read('components/comments/CommentThreadLayer.tsx'),
+    );
     const catchUp = code(read('components/catch-up/CatchUpActionLayer.tsx'));
     expect(screen).toContain('forwardComment({');
     expect(catchUp).toContain('forwardComment({');
     expect(catchUp).not.toContain('attachmentAssetIds: []');
-    expect(screen).toContain('row.attachment_asset_ids ?? []');
+    expect(screen).toContain('forwardFor.attachment_asset_ids ?? []');
+    expect(screen).toContain('props.attachmentIds,');
   });
 
   it('the comment-file select keeps the !asset_id hint', () => {
@@ -162,9 +167,11 @@ describe('Thread polish 1: comment files embed and thread scroll', () => {
   });
 
   it('the comment thread reuses chat stick-to-bottom (no second scroll core)', () => {
-    const comments = code(read('components/comments/Comments.tsx'));
+    const comments = code(
+      read('components/comments/Comments.tsx') + read('components/comments/CommentThreadLayer.tsx'),
+    );
     expect(comments).toContain("from '@/lib/chat/stick-to-bottom'");
-    expect(comments).toContain('ref={threadScrollRef}');
+    expect(comments).toContain('scrollRef={threadScrollRef}');
     expect(comments).toContain('fillBeside={postColumnRight}');
   });
 });

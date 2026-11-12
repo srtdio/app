@@ -1817,8 +1817,11 @@ export function Composer(props: ComposerProps): ReactElement {
         onSubmit={submit}
         {...bottomAnchorProps}
         // The + tray opens inside the writing box (its top), so the dock
-        // keeps one look.
-        className="relative flex flex-col gap-2 border-t bg-panel px-3 py-2 lit-dock"
+        // keeps one look. Phone (12 Nov 2026): the box sits 16 from each
+        // screen edge (the page gutter), so its hint and typed text start on
+        // the 64 column (16 + edge 1 + 4 + the 36 "+" + 8, within 1); from
+        // 768 up the dock keeps its 12.
+        className="relative flex flex-col gap-2 border-t bg-panel px-4 py-2 lit-dock md:px-3"
       >
         {editing === undefined &&
         (pending.length > 0 ||

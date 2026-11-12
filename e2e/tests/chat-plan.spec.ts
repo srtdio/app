@@ -228,8 +228,10 @@ async function agencyFlow(page: Page): Promise<void> {
 
   // One chat per item: no who-can-see chip; a comment goes to everyone.
   await expect(item.locator('[data-plan-visibility-chip]')).toHaveCount(0);
-  await item.getByRole('textbox', { name: 'Comment' }).fill('Need drone shots, checking Tuesday.');
-  await item.getByRole('button', { name: 'Send comment' }).click();
+  // 12 Nov 2026: the box is chat's Composer docked at the page's foot.
+  const dock = item.locator('[data-plan-comments-composer]');
+  await dock.getByRole('textbox', { name: 'Message' }).fill('Need drone shots, checking Tuesday.');
+  await dock.getByRole('button', { name: 'Send', exact: true }).click();
   const note = item.locator('[data-plan-comment="everyone"]', {
     hasText: 'Need drone shots, checking Tuesday.',
   });

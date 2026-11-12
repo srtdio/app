@@ -724,6 +724,8 @@ export function seedClientPlan(
     created_at: '2026-10-09T09:30:00Z',
     edited_at: null,
     deleted_at: null,
+    parent_comment_id: null,
+    attachment_asset_ids: null,
   });
   (t.asset_attachments ??= []).push({
     id: '0190d400-0000-7000-8000-00000000d401',

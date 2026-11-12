@@ -18,7 +18,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import type { ItemScreenData, PlanBundle, PlanItemRow } from '@/lib/chat/plans';
+import type { ItemScreenData, PlanBundle, PlanCommentSend, PlanItemRow } from '@/lib/chat/plans';
 import type { Result } from '@srtdio/rpc';
 
 const ME = '11111111-1111-4111-8111-111111111111';
@@ -81,13 +81,27 @@ vi.mock('@srtdio/rpc', async (importOriginal) => ({
 vi.mock('@/lib/chat/plans', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chat/plans')>()),
   readItemScreen: async () => env.result,
+  // plan_item_comment_send, seen through the old proc's argument names.
+  sendPlanComment: (client: unknown, send: PlanCommentSend) =>
+    env.comment(client, {
+      p_item_id: send.itemId,
+      p_parent_comment_id: send.parentId,
+      p_body: send.body,
+      p_visibility: send.visibility,
+      p_attachment_version_ids: [...send.attachmentVersionIds],
+    }),
+  setPlanCommentThreadRead: () => undefined,
 }));
+vi.mock('@/components/chat/Composer', async () => import('./composer-stub'));
 
 import {
   COMMENT_PLACEHOLDER,
   PlanItemScreen,
+  commentChannel,
   planItemMenuItems,
 } from '@/components/chat/PlanItemScreen';
+import { composerProps } from './composer-stub';
+import { resetDrafts } from '@/lib/chat/drafts';
 import {
   MENTION_TEAM_NOTE,
   PLAN_RUN_GAP_MS,
@@ -99,6 +113,7 @@ import {
   mentionsRestricted,
   planCommentMenu,
   planCommentMessage,
+  planCommentLists,
   planCommentProfiles,
   planPickerRows,
   planThreadRows,
@@ -434,7 +449,7 @@ describe('Remove from plan: only in the More menu', () => {
     expect(items.slice(0, 2).every((i) => i.tone === undefined)).toBe(true);
   });
 
-  it('the concept body has no red button; the screen never imports the chat thread or composer', () => {
+  it("the concept body has no red button; the screen's box is chat's Composer (12 Nov 2026), never chat's thread", () => {
     // The thread file draws with chat's MessageBubble (through the shared
     // ThreadCommentRow); the screen itself stays clear of it.
     expect(read('src/components/chat/PlanItemThread.tsx')).toContain('<ThreadCommentRow');
@@ -446,8 +461,11 @@ describe('Remove from plan: only in the More menu', () => {
     );
     expect(concept).not.toContain('RemoveFromPlanButton');
     expect(concept).not.toContain('data-plan-remove-row');
-    expect(src).not.toMatch(/from '@\/components\/chat\/MessageThread'/);
-    expect(src).not.toMatch(/from '@\/components\/chat\/Composer'/);
+    // Only the reply box's hint word comes from chat's thread file.
+    expect(src).toMatch(
+      /import \{ THREAD_REPLY_PLACEHOLDER \} from '@\/components\/chat\/MessageThread'/,
+    );
+    expect(src).toMatch(/from '@\/components\/chat\/Composer'/);
     expect(src).not.toContain('MentionInput');
   });
 });
@@ -562,15 +580,18 @@ function key(el: HTMLElement, init: KeyboardEventInit): void {
 }
 
 const box = (): HTMLTextAreaElement =>
-  $<HTMLTextAreaElement>('[data-plan-comment-input]') as HTMLTextAreaElement;
+  $<HTMLTextAreaElement>('[data-plan-comments-composer] textarea') as HTMLTextAreaElement;
+/** The people the page box's @ picker offers (chat's Composer takes them as props). */
 const options = (): string[] =>
-  [...document.querySelectorAll('[data-mention-option]')].map(
-    (el) => el.getAttribute('data-mention-option') ?? '',
+  (composerProps.get(commentChannel(CONCEPT.id, null))?.mentions?.members ?? []).map(
+    (m) => m.userId,
   );
 
 beforeEach(() => {
   resetHistorySteps();
   resetMentionNames();
+  resetDrafts();
+  composerProps.clear();
   env.laptop = true;
   env.coarse = false;
   env.members = HELD;
@@ -625,40 +646,35 @@ describe('Remove from plan in the header More menu', () => {
 });
 
 describe('@ tagging', () => {
-  it('members load on focus, never on paint; the picker never offers me', async () => {
+  it("members load after paint into chat's picker; it never offers me", async () => {
     await mount('agency');
-    expect($('[data-mention-picker]')).toBeNull();
-    box().focus();
-    await act(async () => type(box(), '@'));
     await settle();
     expect(options()).toEqual([ASHA, CLIENT]);
     expect(options()).not.toContain(ME);
+    expect(composerProps.get(commentChannel(CONCEPT.id, null))?.voice).toBe(false);
   });
 
   it('a plan not shared with the client: agency side only, even for Everyone', async () => {
     await mount('agency', { ...BUNDLE, plan: { ...BUNDLE.plan, audience: 'team' } });
-    box().focus();
-    await act(async () => type(box(), '@'));
     await settle();
     expect(options()).toEqual([ASHA]);
   });
 
-  it('Enter picks while the picker is open; the next Enter sends @[id] in the body', async () => {
+  it('a sent body keeps its @[id] token and goes to everyone as a main comment', async () => {
     await mount('agency');
     box().focus();
-    await act(async () => type(box(), '@as'));
-    await settle();
-    await act(async () => key(box(), { key: 'Enter' }));
-    await settle();
-    expect(env.comment).not.toHaveBeenCalled();
-    expect(box().value).toBe('@asha ');
-    await act(async () => type(box(), '@asha looks good'));
+    await act(async () => type(box(), `@[${ASHA}] looks good`));
     await act(async () => key(box(), { key: 'Enter' }));
     await settle();
     expect(env.comment).toHaveBeenCalledTimes(1);
-    const args = env.comment.mock.calls[0]?.[1] as { p_body: string; p_visibility: string };
+    const args = env.comment.mock.calls[0]?.[1] as {
+      p_body: string;
+      p_visibility: string;
+      p_parent_comment_id: string | null;
+    };
     expect(args.p_body).toBe(`@[${ASHA}] looks good`);
     expect(args.p_visibility).toBe('everyone');
+    expect(args.p_parent_comment_id).toBeNull();
   });
 
   it('a server invalid_mention refusal toasts the note and keeps the draft', async () => {
@@ -705,5 +721,119 @@ describe('@ tagging', () => {
     expect(env.comment).toHaveBeenCalledTimes(2);
     expect((env.comment.mock.calls[1]?.[1] as { p_body: string }).p_body).toBe('Try me');
     expect($('[data-plan-comment-id="cm-new"]')?.getAttribute('data-state')).toBe('sent');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Threads (12 Nov 2026): main comments with chat's replies row; files
+// ---------------------------------------------------------------------------
+
+describe('plan comment threads', () => {
+  beforeEach(() => {
+    resetMentionNames();
+    env.members = null;
+  });
+
+  const thread = (): ShownComment[] => [
+    shown({ id: 'm1', body: 'Main one', createdAt: '2026-11-02T09:00:00Z', readAt: null }),
+    shown({
+      id: 'r1',
+      parentId: 'm1',
+      body: 'First reply',
+      authorUserId: CLIENT,
+      authorName: 'Cli',
+      createdAt: '2026-11-02T09:10:00Z',
+    }),
+    shown({
+      id: 'r2',
+      parentId: 'm1',
+      body: 'My reply',
+      mine: true,
+      authorUserId: ME,
+      authorName: 'You',
+      createdAt: '2026-11-02T09:20:00Z',
+    }),
+    shown({ id: 'm2', body: 'Main two', createdAt: '2026-11-02T10:00:00Z' }),
+  ];
+
+  it('splits main comments from their replies, in order', () => {
+    const lists = planCommentLists(thread());
+    expect(lists.mains.map((c) => c.id)).toEqual(['m1', 'm2']);
+    expect(lists.replies.get('m1')?.map((c) => c.id)).toEqual(['r1', 'r2']);
+    expect(lists.replies.has('m2')).toBe(false);
+  });
+
+  it("the list shows main comments only, each with replies under chat's replies row", () => {
+    const el = document.createElement('div');
+    el.innerHTML = renderToStaticMarkup(
+      <PlanItemThread
+        comments={thread()}
+        workspaceId="ws"
+        me={ME}
+        replyBox={() => <div data-test-reply-box="" />}
+      />,
+    );
+    const ids = [...el.querySelectorAll('[data-plan-comment-id]')].map((r) =>
+      r.getAttribute('data-plan-comment-id'),
+    );
+    expect(ids).toEqual(['m1', 'm2']);
+    const replies = el.querySelectorAll('[data-replies-row]');
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.textContent).toContain('2 replies');
+    // The last reply is mine: no unread dot.
+    expect(replies[0]?.hasAttribute('data-unread')).toBe(false);
+    // The thread view is closed: no reply box and no thread layer.
+    expect(el.querySelector('[data-test-reply-box]')).toBeNull();
+    expect(el.querySelector('[data-comment-thread]')).toBeNull();
+  });
+
+  it("the unread dot: the last reply is someone else's and newer than my read point", () => {
+    const rows = thread().filter((c) => c.id !== 'r2');
+    const dot = (readAt: string | null): boolean => {
+      const el = document.createElement('div');
+      el.innerHTML = renderToStaticMarkup(
+        <PlanItemThread
+          comments={rows.map((c) => (c.id === 'm1' ? { ...c, readAt } : c))}
+          workspaceId="ws"
+          me={ME}
+          replyBox={() => null}
+        />,
+      );
+      return el.querySelector('[data-replies-row]')?.hasAttribute('data-unread') === true;
+    };
+    expect(dot(null)).toBe(true);
+    expect(dot('2026-11-02T09:05:00Z')).toBe(true);
+    expect(dot('2026-11-02T09:30:00Z')).toBe(false);
+  });
+
+  it('a pending own reply does not count until it lands', () => {
+    const el = document.createElement('div');
+    el.innerHTML = renderToStaticMarkup(
+      <PlanItemThread
+        comments={[
+          shown({ id: 'm1' }),
+          shown({ id: 'local-1', parentId: 'm1', mine: true, authorUserId: ME, pending: true }),
+        ]}
+        workspaceId="ws"
+        me={ME}
+        replyBox={() => null}
+      />,
+    );
+    expect(el.querySelector('[data-replies-row]')).toBeNull();
+  });
+
+  it("files: a recorded comment's stored ids map to post comments' attachments; a pending one keeps its own", () => {
+    const files = new Map([['v1', { name: 'Shot list.pdf', mime: 'application/pdf', size: 10 }]]);
+    const recorded = planCommentMessage(shown({ attachmentIds: ['v1', 'v2'] }), [], files);
+    expect(recorded.attachments).toEqual([
+      { assetId: 'v1', name: 'Shot list.pdf', mime: 'application/pdf', size: 10 },
+      { assetId: 'v2', name: '', mime: '' },
+    ]);
+    const local = [{ assetId: '', name: 'a.png', mime: 'image/png' }];
+    expect(
+      planCommentMessage(shown({ pending: true, localAttachments: local }), [], files).attachments,
+    ).toBe(local);
+    // A files-only comment still draws (an empty body).
+    expect(planCommentMessage(shown({ body: '', attachmentIds: ['v1'] }), [], files).body).toBe('');
   });
 });

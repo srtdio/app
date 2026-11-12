@@ -34,11 +34,12 @@
 // the description card (links as in chat, the link preview inside it), then
 // Date and Approvers, then Comments. A post item reads its comments only, in
 // parallel with the embedded post (never before it), and lists them under
-// "Plan notes" below the post (nothing when there are none). The comment box
-// is the shared Textarea (1 to 4 lines) in ui/WritingBox comment mode (the
-// chat composer's box, send in its row): Enter sends on a fine pointer,
-// Shift+Enter (and Return on touch) adds a line; while the @ picker is open
-// Enter or Tab picks. Tokens only.
+// "Plan notes" below the post (nothing when there are none). Comments are a
+// chat with threads (12 Nov 2026): main comments with chat's replies row, a
+// thread view with its reply box, files on any comment (post comments' tray,
+// upload path and file parts). The comment box is chat's Composer docked full
+// width at the bottom of the page (no mic), Plan's mention rules on top.
+// Tokens only.
 // A bank idea (no plan: opened with an item and no bundle, /plan/bank) reads
 // through planItemRead (one shared session read, the kept idea paints first):
 // header "Idea", subline "Bank" ("Bank · archived"), a "Came from" line when it
@@ -55,14 +56,13 @@
 // Star or Unstar, Archive or Unarchive, Delete last. Send to chat is
 // IdeaShareFlow (the chat picker, then chat_plan_item_share).
 
-import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import type { MutableRefObject, ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   bankIdeaEdit,
   planConceptEdit,
   planConceptLinkPost,
-  planItemCommentCreate,
   planItemMove,
   planItemRemove,
   planItemBucketsSet,
@@ -110,12 +110,10 @@ import {
   withNewBucket,
   type IdeaFlags,
 } from '@/lib/chat/plan-item-bank';
-import { useWorkspaceMembers } from '@/lib/workspace-members';
+import { peekWorkspaceMembers, useWorkspaceMembers } from '@/lib/workspace-members';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { Textarea } from '@/components/ui/Textarea';
-import { RowSend, WritingBox } from '@/components/ui/WritingBox';
 import { useToast } from '@/components/ui/toast';
 import type { ViewerKind } from '@/components/ui/FileViewer';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
@@ -129,7 +127,6 @@ import {
   IconEyeOff,
   IconLink,
   IconPlus,
-  IconSend,
   IconTrash,
 } from '@/components/ui/icons';
 import { Tag, isTagDot } from '@/components/ui/Tag';
@@ -150,13 +147,19 @@ import {
   RemoveFromPlanButton,
   planConceptMenuItems,
 } from '@/components/chat/PlanMoveSheet';
-import { MentionPicker, mentionComboboxProps, stepActive } from '@/components/chat/MentionPicker';
+import { Composer } from '@/components/chat/Composer';
+import { profileNameOf } from '@/components/chat/MessageBubble';
+import { THREAD_REPLY_PLACEHOLDER } from '@/components/chat/MessageThread';
+import {
+  fetchCommentFiles,
+  idsToRead,
+  type CommentFile,
+} from '@/components/comments/comment-files';
 import {
   MENTION_TEAM_NOTE,
   PlanItemThread,
   blockedMentions,
   isInvalidMention,
-  mentionKeyAction,
   mentionsRestricted,
   planPickerRows,
   taggableMembers,
@@ -222,7 +225,7 @@ import {
   rowTitle,
   useScreenRead,
 } from '@/components/chat/PlanScreen';
-import { readProfiles } from '@/lib/chat-reads';
+import { readProfiles, type ChatProfile } from '@/lib/chat-reads';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import {
   bankIdeaEditArgs,
@@ -234,6 +237,7 @@ import {
   readConceptFiles,
   readItemBuckets,
   readItemScreen,
+  sendPlanComment,
   type CommentVisibility,
   type PlanItemRead,
   type ItemScreenData,
@@ -244,9 +248,12 @@ import {
   type ReviewSide,
   type ReviewStatus,
 } from '@/lib/chat/plans';
-import { classifyFileKind } from '@/lib/chat/attachments';
-import { isSendKeydown } from '@/lib/chat/send-key';
-import { useCoarsePointer, useIsLaptop } from '@/lib/use-is-laptop';
+import {
+  classifyFileKind,
+  type AttachmentUploader,
+  type MessageAttachment,
+} from '@/lib/chat/attachments';
+import { useCoarsePointer } from '@/lib/use-is-laptop';
 import { safeTimeZone } from '@/lib/time';
 import { civilToday } from '@/lib/plan-week';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
@@ -257,19 +264,9 @@ import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspace } from '@/lib/workspace-context';
-import {
-  addPick,
-  insertMention,
-  linkTypedUsernames,
-  mentionHandle,
-  mentionIds,
-  mentionQuery,
-  rememberMentionNames,
-  serializeMentions,
-  type MentionMember,
-  type MentionPick,
-} from '@/lib/chat/mentions';
-import { useEscapeLayer } from '@/lib/escape-stack';
+import { mentionIds, mentionQuery, type MentionMember, type NameOf } from '@/lib/chat/mentions';
+import { draftText, getDraft, setDraft, subscribeDrafts } from '@/lib/chat/drafts';
+
 import { resolvePeople } from '@/lib/people-names';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { firstExternalUrl } from '@/lib/chat/message-links';
@@ -648,23 +645,20 @@ export function PlanItemScreen(props: {
   // A Move of an Open plan's client-approved slot to another day: its day.
   const [keepFor, setKeepFor] = useState<{ day: string | null } | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
-  const [text, setText] = useState('');
   const [pending, setPending] = useState<ShownComment[]>([]);
   // "Ask changes" opened the composer: Send records the note, then the review.
   const [askingChanges, setAskingChanges] = useState(false);
-  // @ tags: the picked people (display "@handle" in the box, a token on send),
-  // the caret, and the picker's dismissal and active row.
-  const [picks, setPicks] = useState<MentionPick[]>([]);
-  const [caret, setCaret] = useState(0);
-  const [mentionDismissed, setMentionDismissed] = useState(false);
-  const [mentionActive, setMentionActive] = useState(0);
   // After a send: the comment to scroll to once it is listed.
   const [scrollToId, setScrollToId] = useState<string | null>(null);
   const mentionPeople = usePlanMentionMembers(me, workspaceId);
-  const commentRef = useRef<HTMLTextAreaElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  // The comment box is chat's Composer (12 Nov 2026): its field, for Ask
+  // changes' focus; a bump remounts a box so a draft put back shows.
+  const commentRef = useRef<HTMLTextAreaElement | null>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [boxEpoch, setBoxEpoch] = useState(0);
+  // Comment files by version id: one batched asset_versions read (post comments' read).
+  const [commentFiles, setCommentFiles] = useState<Map<string, CommentFile>>(new Map());
   const coarse = useCoarsePointer();
-  const isLaptop = useIsLaptop();
   const toast = useToast();
   const undoable = useUndoableAction();
   const [editOpen, setEditOpen] = useState(false);
@@ -704,8 +698,6 @@ export function PlanItemScreen(props: {
     setConfirmOpen(false);
     setMoreOpen(false);
     setActionError(null);
-    setText('');
-    setPicks([]);
     setPending([]);
     setAskingChanges(false);
     setEditOpen(false);
@@ -729,8 +721,6 @@ export function PlanItemScreen(props: {
   const stillOn = (itemId: string): boolean => isLiveItem(liveRef.current, itemId);
   // Another item starts clean: no draft, pending row, error or override carries over.
   useEffect(() => {
-    setText('');
-    setPicks([]);
     setPending([]);
     setAskingChanges(false);
     setActionError(null);
@@ -940,35 +930,78 @@ export function PlanItemScreen(props: {
   const shown = useMemo<ShownComment[]>(() => {
     const recorded =
       read.status === 'ready'
-        ? read.data.comments.map((c: PlanCommentRow) => ({
-            id: c.id,
-            authorUserId: c.author_user_id,
-            mine: c.author_user_id !== null && c.author_user_id === me,
-            authorName:
-              c.author_user_id !== null && c.author_user_id === me
-                ? 'You'
-                : ((c.author_user_id !== null ? read.data.names[c.author_user_id] : undefined) ??
-                  'Member'),
-            body: c.body,
-            visibility: c.visibility,
-            createdAt: c.created_at,
-            pending: false,
-            authorKnown:
-              c.author_user_id !== null && read.data.names[c.author_user_id] !== undefined,
-          }))
+        ? read.data.comments.map(
+            (c: PlanCommentRow): ShownComment => ({
+              id: c.id,
+              authorUserId: c.author_user_id,
+              mine: c.author_user_id !== null && c.author_user_id === me,
+              authorName:
+                c.author_user_id !== null && c.author_user_id === me
+                  ? 'You'
+                  : ((c.author_user_id !== null ? read.data.names[c.author_user_id] : undefined) ??
+                    'Member'),
+              body: c.body,
+              visibility: c.visibility,
+              createdAt: c.created_at,
+              pending: false,
+              authorKnown:
+                c.author_user_id !== null && read.data.names[c.author_user_id] !== undefined,
+              parentId: c.parent_comment_id ?? null,
+              attachmentIds: c.attachment_asset_ids ?? null,
+              readAt: c.thread_read_at ?? null,
+            }),
+          )
         : [];
     const ids = new Set(recorded.map((c) => c.id));
     return [...recorded, ...pending.filter((p) => !ids.has(p.id))];
   }, [read, pending, me]);
 
+  // Every comment file in one batched read (no N+1), after paint; a failed
+  // read is asked again on the next pass (post comments' rule).
+  const askedFiles = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (read.status !== 'ready') return;
+    const needed = idsToRead(
+      read.data.comments.flatMap((c: PlanCommentRow) => c.attachment_asset_ids ?? []),
+      askedFiles.current,
+    );
+    if (needed.length === 0) return;
+    for (const id of needed) askedFiles.current.add(id);
+    void fetchCommentFiles(supabase, needed).then((fetched) => {
+      if (fetched === null) {
+        for (const id of needed) askedFiles.current.delete(id);
+        return;
+      }
+      if (fetched.size > 0) setCommentFiles((prev) => new Map([...prev, ...fetched]));
+    });
+  }, [read]);
+
+  /** Put a refused send's text back in its box (the box remounts from its draft). */
+  const restoreDraft = (parentId: string | null, body: string): void => {
+    // After the box's own send clears its draft (it does so right after onSend).
+    queueMicrotask(() => {
+      setDraft(commentChannel(item.id, parentId), { text: body, caret: body.length });
+      setBoxEpoch((n) => n + 1);
+    });
+  };
+
   /**
-   * One comment write, chat's way: the row shows at once with the clock and
-   * the box clears in the same tap; a failure leaves the row in place as "Not
-   * sent" with Retry (chat's FailedActions). True when it landed on this item.
-   * `retryId` re-sends that failed row (same local id, same body).
+   * One comment or reply write, chat's way: the row shows at once with the
+   * clock (the box cleared itself in the same tap); picked files upload first
+   * (post comments' path, library origin) and go as asset version ids; a
+   * failure leaves the row as "Not sent" with Retry (chat's FailedActions); a
+   * refused mention drops the row and puts the draft back with one toast.
+   * True when it landed on this item. `retryId` re-sends that failed row.
    */
-  const sendComment = async (body: string, retryId?: string): Promise<boolean> => {
-    const vis: CommentVisibility = 'everyone';
+  const sendComment = async (
+    send: {
+      body: string;
+      attachments: MessageAttachment[];
+      parentId: string | null;
+      visibility: CommentVisibility;
+    },
+    retryId?: string,
+  ): Promise<boolean> => {
     // A fresh id per send: the box never waits, so two sends can share a millisecond.
     const localId = retryId ?? `local-${generateTraceId()}`;
     const forItem = item.id;
@@ -977,29 +1010,49 @@ export function PlanItemScreen(props: {
       authorUserId: me,
       mine: true,
       authorName: 'You',
-      body,
-      visibility: vis,
+      body: send.body,
+      visibility: send.visibility,
       createdAt: new Date().toISOString(),
       pending: true,
+      parentId: send.parentId,
+      localAttachments: send.attachments,
     };
     setPending((prev) =>
       retryId !== undefined ? prev.map((p) => (p.id === retryId ? row : p)) : [...prev, row],
     );
-    // The draft as typed, put back if the server refuses a tag.
-    const draft = { text, picks };
-    if (retryId === undefined) {
-      // The box clears in the same tap (chat's send); it keeps focus.
-      setText('');
-      setPicks([]);
-      commentRef.current?.focus();
+    if (send.parentId === null) setScrollToId(localId);
+    const markFailed = (kept: MessageAttachment[]): void =>
+      setPending((prev) =>
+        prev.map((p) =>
+          p.id === localId ? { ...p, pending: false, failed: true, localAttachments: kept } : p,
+        ),
+      );
+    const ids: string[] = [];
+    const kept: MessageAttachment[] = [];
+    for (const a of send.attachments) {
+      if (a.assetId !== '') {
+        ids.push(a.assetId);
+        kept.push(a);
+        continue;
+      }
+      const file = a.local?.file ?? null;
+      if (file === null) continue;
+      const up = await uploadFile(file);
+      if (!up.ok) {
+        if (stillOn(forItem)) markFailed(send.attachments);
+        return false;
+      }
+      ids.push(up.versionId);
+      kept.push({ ...a, assetId: up.versionId });
     }
-    setScrollToId(localId);
     const traceId = generateTraceId();
-    const result = await planItemCommentCreate(supabase, {
-      p_item_id: forItem,
-      p_body: body,
-      p_visibility: vis,
-      p_trace_id: traceId,
+    const result = await sendPlanComment(supabase, {
+      itemId: forItem,
+      parentId: send.parentId,
+      body: send.body,
+      visibility: send.visibility,
+      attachmentVersionIds: ids,
+      traceId,
     });
     if (!stillOn(forItem)) {
       if (result.ok) planChanged();
@@ -1015,128 +1068,114 @@ export function PlanItemScreen(props: {
         // A tag the server refused (an approver on a creators-only note): one
         // toast, the row goes and the draft comes back as typed.
         setPending((prev) => prev.filter((p) => p.id !== localId));
-        if (retryId === undefined) {
-          setText((prev) => (prev === '' ? draft.text : prev));
-          setPicks((prev) => (prev.length === 0 ? draft.picks : prev));
-        }
+        if (retryId === undefined) restoreDraft(send.parentId, send.body);
         toast.show({ title: MENTION_TEAM_NOTE });
         return false;
       }
-      setPending((prev) =>
-        prev.map((p) => (p.id === localId ? { ...p, pending: false, failed: true } : p)),
-      );
+      markFailed(kept);
       return false;
     }
-    setScrollToId(result.data);
+    if (send.parentId === null) setScrollToId(result.data);
+    for (const a of kept) {
+      if (a.mime === '') continue;
+      setCommentFiles((prev) =>
+        prev.has(a.assetId) ? prev : new Map(prev).set(a.assetId, { name: a.name, mime: a.mime }),
+      );
+    }
     setPending((prev) =>
-      prev.map((p) => (p.id === localId ? { ...p, id: result.data, pending: false } : p)),
+      prev.map((p) =>
+        p.id === localId ? { ...p, id: result.data, pending: false, localAttachments: kept } : p,
+      ),
     );
     reload();
     planChanged();
     return true;
   };
-  /** A failed comment's Retry: the same body again, on the same row. */
+  /** A failed comment's Retry: the same body and files again, on the same row. */
   const retryComment = (id: string): void => {
     const failed = pending.find((p) => p.id === id && p.failed === true);
-    if (failed !== undefined) void sendComment(failed.body, id);
+    if (failed === undefined) return;
+    void sendComment(
+      {
+        body: failed.body,
+        attachments: failed.localAttachments ?? [],
+        parentId: failed.parentId ?? null,
+        visibility: failed.visibility,
+      },
+      id,
+    );
   };
   /** A failed comment's Delete: it never left the device, so it just goes. */
   const discardComment = (id: string): void => {
     setPending((prev) => prev.filter((p) => p.id !== id));
   };
-  /** A comment's Reply (swipe right, the menu's Reply): the box takes focus in the same tap. */
-  const focusCommentBox = (): void => {
-    commentRef.current?.focus();
-  };
   // @ tags. Only the agency side can be tagged on a creators-only note or a
-  // plan not shared with the client; never me. The picker opens on an "@" run
-  // before the caret once the members are held (loaded on focus or the first
-  // "@", never on paint).
-  const restricted = side === 'agency' && mentionsRestricted('everyone', bundle.plan.audience);
-  const openMention = !mentionDismissed ? mentionQuery(text, caret) : null;
-  const picker =
-    openMention !== null && mentionPeople.members !== null
-      ? planPickerRows(mentionPeople.members, openMention.query, me, restricted)
-      : { rows: [] as MentionMember[], hiddenApprovers: false };
-  const mentionRows = picker.rows;
-  const activeRow = Math.min(mentionActive, Math.max(mentionRows.length - 1, 0));
-  const mentionListId = useId();
-  // The body a send stores: picked "@handle"s become tokens, and so does a
-  // typed @username of someone who can be tagged here.
-  const commentBody = (): string =>
-    linkTypedUsernames(
-      serializeMentions(text, picks),
-      taggableMembers(mentionPeople.members ?? [], me, restricted),
-    ).trim();
-  // A creators-only note that still tags an approver: the note shows and Send waits.
-  const blocked = blockedMentions(
-    serializeMentions(text, picks),
-    mentionPeople.members,
-    restricted,
-  );
-  const trackCaret = (el: HTMLTextAreaElement): void => {
-    const next = el.selectionStart ?? el.value.length;
-    setCaret(next);
-    if (mentionQuery(el.value, next) === null) setMentionDismissed(false);
-  };
-  // A pick swaps the "@query" run for "@handle " and keeps the person in the map.
-  const pickMention = (member: MentionMember | undefined): void => {
-    if (member === undefined) return;
-    const handle = mentionHandle(member);
-    const next = insertMention(text, caret, handle);
-    rememberMentionNames(workspaceId, [member]);
-    setPicks((prev) => addPick(prev, { userId: member.userId, name: handle }));
-    setText(next.text);
-    setCaret(next.caret);
-    setMentionActive(0);
-    const el = commentRef.current;
-    if (el !== null) {
-      requestAnimationFrame(() => {
-        el.focus();
-        el.setSelectionRange(next.caret, next.caret);
-      });
-    }
-  };
-  // Escape closes the picker as the top layer (the page stays open).
-  useEscapeLayer(openMention !== null && mentionRows.length > 0, () => setMentionDismissed(true));
-  // Chat's send rule: plain Enter sends on a fine pointer; Shift+Enter, IME
-  // composition and every Return on touch add a line (the button sends).
-  // While the picker is open, Up / Down move and Enter or Tab picks.
-  const commentKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
-    const action =
-      mentionRows.length > 0 ? mentionKeyAction(event.key, event.nativeEvent.isComposing) : null;
-    if (action === 'up' || action === 'down' || action === 'pick') {
-      event.preventDefault();
-      if (action === 'pick') pickMention(mentionRows[activeRow]);
-      else
-        setMentionActive(
-          stepActive(activeRow, mentionRows.length, action === 'up' ? 'ArrowUp' : 'ArrowDown'),
-        );
-      return;
-    }
+  // plan not shared with the client; never me. The members load after paint
+  // (the held cache, else the one shared members read), as post comments'.
+  const loadMembers = mentionPeople.load;
+  useEffect(() => {
+    if (props.open) loadMembers();
+  }, [props.open, loadMembers]);
+  const restrictedFor = (visibility: CommentVisibility): boolean =>
+    side === 'agency' && mentionsRestricted(visibility, bundle.plan.audience);
+  /**
+   * The page box's Send (and Ask changes' steps): the note, when there is one
+   * (text or files), then the changes review. New main comments go to everyone.
+   */
+  const sendMain = async (body: string, attachments: MessageAttachment[]): Promise<void> => {
+    const steps = askChangesSteps(body, askingChanges);
+    if (attachments.length > 0 && !steps.includes('comment')) steps.unshift('comment');
+    if (steps.length === 0) return;
     if (
-      !isSendKeydown({
-        key: event.key,
-        shiftKey: event.shiftKey,
-        isComposing: event.nativeEvent.isComposing,
-        coarsePointer: coarse,
-      })
+      steps.includes('comment') &&
+      !(await sendComment({ body, attachments, parentId: null, visibility: 'everyone' }))
     )
       return;
-    event.preventDefault();
-    formRef.current?.requestSubmit();
-  };
-  const send = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    if (busy || blocked.length > 0) return;
-    const body = commentBody();
-    const steps = askChangesSteps(body, askingChanges);
-    if (steps.length === 0) return;
-    if (steps.includes('comment') && !(await sendComment(body))) return;
     if (steps.includes('changes')) {
       if (await review('changes')) setAskingChanges(false);
     }
   };
+  /** Ask changes with the box empty: the review alone; with a note, the box's own Send. */
+  const askChangesSend = (): void => {
+    const field = commentRef.current;
+    const files = getDraft(commentChannel(item.id, null)).pendingFiles.length;
+    if (field !== null && (field.value.trim() !== '' || files > 0)) {
+      field.form?.requestSubmit();
+      return;
+    }
+    void sendMain('', []);
+  };
+  /** One reply into an open thread (it takes its main comment's audience on the server). */
+  const sendReply = (root: ShownComment, body: string, attachments: MessageAttachment[]): void => {
+    if (body === '' && attachments.length === 0) return;
+    void sendComment({ body, attachments, parentId: root.id, visibility: root.visibility });
+  };
+  const heldProfiles =
+    me !== null && workspaceId !== null
+      ? peekWorkspaceMembers(me, workspaceId)?.profiles
+      : undefined;
+  const boxNameOf = profileNameOf(new Map<string, ChatProfile>(heldProfiles ?? []), workspaceId);
+  const boxShared = {
+    me,
+    members: mentionPeople.members,
+    nameOf: boxNameOf,
+    trayId: `plan-comments-${item.id}`,
+    expandTitle: title,
+    ...(canAttach ? { uploadFile } : {}),
+  };
+  const replyBox = (root: ShownComment, focus: boolean): ReactElement => (
+    <PlanCommentBox
+      key={`plan-thread:${root.id}:${boxEpoch}`}
+      {...boxShared}
+      channelId={commentChannel(item.id, root.id)}
+      placeholder={THREAD_REPLY_PLACEHOLDER}
+      restricted={restrictedFor(root.visibility)}
+      focusOnMount={!coarse}
+      focusForReply={focus}
+      onSend={(body, attachments) => sendReply(root, body, attachments)}
+      onRestore={(body) => restoreDraft(root.id, body)}
+    />
+  );
 
   // Agency plan actions. Move: to the end of the picked day (one 5-arg
   // plan_item_move with the full plan order; an Open plan's client-approved
@@ -1666,14 +1705,18 @@ export function PlanItemScreen(props: {
     frame = requestAnimationFrame(check);
     return () => cancelAnimationFrame(frame);
   }, [props.open]);
+  // A linked reply: the page lands on its main comment and its thread opens at it.
+  const linkedReplyRoot =
+    highlightId !== null ? (shown.find((c) => c.id === highlightId)?.parentId ?? null) : null;
+  const landingId = linkedReplyRoot ?? highlightId;
   useFocusTarget({
-    targetId: props.open && slidIn && item.kind !== 'post' ? highlightId : null,
+    targetId: props.open && slidIn && item.kind !== 'post' ? landingId : null,
     findElement: (id) =>
       commentsRef.current?.querySelector<HTMLElement>(`[data-plan-comment-id="${id}"]`) ?? null,
     absent: read.status === 'ready' && !shown.some((c) => c.id === highlightId),
     onMissing: () => toast.show({ title: FOCUS_MISSING_COPY, tone: 'error' }),
     highlight: () => {
-      setHighlighted(highlightId);
+      setHighlighted(landingId);
       const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
       return () => {
         clearTimeout(timer);
@@ -1686,12 +1729,68 @@ export function PlanItemScreen(props: {
   // the recorded one). Opening still starts at the top.
   useEffect(() => {
     if (scrollToId === null) return;
-    const page = formRef.current?.closest('[data-plan-page]') ?? null;
+    const page = dockRef.current?.closest('[data-plan-page]') ?? null;
     const row = page?.querySelector<HTMLElement>(`[data-plan-comment-id="${scrollToId}"]`) ?? null;
     if (row === null) return;
     if (typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' });
     setScrollToId(null);
   }, [scrollToId, shown]);
+
+  // The comment box: chat's Composer docked full width at the bottom of the
+  // page (sticky under the content, its own dock edge), "Ask changes" hint
+  // and its error above it. A post item shows it only while asking changes.
+  const commentDock = (
+    <div ref={dockRef} data-plan-comments-composer="" className="sticky bottom-0 z-sticky mt-auto">
+      {askingChanges ? (
+        <div
+          data-plan-ask-hint=""
+          className={cn(
+            'flex flex-col border-t border-border bg-panel py-1 text-md text-fg-2',
+            GUTTER,
+          )}
+        >
+          <p className="py-2">{ASK_CHANGES_HINT}</p>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              data-plan-ask-send=""
+              disabled={busy}
+              onClick={askChangesSend}
+              className="min-w-0 px-3"
+            >
+              <span className="truncate">{ASK_CHANGES_SEND}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Cancel ask changes"
+              data-plan-ask-cancel=""
+              onClick={() => setAskingChanges(false)}
+              className="shrink-0 px-3"
+            >
+              Clear
+            </Button>
+          </div>
+          {actionError !== null ? (
+            <p role="alert" className="pb-2 text-md text-bad">
+              {actionError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <PlanCommentBox
+        key={`plan-main:${item.id}:${boxEpoch}`}
+        {...boxShared}
+        channelId={commentChannel(item.id, null)}
+        inputRef={commentRef}
+        placeholder={askingChanges ? ASK_CHANGES_PLACEHOLDER : COMMENT_PLACEHOLDER}
+        restricted={restrictedFor('everyone')}
+        onSend={(body, attachments) => void sendMain(body, attachments)}
+        onRestore={(body) => restoreDraft(null, body)}
+      />
+    </div>
+  );
 
   return (
     <>
@@ -1740,119 +1839,6 @@ export function PlanItemScreen(props: {
               ),
             }
           : {})}
-        footer={
-          item.kind === 'post' && !askingChanges ? undefined : (
-            <form
-              ref={formRef}
-              onSubmit={(e) => void send(e)}
-              className="relative flex flex-col gap-2"
-              aria-label="Add a comment"
-            >
-              {askingChanges ? (
-                <div
-                  data-plan-ask-hint=""
-                  className="flex items-center gap-2 border-t border-border py-1 pl-3 pr-1 text-md text-fg-2"
-                >
-                  <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label="Cancel ask changes"
-                    data-plan-ask-cancel=""
-                    onClick={() => setAskingChanges(false)}
-                    className="shrink-0 px-3"
-                  >
-                    Clear
-                  </Button>
-                </div>
-              ) : null}
-              {actionError !== null && askingChanges ? (
-                <p role="alert" className="text-md text-bad">
-                  {actionError}
-                </p>
-              ) : null}
-              {/* ui/WritingBox (comment mode), the chat composer's box: the
-                  card always, the Aa row, Emoji and @ (types "@", which opens
-                  the mention list above) while focused or holding text, send
-                  in the row. No "+": plan comments carry no files. */}
-              <WritingBox
-                mode="comment"
-                className="min-w-0"
-                field={() => commentRef.current}
-                hasText={text !== ''}
-                mention
-                expandTitle="Comment"
-                overlay={
-                  mentionRows.length > 0 || picker.hiddenApprovers ? (
-                    <div
-                      data-mention-anchor=""
-                      className="absolute inset-x-0 bottom-full z-sticky mb-2 flex flex-col gap-1"
-                    >
-                      <MentionPicker
-                        members={mentionRows}
-                        active={activeRow}
-                        onPick={pickMention}
-                        listId={mentionListId}
-                      />
-                      {picker.hiddenApprovers ? (
-                        <p
-                          data-plan-mention-note=""
-                          className="rounded-lg border bg-panel px-3 py-2 text-sm text-fg-3 lit-overlay"
-                        >
-                          {MENTION_TEAM_NOTE}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : undefined
-                }
-                input={
-                  <Textarea
-                    formatting
-                    ref={commentRef}
-                    compact
-                    rows={1}
-                    value={text}
-                    onChange={(e) => {
-                      setText(e.target.value);
-                      trackCaret(e.target);
-                      if (e.target.value.includes('@')) mentionPeople.load();
-                    }}
-                    onFocus={mentionPeople.load}
-                    onSelect={(e) => trackCaret(e.currentTarget)}
-                    onKeyDown={commentKeyDown}
-                    data-plan-comment-input=""
-                    aria-label="Comment"
-                    {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
-                    autoComplete="off"
-                    enterKeyHint={coarse ? 'enter' : 'send'}
-                    maxLength={5000}
-                    placeholder={askingChanges ? ASK_CHANGES_PLACEHOLDER : COMMENT_PLACEHOLDER}
-                    style={{ maxHeight: COMMENT_BOX_MAX_PX }}
-                  />
-                }
-                send={
-                  <RowSend
-                    type="submit"
-                    label={askingChanges ? ASK_CHANGES_SEND : 'Send comment'}
-                    data-plan-comment-send={askingChanges ? 'changes' : 'comment'}
-                    icon={<IconSend size={ICON_SIZE.control} />}
-                    disabled={(text.trim() === '' && !askingChanges) || busy || blocked.length > 0}
-                  />
-                }
-              />
-              {blocked.length > 0 ? (
-                <p data-plan-mention-blocked="" role="status" className="text-sm text-warn">
-                  {MENTION_TEAM_NOTE}
-                </p>
-              ) : null}
-              {isLaptop && !coarse ? (
-                <p data-plan-comment-hint="" className="text-right text-sm text-fg-3">
-                  {COMMENT_SEND_HINT}
-                </p>
-              ) : null}
-            </form>
-          )
-        }
       >
         {item.kind === 'post' ? (
           <>
@@ -1880,9 +1866,12 @@ export function PlanItemScreen(props: {
               linkTo={commentLink}
               onRetry={retryComment}
               onDiscard={discardComment}
-              {...(askingChanges ? { onReply: focusCommentBox } : {})}
+              files={commentFiles}
+              threadSubtitle={title}
+              replyBox={replyBox}
             />
             {removeButton}
+            {askingChanges ? commentDock : null}
           </>
         ) : (
           <div className={cn('flex flex-col gap-4 py-4', GUTTER)}>
@@ -2022,14 +2011,18 @@ export function PlanItemScreen(props: {
                   highlightedId={highlighted}
                   replyPrivately={replyPrivately}
                   linkTo={commentLink}
-                  onReply={focusCommentBox}
                   onRetry={retryComment}
                   onDiscard={discardComment}
+                  files={commentFiles}
+                  threadSubtitle={title}
+                  replyBox={replyBox}
+                  openReplyId={linkedReplyRoot !== null ? highlightId : null}
                 />
               )}
             </section>
           </div>
         )}
+        {item.kind !== 'post' ? commentDock : null}
       </PlanPage>
       <PlanConfirmSheet
         open={confirmOpen}
@@ -2313,9 +2306,6 @@ export function LinkedPostPage(props: {
 /** The section label style (design rules: sm/600 uppercase, fg-2). */
 const SECTION_LABEL = TEXT_ROLE.section;
 
-/** The comment box's tallest: 4 lines (16px at 1.4) plus its padding; then it scrolls. */
-const COMMENT_BOX_MAX_PX = 110;
-
 /**
  * The concept's files: the loading box (its size kept, so nothing jumps), the
  * failed copy with Retry, "No files", or a tile per file (a button: an image
@@ -2428,8 +2418,9 @@ function ItemMedia(props: {
 
 /**
  * A post item's plan notes (its plan comments, e.g. a Not OK note) under the
- * embedded post: the "Plan notes" label and a CommentRow each. Nothing at all
- * while there are none (or the read has not landed), so nothing shifts above.
+ * embedded post: the "Plan notes" label and the comments as a chat with
+ * threads (PlanItemThread). Nothing at all while there are none (or the read
+ * has not landed), so nothing shifts above.
  */
 function PlanNotes(props: {
   notes: ShownComment[];
@@ -2437,10 +2428,11 @@ function PlanNotes(props: {
   me: string | null;
   replyPrivately: PlanReplyPrivatelyTarget | null;
   linkTo: PlanCommentLinkTarget;
-  /** Reply focuses the note box; absent while the box is closed. */
-  onReply?: () => void;
   onRetry: (id: string) => void;
   onDiscard: (id: string) => void;
+  files: ReadonlyMap<string, CommentFile>;
+  threadSubtitle: string;
+  replyBox: (root: ShownComment, focus: boolean) => ReactElement;
 }): ReactElement | null {
   if (props.notes.length === 0) return null;
   return (
@@ -2458,9 +2450,106 @@ function PlanNotes(props: {
         linkTo={props.linkTo}
         onRetry={props.onRetry}
         onDiscard={props.onDiscard}
-        {...(props.onReply !== undefined ? { onReply: props.onReply } : {})}
+        files={props.files}
+        threadSubtitle={props.threadSubtitle}
+        replyBox={props.replyBox}
       />
     </section>
+  );
+}
+
+/** A comment box's draft key: the item's box, or one thread's reply box. Pure. */
+export function commentChannel(itemId: string, rootId: string | null): string {
+  return rootId === null ? `plan-comments:${itemId}` : `plan-comment-thread:${rootId}`;
+}
+
+/** The tray tiles a plan comment can store (post comments' three). */
+const COMMENT_TRAY_TILES = ['photos', 'file', 'assets'] as const;
+
+/**
+ * One Plan comment box: chat's Composer as post comments use it (the "+"
+ * tray with Photos, File and Assets, no mic, chat's @ picker), with Plan's
+ * mention rules on top. Only the agency side can be tagged on a restricted
+ * note; when an approver matching the open "@" run is left out, or the text
+ * still tags one, MENTION_TEAM_NOTE shows above the box (the draft is read
+ * from the Composer's own draft store, no state of its own), and a Send that
+ * still tags one puts the text back instead of sending. Pure render plus the
+ * draft subscription: no read.
+ */
+function PlanCommentBox(props: {
+  channelId: string;
+  placeholder: string;
+  restricted: boolean;
+  me: string | null;
+  members: MentionMember[] | null;
+  nameOf: NameOf;
+  trayId: string;
+  expandTitle: string;
+  uploadFile?: AttachmentUploader;
+  inputRef?: MutableRefObject<HTMLTextAreaElement | null>;
+  focusOnMount?: boolean;
+  focusForReply?: boolean;
+  onSend: (body: string, attachments: MessageAttachment[]) => void;
+  /** Put a refused body back in this box. */
+  onRestore: (body: string) => void;
+}): ReactElement {
+  const { channelId } = props;
+  const text = useSyncExternalStore(subscribeDrafts, () => draftText(channelId));
+  const caret = useSyncExternalStore(subscribeDrafts, () => getDraft(channelId).caret);
+  const taggable = useMemo(
+    () => taggableMembers(props.members ?? [], props.me, props.restricted),
+    [props.members, props.me, props.restricted],
+  );
+  const open = mentionQuery(text, caret);
+  const hidden =
+    open !== null && props.members !== null
+      ? planPickerRows(props.members, open.query, props.me, props.restricted).hiddenApprovers
+      : false;
+  const blocked = blockedMentions(text, props.members, props.restricted);
+  const note =
+    hidden || blocked.length > 0 ? (
+      <p
+        {...(blocked.length > 0
+          ? { 'data-plan-mention-blocked': '' }
+          : { 'data-plan-mention-note': '' })}
+        role="status"
+        className="px-3 text-sm text-warn"
+      >
+        {MENTION_TEAM_NOTE}
+      </p>
+    ) : undefined;
+  return (
+    <Composer
+      channelId={channelId}
+      disabled={false}
+      placeholder={props.placeholder}
+      voice={false}
+      tray={{ tiles: COMMENT_TRAY_TILES, trayId: props.trayId }}
+      viewerUserId={props.me ?? undefined}
+      expandTitle={props.expandTitle}
+      mentions={{
+        members: taggable,
+        ready: props.members !== null,
+        isGroup: false,
+        selfId: props.me,
+        nameOf: props.nameOf,
+      }}
+      {...(props.uploadFile !== undefined ? { uploadFile: props.uploadFile } : {})}
+      {...(props.inputRef !== undefined ? { inputRef: props.inputRef } : {})}
+      {...(props.focusOnMount !== undefined ? { focusOnMount: props.focusOnMount } : {})}
+      {...(props.focusForReply !== undefined ? { focusForReply: props.focusForReply } : {})}
+      {...(note !== undefined ? { quoteStrip: note } : {})}
+      onSend={(sent, attachments) => {
+        const body = sent.trim();
+        if (body === '' && attachments.length === 0) return;
+        // A restricted note that still tags an approver: the text comes back, nothing sends.
+        if (blockedMentions(body, props.members, props.restricted).length > 0) {
+          props.onRestore(body);
+          return;
+        }
+        props.onSend(body, attachments);
+      }}
+    />
   );
 }
 

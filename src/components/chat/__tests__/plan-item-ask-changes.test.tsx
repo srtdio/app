@@ -36,8 +36,10 @@ describe('FT55: Ask changes opens the composer first', () => {
     expect(src).toMatch(
       /const askChanges = \(\): void => \{[\s\S]*?setAskingChanges\(true\);\s*commentRef\.current\?\.focus\(\);/,
     );
-    expect(src).toContain('ref={commentRef}');
-    expect(src).toContain("data-plan-comment-send={askingChanges ? 'changes' : 'comment'}");
+    expect(src).toContain('inputRef={commentRef}');
+    // The box is chat's Composer; an empty note still asks changes from the hint's Send.
+    expect(src).toContain('data-plan-ask-send=""');
+    expect(src).toContain('{ASK_CHANGES_SEND}');
     expect(src).toMatch(
       /if \(steps\.includes\('changes'\)\) \{\s*if \(await review\('changes'\)\) setAskingChanges\(false\);/,
     );

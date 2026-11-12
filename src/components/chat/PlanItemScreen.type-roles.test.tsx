@@ -55,6 +55,7 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
     },
   }),
 }));
+vi.mock('@/components/chat/Composer', async () => import('./__tests__/composer-stub'));
 
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
 import {

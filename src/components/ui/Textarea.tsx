@@ -602,9 +602,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       data-live-format={live ? '' : undefined}
       className={cn(
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        'lit-well w-full px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus py-field-y h-auto',
+        'lit-well w-full px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus h-auto',
         FIELD_DISABLED,
-        compact ? 'min-h-11 max-h-32' : 'min-h-18',
+        // Compact (every reply box, 12 Nov 2026): a block (no inline line gap
+        // under it) whose one 20 line sits on the 44 box's vertical centre
+        // (12 + 20 + 12), level with the "+" beside it. Others keep field-y.
+        compact ? 'block min-h-11 max-h-32 py-3' : 'min-h-18 py-field-y',
         split !== null ? split.box : className,
         // Live styling: the mirror draws the glyphs; the box keeps the caret
         // (fg), the selection and the placeholder.

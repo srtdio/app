@@ -887,8 +887,74 @@ const PLAN_RPC: Record<string, RpcHandler> = {
       created_at: new Date().toISOString(),
       edited_at: null,
       deleted_at: null,
+      parent_comment_id: null,
+      attachment_asset_ids: null,
     });
     return id;
+  },
+  // Plan comment threads (12 Nov 2026), as the live proc: a main comment
+  // (p_parent_comment_id null) or a reply to a main comment of the same item,
+  // which takes its root's visibility; files ride as version ids. Returns the id.
+  plan_item_comment_send: (args, tables) => {
+    const comments = (tables.plan_item_comments ??= []);
+    const parentId = typeof args.p_parent_comment_id === 'string' ? args.p_parent_comment_id : null;
+    const root =
+      parentId === null
+        ? undefined
+        : comments.find(
+            (c) =>
+              c.id === parentId &&
+              c.item_id === args.p_item_id &&
+              liveRow(c) &&
+              (c.parent_comment_id ?? null) === null,
+          );
+    if (parentId !== null && root === undefined) throw new HarnessRpcError('invalid_payload');
+    const files = Array.isArray(args.p_attachment_version_ids)
+      ? args.p_attachment_version_ids.map(String)
+      : [];
+    const body = typeof args.p_body === 'string' ? args.p_body.trim() : '';
+    if (body === '' && files.length === 0) throw new HarnessRpcError('invalid_payload');
+    const id = crypto.randomUUID();
+    comments.push({
+      id,
+      workspace_id: WORKSPACE_ID,
+      item_id: args.p_item_id,
+      author_user_id: ME,
+      body,
+      visibility: root?.visibility ?? args.p_visibility,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      deleted_at: null,
+      parent_comment_id: parentId,
+      attachment_asset_ids: files.length > 0 ? files : null,
+    });
+    return id;
+  },
+  // A plan comment thread opened (fire and forget): the viewer's read point
+  // moves to the thread's newest reply (the root's time with none); the next
+  // plan comments read embeds it (postgrest.ts NAMED_EMBEDS).
+  plan_item_comment_thread_read_set: (args, tables) => {
+    const rootId = String(args.p_root_id ?? '');
+    const comments = tables.plan_item_comments ?? [];
+    const root = comments.find((c) => c.id === rootId && (c.parent_comment_id ?? null) === null);
+    if (root === undefined) throw new HarnessRpcError('comment not found');
+    const newest = comments
+      .filter((c) => c.parent_comment_id === rootId && liveRow(c))
+      .map((c) => String(c.created_at))
+      .reduce((a, b) => (b > a ? b : a), String(root.created_at));
+    const reads = (tables.plan_item_comment_thread_reads ??= []);
+    const mine = reads.find((r) => r.root_comment_id === rootId && r.user_id === ME);
+    if (mine === undefined) {
+      reads.push({
+        root_comment_id: rootId,
+        user_id: ME,
+        workspace_id: root.workspace_id,
+        last_read_at: newest,
+      });
+    } else if (newest > String(mine.last_read_at)) {
+      mine.last_read_at = newest;
+    }
+    return null;
   },
   // One message carrying the plan; idempotent on p_id; a team plan never goes
   // into a chat with a client.
@@ -2411,6 +2477,8 @@ export function seedActivityPlanComment(
       created_at: `2026-10-09T10:0${k}:00Z`,
       edited_at: null,
       deleted_at: null,
+      parent_comment_id: null,
+      attachment_asset_ids: null,
     });
   }
   comments.push({
@@ -2423,6 +2491,8 @@ export function seedActivityPlanComment(
     created_at: '2026-10-09T11:00:00Z',
     edited_at: null,
     deleted_at: null,
+    parent_comment_id: null,
+    attachment_asset_ids: null,
   });
   (t.inbox_entries ??= []).push(
     planInboxRow({

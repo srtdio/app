@@ -30,6 +30,7 @@ import {
   readListScreenAxis,
   reportListScreenAxis,
   assertWritingBox,
+  assertReplyBoxAtRest,
   assertAlignment,
   assertMessageFamily,
   assertPhotoCaptionColumn,
@@ -1147,6 +1148,8 @@ function seedChatPlanNote(network: HarnessNetwork): void {
     created_at: '2026-10-09T10:30:00Z',
     edited_at: null,
     deleted_at: null,
+    parent_comment_id: null,
+    attachment_asset_ids: null,
   });
 }
 
@@ -1168,6 +1171,8 @@ function seedChatPlanThread(network: HarnessNetwork, withTeamNote: boolean): voi
     created_at: when,
     edited_at: null,
     deleted_at: null,
+    parent_comment_id: null,
+    attachment_asset_ids: null,
   });
   const rows = [
     comment(
@@ -1216,6 +1221,216 @@ async function openPlanItemThread(page: Page): Promise<void> {
   const thread = page.locator('[data-plan-page="item"] [data-plan-thread]');
   await waitFor([thread], 'plan item thread');
   await thread.scrollIntoViewIfNeeded();
+}
+
+// --- Plan item and Bank idea comments as threads (12 Nov 2026) -------------
+// The item page's main comments are chat family rows (ThreadCommentRow) under
+// the bold DateLine; a main comment with replies carries chat's RepliesRow; a
+// tap opens the thread in the frame post comment threads use (phone: the
+// portal layer; laptop: the SidePanel), its reply box chat's Composer.
+
+/** The main comment that carries the thread: three replies from two people. */
+const PLAN_THREAD_ROOT = '0190d300-0000-7000-8000-00000000d501';
+const PLAN_THREAD_REPLIES = 3;
+/** The thread's last reply, Leo's (COLLEAGUE_A): newer than an old read point, so unread. */
+const PLAN_THREAD_LAST_REPLY = '0190d300-0000-7000-8000-00000000d514';
+
+/** A plan comment on the chat plan's concept: a main comment unless `extra` says a reply. */
+function planComment(
+  id: string,
+  author: string,
+  body: string,
+  at: number,
+  extra: Partial<Row> = {},
+): Row {
+  return {
+    id,
+    workspace_id: WORKSPACE_ID,
+    item_id: PLAN_CONCEPT_ITEM,
+    author_user_id: author,
+    body,
+    visibility: 'everyone',
+    created_at: new Date(at).toISOString(),
+    edited_at: null,
+    deleted_at: null,
+    parent_comment_id: null,
+    attachment_asset_ids: null,
+    ...extra,
+  };
+}
+
+/**
+ * Three main comments over two days on the concept (yesterday's, then today's
+ * with three replies from Leo and ME, then ME's), and ME's read point on the
+ * thread at `readAt` (none when null). The read point rides into the comments
+ * read through its embed (postgrest.ts NAMED_EMBEDS).
+ */
+function seedPlanCommentThreads(network: HarnessNetwork, readAt: number | null): void {
+  const t = network.world.tables;
+  const reply = { parent_comment_id: PLAN_THREAD_ROOT };
+  (t.plan_item_comments ??= []).push(
+    planComment(
+      '0190d300-0000-7000-8000-00000000d502',
+      COLLEAGUE_A,
+      'Moodboard is up.',
+      NOW - 26 * 3_600_000,
+    ),
+    planComment(
+      PLAN_THREAD_ROOT,
+      COLLEAGUE_B,
+      'Can we open on the product, not the team?',
+      NOW - 3 * 3_600_000,
+    ),
+    planComment(
+      '0190d300-0000-7000-8000-00000000d512',
+      COLLEAGUE_A,
+      'Yes, the hero shot goes first.',
+      NOW - 170 * 60_000,
+      reply,
+    ),
+    planComment(
+      '0190d300-0000-7000-8000-00000000d513',
+      ME,
+      'Swapped it in the cut.',
+      NOW - 150 * 60_000,
+      reply,
+    ),
+    planComment(PLAN_THREAD_LAST_REPLY, COLLEAGUE_A, 'Looks right now.', NOW - 40 * 60_000, reply),
+    planComment(
+      '0190d300-0000-7000-8000-00000000d503',
+      ME,
+      'Keep it under 30 seconds.',
+      NOW - 20 * 60_000,
+    ),
+  );
+  if (readAt !== null) {
+    (t.plan_item_comment_thread_reads ??= []).push({
+      root_comment_id: PLAN_THREAD_ROOT,
+      user_id: ME,
+      workspace_id: WORKSPACE_ID,
+      last_read_at: new Date(readAt).toISOString(),
+    });
+  }
+}
+
+/** The chat plan with the concept's comment threads, the thread read by ME. */
+function seedChatPlanCommentThreads(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  seedPlanCommentThreads(network, NOW);
+}
+
+/** The concept in the bank (a Bank idea) with the same comment threads, read by ME. */
+function seedBankIdeaCommentThreads(network: HarnessNetwork): void {
+  seedBankIdea(network);
+  seedPlanCommentThreads(network, NOW);
+}
+
+/** The item page's comments with the thread root and its replies row painted, in view. */
+async function planCommentsReady(page: Page): Promise<void> {
+  const list = page.locator('[data-plan-page="item"] [data-plan-thread]');
+  await waitFor([list.locator(`li[data-plan-comment-id="${PLAN_THREAD_ROOT}"]`)], 'thread root');
+  const replies = list.locator('li[data-replies-row]').first();
+  await waitFor([replies], 'replies row');
+  await replies.scrollIntoViewIfNeeded();
+}
+
+/** The chat plan's concept item opened from the Plan screen, its comments in view. */
+async function openPlanItemComments(page: Page): Promise<void> {
+  await openChatPlan(page);
+  await page
+    .locator('[data-plan-page="plan"]')
+    .locator(`[data-plan-row="${PLAN_CONCEPT_ITEM}"]`)
+    .click();
+  await waitFor([page.locator('[data-plan-page="item"]')], 'plan item');
+  await planCommentsReady(page);
+}
+
+/**
+ * "3 replies" under the root opens its thread: chat's ThreadViewFrame
+ * ("Thread" over the item's title), the root, the "3 replies" strip, the
+ * replies and the docked "Reply" box (phone: the portal layer; laptop: the
+ * SidePanel).
+ */
+async function openPlanCommentThread(page: Page): Promise<void> {
+  await planCommentsReady(page);
+  await tap(
+    [page.locator('[data-plan-page="item"] [data-plan-thread] li[data-replies-row] button')],
+    'replies row',
+  );
+  const thread = page.locator(
+    `[data-thread-view] [data-comment-thread="${PLAN_THREAD_ROOT}"][data-plan-comment-thread]`,
+  );
+  await waitFor([thread], 'plan comment thread');
+  await waitFor(
+    [thread.locator(`[data-plan-comment-id="${PLAN_THREAD_LAST_REPLY}"]`)],
+    'last reply',
+  );
+  await expect(page.locator('[data-thread-view] [data-thread-separator]')).toHaveText(
+    `${PLAN_THREAD_REPLIES} replies`,
+  );
+  await expect(page.locator('[data-thread-view] [data-thread-view-title]')).toHaveText('Thread');
+  await waitFor(
+    [page.locator('[data-comment-thread-composer]').getByPlaceholder('Reply', { exact: true })],
+    'thread reply box',
+  );
+}
+
+/** The open plan comment thread's checks after the shot (the frame post comment threads use). */
+async function planThreadChecks(page: Page): Promise<void> {
+  const name = test.info().title.replace(/ @.*$/, '');
+  await assertThreadHeader(page, name);
+  await assertCommentThreadEnd(page, name);
+  await assertRootReactionKey(page, name);
+}
+
+const PLAN_FILES_COMMENT = '0190d300-0000-7000-8000-00000000d521';
+const PLAN_FILES_ONLY_COMMENT = '0190d300-0000-7000-8000-00000000d522';
+const PLAN_FILES = [
+  { n: 1, mime: 'image/png', kind: 'image', name: 'Grid mock.png', w: 1200, h: 900 },
+  { n: 2, mime: 'application/pdf', kind: 'file', name: 'Shot list.pdf', w: null, h: null },
+  { n: 3, mime: 'application/pdf', kind: 'file', name: 'Call sheet.pdf', w: null, h: null },
+] as const;
+const planFileVersion = (n: number): string => `0190e800-0000-7000-8000-0000000000b${n}`;
+
+/**
+ * Files on plan comments, read from asset_versions with the post comment
+ * columns (COMMENT_FILE_COLUMNS: the name through the !asset_id embed): Leo's
+ * main comment with a photo and a PDF over its text, then a files-only main
+ * comment (a PDF, no text) from another colleague.
+ */
+function seedPlanCommentFiles(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  const t = network.world.tables;
+  for (const f of PLAN_FILES) {
+    const asset = `0190e800-0000-7000-8000-0000000000a${f.n}`;
+    (t.asset_versions ??= []).push({
+      id: planFileVersion(f.n),
+      asset_id: asset,
+      kind: f.kind,
+      mime_type: f.mime,
+      size_bytes: 1_200_000 + f.n * 100_000,
+      width: f.w,
+      height: f.h,
+      duration_ms: null,
+      page_count: f.mime === 'application/pdf' ? FIXTURE_PDF_PAGES : null,
+      external_url: null,
+      r2_key: `${WORKSPACE_ID}/${asset}/v1`,
+      version_number: 1,
+      assets: { display_name: null, filename: f.name },
+    });
+  }
+  (t.plan_item_comments ??= []).push(
+    planComment(
+      PLAN_FILES_COMMENT,
+      COLLEAGUE_A,
+      'The grid and the shot list for Thursday.',
+      NOW - 50 * 60_000,
+      { attachment_asset_ids: [planFileVersion(1), planFileVersion(2)] },
+    ),
+    planComment(PLAN_FILES_ONLY_COMMENT, COLLEAGUE_B, '', NOW - 30 * 60_000, {
+      attachment_asset_ids: [planFileVersion(3)],
+    }),
+  );
 }
 
 async function openChatPlanCard(page: Page): Promise<Locator> {
@@ -1334,6 +1549,8 @@ function seedBank(network: HarnessNetwork): void {
     created_at: at(1),
     edited_at: null,
     deleted_at: null,
+    parent_comment_id: null,
+    attachment_asset_ids: null,
   });
   (t.plan_item_comments ??= []).push(
     comment('0190d500-0000-7000-8000-00000000e5c1', BANK_IDEAS[0], 'Open on the factory floor.'),
@@ -2913,16 +3130,25 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 12 Nov 2026: the page composer is chat's Composer docked in the Plan
+    // page footer ([data-plan-comments-composer]); "@" opens its mention list.
     name: 'plan-item-mention-picker',
     seed: creator,
     extra: (network) => seedChatPlanThread(network, true),
+    hold: true,
     url: '/chat',
     steps: async (page) => {
       await openPlanItemThread(page);
-      const box = page.locator('[data-plan-comment-input]');
-      await box.click();
-      await box.fill('@');
-      await waitFor([page.locator('[data-mention-picker]')], 'mention picker');
+      const box = page
+        .locator('[data-plan-comments-composer]')
+        .getByRole('textbox', { name: 'Message' });
+      await tap([box], 'plan comment box');
+      await page.keyboard.type('@');
+      await waitFor(
+        [page.locator('[data-mention-picker]'), page.locator('[data-mention-option]')],
+        'mention picker',
+      );
+      await page.mouse.move(0, 0);
     },
   },
   {
@@ -2939,6 +3165,115 @@ const SCREENS: Screen[] = [
       const who = page.locator('[data-plan-page="item"] [data-plan-who-can-see]');
       await waitFor([who], 'who can see');
       await who.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // 12 Nov 2026: the concept's main comments as chat family rows under the
+    // bold date lines (yesterday, today), the root's "3 replies" row (Leo and
+    // ME, read: no dot), the page composer docked in the footer.
+    name: 'plan-item-comment-threads',
+    seed: creator,
+    extra: seedChatPlanCommentThreads,
+    url: '/chat',
+    steps: async (page) => {
+      await openPlanItemComments(page);
+      await expect(
+        page.locator('[data-plan-page="item"] [data-plan-thread] li[data-replies-row]'),
+      ).not.toHaveAttribute('data-unread');
+      await waitFor(
+        [
+          page
+            .locator('[data-plan-comments-composer]')
+            .getByPlaceholder('Add a comment', { exact: true }),
+        ],
+        'page comment box',
+      );
+    },
+  },
+  {
+    // That thread opened from its replies row: "<", "Thread" over the item's
+    // title, the root, the "3 replies" strip, the replies on the "Reply" box
+    // (phone: over the page, keyboard down; laptop: the side panel).
+    name: 'plan-item-thread-open',
+    seed: creator,
+    extra: seedChatPlanCommentThreads,
+    url: '/chat',
+    steps: async (page) => {
+      await openPlanItemComments(page);
+      await openPlanCommentThread(page);
+    },
+    after: planThreadChecks,
+  },
+  {
+    // The same threads on a Bank idea (its own route, no plan).
+    name: 'bank-idea-comment-threads',
+    seed: creator,
+    extra: seedBankIdeaCommentThreads,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-came-from]')], 'bank idea');
+      await planCommentsReady(page);
+    },
+  },
+  {
+    // The Bank idea's thread opened from its replies row.
+    name: 'bank-idea-thread-open',
+    seed: creator,
+    extra: seedBankIdeaCommentThreads,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-came-from]')], 'bank idea');
+      await openPlanCommentThread(page);
+    },
+    after: planThreadChecks,
+  },
+  {
+    // Files on plan comments: a main comment with a photo and a PDF over its
+    // text, and a files-only main comment (a PDF card, no text).
+    name: 'plan-comment-files',
+    seed: creator,
+    extra: seedPlanCommentFiles,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      await page
+        .locator('[data-plan-page="plan"]')
+        .locator(`[data-plan-row="${PLAN_CONCEPT_ITEM}"]`)
+        .click();
+      const list = page.locator('[data-plan-page="item"] [data-plan-thread]');
+      const files = list.locator(`li[data-plan-comment-id="${PLAN_FILES_COMMENT}"]`);
+      const only = list.locator(`li[data-plan-comment-id="${PLAN_FILES_ONLY_COMMENT}"]`);
+      await waitFor([files.locator('img')], 'comment photo');
+      await waitFor(
+        [files.getByRole('button', { name: `Open ${PLAN_FILES[1].name}`, exact: true })],
+        'comment PDF card',
+      );
+      await waitFor(
+        [only.getByRole('button', { name: `Open ${PLAN_FILES[2].name}`, exact: true })],
+        'files-only comment card',
+      );
+      await only.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // An unread thread: its last reply (Leo's) is newer than ME's read point,
+    // so the replies row carries the unread dot.
+    name: 'plan-thread-unread-dot',
+    seed: creator,
+    extra: (network) => {
+      seedChatPlan(network);
+      seedPlanCommentThreads(network, NOW - 100 * 60_000);
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openPlanItemComments(page);
+      await waitFor(
+        [
+          page.locator('[data-plan-page="item"] li[data-replies-row][data-unread]'),
+          page.locator('[data-plan-page="item"] li[data-replies-row] [data-unread]'),
+        ],
+        'unread replies row',
+      );
     },
   },
   {
@@ -7174,6 +7509,9 @@ const WRITING_BOX_SCREENS = new Set([
   'post-caption-box',
   'catch-up-tray-comment',
   'catch-up-tray-chat',
+  // 12 Nov 2026: the Plan page's and the plan thread's chat Composer.
+  'plan-item-comment-threads',
+  'plan-item-thread-open',
 ]);
 
 // Emoji reactions (9 Nov 2026): chips under the text everywhere text lives
@@ -7536,6 +7874,10 @@ async function capture(screen: Screen, page: Page): Promise<void> {
       ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
     });
   }
+  // Check 19 (12 Nov 2026): every reply box at rest, its first line on the
+  // frame's and the "+" key's centre; a phone dock 16 from both edges, text on
+  // 64. After the shot: its settle wait never moves a baseline.
+  await assertReplyBoxAtRest(page, screen.name, REPLY_BOX_SCREENS.has(screen.name));
   await screen.after?.(page);
   map.write(screen.name);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
@@ -7556,6 +7898,13 @@ const ALIGN_SCREENS: Readonly<Record<string, AlignScope>> = {
   // (same frame, strip and rows), so chat's measure; the post and brief screens
   // carry their own (one text column, one right edge, text off the hairline).
   'post-comment-thread': 'chat-thread',
+  // 12 Nov 2026: Plan item and Bank idea comments are the same threads: the
+  // open thread is chat's thread view, the main list's replies rows chat's.
+  'plan-item-thread-open': 'chat-thread',
+  'bank-idea-thread-open': 'chat-thread',
+  'plan-item-comment-threads': 'chat-replies-row',
+  'bank-idea-comment-threads': 'chat-replies-row',
+  'plan-thread-unread-dot': 'chat-replies-row',
   'post-detail': 'post-screen',
   'post-detail-approver': 'post-screen',
   'brief-comments': 'brief-screen',
@@ -7573,7 +7922,13 @@ const MESSAGE_FAMILY_SCREENS: Readonly<Record<string, MessageFamilyWant>> = {
   'chat-replies-row': {},
   'post-detail': {},
   'brief-comments': {},
-  'plan-item-thread': { rows: false },
+  // 12 Nov 2026: plan comments are chat family rows (ThreadCommentRow) under
+  // the bold DateLine, on the item page and the Bank idea page.
+  'plan-item-thread': {},
+  'plan-item-comment-threads': { dateLines: 1 },
+  'bank-idea-comment-threads': { dateLines: 1 },
+  'plan-thread-unread-dot': {},
+  'plan-comment-files': {},
   'catch-up-chat-main': {},
   // 12 Nov 2026: Catch up's comment and chat rows in the family's type, the
   // name 4 over the text on a one line and a two line row alike.
@@ -7633,9 +7988,34 @@ const THREAD_ON_BOX_SCREENS: ReadonlySet<string> = new Set([
   'post-comment-thread',
   'post-comment-thread-files',
   'post-comment-thread-two-days',
+  // 12 Nov 2026: Plan item and Bank idea comment threads (the same frame).
+  'plan-item-thread-open',
+  'bank-idea-thread-open',
+]);
+
+// Check 19 (assertReplyBoxAtRest) runs on every screen that shows a reply box;
+// these must show one (a missing box fails), whether or not it is at rest.
+const REPLY_BOX_SCREENS: ReadonlySet<string> = new Set([
+  'chat-thread',
+  'post-comment-thread',
+  'brief-comments',
+  'plan-item-thread',
+  'plan-item-comment-threads',
+  'plan-item-thread-open',
+  'bank-idea-comment-threads',
+  'bank-idea-thread-open',
+  'plan-comment-files',
+  'plan-thread-unread-dot',
 ]);
 
 const LAPTOP_DARK_SCREENS = new Set([
+  // 12 Nov 2026: Plan item and Bank idea comments as threads, light and dark.
+  'plan-item-comment-threads',
+  'plan-item-thread-open',
+  'bank-idea-comment-threads',
+  'bank-idea-thread-open',
+  'plan-comment-files',
+  'plan-thread-unread-dot',
   // 12 Nov 2026: a comment with a photo over a two line text.
   'post-comment-photo-caption',
   // 12 Nov 2026: a comment thread whose replies span two days.
