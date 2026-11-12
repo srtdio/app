@@ -877,7 +877,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
         ))}
       </ul>
     ) : (
-      <ul data-media-skeleton="" className="flex flex-col">
+      <ul data-media-skeleton="" className="flex flex-col max-md:-mx-2">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
           <li key={`bone-${i}`} className="flex items-center gap-3 px-2 py-2">
             <Bone lit="lit-media" as="div" className="h-11 w-11 shrink-0 rounded-lg" />
@@ -899,7 +899,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     groups.map((group) => (
       <section key={group.key} data-media-group={group.key} className="flex flex-col gap-1">
         <MonthLabel groupKey={group.key} label={group.label} />
-        <ul className={grid ? GRID : 'flex flex-col'}>
+        <ul className={grid ? GRID : 'flex flex-col max-md:-mx-2'}>
           {group.items.map((item) => {
             const select = selectOf(item);
             if (isLinkItem(item)) {
