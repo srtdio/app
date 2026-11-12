@@ -130,6 +130,19 @@ describe('createLongPressController', () => {
     c.dispose();
   });
 
+  it('a hold with no trailing click never swallows the next tap (12 Nov 2026)', () => {
+    const c = createLongPressController({ onLongPress: vi.fn(), ignoreMouse: true });
+    const touch = { ...at(0, 0), pointerType: 'touch' };
+    c.handlers.onPointerDown(touch);
+    vi.advanceTimersByTime(LONG_PRESS_MS);
+    c.handlers.onPointerUp();
+    // iPhone sent no click after the hold; the next press is a clean tap.
+    c.handlers.onPointerDown(touch);
+    c.handlers.onPointerUp();
+    expect(c.consumeClickSuppression()).toBe(false);
+    c.dispose();
+  });
+
   it('a click after the menu opened is not suppressed', () => {
     const c = createLongPressController({
       onLongPress: () => c.clearClickSuppression(),

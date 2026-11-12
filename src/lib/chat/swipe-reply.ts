@@ -18,6 +18,13 @@ export const SWIPE_EDGE_PX = 20;
 export const SWIPE_SPRING_MS = 180;
 /** Haptic tick (ms) when the gesture crosses the trigger. */
 export const SWIPE_VIBRATE_MS = 10;
+/**
+ * A swipe that never travelled further than this (px) from the press... (a
+ * finger tap that rolled sideways: on touch no click follows it)
+ */
+export const SWIPE_TAP_SLOP_PX = 16;
+/** ...and lifted within this many ms is a tap (onTap), not a swipe. */
+export const SWIPE_TAP_MS = 350;
 
 /** The only pointer fields the controller reads; React's PointerEvent satisfies it. */
 interface SwipePointerSample {
@@ -144,6 +151,13 @@ export interface SwipeReplyOptions {
    * inside a thread); their left swipe (Delete) stays.
    */
   takes?: (side: SwipeSide) => boolean;
+  /**
+   * A press that locked as a swipe but stayed within SWIPE_TAP_SLOP_PX and
+   * lifted within SWIPE_TAP_MS: the finger meant a tap, and on touch no click
+   * follows a locked swipe. Gets the press's target. The trailing click, if
+   * any, stays swallowed, so the tap acts once.
+   */
+  onTap?: (target: EventTarget | null) => void;
 }
 
 /** A rubber band: the row follows a little and never arms (canTrigger false). */
@@ -200,6 +214,7 @@ export function createSwipeReplyController({
   onLeft,
   canTrigger = () => true,
   takes = () => true,
+  onTap,
   onFrame,
   onStart,
   enabled = () => true,
@@ -222,6 +237,10 @@ export function createSwipeReplyController({
   let pressed: Node | null = null;
   let buzzed = false;
   let suppressClick = false;
+  /** The press's target and time, and its furthest sideways travel (px). */
+  let downTarget: EventTarget | null = null;
+  let downT = 0;
+  let maxTravel = 0;
   /** Recent (x, t) samples for the release velocity. */
   let samples: Array<{ x: number; t: number }> = [];
   let pending: SwipeFrame | null = null;
@@ -328,6 +347,9 @@ export function createSwipeReplyController({
     startX = event.clientX;
     startY = event.clientY;
     pointerId = event.pointerId;
+    downTarget = event.target ?? event.currentTarget ?? null;
+    downT = event.timeStamp ?? now();
+    maxTravel = 0;
     // Only an element (anything with contains) counts as the press's node.
     const node = event.currentTarget ?? event.target ?? null;
     pressed = scrollSource(node) !== null ? (node as Node) : null;
@@ -344,6 +366,7 @@ export function createSwipeReplyController({
     }
     const rawDx = event.clientX - startX;
     const dy = event.clientY - startY;
+    maxTravel = Math.max(maxTravel, Math.abs(rawDx));
     if (phase === 'pending') {
       if (rawDx * rawDx + dy * dy < SWIPE_LOCK_PX * SWIPE_LOCK_PX) return;
       if (direction === 'both') {
@@ -387,8 +410,16 @@ export function createSwipeReplyController({
   function onPointerUp(event?: Pick<SwipePointerSample, 'timeStamp'>): void {
     const releaseT = event?.timeStamp ?? now();
     const fire = phase === 'swiping' && allowed && swipeTriggers(dx, velocity(releaseT));
+    const tap =
+      phase === 'swiping' &&
+      !fire &&
+      maxTravel <= SWIPE_TAP_SLOP_PX &&
+      releaseT - downT <= SWIPE_TAP_MS;
+    const target = downTarget;
     const way = side;
     reset();
+    downTarget = null;
+    if (tap) onTap?.(target);
     if (!fire) return;
     if (way === 'right') onReply?.();
     // A one-way 'left' controller may still name its action onReply (TaskRow, before).

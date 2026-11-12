@@ -8584,6 +8584,47 @@ test('catch up: one finger tap on the replies row opens the thread', async ({ pa
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 
+test('chat: one finger tap on a message opens its thread', async ({ page }) => {
+  const network = await bootPhone(page, () => undefined, '/chat');
+  await openChat(page, MAYA_NAME);
+  await fingerTap(page, plainMessageText(page));
+  await expect(page.locator('[data-thread-view]')).toBeVisible();
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('chat: a tap that rolls sideways still opens the thread', async ({ page }) => {
+  const network = await bootPhone(page, () => undefined, '/chat');
+  await openChat(page, MAYA_NAME);
+  const text = plainMessageText(page);
+  await text.scrollIntoViewIfNeeded();
+  // The finger rolls 14 sideways: the swipe locks (8), no click follows on
+  // touch; the swipe core's tap recovery opens the thread.
+  await text.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const x = r.left + 8;
+    const y = r.top + r.height / 2;
+    const fire = (type: string, dx: number): void => {
+      el.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 1,
+          pointerType: 'touch',
+          isPrimary: true,
+          clientX: x + dx,
+          clientY: y,
+        }),
+      );
+    };
+    fire('pointerdown', 0);
+    fire('pointermove', 6);
+    fire('pointermove', 14);
+    fire('pointerup', 14);
+  });
+  await expect(page.locator('[data-thread-view]')).toBeVisible();
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
 test('mention picker: one finger tap picks a person', async ({ page }) => {
   const network = await bootPhone(page, () => undefined, '/chat');
   const field = await focusChatBox(page, '', (p) => openChat(p, GROUP_NAME));

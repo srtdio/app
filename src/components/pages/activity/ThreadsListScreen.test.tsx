@@ -14,6 +14,7 @@ import {
   hiddenReplies,
   moreRepliesLabel,
   orderThreads,
+  newThreadsOnly,
   peopleLine,
   threadHeaderLines,
   type ThreadBlockData,
@@ -138,6 +139,20 @@ describe('Threads list rules', () => {
     const b = thread({ rootId: 'b', unread: true, lastReplyAt: '2026-11-09T10:00:00Z' });
     const c = thread({ rootId: 'c', unread: true, lastReplyAt: '2026-11-10T08:00:00Z' });
     expect(orderThreads([a, b, c]).map((t) => t.rootId)).toEqual(['c', 'b', 'a']);
+  });
+});
+
+describe('only new threads (12 Nov 2026)', () => {
+  it('shows unread threads only; one marked read here stays until the screen closes', () => {
+    const kept = new Set<string>();
+    const a = thread({ rootId: 'a', unread: true });
+    const b = thread({ rootId: 'b', unread: false });
+    expect(newThreadsOnly([a, b], kept).map((t) => t.rootId)).toEqual(['a']);
+    // Marked read here: it keeps its place (Undo); a never-new one never shows.
+    const aRead = thread({ rootId: 'a', unread: false });
+    expect(newThreadsOnly([aRead, b], kept).map((t) => t.rootId)).toEqual(['a']);
+    // A fresh screen (new set): nothing is new, nothing shows.
+    expect(newThreadsOnly([aRead, b], new Set())).toEqual([]);
   });
 });
 
