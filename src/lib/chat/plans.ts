@@ -242,8 +242,6 @@ const ITEM_COLUMNS =
   'id, plan_id, kind, position, title, description, post_id, created_at, updated_at, target_date, linked_post_id, show_to_client, archived_at, starred_at, last_active_at, came_from_plan_title';
 const BUCKET_COLUMNS = 'item_id, bucket_id';
 const REVIEW_COLUMNS = 'item_id, side, status, reviewed_by, reviewed_at';
-const COMMENT_COLUMNS = 'id, item_id, author_user_id, body, visibility, created_at';
-
 /**
  * The Item screen's comment read: the rows, their thread and file columns,
  * and the viewer's own read point per main comment riding in as an embed
