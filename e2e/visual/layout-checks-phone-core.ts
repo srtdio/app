@@ -151,6 +151,11 @@ export const PHONE_RULE_EXEMPTIONS: readonly PhoneExemption[] = [
     reason: 'a card (chat card, catch-up card, link preview, quote) has its own inset',
   },
   {
+    rule: 'R3',
+    selector: '[data-topbar-workspace-name]',
+    reason: 'the workspace name is a name (R2): it clamps to two lines and ends in "…"',
+  },
+  {
     rule: 'R8',
     selector: 'header:not([data-header-bar]) [data-avatar-kind]',
     reason: 'the top bar avatar photo ends 22 from the edge (TOPBAR_AVATAR_RIGHT_INSET_PX)',

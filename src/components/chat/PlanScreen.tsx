@@ -3166,8 +3166,7 @@ function PlanStatusLines(props: {
         <div
           data-plan-line="plan"
           className={cn(
-            // Phone: should the control ever not fit, it wraps under the label
-            // instead of running off the screen.
+            // Phone: a control that does not fit wraps under the label.
             'flex min-h-11 items-center gap-3 max-md:flex-wrap',
             control.kind === 'text' && CONTROL_IN_LINE,
           )}

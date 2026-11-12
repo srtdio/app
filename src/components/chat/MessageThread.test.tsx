@@ -1571,7 +1571,10 @@ describe('bubble text sizes', () => {
     };
     expect(columnOf('touch')).toContain('flex-1');
     expect(columnOf('laptop')).not.toContain('max-w-[');
-    expect(renderStrip(renderBubble(makeMessage({}), { layout: 'laptop' }))).not.toContain('md:');
+    // No md: breakpoint class; the phone-only max-md: classes are not one.
+    expect(renderStrip(renderBubble(makeMessage({}), { layout: 'laptop' }))).not.toMatch(
+      /(^|[\s"])md:/,
+    );
   });
 
   it('meta, date line and typing row sizes come from chat-type', () => {

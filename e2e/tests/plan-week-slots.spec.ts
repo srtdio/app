@@ -461,7 +461,10 @@ test('header: agency sees the HeaderBar title (title role), then Add on the 16px
   // The one bar: back, the title button (title role, chevron) over its subline, then Add.
   const bar = plan.locator('[data-header-bar]');
   const title = bar.locator('[data-plan-title-menu] [data-plan-title-text]');
-  await expect(title).toHaveCSS('font-size', '15px');
+  await expect(title).toHaveCSS(
+    'font-size',
+    (page.viewportSize()?.width ?? 0) < 768 ? '17px' : '15px',
+  );
   await expect(title).toHaveCSS('font-weight', '600');
   await expect(bar.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   await expect(bar.locator('[data-plan-edit]')).toHaveCount(0);
@@ -525,7 +528,10 @@ test('header: a client sees the title and subline with no Add or Edit', async ({
   const bar = plan.locator('[data-header-bar]');
   const title = bar.locator('h1');
   await expect(title).toHaveText(PLAN_TITLE);
-  await expect(title).toHaveCSS('font-size', '15px');
+  await expect(title).toHaveCSS(
+    'font-size',
+    (page.viewportSize()?.width ?? 0) < 768 ? '17px' : '15px',
+  );
   await expect(bar.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   await expect(plan.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
   expect(Math.round((await boxOf(bar)).height)).toBe(56);

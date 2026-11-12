@@ -970,7 +970,7 @@ export function mentionsMe(
  */
 export const SENDER_LINE_CLASS =
   'block min-w-0 max-w-full truncate max-md:flex max-md:items-baseline';
-/** The name (and its person trigger) in that row: it shrinks and ends in "…". */
+/** The name's box in that row (the person trigger stays inline inside it): it shrinks and ends in "…". */
 export const SENDER_NAME_GIVES = 'max-md:min-w-0 max-md:truncate';
 
 export const MENTION_ME_PEER = 'bg-fg/[.12] text-fg';
@@ -1565,16 +1565,16 @@ export function MessageBubble(props: {
     // baseline as a row, so a long name gives way with "…" and the time
     // ("Today at 8:00 AM") and the tick are never cut.
     <span data-sender-line="" className={SENDER_LINE_CLASS}>
-      {asPerson(
-        <span
-          data-sender-name=""
-          className={cn('text-fg', sized(SENDER_NAME_TYPE, layout), SENDER_NAME_GIVES)}
-        >
-          {headerName(message, profiles)}
-        </span>,
-        'inline',
-        SENDER_NAME_GIVES,
-      )}
+      {/* The row item that gives way; the name trigger inside it stays an
+          inline control in running text (never a block-level button). */}
+      <span data-sender-name-box="" className={SENDER_NAME_GIVES}>
+        {asPerson(
+          <span data-sender-name="" className={cn('text-fg', sized(SENDER_NAME_TYPE, layout))}>
+            {headerName(message, profiles)}
+          </span>,
+          'inline',
+        )}
+      </span>
       {fullMeta.time !== '' ? (
         <span
           aria-hidden="true"

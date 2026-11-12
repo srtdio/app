@@ -114,7 +114,7 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
       expect(classOf(person, attr), attr).toEqual(classOf(grp, attr));
     }
     expect(classOf(person, 'data-list-card-body=""')).toEqual(
-      expect.arrayContaining(['gap-3', 'items-center']),
+      expect.arrayContaining(['gap-3', 'md:items-center']),
     );
     // The flat row frame carries the 16 sides; the body has no padding of its own.
     expect(classOf(person, 'data-list-card-body=""')).not.toContain('p-3');

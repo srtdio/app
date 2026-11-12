@@ -325,10 +325,12 @@ test(
     expect(labelType.weight).toBe('600');
     expect(labelType.transform).toBe('uppercase');
 
-    // ui/ListCard: the preview is the secondary role (13/18).
+    // ui/ListCard: the preview is the secondary role (15/20 under 768, 13/18 from 768).
     const body = mention.locator('[data-list-card-preview]').first();
     await expect(body).toContainText(MENTION_PREVIEW);
-    expect((await typeOf(body)).size).toBe('13px');
+    expect((await typeOf(body)).size).toBe(
+      (page.viewportSize()?.width ?? 0) < 768 ? '15px' : '13px',
+    );
 
     const meta = mention.locator('[data-activity-time]').first();
     expect((await typeOf(meta)).size).toBe('12px');

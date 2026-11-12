@@ -294,9 +294,9 @@ describe('Pipeline, Briefs, Assets, Chat, Activity and the Plan tab render throu
 
   it('every card has the identical height structure', () => {
     const base = heightShape(SCREENS.briefs ?? '');
-    expect(base[0]).toEqual(expect.arrayContaining(['-mx-4', 'h-15', 'md:h-18', 'px-4']));
+    expect(base[0]).toEqual(expect.arrayContaining(['-mx-4', 'h-15', 'px-4', 'py-2']));
     expect(base[1]).not.toContain('p-3');
-    expect(base[2]).toEqual(expect.arrayContaining(['h-9', 'w-9', 'md:h-12', 'md:w-12']));
+    expect(base[2]).toEqual(expect.arrayContaining(['h-9', 'w-9']));
     expect(base[3]).toContain('h-5');
     expect(base[4]).toContain('h-5');
     for (const [name, html] of Object.entries(SCREENS)) {

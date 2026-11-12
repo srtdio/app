@@ -204,6 +204,7 @@ describe('time format rule: src/lib/time.ts is the one rule', () => {
         'formatAgo',
         'formatDate',
         'formatDateTime',
+        'formatDateWithYear',
         'formatDayLabel',
         'formatDayRange',
         'formatDue',

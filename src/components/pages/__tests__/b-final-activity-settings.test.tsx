@@ -187,8 +187,9 @@ describe('Members: ui/Row, role tag only, the mail mark, the trailing rule', () 
 
   it('the ⋯ sits in the Row trailing slot and takes TRAILING_PULL', () => {
     expect(html.match(/data-row-more=""/g)).toHaveLength(2);
+    // The pull itself (its first class); the phone ink slide follows it.
     expect(classOf(html, 'aria-label="Actions for Ada Agency"').split(' ')).toContain(
-      TRAILING_PULL,
+      TRAILING_PULL.split(' ')[0],
     );
   });
 

@@ -140,7 +140,8 @@ test(
       .first();
     await expect(cardTitle).toBeVisible({ timeout: 15_000 });
     const cardType = await typeOf(cardTitle);
-    expect(cardType.size).toBe('15px');
+    // Heading role: 17 under 768, 15 from 768.
+    expect(cardType.size).toBe((page.viewportSize()?.width ?? 0) < 768 ? '17px' : '15px');
     // Flat look (7 Nov 2026): a read row's title is regular; only unread rows are bold.
     expect(cardType.weight).toBe('400');
 
@@ -151,7 +152,7 @@ test(
     await expect(sheet).toBeVisible();
     const header = sheet.getByRole('heading', { name: 'Filter and sort' });
     const headerType = await typeOf(header);
-    expect(headerType.size).toBe('15px');
+    expect(headerType.size).toBe((page.viewportSize()?.width ?? 0) < 768 ? '17px' : '15px');
     expect(headerType.weight).toBe('600');
 
     const label = sheet.locator('[data-filter-body] > p', { hasText: 'Due date' });
