@@ -202,7 +202,10 @@ test('PCS type roles: page title 28px, caption body 14px, details meta 12px @the
 
   const caption = page.locator('[data-caption-block]').getByText('Fixture caption').first();
   await expect(caption).toBeVisible();
-  expect((await typeOf(caption)).size).toBe('14px');
+  // Body role: 17 under 768 (the thread size), 14 from 768.
+  expect((await typeOf(caption)).size).toBe(
+    (page.viewportSize()?.width ?? 0) < 768 ? '17px' : '14px',
+  );
 
   const meta = page.locator('[data-post-details]').first();
   await expect(meta).toBeVisible();

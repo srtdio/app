@@ -72,7 +72,10 @@ describe('HeaderBar slots (additive)', () => {
 describe('trailing rule on the Plan bar actions', () => {
   it('the ⋯ last pulls itself out by 12; an icon box last is pulled by the bar', () => {
     const more = html(<HeaderBar title="Item" actions={<ActionMenuTrigger type="button" />} />);
-    expect(more).toMatch(new RegExp(`aria-label="More actions"[^>]*class="[^"]*${TRAILING_PULL}`));
+    // TRAILING_PULL's first class is the pull; the rest is the phone ink slide.
+    expect(more).toMatch(
+      new RegExp(`aria-label="More actions"[^>]*class="[^"]*${TRAILING_PULL.split(' ')[0]}`),
+    );
     const close = html(
       <HeaderBar
         title="Plan"

@@ -600,6 +600,9 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
               className={cn(
                 'inline-flex h-11 w-11 items-center justify-center text-fg-3',
                 LEADING_PULL,
+                // Phone: the lock's ink sits on the page edge (no 44 box to
+                // centre in, so no pull; LEADING_PULL slides the ink).
+                'max-md:ml-0 max-md:w-auto',
               )}
             >
               <IconLock size={ICON_SIZE.inline} />
@@ -652,7 +655,13 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
             aria-label={`Versions, current version ${versionNumber}`}
             aria-haspopup="dialog"
             variant="ghost"
-            className={cn('shrink-0 px-3 tabular-nums', TRAILING_PULL)}
+            // The text ends on the page edge; the clock glyph before it keeps
+            // its place (the pull's phone ink slide is for a trailing glyph).
+            className={cn(
+              'shrink-0 px-3 tabular-nums',
+              TRAILING_PULL,
+              'max-md:[&>svg]:translate-x-0',
+            )}
           >
             <IconHistory size={ICON_SIZE.inline} />
             {`v${versionNumber}`}

@@ -7,6 +7,9 @@ import { cn } from '@/lib/cn';
  * a part comes from here; a part uses at most three. This file is the only
  * place leading-*, tracking-* or text-[..] may appear (eslint designRules).
  *
+ * Sizes below are from 768 up. Under 768 (12 Nov 2026) the tokens carry the
+ * thread sizes: title, heading, body and label 17/20, secondary 15/20.
+ *
  *   display    28/34 600 tight     post title only
  *   title      15/20 600           bar titles (HeaderBar, page bars)
  *   heading    15/20 600           card, row, sheet and chat-card titles

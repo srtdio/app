@@ -18,6 +18,8 @@
 // - Untouched for 90 days: a switch (live ideas last active over 90 days ago).
 // Footer: Done. A client never opens it with writes (no add, rename or delete).
 
+import { PHONE_PAD_FLUSH } from '@/components/ui/layout';
+import { cn } from '@/lib/cn';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -177,7 +179,9 @@ function SortOption(props: {
       aria-checked={props.on}
       data-bank-sort={props.value}
       onClick={() => props.onPick(props.value)}
-      className="flex items-center justify-between px-1 text-base text-fg"
+      // Phone: the label sits on the sheet's 16 edge and the tick 16 from the
+      // right (no row inset); from 768 the row keeps its 4.
+      className={cn('flex items-center justify-between px-1 text-base text-fg', PHONE_PAD_FLUSH)}
     >
       {props.label}
       {props.on ? <IconCheck size={ICON_SIZE.inline} /> : null}
@@ -492,7 +496,7 @@ function BucketMenuInPlace(props: {
         flat
         data-bank-bucket-menu-rename=""
         onClick={props.onRename}
-        className="flex items-center gap-2 px-1 text-base text-fg"
+        className={cn('flex items-center gap-2 px-1 text-base text-fg', PHONE_PAD_FLUSH)}
       >
         <IconEdit size={ICON_SIZE.inline} />
         Rename
@@ -502,7 +506,7 @@ function BucketMenuInPlace(props: {
         flat
         data-bank-bucket-menu-delete=""
         onClick={props.onDelete}
-        className="flex items-center gap-2 px-1 py-2 text-base text-bad"
+        className={cn('flex items-center gap-2 px-1 py-2 text-base text-bad', PHONE_PAD_FLUSH)}
       >
         <IconTrash size={ICON_SIZE.inline} />
         <span className="flex min-w-0 flex-col text-left">

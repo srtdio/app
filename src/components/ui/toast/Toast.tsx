@@ -49,7 +49,12 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         </span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={`truncate text-base font-medium ${error ? 'text-accent-fg' : 'text-fg'}`}>
+        {/* Phone: the note wraps (two lines at most) beside Clear, never cut
+            short of its words; from 768 it stays one line. */}
+        <span
+          data-toast-title=""
+          className={`truncate text-base font-medium max-md:line-clamp-2 max-md:whitespace-normal max-md:break-words ${error ? 'text-accent-fg' : 'text-fg'}`}
+        >
           {title}
         </span>
         {description !== undefined ? (

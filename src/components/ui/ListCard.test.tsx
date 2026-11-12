@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   LIST_CARD_BODY,
+  LIST_CARD_COUNT,
   LIST_CARD_COVER,
+  LIST_CARD_FRAME_2,
   LIST_CARD_GRID,
   LIST_CARD_LINE1,
   LIST_CARD_LINE2,
@@ -10,6 +12,7 @@ import {
   LIST_CARD_PREVIEW,
   LIST_CARD_SOLID,
   LIST_CARD_SOLID_GROUP,
+  LIST_CARD_SOLID_PICTURE,
   LIST_CARD_SOLID_TILE,
   LIST_CARD_STACK,
   LIST_CARD_TEXT,
@@ -24,7 +27,14 @@ import {
 import { tagClass } from '@/components/ui/Tag';
 import { IconBriefs } from '@/components/ui/icons';
 import { MOVE_CLASS } from '@/lib/motion';
-import { ROW_HEIGHT, ROW_INSET, ROW_PICTURE } from '@/components/ui/layout';
+import {
+  ROW_HEIGHT,
+  ROW_HEIGHT_PHONE,
+  ROW_INSET,
+  ROW_INSET_PHONE,
+  ROW_PICTURE,
+  ROW_PICTURE_PHONE,
+} from '@/components/ui/layout';
 import tailwindConfig from '../../../tailwind.config';
 
 function render(over: Partial<ListCardProps> = {}): string {
@@ -72,25 +82,28 @@ describe('ListCard frame', () => {
     for (const cls of [
       'relative',
       'flex',
-      'h-18',
+      'h-15',
+      'md:h-18',
       'min-w-0',
       '-mx-4',
       'px-4',
-      'py-3',
+      'py-2',
+      'md:py-3',
       MOVE_CLASS.press,
     ]) {
       expect(root).toContain(cls);
     }
-    expect(listCardFrame()).toBe('relative -mx-4 flex h-18 min-w-0 px-4 py-3');
+    expect(listCardFrame()).toBe('relative -mx-4 flex h-15 min-w-0 px-4 py-2 md:h-18 md:py-3');
     for (const cls of listCardFrame().split(' ')) {
       expect(cls).not.toMatch(/^(border|rounded|overflow-hidden|bg-|lit-)/);
     }
     expect(root.filter((c) => /^(border|rounded|bg-|lit-)/.test(c))).toEqual([]);
   });
 
-  it('picture then text 12 apart, vertically centred; the frame carries the 16 sides, the body no padding', () => {
+  it('picture then text 12 apart, vertically centred from 768 and top-aligned under it; the frame carries the 16 sides, the body no padding', () => {
     const body = classOf(render(), 'data-list-card-body=""');
-    expect(body).toEqual(expect.arrayContaining(['gap-3', 'items-center']));
+    expect(body).toEqual(expect.arrayContaining(['gap-3', 'items-start', 'md:items-center']));
+    expect(body).not.toContain('items-center');
     expect(body.filter((c) => /^p[xy]?-/.test(c))).toEqual([]);
     expect(px(spacing['3'] ?? '')).toBe(12);
     expect(px(spacing['4'] ?? '')).toBe(16);
@@ -126,16 +139,42 @@ describe('ListCard frame', () => {
   });
 });
 
-describe('ListCard height: one size, 72 (ROW_HEIGHT)', () => {
-  it('the classes make inset 12 + picture 48 + inset 12 = 72', () => {
+describe('ListCard height: 72 from 768 (ROW_HEIGHT), 60 under it (ROW_HEIGHT_PHONE)', () => {
+  it('from 768 the md: classes make inset 12 + picture 48 + inset 12 = 72', () => {
     const frame = listCardFrame().split(' ');
-    expect(stepPx(find(frame, /^h-\d/), 'h-')).toBe(ROW_HEIGHT);
-    expect(stepPx(find(frame, /^py-/), 'py-')).toBe(ROW_INSET);
+    expect(stepPx(find(frame, /^md:h-\d/), 'md:h-')).toBe(ROW_HEIGHT);
+    expect(stepPx(find(frame, /^md:py-/), 'md:py-')).toBe(ROW_INSET);
     const picture = LIST_CARD_PICTURE.split(' ');
-    expect(stepPx(find(picture, /^h-\d/), 'h-')).toBe(ROW_PICTURE);
-    expect(stepPx(find(picture, /^w-\d/), 'w-')).toBe(ROW_PICTURE);
+    expect(stepPx(find(picture, /^md:h-\d/), 'md:h-')).toBe(ROW_PICTURE);
+    expect(stepPx(find(picture, /^md:w-\d/), 'md:w-')).toBe(ROW_PICTURE);
     expect(ROW_INSET + ROW_PICTURE + ROW_INSET).toBe(ROW_HEIGHT);
     expect(listCardFrame()).not.toMatch(/(^|\s)(compact|calm):/);
+  });
+
+  it('under 768 the base classes make inset 8 + two 20 lines and their 4 + inset 8 = 60, the 36 picture on the title line', () => {
+    const frame = listCardFrame().split(' ');
+    expect(stepPx(find(frame, /^h-\d/), 'h-')).toBe(ROW_HEIGHT_PHONE);
+    expect(stepPx(find(frame, /^py-/), 'py-')).toBe(ROW_INSET_PHONE);
+    const picture = LIST_CARD_PICTURE.split(' ');
+    expect(stepPx(find(picture, /^h-\d/), 'h-')).toBe(ROW_PICTURE_PHONE);
+    expect(stepPx(find(picture, /^w-\d/), 'w-')).toBe(ROW_PICTURE_PHONE);
+    expect(ROW_INSET_PHONE + 44 + ROW_INSET_PHONE).toBe(ROW_HEIGHT_PHONE);
+    // Top-aligned: the picture starts where the title line starts and ends inside the row's inset.
+    expect(LIST_CARD_BODY.split(' ')).toContain('items-start');
+    expect(ROW_PICTURE_PHONE).toBeLessThanOrEqual(44);
+  });
+
+  it('a 2-line preview row grows from the row height at both widths (60 + 20, 72 + 20)', () => {
+    const root = classOf(render({ previewLines: 2 }), 'data-list-card=""');
+    for (const c of LIST_CARD_FRAME_2.split(' ')) expect(root).toContain(c);
+    expect(root).toEqual(
+      expect.arrayContaining(['h-auto', 'md:h-auto', 'min-h-15', 'md:min-h-18']),
+    );
+    // The fixed heights are merged away, so the row can grow.
+    expect(root).not.toContain('h-15');
+    expect(root).not.toContain('md:h-18');
+    const line2 = classOf(render({ previewLines: 2 }), 'data-list-card-line="2"');
+    expect(line2).toEqual(expect.arrayContaining(['min-h-10', 'md:min-h-11', 'items-start']));
   });
 
   it('the text column is 20 + 4 + 20 = 44, inside the picture row (it never sets the height)', () => {
@@ -172,11 +211,12 @@ describe('ListCard height: one size, 72 (ROW_HEIGHT)', () => {
   });
 });
 
-describe('ListCard picture: 48 on the left, centred', () => {
-  it('the slot is 48x48 (h-12 w-12) and never shrinks; it comes first', () => {
+describe('ListCard picture: on the left; 48 centred from 768, 36 on the title line under it', () => {
+  it('the slot is 48x48 from 768 (md:h-12 md:w-12), 36x36 under it (h-9 w-9) and never shrinks; it comes first', () => {
     expect(px(spacing['12'] ?? '')).toBe(48);
+    expect(px(spacing['9'] ?? '')).toBe(36);
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(
-      expect.arrayContaining(['h-12', 'w-12', 'shrink-0']),
+      expect.arrayContaining(['h-9', 'w-9', 'md:h-12', 'md:w-12', 'shrink-0']),
     );
     expect(LIST_CARD_PICTURE).not.toMatch(/(compact|calm):/);
     const html = render();
@@ -186,11 +226,11 @@ describe('ListCard picture: 48 on the left, centred', () => {
     );
   });
 
-  it('person: a rounded-square photo through ui/Avatar card (48; initials when none)', () => {
+  it('person: a rounded-square photo through ui/Avatar card (48 / 36; initials when none)', () => {
     const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
     expect(html).toContain('data-list-card-picture="person"');
     expect(html).toContain('data-avatar-role="card"');
-    expect(html).toContain('h-12 w-12');
+    expect(html).toContain('h-9 w-9 md:h-12 md:w-12');
     expect(html).not.toContain('width:40px;height:40px');
     expect(html).toContain('rounded-lg');
     expect(html).not.toContain('rounded-full');
@@ -421,13 +461,14 @@ describe('LIST_CARD_GRID: the page list', () => {
   });
 });
 
-describe('ListCardBox: the 72 skeleton', () => {
-  it('keeps the flat row frame, the 48 picture and the two 20 lines', () => {
+describe('ListCardBox: the 72 skeleton (60 under 768)', () => {
+  it('keeps the flat row frame, the 48 / 36 picture and the two 20 lines', () => {
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
     expect(html).toContain(`class="${listCardFrame()}"`);
     expect(html).not.toContain('rounded-xl border bg-panel');
-    expect(html).toContain('h-12 w-12');
+    // The row's own picture box at both widths, so a row lands where its box was.
+    for (const c of LIST_CARD_PICTURE.split(' ')) expect(html.split(/[\s"]/)).toContain(c);
     expect(html).toContain(LIST_CARD_BODY);
     expect(html).toContain(LIST_CARD_LINE1);
     expect(html).toContain(LIST_CARD_LINE2);
@@ -532,7 +573,7 @@ describe('ListCard solid + count (11 Nov 2026)', () => {
     expect(html).toBe(render({ unread: true, solid: false }));
   });
 
-  it('solid: the ink fill, accent-fg text, the laptop hover, same 72 frame and bleed', () => {
+  it('solid: the ink fill, accent-fg text, the laptop hover, same frame (72 / 60) and bleed', () => {
     const html = solid();
     const root = classOf(html, 'data-list-card=""');
     for (const c of LIST_CARD_SOLID.split(' ')) expect(root).toContain(c);
@@ -545,6 +586,16 @@ describe('ListCard solid + count (11 Nov 2026)', () => {
     expect(classOf(html, 'data-list-card-preview=""')).toContain('text-accent-fg');
     expect(classOf(html, 'data-list-card-preview=""')).not.toContain('text-fg-2');
     expect(html).toContain('data-list-card-solid=""');
+  });
+
+  it('solid tile and count stay on the row centre under 768 (the body is top-aligned there)', () => {
+    const html = solid();
+    expect(LIST_CARD_SOLID_PICTURE).toBe('self-center');
+    expect(classOf(html, 'data-list-card-picture=')).toContain('self-center');
+    expect(LIST_CARD_COUNT.split(' ')).toContain('self-center');
+    expect(classOf(html, 'data-list-card-count=""')).toContain('self-center');
+    // A plain row's picture hangs from the title line: no self-center.
+    expect(classOf(render(), 'data-list-card-picture=')).not.toContain('self-center');
   });
 
   it('solid picture tile: bg-panel with an fg icon in the rounded-picture box', () => {
@@ -574,7 +625,7 @@ describe('ListCard solid + count (11 Nov 2026)', () => {
     expect(html).not.toContain('data-list-card-tag');
     expect(html).not.toContain('data-list-card-unread');
     expect(html).toMatch(
-      /data-list-card-count="" aria-hidden="true" class="flex shrink-0 items-center"><span data-count-badge="on-fill"[^>]*>7<\/span><\/span><\/div><\/div>$/,
+      /data-list-card-count="" aria-hidden="true" class="flex shrink-0 items-center self-center"><span data-count-badge="on-fill"[^>]*>7<\/span><\/span><\/div><\/div>$/,
     );
     expect(solid({ count: 150 })).toContain('>99+</span>');
   });

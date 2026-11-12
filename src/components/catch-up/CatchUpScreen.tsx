@@ -95,9 +95,14 @@ import { firstName } from '@/components/catch-up/CatchUpRows';
 /** Move this far (px) before a press becomes a swipe (or a scroll, if it went up or down first). */
 const SWIPE_START_PX = 10;
 
+/**
+ * The page edge: 16 on a phone (12 Nov 2026: the bar's keys, the card and the
+ * two buttons share the app's 16 gutter), 12 from 768 up as before.
+ */
+export const CATCH_UP_EDGE = 'px-4 md:px-3';
+
 /** The bar: 64 tall under the safe area, on the page tone, no hairline and no shade. */
-export const CATCH_UP_BAR_CLASS =
-  'flex h-[calc(4rem+var(--shell-safe-top,0px))] shrink-0 items-center gap-2 px-3 pt-[var(--shell-safe-top,0px)]';
+export const CATCH_UP_BAR_CLASS = `flex h-[calc(4rem+var(--shell-safe-top,0px))] shrink-0 items-center gap-2 ${CATCH_UP_EDGE} pt-[var(--shell-safe-top,0px)]`;
 
 /** The bar's round 48 keys (soft grey fill): "<" and Undo. */
 export const CATCH_UP_ROUND_KEY = 'h-12 w-12 rounded-full bg-fg/10';
@@ -812,7 +817,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
     body = (
       <>
         <div
-          className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-1"
+          className={cn('flex min-h-0 flex-1 flex-col pb-3 pt-1', CATCH_UP_EDGE)}
           aria-hidden={inThread || undefined}
         >
           <CatchUpCard
@@ -920,7 +925,8 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         >
           {inThread && thread !== null ? (
             <>
-              <div className="flex h-14 shrink-0 items-center gap-2 px-2">
+              {/* Phone: the round key sits on the sheet's 16 edge; laptop: 8, as before. */}
+              <div className="flex h-14 shrink-0 items-center gap-2 px-4 md:px-2">
                 <IconButton
                   label="Back to the card"
                   data-catch-up-thread-back=""
@@ -961,7 +967,10 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
           {!phoneTyping ? (
             <div
               data-catch-up-actions=""
-              className="grid shrink-0 grid-cols-2 gap-3 px-3 pb-[max(16px,env(safe-area-inset-bottom))]"
+              className={cn(
+                'grid shrink-0 grid-cols-2 gap-3 pb-[max(16px,env(safe-area-inset-bottom))]',
+                CATCH_UP_EDGE,
+              )}
             >
               <Button
                 type="button"

@@ -62,8 +62,8 @@ describe('ChannelList on ui/ListCard', () => {
   it('group and people chats render [data-list-card] with the 48 picture (40 Compact), no dividers', () => {
     const out = list();
     expect(out.match(/data-list-card=""/g)).toHaveLength(3);
-    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-12 w-12/);
-    expect(out).toContain('h-12 w-12');
+    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*md:h-12 md:w-12/);
+    expect(out).toContain('md:h-12 md:w-12');
     expect(out).not.toContain('data-row-divider');
   });
 

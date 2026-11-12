@@ -229,7 +229,7 @@ for (const photo of [true, false]) {
     await page.goto('/chat');
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
-    // The notes row is ui/ListCard's person slot at 48 in Cozy (ui/Avatar 'card'):
+    // The notes row is ui/ListCard's person slot (ui/Avatar 'card'), 48 from 768 and 36 under it:
     // the user's own photo, a rounded square (L2); their initials (no image) without one.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
@@ -239,7 +239,8 @@ for (const photo of [true, false]) {
       const box = await picture.boundingBox();
       return `${Math.round(box?.width ?? 0)}x${Math.round(box?.height ?? 0)}`;
     };
-    await expect.poll(size).toBe('48x48');
+    const side = (page.viewportSize()?.width ?? 0) < 768 ? 36 : 48;
+    await expect.poll(size).toBe(`${side}x${side}`);
     const tileAvatar = tile.locator('[data-avatar-role="card"]');
     // L2: people are rounded squares like groups.
     await expect(tileAvatar).toHaveClass(/rounded-lg/);

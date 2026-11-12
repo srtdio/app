@@ -13,10 +13,35 @@ export const CHAT_GUTTER = 'px-3';
  * Applied by the parts (ActionMenuTrigger, HeaderBar, Row, Card, Sheet), never
  * at a call site (eslint designRules: no negative-margin IconButton).
  */
-export const TRAILING_PULL = '-mr-3';
+export const TRAILING_PULL = '-mr-3 max-md:[&>svg]:translate-x-[var(--ink-r,0px)]';
 
 /** The leading mirror of the trailing rule (a back "<" or close X on the left edge). */
-export const LEADING_PULL = '-ml-3';
+export const LEADING_PULL = '-ml-3 max-md:[&>svg]:-translate-x-[var(--ink-l,0px)]';
+
+/*
+ * Ink on the edge (12 Nov 2026, phone only). A glyph's drawn shapes sit inside
+ * its box (a chevron's ink starts 6 in, three dots 8 in), so the pull alone
+ * leaves the visible ink off the 16 edge. Every icon (ui/icons) carries its
+ * ink inset as --ink-l / --ink-r; the pulls above slide the glyph by it, so
+ * the visible ink sits on the content edge. The 44 hit box never moves or
+ * shrinks. From 768 up nothing moves. INK_LEADING / INK_TRAILING are the same
+ * slide for a part that pulls its key through a child selector.
+ */
+export const INK_LEADING = 'max-md:[&>svg]:-translate-x-[var(--ink-l,0px)]';
+export const INK_TRAILING = 'max-md:[&>svg]:translate-x-[var(--ink-r,0px)]';
+/** The trailing slide from a slot that pulls its child key (`[&>button]:-mr-3`: Row, Card). */
+export const INK_TRAILING_CHILD = 'max-md:[&>button>svg]:translate-x-[var(--ink-r,0px)]';
+/** The same for a slot that pulls only its last 44 key (HeaderBar actions, Toolbar icons). */
+export const INK_TRAILING_LAST =
+  'max-md:[&>button.w-11:last-child>svg]:translate-x-[var(--ink-r,0px)]';
+
+/**
+ * A bar title beside a pulled leading 44 key (back "<", close) on phone: 8
+ * more, so the title starts on the 64 text column (16 - 12 + 44 + 8 + 8),
+ * above the names and list text. Goes on the title column of a bar whose
+ * items are 8 apart (gap-2). From 768 up: nothing.
+ */
+export const BAR_TITLE_AFTER_KEY = 'max-md:ml-2';
 
 /** A 44 control inside a shorter line keeps its box without growing the line. */
 export const CONTROL_IN_LINE = '-my-3';
@@ -56,14 +81,22 @@ export const LANE_STRIP = 'mx-3 mb-2';
  * src/__tests__/named-sizes.test.ts proves each part's class equals its constant.
  */
 
-/** A list row (ui/ListCard): 12 + 48 + 12. */
+/** A list row (ui/ListCard) from 768 up: 12 + 48 + 12. */
 export const ROW_HEIGHT = 72;
-/** The list row picture box and Avatar 'card'. */
+/** The list row picture box and Avatar 'card' from 768 up. */
 export const ROW_PICTURE = 48;
-/** The list row's top and bottom inset. */
+/** The list row's top and bottom inset from 768 up. */
 export const ROW_INSET = 12;
-/** The row's text column x: picture 48 + its 12 gap (Activity sub rows). */
+/** The row's text column x from 768 up: picture 48 + its 12 gap (Activity sub rows). */
 export const ROW_TEXT_START = 60;
+/** A list row under 768 (12 Nov 2026): 8 + 44 + 8, the thread's picture and column. */
+export const ROW_HEIGHT_PHONE = 60;
+/** The list row picture box and Avatar 'card' under 768: the message photo's 36. */
+export const ROW_PICTURE_PHONE = 36;
+/** The list row's top and bottom inset under 768; the picture's top is the title line's top. */
+export const ROW_INSET_PHONE = 8;
+/** The row's text column x under 768: picture 36 + its 12 gap (screen x 64, a message's column). */
+export const ROW_TEXT_START_PHONE = 48;
 /** A chip's visible face height (ui/Chip CHIP_FACE_SIZE). */
 export const CHIP_FACE = 36;
 /** A chip's tap height. */
@@ -95,3 +128,18 @@ export const SCREEN_GUTTER_LAPTOP = 24;
  * photo lands on the page edge (GUTTER) on phone and laptop.
  */
 export const PAGE_BLEED = '-mx-4';
+
+/*
+ * Phone-only paddings (12 Nov 2026), named so a page or chat file never writes
+ * a new padding class for them. From 768 up they do nothing.
+ */
+/** A text button that must keep its whole label in a narrow row: 8 side padding. */
+export const PHONE_PAD_TIGHT = 'max-md:px-2';
+/** A row or bar that sits on the 16 page edge on phone. */
+export const PHONE_PAD_EDGE = 'max-md:px-4';
+/** The same, trailing side only. */
+export const PHONE_PAD_EDGE_R = 'max-md:pr-4';
+/** A row inside a 16 inset that must not add its own: flush on phone. */
+export const PHONE_PAD_FLUSH = 'max-md:px-0';
+/** Sub rows under a message photo: the 64 column on phone (36 + 12), 44 from 768. */
+export const SUB_ROW_TEXT_INSET = 'pl-12 md:pl-11';

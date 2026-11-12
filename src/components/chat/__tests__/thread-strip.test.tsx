@@ -72,7 +72,8 @@ describe('RepliesSeparatorRow: the one strip', () => {
   });
 
   it('the strip label sits on the 16 gutter (rule 1 exception); replies on the 60 text column', () => {
-    expect(THREAD_STRIP_COLUMNS.chat).toEqual({ x: 'px-4', gap: 'gap-2' });
+    // Phone: 12 after the 36 icon column ("Reply in thread" on 64); laptop 8.
+    expect(THREAD_STRIP_COLUMNS.chat).toEqual({ x: 'px-4', gap: 'gap-2 max-md:gap-3' });
     expect(THREAD_STRIP_COLUMNS['catch-up']).toEqual({ x: 'px-4', gap: 'gap-3' });
     // Replies: chat 'px-4' + 32 + gap-3 (threadPlace 'reply'); catch up px-4 + 32 + gap-3.
     expect(src('components/chat/MessageBubble.tsx')).toContain("replyPlace && 'gap-3'");

@@ -49,6 +49,21 @@ describe('Toast', () => {
     expect(text).toContain('from Alex');
   });
 
+  it('phone: the title wraps to two lines beside Clear; from 768 it stays one line', () => {
+    const tree = Toast({
+      toast: { ...base, title: 'Briefs come from approvers.' },
+      onDismiss: () => {},
+    });
+    const [title] = findAll(
+      tree,
+      (el) => (el.props as { 'data-toast-title'?: string })['data-toast-title'] === '',
+    );
+    const cls = (title!.props as { className: string }).className;
+    expect(cls).toContain('truncate');
+    expect(cls).toContain('max-md:line-clamp-2');
+    expect(cls).toContain('max-md:whitespace-normal');
+  });
+
   it('fires onPress when the content area is tapped', () => {
     const onPress = vi.fn();
     const tree = Toast({ toast: { ...base, onPress }, onDismiss: () => {} });

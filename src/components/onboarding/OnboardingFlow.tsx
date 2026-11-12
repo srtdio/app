@@ -50,7 +50,7 @@ import { PlatformMark } from '@/components/ui/PlatformMark';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Select } from '@/components/ui/Select';
 import { Sheet } from '@/components/ui/Sheet';
-import { LEADING_PULL } from '@/components/ui/layout';
+import { GUTTER, LEADING_PULL } from '@/components/ui/layout';
 import { Text } from '@/components/ui/Text';
 import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
@@ -843,7 +843,7 @@ export function OnboardingFlow({
             <Avatar role="profile" />
           )}
           <div className="flex min-w-0 flex-col gap-1">
-            <Button onClick={() => photoInputRef.current?.click()}>
+            <Button onClick={() => photoInputRef.current?.click()} className={LABEL_WRAPS}>
               {photoPreview !== null ? ONBOARDING_COPY.changePhoto : ONBOARDING_COPY.addPhoto}
             </Button>
             <p className="text-base text-fg">{ONBOARDING_COPY.photoHint}</p>
@@ -1081,7 +1081,10 @@ export function OnboardingFlow({
           paddingRight: 'env(safe-area-inset-right)',
         }}
       >
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6">
+        {/* The page edge (GUTTER): 16 under 768, 24 from it. The wordmark, the
+            card and the Back key's ink (LEADING_PULL: -12 + the 44 box's 12 to
+            its 20 glyph, less the glyph's ink inset) all start on it. */}
+        <div className={cn('mx-auto flex w-full max-w-md flex-1 flex-col', GUTTER)}>
           <header className="flex min-h-14 items-center justify-between pt-2">
             {canGoBack ? (
               <IconButton type="button" onClick={back} label="Back" className={LEADING_PULL}>
@@ -1315,7 +1318,15 @@ function Primary({
   );
 }
 
-/** A secondary way on, as a 44px text button under the primary. */
+/**
+ * Under 768 a long label wraps onto a second centred line instead of being cut
+ * ("Not you? Sign in with a different email", "Add a photo (optional)"): the
+ * button keeps its 44 minimum and its 12 above and below, and grows by the
+ * extra line. From 768 up: nothing (one line, 44).
+ */
+export const LABEL_WRAPS = 'max-md:h-auto max-md:whitespace-normal max-md:[text-wrap:balance]';
+
+/** A secondary way on, as a text button under the primary: 44 tall, taller when its label wraps. */
 function TextAction({
   disabled,
   onClick,
@@ -1331,7 +1342,7 @@ function TextAction({
       variant="link"
       disabled={disabled}
       onClick={onClick}
-      className="w-full hover:underline md:w-full"
+      className={cn('w-full hover:underline md:w-full', LABEL_WRAPS)}
     >
       {children}
     </Button>

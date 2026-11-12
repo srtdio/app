@@ -1,12 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ONBOARDING_NOW } from './onboarding-steps';
+import { assertPhoneRules, PHONE_PART_RULES } from './layout-checks-phone';
 import { recordScreenFiles, settle, stabilise } from './shared';
 
 // Parts gallery (e2e/gallery): one full-page shot per registered ui part at
 // /gallery/<Part>, every state and awkward case in one page (the register is
 // e2e/gallery/register.ts). Runs in iphone-light, iphone-dark, laptop-light,
 // laptop-dark (@laptop-dark) and chrome-phone (@gallery, Chromium Pixel 7);
-// never in the ipad-* projects. Same fixed clock, settle and screen-to-files
+// never in the ipad-* projects. phone-360 and phone-320 run its checks with
+// no shot. Same fixed clock, settle and screen-to-files
 // fragment as screens.spec.ts. One line per screen: a changed line selects
 // that screen only (scripts/ci/visual-select.ts). The list matches PARTS in
 // the register (guard: src/__tests__/gallery-register.test.ts).
@@ -97,12 +99,17 @@ for (const screen of GALLERY) {
     const shape = await overflowOf(page);
     expect.soft(shape.page, 'page wider than the viewport').toBeLessThanOrEqual(shape.viewport);
     expect.soft(shape.over, 'cell content wider than its cell').toEqual([]);
-    await expect.soft(page).toHaveScreenshot(`${screen.name}.png`, {
-      fullPage: true,
-      maxDiffPixelRatio: 0.002,
-      animations: 'disabled',
-      caret: 'hide',
-    });
+    // The phone rules a part answers to (layout-checks-phone.ts), under 768 wide.
+    await assertPhoneRules(page, screen.name, PHONE_PART_RULES);
+    // The phone-* projects run the checks only: no shot, no baseline.
+    if (!test.info().project.name.startsWith('phone-')) {
+      await expect.soft(page).toHaveScreenshot(`${screen.name}.png`, {
+        fullPage: true,
+        maxDiffPixelRatio: 0.002,
+        animations: 'disabled',
+        caret: 'hide',
+      });
+    }
     map.write(screen.name);
     expect(blocked, 'blocked non-fixture requests').toEqual([]);
   });

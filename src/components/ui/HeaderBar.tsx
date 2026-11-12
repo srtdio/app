@@ -3,7 +3,12 @@ import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
-import { GUTTER, LEADING_PULL } from '@/components/ui/layout';
+import {
+  BAR_TITLE_AFTER_KEY,
+  GUTTER,
+  INK_TRAILING_LAST,
+  LEADING_PULL,
+} from '@/components/ui/layout';
 import { PINNED_BAR_TOP_CLASS } from '@/lib/scroll-mode';
 
 export interface HeaderBarProps {
@@ -49,6 +54,11 @@ export interface HeaderBarProps {
    * title role. Default: the plain h1.
    */
   titleSlot?: ReactNode;
+  /**
+   * Phone only: a title that must be read whole (a question, a rule) wraps to
+   * two lines inside the 56 bar instead of cutting. Default false: one line.
+   */
+  titleWraps?: boolean;
   /** Hooks on the title column (data-* and tabIndex for a panel's focus target). Behaviour only. */
   titleProps?: {
     tabIndex?: number;
@@ -78,8 +88,8 @@ export interface HeaderBarProps {
 
 /**
  * The one header bar: 56 (64 laptop), gutter 16/24. Leading 44: back "<" when
- * pushed (pulled out by 12 so the glyph sits on the edge), the workspace mark
- * at root. Title one line. Trailing up to two IconButtons + ⋯ last. Glyphs 20.
+ * pushed (pulled out by 12 so the glyph sits on the edge; on phone its ink is
+ * on 16 and the title starts at 64), the workspace mark at root. Title one line. Trailing up to two IconButtons + ⋯ last. Glyphs 20.
  */
 export function HeaderBar({
   title,
@@ -92,6 +102,7 @@ export function HeaderBar({
   compact = false,
   routeFocus = false,
   titleSlot,
+  titleWraps = false,
   titleProps,
   overlay,
   barRef,
@@ -134,13 +145,22 @@ export function HeaderBar({
         {...titleProps}
         className={cn(
           'flex min-w-0 flex-1 flex-col',
+          // Beside the back "<" the title starts on the 64 text column (phone).
+          onBack !== undefined && BAR_TITLE_AFTER_KEY,
           titleProps?.tabIndex !== undefined && 'rounded-lg focus:outline-none',
         )}
       >
         {titleSlot ?? (
           <h1
             {...(routeFocus ? { tabIndex: -1 } : {})}
-            className={textRole('title', cn('truncate', routeFocus && 'focus:outline-none'))}
+            className={textRole(
+              'title',
+              cn(
+                'truncate',
+                titleWraps && 'max-md:line-clamp-2 max-md:whitespace-normal',
+                routeFocus && 'focus:outline-none',
+              ),
+            )}
           >
             {title}
           </h1>
@@ -155,7 +175,11 @@ export function HeaderBar({
         <div
           data-header-actions=""
           // The trailing rule pulls only a 44 icon box (w-11); a text action keeps its text on the edge (L6).
-          className="flex shrink-0 items-center gap-0 [&>button.w-11:last-child]:-mr-3"
+          // On phone the last key's glyph slides so its ink sits on the edge (INK_TRAILING_LAST).
+          className={cn(
+            'flex shrink-0 items-center gap-0 [&>button.w-11:last-child]:-mr-3',
+            INK_TRAILING_LAST,
+          )}
         >
           {actions}
         </div>

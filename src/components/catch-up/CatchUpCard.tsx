@@ -386,7 +386,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
             </IconButton>
           ) : null}
         </span>
-        <span className="flex min-w-0 flex-1 justify-center">
+        {/* The menu's opener wrappers may shrink, so a long title ends in "…"
+            inside the row instead of running past the card's edge. */}
+        <span className="flex min-w-0 flex-1 justify-center [&>span>span]:min-w-0 [&>span]:min-w-0">
           <ActionMenu
             title={props.menu.title}
             items={props.menu.items}
@@ -438,7 +440,9 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           <Text
             role="secondary"
             data-catch-up-tip-text=""
-            className={cn('min-w-0', sized(TIP_LINE_TYPE, layout))}
+            // Phone: the words wrap to a second line (never cut, never under
+            // "Got it"); laptop keeps the one line.
+            className={cn('min-w-0', sized(TIP_LINE_TYPE, layout), 'max-md:whitespace-normal')}
           >
             {props.tip.text}
           </Text>

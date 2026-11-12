@@ -67,7 +67,7 @@ import {
 import { currentOrigin } from '@/lib/chat/message-links';
 import { bodyLinkClass, markSearchWords, renderMessageBody } from '@/components/chat/message-body';
 import { Avatar } from '@/components/ui/Avatar';
-import { LANE_BOTTOM_CLEAR, LANE_TOP_CLEAR } from '@/components/ui/layout';
+import { LANE_BOTTOM_CLEAR, LANE_TOP_CLEAR, LEADING_PULL } from '@/components/ui/layout';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
@@ -3609,6 +3609,24 @@ export function olderLoadErrorRow(onRetry: () => void): ReactElement {
  * no blur, no opacity. 0px tall where there is no inset (laptop, Playwright).
  * Phone only (src/lib/bar-tint.ts).
  */
+/**
+ * The conversation bar's side padding. Phone (12 Nov 2026): the 16 page edge,
+ * so the pulled back key's ink lands on 16; select mode keeps the 8 its count
+ * line is built on. Laptop: HEADER_PAD, unchanged.
+ */
+export function threadHeaderPad(layout: ChatLayout, selecting: boolean): string {
+  return layout === 'touch' && !selecting ? 'px-4' : sized(HEADER_PAD, layout);
+}
+
+/**
+ * The conversation bar's back key on phone: the leading rule (box at 4, its
+ * 20 glyph box at 16, the ink slid onto 16) and 4 after it, so with the bar's
+ * 12 gap the photo starts on the 64 column (4 + 44 + 4 + 12). Laptop: nothing.
+ */
+export function threadBackKey(layout: ChatLayout): string | undefined {
+  return layout === 'touch' ? `${LEADING_PULL} mr-1` : undefined;
+}
+
 export function ThreadTopStrip({ layout }: { layout: ChatLayout }): ReactElement | null {
   if (layout === 'laptop') return null;
   return (
@@ -3635,11 +3653,15 @@ export function threadOpeningSkeleton(
       <div
         className={cn(
           'flex h-14 shrink-0 items-center gap-3 border-b bg-panel lit-header',
-          sized(HEADER_PAD, layout),
+          threadHeaderPad(layout, false),
         )}
       >
         {onBack !== undefined ? (
-          <IconButton label="Back to conversations" onClick={onBack}>
+          <IconButton
+            label="Back to conversations"
+            onClick={onBack}
+            className={threadBackKey(layout)}
+          >
             <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
@@ -5752,7 +5774,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       <div
         className={cn(
           'flex h-14 shrink-0 items-center gap-3 border-b bg-panel lit-header',
-          sized(HEADER_PAD, layout),
+          threadHeaderPad(layout, selecting),
         )}
       >
         {selecting ? (
@@ -5767,7 +5789,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         ) : (
           <>
             {props.onBack !== undefined ? (
-              <IconButton label="Back to conversations" onClick={props.onBack}>
+              <IconButton
+                label="Back to conversations"
+                onClick={props.onBack}
+                className={threadBackKey(layout)}
+              >
                 <IconChevronLeft size={ICON_SIZE.control} />
               </IconButton>
             ) : null}

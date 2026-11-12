@@ -269,9 +269,10 @@ test('fix 6 and 30 on ui/ListCard: a brief row shows the brief icon picture; del
   await expect(briefPicture).toBeVisible();
   const briefBox = await briefPicture.boundingBox();
   if (briefBox === null) throw new Error('brief picture has no box');
-  // The row picture is 48 (ROW_PICTURE).
-  expect(Math.round(briefBox.width)).toBe(48);
-  expect(Math.round(briefBox.height)).toBe(48);
+  // The row picture is 48 from 768 (ROW_PICTURE), 36 under it (ROW_PICTURE_PHONE).
+  const rowPicture = (page.viewportSize()?.width ?? 0) < 768 ? 36 : 48;
+  expect(Math.round(briefBox.width)).toBe(rowPicture);
+  expect(Math.round(briefBox.height)).toBe(rowPicture);
   await expect(brief.locator('[data-activity-scope-tag]')).toHaveText('Brief');
 
   const files = card(page, 'assets_deleted');
@@ -324,10 +325,12 @@ test(
     expect(labelType.weight).toBe('600');
     expect(labelType.transform).toBe('uppercase');
 
-    // ui/ListCard: the preview is the secondary role (13/18).
+    // ui/ListCard: the preview is the secondary role (15/20 under 768, 13/18 from 768).
     const body = mention.locator('[data-list-card-preview]').first();
     await expect(body).toContainText(MENTION_PREVIEW);
-    expect((await typeOf(body)).size).toBe('13px');
+    expect((await typeOf(body)).size).toBe(
+      (page.viewportSize()?.width ?? 0) < 768 ? '15px' : '13px',
+    );
 
     const meta = mention.locator('[data-activity-time]').first();
     expect((await typeOf(meta)).size).toBe('12px');

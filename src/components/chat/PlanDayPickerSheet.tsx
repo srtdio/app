@@ -237,7 +237,8 @@ export function PlanDatesSheet(props: {
     >
       <div className="flex flex-col gap-3">
         <p className="-mt-1 text-md text-fg-3">{PLAN_DATES_HINT}</p>
-        <div className="grid grid-cols-2 gap-2">
+        {/* Phone: From over To, so a whole date ("25 Oct 2026") fits at 320. */}
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {(
             [
               ['startsOn', 'From'],
@@ -250,6 +251,7 @@ export function PlanDatesSheet(props: {
               </span>
               <DatePicker
                 label={label}
+                short
                 value={draft[field]}
                 onChange={(value) => {
                   setDraft((r) => ({ ...r, [field]: value }));

@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { SHEET_FRAME, SHEET_WIDE } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
-import { LEADING_PULL } from '@/components/ui/layout';
+import { BAR_TITLE_AFTER_KEY, LEADING_PULL } from '@/components/ui/layout';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
@@ -156,7 +156,9 @@ export function ComposerSheet({
       >
         <div
           data-composer-header=""
-          className="flex min-w-0 items-center gap-2 border-b border-border px-4 py-2 sm:gap-3"
+          // Phone: the save buttons keep whole labels; only when they cannot
+          // sit beside the "<" (320 wide) they drop to their own line, right.
+          className="flex min-w-0 items-center gap-2 border-b border-border px-4 py-2 max-md:flex-wrap sm:gap-3"
         >
           {/* The one exit: "<" back leading, pulled out by 12 (LEADING_PULL). */}
           <IconButton
@@ -172,10 +174,16 @@ export function ComposerSheet({
           >
             <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
-          <Text as="h2" role="title" className="min-w-0 flex-1 truncate text-fg">
+          {/* Phone: the title starts on the 64 column and takes the room the
+              buttons leave, cut with an ellipsis. */}
+          <Text
+            as="h2"
+            role="title"
+            className={cn('min-w-0 flex-1 truncate text-fg', BAR_TITLE_AFTER_KEY)}
+          >
             {title}
           </Text>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">{actions}</div>
+          <div className="flex shrink-0 items-center gap-2 max-md:ml-auto sm:gap-3">{actions}</div>
         </div>
         <div className="overflow-y-auto px-4 py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
           {children}

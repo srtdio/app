@@ -42,6 +42,7 @@ import { Button } from '@/components/ui/Button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { IconDownload, IconFile, ICON_SIZE } from '@/components/ui/icons';
 import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
+import { INK_LEADING, INK_TRAILING_LAST } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
@@ -1163,9 +1164,16 @@ function TopBar(props: {
       className={cn(
         'relative z-raised flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)]',
         NO_SELECT,
+        // Phone: the 44 keys sit 4 in (glyph boxes on 16); Back's ink and the
+        // last key's ink slide onto the 16 edges.
+        INK_TRAILING_LAST,
       )}
     >
-      <ViewerBackButton buttonRef={props.closeRef} onClick={props.onClose} className={tone.bar} />
+      <ViewerBackButton
+        buttonRef={props.closeRef}
+        onClick={props.onClose}
+        className={cn(tone.bar, INK_LEADING)}
+      />
       <div className="min-w-0 flex-1 px-1 text-center">
         <p
           data-viewer-bar-title=""
@@ -1458,7 +1466,11 @@ export function FileViewerFallback(props: {
       className={cn('fixed inset-0 z-viewer flex flex-col', tone.backdrop, NO_SELECT)}
     >
       <div className="flex shrink-0 items-center px-1 pt-[max(env(safe-area-inset-top),4px)]">
-        <ViewerBackButton buttonRef={closeRef} onClick={props.onClose} className={tone.bar} />
+        <ViewerBackButton
+          buttonRef={closeRef}
+          onClick={props.onClose}
+          className={cn(tone.bar, INK_LEADING)}
+        />
       </div>
       <div className="flex flex-1 items-center justify-center">
         <ViewerError

@@ -75,9 +75,12 @@ export const CHIP_PICKED_EDGE = 'border-fg text-fg';
  * padding), so a chip row keeps its 44 height. At least 44 wide too (a short
  * label like "All" stretches the face to 44), a full pill like the face. Its
  * focus line is drawn on the visible chip, the box's one child span.
+ * Under 768 (12 Nov 2026) a chip never shrinks in its row (max-md:shrink-0):
+ * its label stays whole and the row scrolls or wraps; it is still never wider
+ * than its row (max-w-full), where the label's ellipsis is the last resort.
  */
 export const CHIP_HIT =
-  'group relative inline-flex min-h-11 min-w-11 max-w-full items-center rounded-full outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default aria-disabled:cursor-default';
+  'group relative inline-flex min-h-11 min-w-11 max-w-full items-center rounded-full outline-none max-md:shrink-0 [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default aria-disabled:cursor-default';
 
 /**
  * Switched off (11 Nov 2026), the one look: fg-3 ink and the grey edge (the
@@ -87,7 +90,7 @@ export const CHIP_HIT =
 export const CHIP_DISABLED =
   'group-disabled:border-border-strong group-disabled:text-fg-3 group-aria-disabled:border-border-strong group-aria-disabled:text-fg-3';
 
-/** The label: one line, cut with an ellipsis; the chip never grows past its row. */
+/** The label: one line; cut with an ellipsis only when the chip alone is wider than its row. */
 export const CHIP_LABEL = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap';
 
 /** A call site's layout classes that also apply to the tap box (it sits in their row). */

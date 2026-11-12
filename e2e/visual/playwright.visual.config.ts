@@ -22,6 +22,12 @@ import { defineConfig, devices } from '@playwright/test';
 // The parts gallery (gallery.spec.ts, @gallery @laptop-dark) runs in the
 // iphone-* and laptop-* projects, never in ipad-*, and alone in chrome-phone
 // (Chromium, Pixel 7, light): no other screen runs in Chromium.
+// Plus two narrow phones, phone-360 and phone-320 (iPhone 13 at 360 and 320
+// wide, light): they run every layout check of screens.spec.ts and
+// gallery.spec.ts (the phone rules, layout-checks-phone.ts, among them) and
+// take NO screenshot (the specs skip toHaveScreenshot for a project named
+// phone-*), so they have no folder under __screenshots__, never take part in
+// a baseline refresh and never run emails.spec.ts.
 // VISUAL_PORT picks the harness port (default 4195).
 const isCI = process.env.CI === 'true';
 const port = Number(process.env.VISUAL_PORT ?? 4195);
@@ -31,6 +37,11 @@ const port = Number(process.env.VISUAL_PORT ?? 4195);
 const stable = { timezoneId: 'UTC', locale: 'en-US' } as const;
 
 const phone = { ...devices['iPhone 13'], ...stable } as const;
+/** A narrow phone: the iPhone 13 settings at another width, its height kept. */
+const phoneAt = (width: number) =>
+  ({ ...phone, viewport: { width, height: phone.viewport.height } }) as const;
+/** The specs whose layout checks the phone-* projects run (no shot is taken). */
+const CHECKS_ONLY = ['screens.spec.ts', 'gallery.spec.ts'];
 const laptop = {
   ...stable,
   browserName: 'webkit',
@@ -94,6 +105,18 @@ export default defineConfig({
     { name: 'ipad-landscape-light', use: { ...landscape, colorScheme: 'light' }, grep: TABLET },
     { name: 'ipad-landscape-dark', use: { ...landscape, colorScheme: 'dark' }, grep: TABLET },
     { name: 'chrome-phone', use: { ...chromePhone, colorScheme: 'light' }, grep: /@gallery/ },
+    {
+      name: 'phone-360',
+      use: { ...phoneAt(360), colorScheme: 'light' },
+      testMatch: CHECKS_ONLY,
+      grepInvert: TABLET,
+    },
+    {
+      name: 'phone-320',
+      use: { ...phoneAt(320), colorScheme: 'light' },
+      testMatch: CHECKS_ONLY,
+      grepInvert: TABLET,
+    },
   ],
   webServer: {
     command: `pnpm exec vite --config e2e/harness/vite.config.ts --port ${port} --strictPort`,

@@ -1,3 +1,4 @@
+import { PHONE_PAD_TIGHT } from '@/components/ui/layout';
 import { mark } from '@/lib/perf-marks';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, MutableRefObject, ReactElement } from 'react';
@@ -1315,7 +1316,8 @@ export function CreatePostSheet({
     <>
       <Button
         variant="secondary"
-        className="shrink-0"
+        // Phone: 8 side padding, so both labels stay whole beside the title.
+        className={cn('shrink-0', PHONE_PAD_TIGHT)}
         data-submit="draft"
         onClick={() => void handleSubmit('draft')}
         busy={submitMode === 'draft'}
@@ -1336,7 +1338,7 @@ export function CreatePostSheet({
       </Button>
       <Button
         variant="primary"
-        className="shrink-0"
+        className={cn('shrink-0', PHONE_PAD_TIGHT)}
         data-submit="review"
         onClick={() => void handleSubmit('review')}
         busy={submitMode === 'review'}

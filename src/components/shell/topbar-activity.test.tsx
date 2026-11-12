@@ -29,7 +29,7 @@ import {
 import { ListScreen } from '@/components/shell/ListScreen';
 import { TopbarSlots } from '@/components/shell/Topbar';
 import { LIST_CARD_GRID, LIST_CARD_SOLID_GROUP } from '@/components/ui/ListCard';
-import { ROW_HEIGHT } from '@/components/ui/layout';
+import { ROW_HEIGHT, ROW_HEIGHT_PHONE } from '@/components/ui/layout';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -146,12 +146,18 @@ describe('a row shows only while its count is above 0', () => {
 });
 
 describe('the rows are ui/ListCard solid rows', () => {
-  it('72 tall, ink fill, the words, the count pill on-fill at the right edge', async () => {
+  it('72 tall (60 under 768), ink fill, the words, the count pill on-fill at the right edge', async () => {
     await mount(rows({ unread: 7, threads: 150 }));
     const [catchUpRow, threadsRow] = solidRows();
     for (const row of [catchUpRow, threadsRow]) {
       const cls = (row?.className ?? '').split(/\s+/);
-      expect(cls).toContain(`h-${ROW_HEIGHT / 4}`);
+      expect(cls).toContain(`md:h-${ROW_HEIGHT / 4}`);
+      expect(cls).toContain(`h-${ROW_HEIGHT_PHONE / 4}`);
+      // Under 768 the body is top-aligned: the tile and the count centre themselves.
+      const centred = (q: string): boolean =>
+        (row?.querySelector(q)?.className ?? '').split(/\s+/).includes('self-center');
+      expect(centred('[data-list-card-picture]')).toBe(true);
+      expect(centred('[data-list-card-count]')).toBe(true);
       expect(cls).toEqual(expect.arrayContaining(['bg-accent', 'text-accent-fg', '-mx-4', 'px-4']));
       expect(cls).toContain('hover:bg-accent-hover');
       expect(cls).toContain('select-none');

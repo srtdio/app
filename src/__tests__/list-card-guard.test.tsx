@@ -2,9 +2,11 @@
 // 1. No ListCard caller passes a menu: no `menu` / `check` prop on <ListCard>,
 //    and no ActionMenu / ActionMenuTrigger / ⋮ glyph inside a <ListCard>'s
 //    props. A card's actions live on its list's select bar (ui/SelectBar).
-// 2. Every row is 72 (ROW_HEIGHT; one size since 10 Nov 2026): h-18, py-3,
-//    the 48 picture; the two 20 text lines (and the 4 between, 44) fit inside
-//    the picture + padding. The frame is flat: no border,
+// 2. Every row is 72 from 768 (ROW_HEIGHT): md:h-18, md:py-3, the 48 picture;
+//    the two 20 text lines (and the 4 between, 44) fit inside the picture +
+//    padding. Under 768 (12 Nov 2026) every row is 60 (ROW_HEIGHT_PHONE):
+//    h-15, py-2, the 44 text column fills it and the 36 picture hangs from
+//    the title line's top. The frame is flat: no border,
 //    no radius, no lit height, no clip; it bleeds -mx-4 / px-4 so the selected
 //    and pressed fill runs edge to edge.
 //    The real measure runs in e2e/visual/layout-checks.ts (listCardHeight).
@@ -19,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ListCard, ListCardBox, listCardFrame, type ListCardProps } from '@/components/ui/ListCard';
 import { IconBriefs } from '@/components/ui/icons';
-import { ROW_HEIGHT } from '@/components/ui/layout';
+import { ROW_HEIGHT, ROW_HEIGHT_PHONE, ROW_PICTURE_PHONE } from '@/components/ui/layout';
 import tailwindConfig from '../../tailwind.config';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -111,7 +113,7 @@ const cls = (html: string, attr: string): string[] =>
   (new RegExp(`<[a-z]+[^>]*${attr}[^>]*class="([^"]*)"`).exec(html)?.[1] ?? '').split(' ');
 const pick = (list: string[], re: RegExp): string => list.find((c) => re.test(c)) ?? '';
 
-describe('guard: every row is 72 (ROW_HEIGHT)', () => {
+describe('guard: every row is 72 from 768 (ROW_HEIGHT) and 60 under it (ROW_HEIGHT_PHONE)', () => {
   const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
   const padding = tailwindConfig.theme?.extend?.padding as Record<string, string>;
   const px = (token: string, prefix: string): number => {
@@ -119,19 +121,35 @@ describe('guard: every row is 72 (ROW_HEIGHT)', () => {
     return parseFloat(spacing[key] ?? padding[key] ?? 'NaN') * 16;
   };
 
-  /** The row height from the rendered classes: the frame's own h-N, never smaller than its content. */
-  function measured(html: string): number {
+  /**
+   * The row height from the rendered classes at one width: the frame's own
+   * h-N (`md:` from 768, the base class under it), never smaller than its content.
+   */
+  function measured(html: string, at: 'laptop' | 'phone'): number {
+    const v = at === 'laptop' ? 'md:' : '';
+    const size = (list: string[], kind: 'h' | 'py'): number =>
+      px(pick(list, new RegExp(`^${v}${kind}-\\d`)), `${v}${kind}-`);
     const frameCls = cls(html, 'data-list-card=""');
-    const frame = px(pick(frameCls, /^h-\d/), 'h-');
-    const inset = px(pick(frameCls, /^py-/), 'py-');
-    const picture = px(pick(cls(html, 'data-list-card-picture='), /^h-\d/), 'h-');
+    const frame = size(frameCls, 'h');
+    const inset = size(frameCls, 'py');
+    const picture = size(cls(html, 'data-list-card-picture='), 'h');
+    // The two lines are one size at every width (h-5, no md: twin).
     const line1 = px(pick(cls(html, 'data-list-card-line="1"'), /^h-\d/), 'h-');
     const line2 = px(pick(cls(html, 'data-list-card-line="2"'), /^h-\d/), 'h-');
     const text = line1 + 4 + line2;
-    // The picture sits one inset below the top and one above the bottom; the 44
-    // text column (20 + 4 + 20) centres against it and still fits the frame.
-    expect(picture + inset + inset).toBe(frame);
-    expect(text).toBeLessThanOrEqual(frame);
+    expect(text).toBe(44);
+    if (at === 'laptop') {
+      // The picture sits one inset below the top and one above the bottom; the
+      // 44 text column (20 + 4 + 20) centres against it and still fits the frame.
+      expect(picture + inset + inset).toBe(frame);
+      expect(text).toBeLessThanOrEqual(frame);
+    } else {
+      // The text column fills the row between its insets; the picture hangs
+      // from the title line's top and ends inside the bottom inset.
+      expect(inset + text + inset).toBe(frame);
+      expect(picture).toBe(ROW_PICTURE_PHONE);
+      expect(inset + picture).toBeLessThanOrEqual(frame - inset);
+    }
     return frame;
   }
 
@@ -161,16 +179,22 @@ describe('guard: every row is 72 (ROW_HEIGHT)', () => {
   };
 
   for (const [name, over] of Object.entries(variants)) {
-    it(`${name}: ${ROW_HEIGHT}`, () => {
-      expect(measured(renderToStaticMarkup(<ListCard {...base} {...over} />))).toBe(ROW_HEIGHT);
+    it(`${name}: ${ROW_HEIGHT} from 768, ${ROW_HEIGHT_PHONE} under it`, () => {
+      const html = renderToStaticMarkup(<ListCard {...base} {...over} />);
+      expect(measured(html, 'laptop')).toBe(ROW_HEIGHT);
+      expect(measured(html, 'phone')).toBe(ROW_HEIGHT_PHONE);
     });
   }
 
-  it('ROW_HEIGHT is 72 and the skeleton keeps the same frame and picture', () => {
+  it('ROW_HEIGHT is 72, ROW_HEIGHT_PHONE 60, and the skeleton keeps the same frame and picture', () => {
     expect(ROW_HEIGHT).toBe(72);
+    expect(ROW_HEIGHT_PHONE).toBe(60);
     const box = renderToStaticMarkup(<ListCardBox />);
-    expect(cls(box, 'data-list-card-box=""')).toEqual(expect.arrayContaining(['h-18']));
-    expect(box).toContain('h-12 w-12');
+    expect(cls(box, 'data-list-card-box=""')).toEqual(
+      expect.arrayContaining(['h-15', 'md:h-18', 'py-2', 'md:py-3']),
+    );
+    expect(box).toContain('h-9 w-9');
+    expect(box).toContain('md:h-12 md:w-12');
     expect(box).not.toMatch(/\b(compact|calm):/);
   });
 });
@@ -180,7 +204,7 @@ describe('guard: the row frame is flat (no border, radius, lit or clip; bled 16)
     ['listCardFrame()', listCardFrame()],
     ['listCardFrame(true)', listCardFrame(true)],
   ] as const) {
-    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4 px-4 h-18`, () => {
+    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4 px-4 h-15 md:h-18`, () => {
       const tokens = frame.split(/\s+/).filter(Boolean);
       expect(
         tokens.filter((t) => /border/.test(t)),
@@ -195,7 +219,7 @@ describe('guard: the row frame is flat (no border, radius, lit or clip; bled 16)
         name,
       ).toEqual([]);
       expect(tokens, name).not.toContain('overflow-hidden');
-      expect(tokens, name).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-18']));
+      expect(tokens, name).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-15', 'md:h-18']));
     });
   }
 
@@ -212,7 +236,7 @@ describe('guard: the row frame is flat (no border, radius, lit or clip; bled 16)
         'data-list-card=""',
       );
       expect(frame.filter((t) => /^(border|rounded|lit-|overflow-hidden$)/.test(t))).toEqual([]);
-      expect(frame).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-18']));
+      expect(frame).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-15', 'md:h-18']));
     }
   });
 });

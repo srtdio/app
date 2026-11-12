@@ -6,6 +6,7 @@ import {
   formatAgo,
   formatDate,
   formatDateTime,
+  formatDateWithYear,
   formatDayLabel,
   formatDayRange,
   formatDue,
@@ -403,6 +404,22 @@ describe('formatDate', () => {
     const now = new Date('2027-01-01T01:00:00Z');
     expect(formatDate('2026-12-30T12:00:00Z', now, NY)).toBe('30 Dec');
     expect(formatDate('2026-12-30T12:00:00Z', now, IST)).toBe('30 Dec 2026');
+  });
+});
+
+describe('formatDateWithYear: a date field value, short month, always the year', () => {
+  it('reads a date-only day as-is, in and off the current year', () => {
+    expect(formatDateWithYear('2026-10-25')).toBe('25 Oct 2026');
+    expect(formatDateWithYear('2026-10-19')).toBe('19 Oct 2026');
+    expect(formatDateWithYear('2027-01-03')).toBe('3 Jan 2027');
+  });
+  it('reads an instant on the zone', () => {
+    // 20:00 UTC on 24 Oct is 01:30 on 25 Oct in Kolkata.
+    expect(formatDateWithYear('2026-10-24T20:00:00Z', IST)).toBe('25 Oct 2026');
+    expect(formatDateWithYear('2026-10-24T20:00:00Z', NY)).toBe('24 Oct 2026');
+  });
+  it('a bad value is empty', () => {
+    expect(formatDateWithYear('nope')).toBe('');
   });
 });
 

@@ -48,6 +48,7 @@
 // position; laptop: the dialog grows 95% to 100%. A row that arrives rises 8px
 // into place (itemIn). Never a fade. Boxes (Bone) while the list loads. Tokens only.
 
+import { PHONE_PAD_EDGE } from '@/components/ui/layout';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
@@ -259,7 +260,8 @@ function AddRow(props: {
   };
   const blank = text.trim() === '';
   return (
-    <li className="flex flex-col px-3 pt-3">
+    // Phone: the field and the round add key keep the sheet's 16 edge.
+    <li className={cn('flex flex-col px-3 pt-3', PHONE_PAD_EDGE)}>
       {/* The well and, like the chat composer's send, a round add button beside it: Enter adds too. */}
       <form data-task-add="" onSubmit={submit} className="flex items-center gap-2">
         <div className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border border-field bg-panel-2 pl-3 pr-1 lit-well focus-within:lit-focus">
@@ -301,26 +303,35 @@ function AddRow(props: {
         aria-label="Due date"
         className="flex items-center gap-2 py-2"
       >
-        {choices.map((c) => (
-          <Chip
-            key={c.key}
-            label={c.label}
-            selected={quick?.key === c.key}
-            data-task-day={c.key}
-            disabled={props.disabled}
-            onClick={() => setDueOn(c.dueOn)}
-          />
-        ))}
-        {quick === undefined && dueOn !== null ? (
-          <Chip
-            // The picked day itself (a chosen date stays absolute): "12 Nov".
-            label={formatDueDate(dueOn, props.calendar.timeZone, props.calendar.now)}
-            selected
-            data-task-day="picked"
-            className="font-mono tabular-nums"
-            onClick={() => props.onPickDate(dueOn, setDueOn)}
-          />
-        ) : null}
+        {/* The chips keep their whole labels (never squeezed): on a narrow
+            phone they scroll sideways, like the chip line above, and the
+            calendar key stays in view. */}
+        <div
+          data-task-day-chips=""
+          className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {choices.map((c) => (
+            <Chip
+              key={c.key}
+              label={c.label}
+              selected={quick?.key === c.key}
+              data-task-day={c.key}
+              disabled={props.disabled}
+              className="shrink-0 whitespace-nowrap"
+              onClick={() => setDueOn(c.dueOn)}
+            />
+          ))}
+          {quick === undefined && dueOn !== null ? (
+            <Chip
+              // The picked day itself (a chosen date stays absolute): "12 Nov".
+              label={formatDueDate(dueOn, props.calendar.timeZone, props.calendar.now)}
+              selected
+              data-task-day="picked"
+              className="shrink-0 whitespace-nowrap font-mono tabular-nums"
+              onClick={() => props.onPickDate(dueOn, setDueOn)}
+            />
+          ) : null}
+        </div>
         <IconButton
           type="button"
           label={PICK_DATE_LABEL}

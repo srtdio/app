@@ -88,7 +88,7 @@ import {
 } from '@/lib/catch-up/route';
 import { activityLoadMore, readViewport } from '@/lib/load-more-rule';
 import { fillColumns } from '@/lib/use-fill-count';
-import { ROW_HEIGHT } from '@/components/ui/layout';
+import { ROW_HEIGHT, ROW_HEIGHT_PHONE } from '@/components/ui/layout';
 
 /** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
@@ -610,7 +610,8 @@ export function NotificationsPage() {
     layout: {
       sections: buckets.map((bucket) => bucket.groups.length),
       columns: fillColumns(viewport.width),
-      rowPx: ROW_HEIGHT,
+      // A row not measured yet: the row height at this width (60 under 768).
+      rowPx: viewport.width < 768 ? ROW_HEIGHT_PHONE : ROW_HEIGHT,
       headingPx: ACTIVITY_HEADING_PX,
       gapPx: ACTIVITY_SECTION_GAP_PX,
       rowHeights,

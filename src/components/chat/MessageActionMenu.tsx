@@ -594,7 +594,10 @@ export function MenuTile(props: {
       <span data-menu-icon="" className="flex items-center justify-center">
         {item.icon}
       </span>
-      <span className="min-w-0 max-w-full truncate">{item.label}</span>
+      {/* Never cut: a label that does not fit one line ("Add to Tasks" on a
+          narrow phone) wraps to two centred lines; the row stretches every
+          tile to one height. */}
+      <span className="min-w-0 max-w-full text-center">{item.label}</span>
     </PressableRow>
   );
 }

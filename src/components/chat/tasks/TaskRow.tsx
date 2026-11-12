@@ -33,6 +33,7 @@
 // menu grows from its chip; the row glides when rows above it come or go;
 // Mark checked draws the tick (drawTick). Never a fade.
 
+import { PHONE_PAD_EDGE_R } from '@/components/ui/layout';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
   KeyboardEvent,
@@ -651,7 +652,11 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         {...swipe.handlers}
         onClickCapture={swipe.onClickCapture}
         // Vertical scroll stays the list's; a horizontal move is the swipe's.
-        className="relative flex min-h-11 touch-pan-y touch-pinch-zoom items-start gap-1 pl-1 pr-1"
+        // Phone: the priority chip's fill ends on the sheet's 16 edge.
+        className={cn(
+          'relative flex min-h-11 touch-pan-y touch-pinch-zoom items-start gap-1 pl-1 pr-1',
+          PHONE_PAD_EDGE_R,
+        )}
       >
         <IconButton
           buttonRef={tickRef}

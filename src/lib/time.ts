@@ -465,6 +465,16 @@ export function formatPlanStart(
   return 'Live';
 }
 
+/**
+ * "25 Oct 2026": the day, the short month and always the year (a date field's
+ * own value, where the year is part of what was picked). '' when unparseable.
+ */
+export function formatDateWithYear(value: DateInput, timeZone?: string): string {
+  const civil = civilOf(value, safeTimeZone(timeZone));
+  if (civil === undefined) return '';
+  return `${civil.day} ${monthName(civil.month)} ${civil.year}`;
+}
+
 /** "Monday, 19 October 2026": the full spoken date, for accessible names. '' when unparseable. */
 export function formatSpokenDate(value: DateInput, timeZone?: string): string {
   const civil = civilOf(value, safeTimeZone(timeZone));

@@ -268,6 +268,32 @@ describe('X8 waiting screen keeps its four actions', () => {
   });
 });
 
+describe('phone type (12 Nov 2026): long labels wrap, never cut', () => {
+  const WRAPS = ['max-md:h-auto', 'max-md:whitespace-normal'];
+
+  it('the text actions under the primary wrap under 768 and keep the 44 minimum', async () => {
+    await render({ profile: SAVED_PROFILE, approverStage: 'waiting' });
+    for (const label of [ONBOARDING_COPY.makePostsAfterAll, ONBOARDING_COPY.differentEmail]) {
+      const classes = button(label).className.split(' ');
+      expect(classes).toEqual(expect.arrayContaining([...WRAPS, 'min-h-11', 'text-center']));
+    }
+  });
+
+  it('"Add a photo (optional)" wraps under 768; Continue stays one line', async () => {
+    await toNameScreen('Creator');
+    const photo = button(ONBOARDING_COPY.addPhoto).className.split(' ');
+    expect(photo).toEqual(expect.arrayContaining([...WRAPS, 'min-h-11']));
+    expect(button('Continue').className.split(' ')).not.toContain('max-md:whitespace-normal');
+  });
+
+  it('the page runs on the 16 edge under 768 and 24 from it (GUTTER)', async () => {
+    await render({ profile: SAVED_PROFILE, approverStage: 'waiting' });
+    const column = document.querySelector('[data-onboarding-card]')?.closest('.max-w-md');
+    expect(column?.className.split(' ')).toEqual(expect.arrayContaining(['px-4', 'md:px-6']));
+    expect(column?.className.split(' ')).not.toContain('px-6');
+  });
+});
+
 describe('X8 switch from the make-a-workspace dialog', () => {
   it('a saved Creator whose stored step is the brand step opens on the brand screen', async () => {
     await render({ profile: SAVED_PROFILE, approverStage: 'brand' });

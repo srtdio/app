@@ -1193,9 +1193,13 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
         </span>
         <span className="flex shrink-0 items-center gap-2">
           {inChat ? (
-            <span className="text-sm text-fg-3">in this chat</span>
+            <span className="shrink-0 whitespace-nowrap text-sm text-fg-3">in this chat</span>
           ) : isTagDot(post.stage) ? (
-            <Tag label={stageLabel(post.stage)} dot={post.stage} />
+            <Tag
+              label={stageLabel(post.stage)}
+              dot={post.stage}
+              className="shrink-0 whitespace-nowrap"
+            />
           ) : null}
           {active ? (
             <span className="text-accent">
@@ -1278,13 +1282,15 @@ export function BriefPickerList(props: {
               className={rowClass(active)}
             >
               <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="flex items-center gap-2">
+                {/* The title gives way ("..."); the status tag stays whole. */}
+                <span className="flex min-w-0 items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-lg font-medium text-fg">
                     {brief.title}
                   </span>
                   <Tag
                     label={briefStatusLabel(brief.status)}
                     tone={brief.status === 'closed' ? 'neutral' : 'good'}
+                    className="shrink-0 whitespace-nowrap"
                   />
                 </span>
                 {brief.objective.trim() !== '' ? (
@@ -1294,12 +1300,15 @@ export function BriefPickerList(props: {
                 ) : null}
                 <span className="flex flex-wrap items-center gap-2">
                   {brief.formatRequested !== null && brief.formatRequested !== '' ? (
-                    <Tag label={formatLabel(brief.formatRequested)} />
+                    <Tag
+                      label={formatLabel(brief.formatRequested)}
+                      className="shrink-0 whitespace-nowrap"
+                    />
                   ) : null}
                   {due !== null ? (
                     <span
                       className={cn(
-                        'font-mono text-sm tabular-nums',
+                        'shrink-0 whitespace-nowrap font-mono text-sm tabular-nums',
                         due.bad ? 'text-bad' : 'text-fg-2',
                       )}
                     >
@@ -1307,7 +1316,7 @@ export function BriefPickerList(props: {
                     </span>
                   ) : null}
                   <span className="flex-1" />
-                  <span className="text-sm text-fg-2">
+                  <span className="shrink-0 whitespace-nowrap text-sm text-fg-2">
                     {`${briefPostCountLabel(brief.postCount)} · Raised ${formatAgo(brief.createdAt, now)}`}
                   </span>
                 </span>

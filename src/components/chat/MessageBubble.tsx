@@ -964,6 +964,15 @@ export function mentionsMe(
  * callers; with no own bubble since L1 every row passes false. Tokens only, so
  * light and dark stay at parity.
  */
+/**
+ * A message head's name line. From 768 up: one block line that truncates
+ * whole. Under 768: a baseline row, so the name is the part that gives way.
+ */
+export const SENDER_LINE_CLASS =
+  'block min-w-0 max-w-full truncate max-md:flex max-md:items-baseline';
+/** The name's box in that row (the person trigger stays inline inside it): it shrinks and ends in "…". */
+export const SENDER_NAME_GIVES = 'max-md:min-w-0 max-md:truncate';
+
 export const MENTION_ME_PEER = 'bg-fg/[.12] text-fg';
 
 export function mentionClass(mine: boolean, self: boolean): string {
@@ -1552,25 +1561,31 @@ export function MessageBubble(props: {
   const senderLine = rootStack ? null : showMeta ? (
     // One block line, its parts inline: the name trigger stays an inline
     // control in running text (its hit area is the trigger's 44 box), and the
-    // whole line truncates.
-    <span data-sender-line="" className="block min-w-0 max-w-full truncate">
-      {asPerson(
-        <span data-sender-name="" className={cn('text-fg', sized(SENDER_NAME_TYPE, layout))}>
-          {headerName(message, profiles)}
-        </span>,
-        'inline',
-      )}
+    // whole line truncates. Phone (12 Nov 2026): the parts sit on one
+    // baseline as a row, so a long name gives way with "…" and the time
+    // ("Today at 8:00 AM") and the tick are never cut.
+    <span data-sender-line="" className={SENDER_LINE_CLASS}>
+      {/* The row item that gives way; the name trigger inside it stays an
+          inline control in running text (never a block-level button). */}
+      <span data-sender-name-box="" className={SENDER_NAME_GIVES}>
+        {asPerson(
+          <span data-sender-name="" className={cn('text-fg', sized(SENDER_NAME_TYPE, layout))}>
+            {headerName(message, profiles)}
+          </span>,
+          'inline',
+        )}
+      </span>
       {fullMeta.time !== '' ? (
         <span
           aria-hidden="true"
           data-sender-time=""
-          className={cn('ml-2 text-fg-3', SENDER_TIME_TYPE)}
+          className={cn('ml-2 text-fg-3 max-md:shrink-0', SENDER_TIME_TYPE)}
         >
           {fullMeta.time}
         </span>
       ) : null}
       {headTick !== null ? (
-        <span className="ml-1 inline-flex align-middle text-fg-3">
+        <span className="ml-1 inline-flex align-middle text-fg-3 max-md:shrink-0 max-md:self-center">
           <MetaGlyph status={headTick} />
         </span>
       ) : null}

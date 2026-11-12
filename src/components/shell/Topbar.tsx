@@ -138,10 +138,11 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={onCreateWorkspace}
-          className="min-w-0 text-left"
+          // Phone: the label is never cut; it wraps to two lines and the key grows inside the bar.
+          className="min-w-0 text-left max-md:h-auto max-md:min-h-11 max-md:py-1"
         >
           <IconPlus size={ICON_SIZE.inline} className="shrink-0 text-fg" />
-          <span className="truncate">Create your workspace</span>
+          <span className="truncate max-md:whitespace-normal">Create your workspace</span>
         </Button>
       ) : workspaceName === null ? (
         <Bone lit="flat" className="md:hidden h-4 w-24 rounded" />

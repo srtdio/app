@@ -315,6 +315,8 @@ describe('PersonCardHost content', () => {
     expect(meta).not.toBeNull();
     expect(meta?.textContent).toBe('');
     expect(meta?.className).toContain('h-5');
+    // Under 768 the line is its own 16 box, so its words centre on the photo's initials.
+    expect(meta?.className).toContain('max-md:h-4 max-md:py-0');
     // Still the inline message: unknown is not removed.
     expect(messageInput()).not.toBeNull();
   });

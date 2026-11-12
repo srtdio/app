@@ -49,6 +49,21 @@ describe('SelectBar', () => {
     expect(html).toContain('lit-dock');
     expect(html).not.toMatch(/shadow-|dark:|#[0-9a-f]{3,6}\b/);
   });
+
+  it('phone: the bar wraps, the count is never cut, the actions are one trailing group; from 768 one line', () => {
+    const html = renderToStaticMarkup(
+      <SelectBar count={1} onCancel={noop} actions={ACTIONS} label="Selected posts" />,
+    );
+    expect(html).toMatch(/data-select-bar=""[^>]*class="[^"]*max-md:flex-wrap/);
+    expect(html).toMatch(/class="(?:[^"]* )?shrink-0[ "][^>]*data-select-bar-cancel=""/);
+    expect(html).toMatch(/data-select-bar-count=""[^>]*class="[^"]*max-md:min-w-max/);
+    // The group is no box from 768 (contents), so the laptop bar is unchanged.
+    expect(html).toMatch(
+      /data-select-bar-actions=""[^>]*class="[^"]*max-md:ml-auto max-md:flex-wrap md:contents/,
+    );
+    const group = html.slice(html.indexOf('data-select-bar-actions'));
+    expect([...group.matchAll(/data-select-bar-action="/g)]).toHaveLength(3);
+  });
 });
 
 describe('useListSelection + ListCard select', () => {

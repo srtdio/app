@@ -167,8 +167,8 @@ describe('group chat: ui/ListCard', () => {
     expect(h).toMatch(/data-list-card-picture="image"[^>]*data-group-photo=""/);
     // The shared Avatar at its card role (48, 40 in Compact), group kind, clipped to radius 8.
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('h-12 w-12');
-    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-12 w-12/);
+    expect(h).toContain('md:h-12 md:w-12');
+    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*md:h-12 md:w-12/);
     expect(h).toContain('rounded-lg');
     // formatAgo on the list's clock (sent an hour before NOW), meta role, line 1.
     const time = '1h';
@@ -204,7 +204,7 @@ describe('person chat: ui/ListCard, the same card as a group', () => {
     expect(h).not.toContain('data-tile');
     expect(h).toMatch(/data-list-card-picture="person"[^>]*data-person-photo=""/);
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('h-12 w-12');
+    expect(h).toContain('md:h-12 md:w-12');
     expect(h).toContain('rounded-full');
     expect(h).toContain('>Asha Rao<');
     // formatAgo on the list's clock: sent an hour before NOW.

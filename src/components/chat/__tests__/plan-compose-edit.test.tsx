@@ -154,6 +154,9 @@ describe('New plan create: one call, never half built', () => {
     // The field look (44px, 8px radius, panel-2, focus, left value) is ui/DatePicker's.
     expect(pickerSrc).toContain("import { DatePicker } from '@/components/ui/DatePicker';");
     expect(pickerSrc).toMatch(/data-plan-date=\{field\}[\s\S]*?<DatePicker\s+label=\{label\}/);
+    // Phone: the short month form ("25 Oct 2026"), From over To; two columns from 768.
+    expect(pickerSrc).toMatch(/<DatePicker\s+label=\{label\}\s+short\b/);
+    expect(pickerSrc).toContain('className="grid grid-cols-1 gap-2 md:grid-cols-2"');
     const html = renderToStaticMarkup(
       <PlanDatesSheet open range={RANGE} onSave={() => {}} onClose={() => {}} />,
     );
@@ -164,8 +167,8 @@ describe('New plan create: one call, never half built', () => {
       /<button[^>]*aria-haspopup="dialog"[^>]*aria-label="From"[^>]*class="[^"]*h-11/,
     );
     expect(html).toMatch(/aria-label="To"/);
-    expect(html).toContain('October 12, 2026');
-    expect(html).toContain('October 18, 2026');
+    expect(html).toContain('12 Oct 2026');
+    expect(html).toContain('18 Oct 2026');
     // The 5-week rule and its hint stay.
     expect(html).toContain('Up to 5 weeks. Items on days you drop go back to');
     expect(html).toContain('Save dates');

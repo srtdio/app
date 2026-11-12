@@ -14,7 +14,7 @@ import { ICON_SIZE, IconChat, IconForward, IconTodo, RailCurveGlyph } from '@/co
 import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { Text, textRole } from '@/components/ui/Text';
-import { TRAILING_PULL } from '@/components/ui/layout';
+import { INK_TRAILING_LAST, TRAILING_PULL } from '@/components/ui/layout';
 import { ADD_TO_TASKS_LABEL, MORE_ACTIONS_LABEL } from '@/components/chat/MessageActionMenu';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
@@ -222,7 +222,8 @@ export interface RootActions {
 
 /** Where a thread strip sits: the host's row inset and photo-to-text gap (rule 1: label on the text column). */
 export const THREAD_STRIP_COLUMNS: Record<'chat' | 'catch-up', { x: string; gap: string }> = {
-  chat: { x: 'px-4', gap: 'gap-2' },
+  // Phone: 12 after the 36 icon column, so "Reply in thread" starts on 64.
+  chat: { x: 'px-4', gap: 'gap-2 max-md:gap-3' },
   'catch-up': { x: 'px-4', gap: 'gap-3' },
 };
 
@@ -297,7 +298,8 @@ export function RepliesSeparatorRow(props: {
           <StripLead label={label} empty={empty} />
         </span>
       )}
-      <span className={cn('flex shrink-0 items-center', TRAILING_PULL)}>
+      {/* Phone: the last key's glyph slides so its ink ends on the 16 edge. */}
+      <span className={cn('flex shrink-0 items-center', TRAILING_PULL, INK_TRAILING_LAST)}>
         {actions.onTasks !== undefined ? (
           <IconButton
             type="button"
@@ -447,7 +449,8 @@ export function ThreadRootHead(props: {
   dateTime: string;
 }): ReactElement {
   return (
-    <div data-thread-root-head="" className="flex min-w-0 items-center gap-3">
+    // Phone: 8 after the 40 photo, so the name and its time start on 64.
+    <div data-thread-root-head="" className="flex min-w-0 items-center gap-3 max-md:gap-2">
       <Avatar
         role="row"
         name={props.name}

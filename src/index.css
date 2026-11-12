@@ -481,6 +481,25 @@
   --lit-side: 1px 0 0 var(--border);
   --lit-dock: 0 -1px 0 var(--border);
 }
+/* TYPE VARIABLES (12 Nov 2026). The md, base and lg type tokens
+   (tailwind.config.ts fontSize) read these. Under 768 the whole app is on the
+   thread sizes: md 15/20, base 17/20, lg 17/20. From 768 up: 13/18, 14/20,
+   15/20, as before. Guard: src/__tests__/design-tokens.test.ts. */
+:root {
+  --type-md: 15px;
+  --type-md-line: 20px;
+  --type-base: 17px;
+  --type-lg: 17px;
+}
+@media (min-width: 768px) {
+  :root {
+    --type-md: 13px;
+    --type-md-line: 18px;
+    --type-base: 14px;
+    --type-lg: 15px;
+  }
+}
+
 @layer base {
   html,
   body,

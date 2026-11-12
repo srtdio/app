@@ -48,8 +48,12 @@ export function useCatchUpReactions(
   });
 }
 
-/** The smiley alone (no reactions yet): a 44 key in the row's top-right corner. */
-export const CATCH_UP_REACT_CLASS = 'absolute right-2 top-0 text-fg-3';
+/**
+ * The smiley alone (no reactions yet): a 44 key in the row's top-right corner.
+ * Phone: the box sits on the row's edge, so its 16 glyph (14 in) ends on the
+ * row's 16 inset; laptop 8 in, as before.
+ */
+export const CATCH_UP_REACT_CLASS = 'absolute right-2 top-0 text-fg-3 max-md:right-0';
 
 /** A row's reactions: the chips under the text, or the corner smiley when none. */
 export function CatchUpRowReactions(props: {

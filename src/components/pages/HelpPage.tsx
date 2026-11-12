@@ -4,6 +4,7 @@ import { PageHead } from '@/components/shell/PageHead';
 import { CHIP_FACE_SIZE, CHIP_HIT, CHIP_REST_EDGE, Chip } from '@/components/ui/Chip';
 import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
+import { INK_TRAILING } from '@/components/ui/layout';
 import { NoResults } from '@/components/ui/NoResults';
 import { Text } from '@/components/ui/Text';
 import { cn } from '@/lib/cn';
@@ -232,7 +233,14 @@ export function HelpPage() {
             <div className="mt-2 flex flex-col">
               {articles.map((article) => (
                 <details key={article.id} className="group border-b border-border">
-                  <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                  {/* The chevron's box ends on the page edge; under 768 its ink does
+                      (INK_TRAILING slides the glyph by its ink inset). */}
+                  <summary
+                    className={cn(
+                      'flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden',
+                      INK_TRAILING,
+                    )}
+                  >
                     <span>{article.title}</span>
                     <IconChevronDown
                       size={ICON_SIZE.nav}

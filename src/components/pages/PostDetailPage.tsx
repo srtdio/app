@@ -1904,7 +1904,13 @@ export function PostDetailPage({
                     variant="ghost"
                     data-caption-edit=""
                     onClick={openCaptionEditor}
-                    className={cn('shrink-0', TRAILING_PULL)}
+                    // Phone: the word ends on the block's right edge (16 pad
+                    // - 12 pull = 4 more); the pencil keeps its place.
+                    className={cn(
+                      'shrink-0',
+                      TRAILING_PULL,
+                      'max-md:translate-x-1 max-md:[&>svg]:translate-x-0',
+                    )}
                   >
                     <IconEdit size={ICON_SIZE.inline} />
                     Edit
@@ -1985,7 +1991,9 @@ export function PostDetailPage({
                           setCaptionTipOpen(false);
                           dismissCaptionTip(userId);
                         }}
-                        className="ml-auto shrink-0"
+                        // Phone: the words end on the block's right edge (the
+                        // link's 8 side padding slides out).
+                        className="ml-auto shrink-0 max-md:translate-x-2"
                       >
                         Got it
                       </Button>

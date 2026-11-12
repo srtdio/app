@@ -580,6 +580,13 @@ export function namesNeeded(
 // is transparent at rest so the selected edge never shifts the row.
 const ROW = 'flex items-center border px-2 text-base mv-tint';
 
+/**
+ * A Recent row's remove key under 768: section pad 8 + (44 box - 16 glyph) / 2
+ * leaves the glyph box 22 from the screen edge; sliding the glyph 8 puts its
+ * box at 14 and its ink (about 2.5 inside) 16 from the edge. From 768: nothing.
+ */
+export const RECENT_REMOVE_INK = 'max-md:[&>svg]:translate-x-2';
+
 /** The keyboard-selected (or hovered) row: the one selected look, lit-selected. */
 const ACTIVE_ROW = 'lit-selected text-fg';
 
@@ -632,7 +639,13 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
         className="flex items-center justify-between gap-3 px-4 text-base text-fg-2"
       >
         <span className="truncate">{SEARCH_FAILED_COPY}</span>
-        <Button type="button" variant="link" data-palette-retry="" onClick={props.onRetry}>
+        <Button
+          type="button"
+          variant="link"
+          data-palette-retry=""
+          onClick={props.onRetry}
+          className="shrink-0"
+        >
           Retry
         </Button>
       </div>
@@ -746,7 +759,10 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                       data-palette-recent-remove={item.recent.id}
                       onMouseDown={keepFocus}
                       onClick={() => onRemove(item.recent)}
-                      className="shrink-0 text-fg-3"
+                      // Under 768 the 16 glyph slides 8 inside its 44 box (the box
+                      // ends 8 from the screen edge), so its ink sits 16 from the
+                      // edge, on the rows' right edge; the hit box never moves.
+                      className={cn('shrink-0 text-fg-3', RECENT_REMOVE_INK)}
                     >
                       <IconTrash size={ICON_SIZE.inline} />
                     </IconButton>
@@ -1239,7 +1255,9 @@ export function CommandPalette({
             ) : null}
           </div>
           {pickOn !== null ? (
-            <span data-palette-pick-pill="" className="shrink-0">
+            // A flex box under 768: the pill is the box's whole height, so its
+            // words sit on the bar's centre line with Cancel (no line box around it).
+            <span data-palette-pick-pill="" className="shrink-0 max-md:flex max-md:items-center">
               <Tag label={pickPillLabel(pickOn, pickLabel)} />
             </span>
           ) : null}

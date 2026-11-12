@@ -129,18 +129,39 @@ export interface IconProps {
   inline?: boolean;
 }
 
+/**
+ * Ink insets (12 Nov 2026): how far a glyph's drawn shapes sit inside its box,
+ * left and right, in 24-grid units (path geometry, measured once). Every icon
+ * hands them on as --ink-l / --ink-r in px at its drawn size, less half its
+ * stroke, so a part that parks a glyph on a content edge (ui/layout
+ * LEADING_PULL, TRAILING_PULL, INK_*) can put the visible ink on that edge
+ * instead of the empty side of the box. Pure style: nothing reads the DOM.
+ */
+type Ink = readonly [left: number, right: number];
+type InkStyle = CSSProperties & { '--ink-l'?: string; '--ink-r'?: string };
+
+function inkStyle(ink: Ink | undefined, size: number, stroke: number): InkStyle {
+  if (ink === undefined) return {};
+  const px = (units: number): string =>
+    `${Math.max(0, Math.round(((units - stroke / 2) * size * 100) / 24) / 100)}px`;
+  return { '--ink-l': px(ink[0]), '--ink-r': px(ink[1]) };
+}
+
 interface SvgProps extends IconProps {
   children: ReactNode;
+  /** The glyph's ink insets (see Ink); absent: the glyph fills its box. */
+  ink?: Ink;
   /** Non-square glyphs (the message ticks): the box in viewBox units. Defaults to 24x24. */
   box?: { width: number; height: number };
 }
 
 /** Hand-drawn glyphs, kept only where Heroicons has no equivalent. */
-function Svg({ className, size = ICON_SIZE.nav, inline = false, box, children }: SvgProps) {
+function Svg({ className, size = ICON_SIZE.nav, inline = false, box, ink, children }: SvgProps) {
+  const inked = box !== undefined ? {} : inkStyle(ink, size, strokeFor(size));
   return (
     <svg
       className={className}
-      style={inline ? { display: 'inline-block', verticalAlign: '-0.15em' } : undefined}
+      style={inline ? { ...inked, display: 'inline-block', verticalAlign: '-0.15em' } : inked}
       width={box !== undefined ? box.width : size}
       height={box !== undefined ? box.height : size}
       viewBox={box !== undefined ? `0 0 ${box.width} ${box.height}` : '0 0 24 24'}
@@ -159,6 +180,94 @@ function Svg({ className, size = ICON_SIZE.nav, inline = false, box, children }:
 
 type HeroIcon = typeof ViewColumnsIcon;
 
+// Heroicons ink insets: [glyph, left, right] in 24-grid units (see Ink).
+const HERO_INK = new Map<HeroIcon, Ink>(
+  (
+    [
+      [UserIcon, 4.5, 4.5],
+      [CheckIcon, 4.5, 4.5],
+      [CheckCircleIcon, 3, 3],
+      [MagnifyingGlassIcon, 3, 3],
+      [PlusIcon, 4.5, 4.5],
+      [ViewColumnsIcon, 3, 3],
+      [DocumentTextIcon, 4.5, 4.5],
+      [PencilSquareIcon, 3, 2.25],
+      [CalendarDaysIcon, 3, 3],
+      [ChatBubbleOvalLeftIcon, 3, 3],
+      [ChatBubbleBottomCenterTextIcon, 2.25, 2.25],
+      [InboxStackIcon, 2.25, 2.25],
+      [InboxIcon, 2.25, 2.25],
+      [PhotoIcon, 2.25, 2.25],
+      [Cog6ToothIcon, 3.41, 3.41],
+      [TrashIcon, 3.75, 3.75],
+      [PencilIcon, 2.25, 2.25],
+      [ArrowRightStartOnRectangleIcon, 5.25, 2.25],
+      [SunIcon, 3, 3],
+      [MoonIcon, 3, 2.25],
+      [ChevronDownIcon, 4.5, 4.5],
+      [ArrowsUpDownIcon, 3, 3],
+      [BoldIcon, 6, 6],
+      [ItalicIcon, 5.25, 5.25],
+      [UnderlineIcon, 3.75, 3.75],
+      [StrikethroughIcon, 3.75, 3.75],
+      [NumberedListIcon, 2.99, 3.76],
+      [ListBulletIcon, 3.38, 3.75],
+      [AdjustmentsHorizontalIcon, 3.75, 3.75],
+      [ArrowUpTrayIcon, 3, 3],
+      [ArrowsRightLeftIcon, 3, 3],
+      [DocumentIcon, 4.5, 4.5],
+      [LinkIcon, 2.25, 2.25],
+      [ArrowUpRightIcon, 4.5, 4.5],
+      [ArrowDownTrayIcon, 3, 3],
+      [Square2StackIcon, 3.75, 3.75],
+      [ChevronRightIcon, 8.25, 8.25],
+      [ChevronLeftIcon, 8.25, 8.25],
+      [ClockIcon, 3, 3],
+      [EllipsisVerticalIcon, 11.25, 11.25],
+      [ArrowUturnLeftIcon, 3, 3],
+      [ArrowUturnRightIcon, 3, 3],
+      [PaperAirplaneIcon, 3.27, 2.52],
+      [MicrophoneIcon, 6, 6],
+      [Bars3BottomLeftIcon, 3.75, 3.75],
+      [CameraIcon, 2.25, 2.25],
+      [Squares2X2Icon, 3.75, 3.75],
+      [FilmIcon, 2.25, 2.25],
+      [PlaySolid, 4.5, 4.21],
+      [PauseIcon, 8.25, 8.25],
+      [PauseSolid, 6.75, 6.75],
+      [XMarkIcon, 6, 6],
+      [CalendarIcon, 3, 3],
+      [AtSymbolIcon, 3, 3],
+      [ScaleIcon, 2.25, 2.25],
+      [CheckBadgeIcon, 3, 3],
+      [QuestionMarkCircleIcon, 3, 3],
+      [RectangleStackIcon, 3, 3],
+      [ArrowPathIcon, 2.98, 2.98],
+      [EyeIcon, 1.98, 1.98],
+      [PaperClipIcon, 3, 3.62],
+      [LockClosedIcon, 4.5, 4.5],
+      [FaceSmileIcon, 3, 3],
+      [HeartIcon, 3, 3],
+      [BriefcaseIcon, 3, 3],
+      [MusicalNoteIcon, 3.78, 4.5],
+      [GiftIcon, 2.25, 1.5],
+      [ArrowUpIcon, 4.5, 4.5],
+      [BellAlertIcon, 3.12, 3.12],
+      [StarIcon, 2.84, 2.84],
+      [StarSolid, 2.09, 2.09],
+      [BuildingLibraryIcon, 3, 3],
+      [ArchiveBoxIcon, 2.25, 2.25],
+      [BookmarkIcon, 4.5, 4.5],
+      [ExclamationTriangleIcon, 2.39, 2.39],
+      [InformationCircleIcon, 3, 3],
+      [EyeSlashIcon, 1.93, 1.94],
+      [NoSymbolIcon, 3, 3],
+      [Bars3Icon, 3.75, 3.75],
+      [MinusIcon, 5, 5],
+    ] as const
+  ).map(([icon, left, right]) => [icon, [left, right]]),
+);
+
 /**
  * A Heroicons glyph on the same contract as Svg: size (default 18), decorative,
  * and the same inline layout. 24/outline takes strokeFor(size) over Heroicons'
@@ -171,9 +280,10 @@ function Hero({
   size = ICON_SIZE.nav,
   inline = false,
 }: IconProps & { icon: HeroIcon; solid?: boolean }) {
+  const inked = inkStyle(HERO_INK.get(C), size, solid ? 0 : strokeFor(size));
   const style: CSSProperties = inline
-    ? { width: size, height: size, display: 'inline-block', verticalAlign: '-0.15em' }
-    : { width: size, height: size };
+    ? { ...inked, width: size, height: size, display: 'inline-block', verticalAlign: '-0.15em' }
+    : { ...inked, width: size, height: size };
   return (
     <C
       width={size}
@@ -282,7 +392,7 @@ export function IconSort(props: IconProps) {
  */
 export function IconExpand(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[5, 5]} {...props}>
       <path d="M5 19 19 5" />
       <path d="M13 5h6v6" />
       <path d="M11 19H5v-6" />
@@ -293,7 +403,7 @@ export function IconExpand(props: IconProps) {
 /** Collapse: the same diagonal, heads pointing in to the middle ("close full"). */
 export function IconCollapse(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[4, 4]} {...props}>
       <path d="M20 4l-6 6" />
       <path d="M14 4v6h6" />
       <path d="M4 20l6-6" />
@@ -335,7 +445,7 @@ export function IconListBullet(props: IconProps) {
 /** Writing box Aa row: Quote (a bar beside two lines). */
 export function IconQuote(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[5, 5]} {...props}>
       <path d="M5 5v14" />
       <path d="M10 8h9M10 12h9M10 16h6" />
     </Svg>
@@ -383,7 +493,7 @@ export function IconCopy(props: IconProps) {
  */
 export function IconReplyPrivately(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[3, 2.99]} {...props}>
       <path d="M12.58 19.963a9.906 9.906 0 0 1 -4.88 -.963l-4.7 1l1.3 -3.9c-2.324 -3.437 -1.426 -7.872 2.1 -10.374c3.526 -2.501 8.59 -2.296 11.845 .48c2.13 1.817 3.055 4.368 2.692 6.82" />
       <path d="M16 22l5 -5" />
       <path d="M21 21.5v-4.5h-4.5" />
@@ -402,7 +512,7 @@ export function IconChevronLeft(props: IconProps) {
 /** A pushpin (pin a version or message). Hand-drawn: Heroicons has no pushpin; MapPinIcon means a place. */
 export function IconPin(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[7, 7]} {...props}>
       <path d="M12 17v5" />
       <path d="M9 3h6l-1 7 3 3H7l3-3-1-7z" />
     </Svg>
@@ -428,7 +538,7 @@ export function IconForward(props: IconProps) {
 /** Add an image: a photo with a plus. Hand-drawn: Heroicons has no photo-plus. */
 export function IconImagePlus(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[3, 3]} {...props}>
       <path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8" />
       <circle cx={8.5} cy={9} r={1.4} />
       <path d="M4 16l4-4 3.5 3.5" />
@@ -465,7 +575,7 @@ export function IconPhoto(props: IconProps) {
 /** A carousel badge: stacked cards. Hand-drawn: Square2StackIcon reads as copy at badge size. */
 export function IconCarousel(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[4, 4]} {...props}>
       <rect x={8} y={8} width={12} height={12} rx={2} />
       <path d="M4 16V6a2 2 0 0 1 2-2h10" />
     </Svg>
@@ -475,7 +585,7 @@ export function IconCarousel(props: IconProps) {
 /** Hide keyboard (Slack parity): a keyboard with key dots and a spacebar, a chevron down under it. */
 export function IconKeyboardHide(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[3, 3]} {...props}>
       <rect x={3} y={3} width={18} height={12} rx={2} />
       <path d="M7 7h.01M10 7h.01M14 7h.01M17 7h.01M7 9.5h.01M10 9.5h.01M14 9.5h.01M17 9.5h.01M9 12h6" />
       <path d="M9.5 18l2.5 2.5 2.5-2.5" />
@@ -514,7 +624,7 @@ export function IconCalendar(props: IconProps) {
 /** Calendar outline with a small clock at the bottom-right: scheduled sends (never reminders). Hand-drawn: Heroicons has no calendar-clock. */
 export function IconCalendarClock(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[4, 2.5]} {...props}>
       <path d="M20 10.5V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4.5" />
       <path d="M4 9h16M8 3v4M16 3v4" />
       <circle cx={17} cy={17} r={4.5} />
@@ -554,7 +664,7 @@ export function IconEye(props: IconProps) {
 /** Pending (status drawer). Hand-drawn: Heroicons has no hourglass, and ClockIcon is IconClock. */
 export function IconHourglass(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[6, 6]} {...props}>
       <path d="M6 4h12M6 20h12" />
       <path d="M8 4v1.5l4 6.5 4-6.5V4" />
       <path d="M8 20v-1.5l4-6.5 4 6.5V20" />
@@ -630,7 +740,7 @@ export function IconAlarmClock(props: IconProps) {
  */
 export function IconResolve(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[2, 2]} {...props}>
       <path d="M21.801 10A10 10 0 1 1 17 3.335" />
       <path d="m9 11 3 3L22 4" />
     </Svg>
@@ -645,7 +755,7 @@ export function IconResolve(props: IconProps) {
  */
 export function IconTodo(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[3, 3]} {...props}>
       <path d="m3 17 2 2 4-4" />
       <path d="m3 7 2 2 4-4" />
       <path d="M13 6h8" />
@@ -658,7 +768,7 @@ export function IconTodo(props: IconProps) {
 /** The chat task list: a rounded square with a tick. Hand-drawn: Heroicons has no checkbox-square. */
 export function IconTaskSquare(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[4, 4]} {...props}>
       <rect x={4} y={4} width={16} height={16} rx={4} />
       <path d="M8.3 12.2l2.6 2.6 4.8-5.3" />
     </Svg>
@@ -686,7 +796,7 @@ export function IconArchive(props: IconProps) {
 /** Select text: an iMessage-style crop, a handle dot at either end. Hand-drawn: Heroicons has no text-selection glyph. */
 export function IconSelectText(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[3, 5.7]} {...props}>
       <circle cx="6" cy="4.5" r="1.3" fill="currentColor" />
       <path d="M6 6.5V16a1 1 0 0 0 1 1h10.5" />
       <path d="M3 7h13a1 1 0 0 1 1 1v10.5" />
@@ -702,7 +812,7 @@ export function IconBookmark(props: IconProps) {
 /** Six dots: the Plan list's drag handle (laptop). Hand-drawn: Heroicons has no grip. */
 export function IconGrip(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[8, 8]} {...props}>
       <circle cx={9} cy={6} r={1} />
       <circle cx={15} cy={6} r={1} />
       <circle cx={9} cy={12} r={1} />
@@ -740,7 +850,7 @@ export function IconMinus(props: IconProps) {
 /** Mail (email on). Hand-drawn on the Svg contract: an envelope with its flap. */
 export function IconMail(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[3, 3]} {...props}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m3 7 9 6 9-6" />
     </Svg>
@@ -750,7 +860,7 @@ export function IconMail(props: IconProps) {
 /** Mail off (email off): the same envelope, struck through. */
 export function IconMailOff(props: IconProps) {
   return (
-    <Svg {...props}>
+    <Svg ink={[3, 3]} {...props}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m3 7 9 6 9-6" />
       <path d="M3 3l18 18" />

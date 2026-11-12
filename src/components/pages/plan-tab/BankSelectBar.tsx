@@ -168,7 +168,13 @@ export function BankSelectBar(
       actions={visibleSelectActions(bankSelectActions(picked, handlers), picked.length)}
       extra={
         onAll !== undefined ? (
-          <Button variant="ghost" type="button" data-bank-select-all="" onClick={onAll}>
+          <Button
+            variant="ghost"
+            type="button"
+            data-bank-select-all=""
+            onClick={onAll}
+            className="shrink-0"
+          >
             All
           </Button>
         ) : null

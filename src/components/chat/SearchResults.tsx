@@ -1,3 +1,4 @@
+import { PHONE_PAD_FLUSH } from '@/components/ui/layout';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
@@ -74,7 +75,7 @@ export function useMessageSearch(params: {
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
-export const RESULT_LABEL = `px-1 pt-1 ${TEXT_ROLE.section}`;
+export const RESULT_LABEL = `px-1 pt-1 ${PHONE_PAD_FLUSH} ${TEXT_ROLE.section}`;
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(

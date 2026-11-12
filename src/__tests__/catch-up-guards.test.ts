@@ -154,6 +154,29 @@ describe('catch-up guards', () => {
     expect(tip).toContain('sized(TIP_LINE_TYPE, layout)');
   });
 
+  it('phone: the bar, the card and the two buttons keep the 16 page edge; laptop keeps 12', () => {
+    const screen = FILES.find((f) => f.rel === 'components/catch-up/CatchUpScreen.tsx')?.src ?? '';
+    expect(screen).toContain("export const CATCH_UP_EDGE = 'px-4 md:px-3';");
+    // The bar, the card's wrapper and the buttons row each take the one edge.
+    expect(screen).toMatch(/CATCH_UP_BAR_CLASS = `[^`]*\$\{CATCH_UP_EDGE\}/);
+    expect(screen).toContain("cn('flex min-h-0 flex-1 flex-col pb-3 pt-1', CATCH_UP_EDGE)");
+    const from = screen.indexOf('data-catch-up-actions=""');
+    expect(from).toBeGreaterThan(-1);
+    expect(screen.slice(from, from + 260)).toContain('CATCH_UP_EDGE');
+    // No bare 12 gutter is left on the screen's own rows.
+    expect(screen).not.toMatch(/["' ]px-3["' ]/);
+  });
+
+  it('the tip wraps on a phone (never cut, never under "Got it"); a long card title gives way', () => {
+    const card = FILES.find((f) => f.rel === 'components/catch-up/CatchUpCard.tsx')?.src ?? '';
+    const from = card.indexOf('data-catch-up-tip-text=""');
+    expect(card.slice(from, from + 400)).toContain('max-md:whitespace-normal');
+    expect(card).toMatch(/data-catch-up-tip-dismiss=""\s+className="min-h-11 shrink-0 px-3"/);
+    // The name row's menu wrappers may shrink, so the title truncates inside the card.
+    expect(card).toContain('[&>span>span]:min-w-0 [&>span]:min-w-0');
+    expect(card).toMatch(/data-catch-up-title="" className="min-w-0 truncate"/);
+  });
+
   it('rows use the message family type; the open-thread text adds no height', () => {
     const rows = FILES.find((f) => f.rel === 'components/catch-up/CatchUpRows.tsx')?.src ?? '';
     expect(rows).toContain('sized(SENDER_NAME_TYPE, layout)');

@@ -5,7 +5,7 @@ import { IconUser } from '@/components/ui/icons';
 /**
  * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
  * name in a meta line; 'stack' (32, Slack-legible, 8 Nov 2026) in a chat replies row's repliers (L3); 'message' (36) a message row's photo on phone and tablet (11 Nov 2026); 'header' (32) in a thread or detail header; 'row' (40)
- * in a list row (members, search, pickers); 'card' (48, ROW_PICTURE) as
+ * in a list row (members, search, pickers); 'card' (48, ROW_PICTURE; 36 under 768, ROW_PICTURE_PHONE) as
  * a list row's picture (ui/ListCard); 'profile' (72) on a profile or group info screen.
  * No other sizes.
  */
@@ -42,10 +42,14 @@ export const AVATAR_PX: Record<AvatarRole, number> = {
   message: 36,
   header: 32,
   row: 40,
-  // ROW_PICTURE (ui/layout), drawn by the CARD_SIZE classes.
+  // ROW_PICTURE (ui/layout) from 768, drawn by the AVATAR_CARD_SIZE classes; under
+  // 768 the classes draw AVATAR_CARD_PHONE_PX.
   card: 48,
   profile: 72,
 };
+
+/** 'card' under 768 (12 Nov 2026): ROW_PICTURE_PHONE, the message photo's 36. */
+export const AVATAR_CARD_PHONE_PX = 36;
 
 const INITIALS_TYPE: Record<AvatarRole, string> = {
   inline: 'text-xs',
@@ -53,7 +57,8 @@ const INITIALS_TYPE: Record<AvatarRole, string> = {
   message: 'text-sm',
   header: 'text-sm',
   row: 'text-base',
-  card: 'text-base',
+  // Under 768 the 36 picture takes the 36 'message' role's initials.
+  card: 'text-sm md:text-base',
   profile: 'text-2xl',
 };
 
@@ -98,12 +103,12 @@ export function avatarShapeClass(role: AvatarRole): string {
 const base = 'lit-avatar inline-flex shrink-0 items-center justify-center select-none';
 
 /**
- * 'card' matches the ui/ListCard picture (ROW_PICTURE 48): sized by classes,
- * not the inline style.
+ * 'card' matches the ui/ListCard picture (ROW_PICTURE 48 from 768,
+ * ROW_PICTURE_PHONE 36 under it): sized by classes, not the inline style.
  */
-const CARD_SIZE = 'h-12 w-12';
+export const AVATAR_CARD_SIZE = 'h-9 w-9 md:h-12 md:w-12';
 
-/** The inline size for a role: none for 'card' (CARD_SIZE classes size it). */
+/** The inline size for a role: none for 'card' (AVATAR_CARD_SIZE classes size it). */
 function sizeStyle(role: AvatarRole, px: number): CSSProperties | undefined {
   return role === 'card' ? undefined : { width: px, height: px };
 }
@@ -140,7 +145,7 @@ function AvatarFace({
       ? { role: 'img', 'aria-label': label }
       : {};
   const px = AVATAR_PX[role];
-  const box = cn(avatarShapeClass(role), base, role === 'card' && CARD_SIZE);
+  const box = cn(avatarShapeClass(role), base, role === 'card' && AVATAR_CARD_SIZE);
   const style = sizeStyle(role, px);
 
   if (src !== undefined && !errored) {

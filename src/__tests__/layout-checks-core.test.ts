@@ -17,8 +17,11 @@ import {
   lineCount,
   lineHeightPx,
   movedSideways,
+  LIST_CARD_INSET_Y_PHONE_PX,
   LIST_CARD_INSET_Y_PX,
+  LIST_CARD_PICTURE_PHONE_PX,
   LIST_CARD_PICTURE_PX,
+  listCardGeometry,
   listCardViolations,
   overlappingPairs,
   overlaps,
@@ -36,7 +39,7 @@ import {
   type ListCardGeom,
   type TapTarget,
 } from '../../e2e/visual/layout-checks-core';
-import { ROW_HEIGHT } from '@/components/ui/layout';
+import { ROW_HEIGHT, ROW_HEIGHT_PHONE } from '@/components/ui/layout';
 
 // The pure geometry behind the visual suite's layout checks
 // (e2e/visual/layout-checks.ts runs it on every screen before the shot).
@@ -447,6 +450,114 @@ describe('list cards (ui/ListCard): the 72 flat rows (ROW_HEIGHT), the picture a
   });
 });
 
+describe('list cards under 768: the 60 row (ROW_HEIGHT_PHONE), the 36 picture at 16 and 8 from the row top, text at 64', () => {
+  // A flat row bled to x 0: picture at 16, top the 8 inset (the title line's
+  // top, never centred); text at 16 + 36 + 12 = 64, filling the row's 44.
+  const phoneRow = (y: number, over: Partial<ListCardGeom> = {}): ListCardGeom => ({
+    label: `card@${y}`,
+    card: { x: 0, y, width: 390, height: 60 },
+    borderLeft: 0,
+    borderTop: 0,
+    picture: { x: 16, y: y + 8, width: 36, height: 36 },
+    text: { x: 64, y: y + 8, width: 310, height: 44 },
+    ...over,
+  });
+
+  it('the geometry: 8 + 44 + 8 = 60, the 36 picture; from 768 it stays 12 + 48 + 12 = 72', () => {
+    expect(LIST_CARD_PICTURE_PHONE_PX).toBe(36);
+    expect(LIST_CARD_INSET_Y_PHONE_PX).toBe(8);
+    expect(LIST_CARD_INSET_Y_PHONE_PX + 44 + LIST_CARD_INSET_Y_PHONE_PX).toBe(ROW_HEIGHT_PHONE);
+    expect(ROW_HEIGHT_PHONE).toBe(60);
+    expect(listCardGeometry(true)).toEqual({ height: 60, picture: 36, insetY: 8 });
+    expect(listCardGeometry(false)).toEqual({ height: 72, picture: 48, insetY: 12 });
+  });
+
+  it('passes the phone row on a phone, and fails it as a laptop row (and the reverse)', () => {
+    expect(listCardViolations([phoneRow(0), phoneRow(60)], true)).toEqual([]);
+    const asLaptop = listCardViolations([phoneRow(0)], false);
+    expect(asLaptop.some((m) => m.includes('not 72'))).toBe(true);
+    expect(asLaptop.some((m) => m.includes('not 48x48'))).toBe(true);
+    const laptopRow: ListCardGeom = {
+      ...phoneRow(0),
+      card: { x: 0, y: 0, width: 390, height: 72 },
+      picture: { x: 16, y: 12, width: 48, height: 48 },
+      text: { x: 76, y: 14, width: 298, height: 44 },
+    };
+    expect(listCardViolations([laptopRow], false)).toEqual([]);
+    const asPhone = listCardViolations([laptopRow], true);
+    expect(asPhone.some((m) => m.includes('not 60'))).toBe(true);
+    expect(asPhone.some((m) => m.includes('not 36x36'))).toBe(true);
+    expect(asPhone.some((m) => m.includes('not 16,8'))).toBe(true);
+  });
+
+  it('fails a phone picture centred in the row (12 from the top) or off the 16 edge', () => {
+    const centred = listCardViolations(
+      [phoneRow(0, { picture: { x: 16, y: 12, width: 36, height: 36 } })],
+      true,
+    );
+    expect(centred.some((m) => m.includes('not 16,8'))).toBe(true);
+    const off = listCardViolations(
+      [phoneRow(0, { picture: { x: 20, y: 8, width: 36, height: 36 } })],
+      true,
+    );
+    expect(off.some((m) => m.includes('not 16,8'))).toBe(true);
+  });
+
+  it('fails phone text off the 64 column', () => {
+    const out = listCardViolations(
+      [phoneRow(0, { text: { x: 76, y: 8, width: 298, height: 44 } })],
+      true,
+    );
+    expect(out.some((m) => m.includes('not 12'))).toBe(true);
+  });
+
+  it('a 2-line preview row is 60 + 20 on a phone and its picture stays on the title line', () => {
+    const two = phoneRow(60, {
+      card: { x: 0, y: 60, width: 390, height: 80 },
+      lines2: true,
+    });
+    expect(listCardViolations([phoneRow(0), two], true)).toEqual([]);
+    // The laptop's 92 is wrong here, and so is a centred picture (8 + 10).
+    const tall = listCardViolations(
+      [{ ...two, card: { x: 0, y: 60, width: 390, height: 92 } }],
+      true,
+    );
+    expect(tall.some((m) => m.includes('not 80') && m.includes('60 + 20'))).toBe(true);
+    const centred = listCardViolations(
+      [{ ...two, picture: { x: 16, y: 60 + 18, width: 36, height: 36 } }],
+      true,
+    );
+    expect(centred.some((m) => m.includes('not 16,8'))).toBe(true);
+    // Unfolded: taller is fine, shorter is not.
+    const open = { ...two, unfolded: true, card: { x: 0, y: 60, width: 390, height: 140 } };
+    expect(listCardViolations([open], true)).toEqual([]);
+  });
+
+  it('from 768 a 2-line preview row is 72 + 20 and its picture stays centred', () => {
+    const two: ListCardGeom = {
+      label: 'two',
+      card: { x: 0, y: 0, width: 390, height: 92 },
+      borderLeft: 0,
+      borderTop: 0,
+      picture: { x: 16, y: 22, width: 48, height: 48 },
+      text: { x: 76, y: 12, width: 298, height: 68 },
+      lines2: true,
+    };
+    expect(listCardViolations([two], false)).toEqual([]);
+    expect(listCardViolations([two])).toEqual([]);
+  });
+
+  it('a solid row on a phone: 60 tall, the 36 tile centred (12 from the top), not hung', () => {
+    const solid = phoneRow(0, { solid: true, picture: { x: 16, y: 12, width: 36, height: 36 } });
+    expect(listCardViolations([solid, phoneRow(60)], true)).toEqual([]);
+    const hung = listCardViolations(
+      [phoneRow(0, { solid: true, picture: { x: 16, y: 8, width: 36, height: 36 } })],
+      true,
+    );
+    expect(hung.some((m) => m.includes('not 16,12'))).toBe(true);
+  });
+});
+
 describe('pinnedBarViolations', () => {
   const at = (topAtRest: number, topScrolled: number, scrolledBy: number) => ({
     found: true,
@@ -852,18 +963,19 @@ describe('list-screen axis (shell/ListScreen)', () => {
     chipX: 16,
     contentTop: 16,
     rowTop: 16,
-    textX: 76,
+    textX: 64,
     rightInset: 16,
   };
 
   it('expects the SCREEN_* constants at the phone and laptop gutter', async () => {
     const { listScreenAxisExpected } = await load();
+    // Phone: 16 gutter + the 36 picture + 12 = 64 (a message's column).
     expect(listScreenAxisExpected(false)).toEqual({
       chipsTop: 12,
       chipX: 16,
       contentTop: 16,
       rowTop: 16,
-      textX: 76,
+      textX: 64,
       rightInset: 16,
     });
     expect(listScreenAxisExpected(true)).toEqual({
@@ -914,8 +1026,8 @@ describe('list-screen axis (shell/ListScreen)', () => {
     const text = listScreenAxisReport([pipelinePhone, plan], pipelinePhone);
     expect(text.split('\n')).toEqual([
       'screen | chipsTop | chipX | contentTop | rowTop | textX | rightInset',
-      'pipeline | 12 (0) | 16 (0) | 16 (0) | 16 (0) | 76 (0) | 16 (0)',
-      'plan | 12 (0) | 16 (0) | 20 (+4) | 16 (0) | 76 (0) | n/a (n/a)',
+      'pipeline | 12 (0) | 16 (0) | 16 (0) | 16 (0) | 64 (0) | 16 (0)',
+      'plan | 12 (0) | 16 (0) | 20 (+4) | 16 (0) | 64 (0) | n/a (n/a)',
     ]);
   });
 });
