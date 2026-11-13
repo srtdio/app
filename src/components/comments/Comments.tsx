@@ -52,17 +52,17 @@ import { isAgencySide, usePlanMentionMembers } from '@/components/chat/PlanItemT
 import {
   MESSAGE_PHOTO_BOX,
   MESSAGE_PHOTO_GAP,
-  SEARCH_PEEK_INDENT,
   sized,
   useChatLayout,
 } from '@/components/chat/chat-type';
 import {
-  ChatSearchField,
-  ChatSearchKey,
-  ChatSearchSteps,
-  useLocalSearch,
-} from '@/components/chat/ChatSearch';
-import { searchRowsOf } from '@/lib/chat/in-chat-search';
+  CommentsSearchDock,
+  CommentsSearchHead,
+  CommentsSearchScope,
+  SearchPeek,
+  peekReply,
+  useCommentsSearch,
+} from '@/components/comments/CommentsSearch';
 import { useInduction } from '@/components/induction/InductionProvider';
 import {
   CommentForwardLayer,
@@ -82,9 +82,9 @@ import { LoadError } from '@/components/ui/LoadError';
 import { ClearButton } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { PAGE_BLEED, PHONE_BLEED } from '@/components/ui/layout';
-import { SECTION_LABEL, Text, textRole } from '@/components/ui/Text';
+import { Text, textRole } from '@/components/ui/Text';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
-import { SearchCurrentContext, SearchWordsContext } from '@/components/ui/SearchHighlight';
+import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { Bone } from '@/lib/motion';
 import { useOptionalToast, useToast } from '@/components/ui/toast';
 import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
@@ -623,44 +623,6 @@ export function postColumnRightOf(from: Element | null): number | null {
   return side.getBoundingClientRect().left - (Number.parseFloat(style.columnGap) || 0);
 }
 
-/** The comments search's key and field words. */
-const COMMENTS_SEARCH_LABEL = 'Search in comments';
-const COMMENTS_SEARCH_PLACE = 'comments';
-
-/**
- * Brings a hit's row to the middle of its scroller, vertically only (a row
- * bleeds past its column, so scrollIntoView would also slide the column sideways).
- */
-function centreRowY(row: Element): void {
-  let box: HTMLElement | null = row.parentElement;
-  while (box !== null) {
-    const overflow = getComputedStyle(box).overflowY;
-    if (box.scrollHeight > box.clientHeight && (overflow === 'auto' || overflow === 'scroll'))
-      break;
-    box = box.parentElement;
-  }
-  const at = row.getBoundingClientRect();
-  const mid = at.top + at.height / 2;
-  if (box === null) {
-    window.scrollBy({ top: mid - window.innerHeight / 2 });
-    return;
-  }
-  const frame = box.getBoundingClientRect();
-  box.scrollBy({ top: mid - (frame.top + frame.height / 2) });
-}
-
-/** A reply by id, from the replies by comment. */
-function replyOf(
-  replies: ReadonlyMap<string, readonly CommentRow[]>,
-  id: string,
-): CommentRow | undefined {
-  for (const list of replies.values()) {
-    const hit = list.find((r) => r.id === id);
-    if (hit !== undefined) return hit;
-  }
-  return undefined;
-}
-
 export function Comments(props: CommentsProps): ReactElement {
   const { workspaceId, entityType, entityId } = props;
   const newTrace = useNewTrace();
@@ -672,7 +634,6 @@ export function Comments(props: CommentsProps): ReactElement {
   const coarsePointer = useCoarsePointer();
   const reducedMotion = usePrefersReducedMotion();
   const searchWords = useContext(SearchWordsContext);
-  const outerCurrent = useContext(SearchCurrentContext);
   const { session } = useSession();
   const me = session?.user.id ?? null;
   const { canAttach, uploadFile } = useCommentAttachments();
@@ -961,21 +922,15 @@ export function Comments(props: CommentsProps): ReactElement {
   // in its place, "N of M" in the comment box's place. Every comment and reply
   // is on the device, so no read. A hit in a reply shows that reply alone under
   // its comment's replies row (the thread stays shut); a tap opens the thread there.
-  const search = useLocalSearch({
-    readRows: () =>
-      searchRowsOf(
-        lists.roots.map((root) => ({
-          root: messageOf(root),
-          replies: (lists.replies.get(root.id) ?? []).map(messageOf),
-        })),
-      ),
-    onJump: (id) => {
-      const row = listRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
-      if (row != null) centreRowY(row);
-    },
+  const search = useCommentsSearch({
+    threads: () =>
+      lists.roots.map((root) => ({
+        root: messageOf(root),
+        replies: (lists.replies.get(root.id) ?? []).map(messageOf),
+      })),
+    scope: listRef,
   });
-  const peek =
-    search.open && search.currentId !== null ? replyOf(lists.replies, search.currentId) : undefined;
+  const peek = peekReply(search, lists.replies);
   // Laptop, post page (item 6): the thread panel fills beside the post column
   // and takes the comments' place; elsewhere it stays the default 380.
   const postColumnRight = useCallback(() => postColumnRightOf(listRef.current), []);
@@ -1348,19 +1303,13 @@ export function Comments(props: CommentsProps): ReactElement {
     }
     if (root !== undefined && peek !== undefined && peek.parent_comment_id === root.id) {
       mainRows.push(
-        <li
-          key={`peek:${peek.id}`}
-          data-search-peek=""
-          className={sized(SEARCH_PEEK_INDENT, layout)}
-        >
-          <ul>
-            {renderRow(
-              messageOf(peek),
-              { head: true, tail: true, afterLabel: false },
-              { onOpen: () => openThread(root.id, false, peek.id), highlighted: false },
-            )}
-          </ul>
-        </li>,
+        <SearchPeek key={`peek:${peek.id}`} layout={layout}>
+          {renderRow(
+            messageOf(peek),
+            { head: true, tail: true, afterLabel: false },
+            { onOpen: () => openThread(root.id, false, peek.id), highlighted: false },
+          )}
+        </SearchPeek>,
       );
     }
   }
@@ -1430,17 +1379,8 @@ export function Comments(props: CommentsProps): ReactElement {
           openThread(guide, !coarsePointer);
       }}
     >
-      <div data-comments-head="" className="mb-2 flex min-h-11 items-center">
-        {search.open ? (
-          <ChatSearchField chatName={COMMENTS_SEARCH_PLACE} search={search} />
-        ) : (
-          <>
-            <span className={SECTION_LABEL}>Comments</span>
-            {!loading && lists.roots.length > 0 ? (
-              <ChatSearchKey label={COMMENTS_SEARCH_LABEL} onOpen={search.start} />
-            ) : null}
-          </>
-        )}
+      <div className="mb-2">
+        <CommentsSearchHead search={search} searchable={!loading && lists.roots.length > 0} />
       </div>
       {loading ? (
         <ul data-comments-loading="" aria-busy="true" className="flex flex-col gap-3 py-2">
@@ -1466,22 +1406,14 @@ export function Comments(props: CommentsProps): ReactElement {
           {COMMENTS_EMPTY}
         </Text>
       ) : (
-        <SearchWordsContext.Provider value={search.open ? search.words : searchWords}>
-          <SearchCurrentContext.Provider value={search.open ? search.currentId : outerCurrent}>
-            <ul data-comments-list="" className={cn(PAGE_BLEED, 'flex flex-col')}>
-              {mainRows}
-            </ul>
-          </SearchCurrentContext.Provider>
-        </SearchWordsContext.Provider>
+        <CommentsSearchScope search={search}>
+          <ul data-comments-list="" className={cn(PAGE_BLEED, 'flex flex-col')}>
+            {mainRows}
+          </ul>
+        </CommentsSearchScope>
       )}
       {search.open ? (
-        // Phone: in the decision bar's place (index.css hides it); laptop: under the list.
-        <div
-          data-comments-search-dock=""
-          className="fixed inset-x-0 bottom-0 z-dock md:sticky md:inset-x-auto"
-        >
-          <ChatSearchSteps search={search} />
-        </div>
+        <CommentsSearchDock search={search} />
       ) : canComment ? (
         <div data-comments-composer="" className={cn('mt-6', PHONE_BLEED)}>
           <Composer

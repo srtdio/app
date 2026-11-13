@@ -3287,6 +3287,28 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 13 Nov 2026: the comments search on a Bank idea (Plan's same parts): the
+    // hit is a reply, shown alone under its comment; the comment box hides.
+    name: 'bank-comments-search-reply',
+    seed: creator,
+    extra: seedBankIdeaCommentThreads,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-came-from]')], 'bank idea');
+      await planCommentsReady(page);
+      await page.locator('[data-comments-head] [data-chat-search-key]').evaluate((key) => {
+        (key as HTMLElement).click();
+      });
+      await page.locator('[data-comments-head] [data-chat-search-field]').fill('hero');
+      await expect(page.locator('[data-comments-search-dock] [data-chat-search-count]')).toHaveText(
+        '1 of 1',
+      );
+      await waitFor([page.locator('[data-search-peek] [data-search-current] mark')], 'reply hit');
+      await expect(page.locator('[data-thread-view]')).toHaveCount(0);
+      await expect(page.locator('[data-plan-comments-composer]')).toBeHidden();
+    },
+  },
+  {
     // The Bank idea's thread opened from its replies row.
     name: 'bank-idea-thread-open',
     seed: creator,

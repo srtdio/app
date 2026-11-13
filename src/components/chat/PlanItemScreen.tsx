@@ -1999,7 +1999,10 @@ export function PlanItemScreen(props: {
               </div>
             ) : null}
             <section ref={commentsRef} className="flex flex-col gap-3" aria-label="Comments">
-              <h4 className={SECTION_LABEL}>Comments</h4>
+              {/* With comments, the list draws its own "Comments" row (the search key). */}
+              {read.status !== 'loading' && read.status !== 'error' && shown.length > 0 ? null : (
+                <h4 className={SECTION_LABEL}>Comments</h4>
+              )}
               {read.status === 'loading' ? (
                 <Bone lit="flat" as="div" className="h-18 rounded-lg" />
               ) : read.status === 'error' ? (

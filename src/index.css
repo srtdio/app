@@ -952,7 +952,9 @@
   display: none;
 }
 
-/* Comments search (13 Nov 2026): on phone "N of M" takes the decision bar's place. */
-body:has([data-comments-search-dock]) [data-decision-bar] {
+/* Comments search (13 Nov 2026): "N of M" takes the post's decision bar's and
+   Plan's comment box's place while it shows. */
+body:has([data-comments-search-dock]) [data-decision-bar],
+body:has([data-comments-search-dock]) [data-plan-comments-composer] {
   display: none;
 }
