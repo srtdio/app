@@ -938,3 +938,10 @@
     border-left: 3px solid color-mix(in srgb, currentColor 45%, transparent);
   }
 }
+
+/* Search inside a chat (13 Nov 2026): the hit the step bar stands on rings its
+   coloured words with the ink line; the other hits keep the plain mark. */
+[data-search-current] mark[data-search-mark] {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}

@@ -34,7 +34,9 @@ const FILES = sourceFiles(ROOT).map((path) => ({
 export const SEARCH_ALLOWED = (rel: string): boolean =>
   rel === 'components/shell/CommandPalette.tsx' ||
   rel.endsWith('/HelpPage.tsx') ||
-  rel.startsWith('components/cockpit/');
+  rel.startsWith('components/cockpit/') ||
+  // Search inside a chat (13 Nov 2026, approved): the chat bar's own search box.
+  rel === 'components/chat/ChatSearch.tsx';
 
 /** role="progressbar" allowed by file: the upload ring, and progress that is not an upload. */
 export const PROGRESS_ALLOWED: readonly string[] = [

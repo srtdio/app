@@ -2072,6 +2072,38 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 13 Nov 2026: search inside a chat, open: the bar is the search box
+    // ("Search in Launch crew", Cancel), the composer is the step bar.
+    name: 'chat-search-open',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, GROUP_NAME);
+      await threadStill(page);
+      await tap([page.locator('[data-chat-search-key]')], 'search key');
+      await waitFor([page.locator('[data-chat-search-field]')], 'search field');
+      await waitFor([page.locator('[data-chat-search-steps]')], 'step bar');
+    },
+  },
+  {
+    // 13 Nov 2026: search inside a chat, typed: every hit coloured, the
+    // current one ringed, "N of M" with up (older) and down (newer).
+    name: 'chat-search-typed',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, GROUP_NAME);
+      await threadStill(page);
+      await tap([page.locator('[data-chat-search-key]')], 'search key');
+      await page.locator('[data-chat-search-field]').fill('the');
+      await expect(page.locator('[data-chat-search-count]')).toHaveText(/^1 of \d+/);
+      await tap([page.locator('[data-chat-search-older]')], 'older');
+      await expect(page.locator('[data-chat-search-count]')).toHaveText(/^2 of \d+/);
+      await waitFor([page.locator('[data-search-current] mark[data-search-mark]')], 'current hit');
+      await threadStill(page);
+    },
+  },
+  {
     // L3: a root's replies row in the main chat (a post-card thread).
     name: 'chat-replies-row',
     seed: creator,

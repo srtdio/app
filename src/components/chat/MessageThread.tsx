@@ -74,6 +74,12 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { ICON_SIZE, IconChat, IconChevronLeft, IconInfo } from '@/components/ui/icons';
+import {
+  ChatSearchField,
+  ChatSearchKey,
+  ChatSearchSteps,
+  useChatSearch,
+} from '@/components/chat/ChatSearch';
 import { useLongPress } from '@/components/ui';
 import {
   cancelPendingLongPressesWithin,
@@ -296,6 +302,7 @@ import {
   glowTarget,
   highlightNodes,
   JUMP_SETTLE_MS,
+  SearchCurrentContext,
   SearchWordsContext,
 } from '@/components/ui/SearchHighlight';
 import type { ThreadReadState } from '@/lib/chat/use-chat-thread';
@@ -1650,6 +1657,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   const rowSwipe = rowSwipeRef.current;
   // A search jump's words: matched words in this bubble draw as <mark>.
   const searchWords = useContext(SearchWordsContext);
+  const searchCurrent = useContext(SearchCurrentContext);
   const personSource = useContext(PersonSourceContext);
   const savedFrom = useSavedFrom();
   const meta = props.meta;
@@ -1697,6 +1705,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   return (
     <MessageBubble
       searchWords={searchWords}
+      searchCurrent={searchCurrent !== null && searchCurrent === props.message.id}
       personSource={personSource}
       savedFrom={savedFrom}
       message={props.message}
@@ -4729,6 +4738,15 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   });
   const jumpTo = (id: string): void =>
     setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }));
+  // Search inside this chat (13 Nov 2026): the bar's search key; hits walk with
+  // the chat's own jump (quiet: a hit gone since the answer just stays put).
+  const chatSearch = useChatSearch({
+    workspaceId,
+    channelId,
+    onJump: (id) => setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1, quiet: true })),
+    onWords: setHeaderWords,
+  });
+  const searching = chatSearch.open && !selecting;
 
   // Thread lookups: every loaded row, plus the open thread's root (a reply sent
   // from the view lands in the chat with its root known even when the chat has
@@ -5784,6 +5802,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             ) : null}
             <SelectionHeader count={selected.size} onCancel={cancelSelection} layout={layout} />
           </>
+        ) : searching ? (
+          <ChatSearchField chatName={props.title} search={chatSearch} />
         ) : (
           <>
             {props.onBack !== undefined ? (
@@ -5814,6 +5834,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                   : {})}
             />
             {/* FT46: no Info icon; the identity tap opens Group info. */}
+            {channelId !== undefined && workspaceId !== null ? (
+              <ChatSearchKey onOpen={chatSearch.start} />
+            ) : null}
           </>
         )}
       </div>
@@ -5863,55 +5886,57 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         />
       ) : null}
       <SearchWordsContext.Provider value={headerWords}>
-        <ReactorLoadContext.Provider value={reactorLoad}>
-          <ThreadBody
-            {...bodyActions}
-            jumpRequest={mainJump}
-            {...(props.onEnsureLoaded !== undefined
-              ? { onEnsureLoaded: props.onEnsureLoaded }
-              : {})}
-            messages={shownMessages}
-            repliesFor={repliesFor}
-            chipFor={chipFor}
-            onTalkAbout={talkAbout}
-            // 12 Nov 2026: Talk about opens the card's thread with the keyboard
-            // down on touch; a laptop keeps the cursor in a box.
-            onTalkAboutFocus={() => {
-              if (finePointer) focusComposerInput(composerInputRef.current);
-            }}
-            threads={mainThreads}
-            loading={bodyLoading}
-            {...(channelId !== undefined ? { olderKey: channelOlderKey(channelId) } : {})}
-            {...(props.loadFailed !== undefined ? { loadFailed: props.loadFailed } : {})}
-            {...(props.onRetryLoad !== undefined ? { onRetryLoad: props.onRetryLoad } : {})}
-            onReply={handleReply}
-            onOpenThread={handleTapOpen}
-            // An older page held for its task lines is still loading: the page
-            // anchor holds until its rows and lines paint together.
-            {...(props.loadingOlder !== undefined || olderPageHeld
-              ? { loadingOlder: props.loadingOlder === true || olderPageHeld }
-              : {})}
-            {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
-            {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
-            {...(props.onNewestVisible !== undefined && !markedHere
-              ? { onNewestVisible: props.onNewestVisible }
-              : {})}
-            {...(props.onToggleReaction !== undefined
-              ? { onToggleReaction: props.onToggleReaction }
-              : {})}
-            reading={{
-              unread,
-              seen,
-              readBy:
-                readBy !== null ? { messageId: readBy.message.id, label: readBy.label } : null,
-            }}
-            onJumpFirstUnread={jumpFirstUnread}
-            onOpenReadInfo={() => setReadInfoOpen(true)}
-            {...(taskChannel !== null
-              ? { taskLines: { events: windowEvents, ctx: taskLineCtx } }
-              : {})}
-          />
-        </ReactorLoadContext.Provider>
+        <SearchCurrentContext.Provider value={searching ? chatSearch.currentId : null}>
+          <ReactorLoadContext.Provider value={reactorLoad}>
+            <ThreadBody
+              {...bodyActions}
+              jumpRequest={mainJump}
+              {...(props.onEnsureLoaded !== undefined
+                ? { onEnsureLoaded: props.onEnsureLoaded }
+                : {})}
+              messages={shownMessages}
+              repliesFor={repliesFor}
+              chipFor={chipFor}
+              onTalkAbout={talkAbout}
+              // 12 Nov 2026: Talk about opens the card's thread with the keyboard
+              // down on touch; a laptop keeps the cursor in a box.
+              onTalkAboutFocus={() => {
+                if (finePointer) focusComposerInput(composerInputRef.current);
+              }}
+              threads={mainThreads}
+              loading={bodyLoading}
+              {...(channelId !== undefined ? { olderKey: channelOlderKey(channelId) } : {})}
+              {...(props.loadFailed !== undefined ? { loadFailed: props.loadFailed } : {})}
+              {...(props.onRetryLoad !== undefined ? { onRetryLoad: props.onRetryLoad } : {})}
+              onReply={handleReply}
+              onOpenThread={handleTapOpen}
+              // An older page held for its task lines is still loading: the page
+              // anchor holds until its rows and lines paint together.
+              {...(props.loadingOlder !== undefined || olderPageHeld
+                ? { loadingOlder: props.loadingOlder === true || olderPageHeld }
+                : {})}
+              {...(props.hasMore !== undefined ? { hasMore: props.hasMore } : {})}
+              {...(props.onLoadOlder !== undefined ? { onLoadOlder: props.onLoadOlder } : {})}
+              {...(props.onNewestVisible !== undefined && !markedHere
+                ? { onNewestVisible: props.onNewestVisible }
+                : {})}
+              {...(props.onToggleReaction !== undefined
+                ? { onToggleReaction: props.onToggleReaction }
+                : {})}
+              reading={{
+                unread,
+                seen,
+                readBy:
+                  readBy !== null ? { messageId: readBy.message.id, label: readBy.label } : null,
+              }}
+              onJumpFirstUnread={jumpFirstUnread}
+              onOpenReadInfo={() => setReadInfoOpen(true)}
+              {...(taskChannel !== null
+                ? { taskLines: { events: windowEvents, ctx: taskLineCtx } }
+                : {})}
+            />
+          </ReactorLoadContext.Provider>
+        </SearchCurrentContext.Provider>
       </SearchWordsContext.Provider>
       <WhoReactedSheet
         messageId={reactionsFor}
@@ -5932,7 +5957,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         />
       ) : null}
       <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
-      {view === null && selectionBar === null && (props.currentUserId ?? '') !== '' ? (
+      {view === null &&
+      selectionBar === null &&
+      !searching &&
+      (props.currentUserId ?? '') !== '' ? (
         <ThreadHoldTip
           userId={props.currentUserId ?? ''}
           layout={layout}
@@ -5942,6 +5970,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       ) : null}
       {view === null && selectionBar !== null ? (
         selectionBar
+      ) : view === null && searching ? (
+        <ChatSearchSteps search={chatSearch} />
       ) : (
         <Composer
           key={channelKey}

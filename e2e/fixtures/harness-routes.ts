@@ -1548,14 +1548,22 @@ const RPC: Record<string, RpcHandler> = {
     const beforeAt = typeof args.p_before_created_at === 'string' ? args.p_before_created_at : null;
     const beforeId = typeof args.p_before_id === 'string' ? args.p_before_id : null;
     return (tables.chat_messages ?? [])
-      .filter((m) => m.deleted_at === null && typeof m.body === 'string')
+      .filter((m) => m.deleted_at === null)
       .filter((m) => args.p_channel_id == null || m.channel_id === args.p_channel_id)
       .filter((m) => {
         const tokens =
-          String(m.body)
+          String(m.body ?? '')
             .toLowerCase()
             .match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
-        return words.every((w) => tokens.some((t) => t.startsWith(w)));
+        if (tokens.length > 0 && words.every((w) => tokens.some((t) => t.startsWith(w))))
+          return true;
+        // In one chat (13 Nov 2026), a file name matches too (substring, any case).
+        if (args.p_channel_id == null) return false;
+        const meta = m.attachment_meta;
+        if (meta === null || typeof meta !== 'object' || Array.isArray(meta)) return false;
+        return Object.values(meta as Record<string, { name?: unknown }>).some(
+          (f) => typeof f?.name === 'string' && f.name.toLowerCase().includes(query.toLowerCase()),
+        );
       })
       .sort(
         (a, b) =>

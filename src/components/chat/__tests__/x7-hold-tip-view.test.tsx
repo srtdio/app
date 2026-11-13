@@ -29,7 +29,7 @@ describe('X7 H6: hold tip view', () => {
       'utf8',
     );
     expect(thread).toMatch(
-      /view === null && selectionBar === null && \(props\.currentUserId \?\? ''\) !== '' \? \(\s*<ThreadHoldTip/,
+      /view === null &&\s*selectionBar === null &&\s*!searching &&\s*\(props\.currentUserId \?\? ''\) !== '' \? \(\s*<ThreadHoldTip/,
     );
   });
 });
