@@ -3519,6 +3519,181 @@ export async function assertActivitySolidRows(
   ]);
 }
 
+// Check 15b, catch up per tab (13 Nov 2026): each list tab's catch-up rows
+// (catch-up/TabCatchUp: ui/ListCard solid + count) sit ABOVE its chip row in
+// ListScreen's catchUp strip ([data-shell="catch-up"]), one per kind, only
+// while its count is above 0 (at 0: no row, no strip). Measured: the rows
+// shown and their order; 12 under the top bar; 16 from the last row to the
+// chips; 72 tall (60 under 768); "N unread" matching the count; the text
+// column on the list rows' text column; the count pill on the row's 16 / 24
+// content edge; phone edge to edge, laptop on the 24 gutter less the 16 bleed.
+// Activity passes kinds [] (no row there, ever).
+
+/** The rows a tab shows, in order (TabCatchUpKind values). */
+export interface TabCatchUpRowsWant {
+  kinds: readonly ('post' | 'brief' | 'plan-item' | 'idea' | 'chat')[];
+}
+
+interface TabCatchUpGeom {
+  viewport: number;
+  scrollWidth: number;
+  strips: number;
+  stripTop: number | null;
+  barBottom: number | null;
+  chipsTop: number | null;
+  mainLeft: number;
+  mainRight: number;
+  solidOutside: number;
+  rows: {
+    kind: string;
+    count: number;
+    line: string;
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    titleLeft: number | null;
+    badgeRight: number | null;
+  }[];
+  listTitleLeft: number | null;
+}
+
+async function readTabCatchUpRows(page: Page): Promise<TabCatchUpGeom> {
+  return page.evaluate((): TabCatchUpGeom => {
+    const shown = (el: Element | null | undefined): el is Element => {
+      if (el === null || el === undefined) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    };
+    const main = document.querySelector('main') ?? document.body;
+    const mainBox = main.getBoundingClientRect();
+    const strips = Array.from(main.querySelectorAll('[data-shell="catch-up"]')).filter(shown);
+    const strip = strips[0] ?? null;
+    const bar = document.querySelector('header');
+    const chips = Array.from(main.querySelectorAll('[data-shell="chips"] button')).find(shown);
+    const rows = Array.from(main.querySelectorAll('[data-tab-catch-up]'))
+      .filter(shown)
+      .map((row) => {
+        const r = row.getBoundingClientRect();
+        const title = row.querySelector('[data-list-card-title]');
+        const badge = row.querySelector('[data-list-card-count] [data-count-badge]');
+        return {
+          kind: row.getAttribute('data-tab-catch-up') ?? '',
+          count: Number(row.getAttribute('data-count')),
+          line: row.querySelector('[data-list-card-preview]')?.textContent?.trim() ?? '',
+          left: r.left,
+          right: r.right,
+          top: r.top,
+          bottom: r.bottom,
+          titleLeft: shown(title) ? title.getBoundingClientRect().left : null,
+          badgeRight: shown(badge) ? badge.getBoundingClientRect().right : null,
+        };
+      });
+    const listTitle = Array.from(
+      main.querySelectorAll(
+        '[data-shell="content"] [data-list-card]:not([data-list-card-solid]) [data-list-card-title]',
+      ),
+    ).find(shown);
+    return {
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      strips: strips.length,
+      stripTop: strip !== null ? strip.getBoundingClientRect().top : null,
+      barBottom: shown(bar) ? bar.getBoundingClientRect().bottom : null,
+      chipsTop: chips !== undefined ? chips.getBoundingClientRect().top : null,
+      mainLeft: mainBox.left,
+      mainRight: mainBox.right,
+      solidOutside: Array.from(main.querySelectorAll('[data-list-card-solid]'))
+        .filter(shown)
+        .filter((el) => el.closest('[data-shell="catch-up"]') === null).length,
+      rows,
+      listTitleLeft: listTitle !== undefined ? listTitle.getBoundingClientRect().left : null,
+    };
+  });
+}
+
+/** The rules over one read. Pure. */
+export function tabCatchUpFindings(got: TabCatchUpGeom, want: TabCatchUpRowsWant): string[] {
+  const out: string[] = [];
+  const same = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+  const r1 = (n: number): number => Math.round(n * 10) / 10;
+  const phone = got.viewport < 768;
+  const kinds = got.rows.map((r) => r.kind).join(' > ');
+  if (kinds !== want.kinds.join(' > ')) {
+    out.push(`catch-up rows "${kinds}", expected "${want.kinds.join(' > ')}"`);
+  }
+  if (got.solidOutside > 0) out.push(`${got.solidOutside} solid rows outside the catch-up strip`);
+  if (got.scrollWidth > got.viewport) {
+    out.push(`the page scrolls sideways (${got.scrollWidth} > ${got.viewport})`);
+  }
+  if (want.kinds.length === 0) {
+    if (got.strips !== 0) out.push('a catch-up strip with no row (nothing is reserved at 0)');
+    return out;
+  }
+  if (got.strips !== 1) out.push(`${got.strips} catch-up strips, not 1`);
+  const top = Math.min(...got.rows.map((r) => r.top));
+  const bottom = Math.max(...got.rows.map((r) => r.bottom));
+  if (got.barBottom !== null && !same(top - got.barBottom, 12)) {
+    out.push(`the first catch-up row starts ${r1(top - got.barBottom)} under the top bar, not 12`);
+  }
+  if (got.chipsTop === null) out.push('no chip row under the catch-up rows');
+  else if (!same(got.chipsTop - bottom, 16)) {
+    out.push(`the chips start ${r1(got.chipsTop - bottom)} under the last catch-up row, not 16`);
+  }
+  const height = phone ? ROW_HEIGHT_PHONE : ROW_HEIGHT;
+  for (const row of got.rows) {
+    const name = `the ${row.kind} catch-up row`;
+    if (!(row.count > 0)) out.push(`${name} shows at count ${row.count}`);
+    if (row.line !== `${row.count} unread`) out.push(`${name} reads "${row.line}", not "N unread"`);
+    if (!same(row.bottom - row.top, height)) {
+      out.push(`${name} is ${r1(row.bottom - row.top)} tall, not ${height}`);
+    }
+    if (row.badgeRight === null) out.push(`${name} has no count pill`);
+    else if (!same(row.right - row.badgeRight, 16)) {
+      out.push(
+        `${name}: the count pill ends ${r1(row.right - row.badgeRight)} from the row edge, not 16`,
+      );
+    }
+    if (
+      got.listTitleLeft !== null &&
+      row.titleLeft !== null &&
+      !same(row.titleLeft, got.listTitleLeft)
+    ) {
+      if (row.left <= got.mainLeft + (phone ? 1 : 9)) {
+        out.push(
+          `${name}: text column at ${r1(row.titleLeft)}, the list rows' at ${r1(got.listTitleLeft)}`,
+        );
+      }
+    }
+    // Phone: edge to edge (the 16 gutter less the row's 16 bleed); laptop: 24 less 16.
+    const inset = phone ? 0 : 8;
+    if (row.left < got.mainLeft + inset - 1) {
+      out.push(`${name} starts ${r1(row.left - got.mainLeft)} from the page edge, not ${inset}`);
+    }
+    if (phone && !same(row.right, got.mainRight)) {
+      out.push(`${name} ends ${r1(got.mainRight - row.right)} short of the page edge on phone`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Check 15b: measures a tab's catch-up rows on the page as it stands (phone
+ * and laptop, light and dark) and fails on a breach. `want.kinds` lists the
+ * rows this screen shows, in order; [] asserts none (Activity, a tab at 0).
+ */
+export async function assertTabCatchUpRows(
+  page: Page,
+  screenName: string,
+  want: TabCatchUpRowsWant,
+): Promise<void> {
+  const got = await readTabCatchUpRows(page);
+  settleFindings(
+    screenName,
+    tabCatchUpFindings(got, want).map((message) => ({ check: 'list-card' as const, message })),
+  );
+}
+
 /**
  * Activity's Load more (10 Nov 2026): depth in item rows, never entries. When
  * more exists, the button's bottom sits between the fold + 0.35 and the fold +

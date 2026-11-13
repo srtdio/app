@@ -7,6 +7,8 @@ import {
 } from '../fixtures/harness-routes';
 import {
   assertActivitySolidRows,
+  assertTabCatchUpRows,
+  type TabCatchUpRowsWant,
   assertActivityLoadMoreBand,
   assertActivityCounts,
   assertActivityPreviews,
@@ -2173,14 +2175,15 @@ const SCREENS: Screen[] = [
     url: '/activity',
     steps: async (page) => {
       await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
-      // Unread rows on All: the Catch up solid row with its count; no unread
-      // thread at the fixture clock, so no Threads row.
-      await activitySolidRowsAt(page, { catchUp: true, threads: false });
+      // Unread rows on All, and still no catch-up row: catch up lives on each
+      // tab (13 Nov 2026); Activity never shows Catch up or Threads.
+      await activitySolidRowsAt(page, { catchUp: false, threads: false });
     },
-    // The solid row against the list rows under it (height, text column, right
-    // edge, seam, the 12 and 16 steps); laptop Sidebar.
-    after: async (page) =>
-      assertActivitySolidRows(page, 'notifications', { catchUp: true, threads: false }),
+    // No solid row, no lead slot, no catch-up strip; laptop Sidebar.
+    after: async (page) => {
+      await assertActivitySolidRows(page, 'notifications', { catchUp: false, threads: false });
+      await assertTabCatchUpRows(page, 'notifications', { kinds: [] });
+    },
   },
   // Activity's Load more (10 Nov 2026): depth in item rows, never entries; the
   // button sits half a screen below the fold. Measured at the page top, then
@@ -2262,10 +2265,10 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
       await waitFor([page.locator('[data-sidebar-activity][data-selected="true"]')], 'Activity');
-      await activitySolidRowsAt(page, { catchUp: true, threads: false });
+      await activitySolidRowsAt(page, { catchUp: false, threads: false });
     },
     after: async (page) =>
-      assertActivitySolidRows(page, 'sidebar-activity-active', { catchUp: true, threads: false }),
+      assertActivitySolidRows(page, 'sidebar-activity-active', { catchUp: false, threads: false }),
   },
   {
     // The idea bank's Activity rows (team viewer): added, shown, hidden, moved, planned.
@@ -8438,12 +8441,14 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-box-format-row',
   'chat-bubble-blocks',
   'post-comment-box',
-  // Activity's solid rows, Catch up and Threads (11 Nov 2026): phone and
-  // laptop, light and dark.
-  'activity-solid-rows',
-  'activity-threads-new',
-  'activity-catch-up-menu',
-  'activity-threads-list',
+  // Catch up per tab (13 Nov 2026): each tab's rows above its chips, phone
+  // and laptop, light and dark.
+  'catch-up-pipeline',
+  'catch-up-briefs',
+  'catch-up-plan',
+  'catch-up-bank',
+  'catch-up-chat',
+  'catch-up-hover',
 ]);
 
 // --- Activity's solid rows: Catch up, then Threads (11 Nov 2026) -----------
@@ -8509,98 +8514,146 @@ async function activitySolidRowsAt(
   if (!want.catchUp && !want.threads) await expect(lead, 'no lead slot').toHaveCount(0);
 }
 
+/** One unread inbox entry for me (a card-making kind), `minsAgo` before the fixture clock. */
+function catchUpEntry(id: string, minsAgo: number, row: Row): Row {
+  return {
+    id,
+    user_id: ME,
+    workspace_id: WORKSPACE_ID,
+    tier: 'active',
+    scope_key: null,
+    read_at: null,
+    snoozed_until: null,
+    email_sent_at: null,
+    deleted_at: null,
+    actor_user_id: PEER,
+    payload: {},
+    created_at: new Date(NOW - minsAgo * 60_000).toISOString(),
+    ...row,
+  };
+}
+
+/** A brief created for me, a plan item comment and a bank idea comment, all unread. */
+function seedTabCatchUps(network: HarnessNetwork): void {
+  seedCatchUp(network);
+  (network.world.tables.inbox_entries ??= []).push(
+    catchUpEntry('0190f1c0-0000-7000-8000-00000000c101', 4, {
+      event_type: 'brief_created',
+      entity_type: 'brief',
+      entity_id: '0190f1c0-0000-7000-8000-00000000cb01',
+      scope: 'briefs',
+    }),
+    catchUpEntry('0190f1c0-0000-7000-8000-00000000c102', 5, {
+      event_type: 'plan_comment',
+      entity_type: 'plan_item',
+      entity_id: PLAN_CONCEPT_ITEM,
+      scope: 'plan',
+    }),
+    catchUpEntry('0190f1c0-0000-7000-8000-00000000c103', 6, {
+      event_type: 'plan_comment',
+      entity_type: 'plan_item',
+      entity_id: BANK_IDEAS[0],
+      scope: 'plan',
+      scope_key: 'bank',
+    }),
+  );
+}
+
+/** A tab's catch-up rows as the screen expects them, then the rows' own check. */
+async function tabCatchUpAt(page: Page, kinds: readonly TabCatchUpRowsWant['kinds'][number][]) {
+  for (const kind of kinds) {
+    await waitFor(
+      [page.locator(`[data-shell="catch-up"] [data-tab-catch-up="${kind}"]:not([data-count="0"])`)],
+      `${kind} catch-up row`,
+    );
+  }
+}
+
 SCREENS.push(
   {
-    // Both rows: Catch up (unread) then Threads (1 new). Phone: stacked, edge
-    // to edge; laptop: two cells of the list's grid, touching.
-    name: 'activity-solid-rows',
+    // Pipeline: "Post catch up" above the stage chips (an unread post comment).
+    name: 'catch-up-pipeline',
     seed: creator,
-    extra: seedOneThreadNew,
-    url: '/activity',
+    extra: seedTabCatchUps,
+    url: '/pipeline',
     steps: async (page) => {
-      await activityReady(page);
-      await activitySolidRowsAt(page, { catchUp: true, threads: true });
+      await pipelineReady(page);
+      await tabCatchUpAt(page, ['post']);
     },
-    after: async (page) =>
-      // Narrow phones too (390, 375): the rows still span the viewport.
-      assertActivitySolidRows(
-        page,
-        'activity-solid-rows',
-        { catchUp: true, threads: true },
-        { narrow: true },
-      ),
+    after: async (page) => assertTabCatchUpRows(page, 'catch-up-pipeline', { kinds: ['post'] }),
   },
   {
-    // The Threads row alone (1 new); nothing unread, so no Catch up row.
-    name: 'activity-threads-new',
+    // Briefs: "Brief catch up" (a brief created for me).
+    name: 'catch-up-briefs',
+    seed: creator,
+    extra: seedTabCatchUps,
+    url: '/briefs',
+    steps: async (page) => {
+      await briefsReady(page);
+      await tabCatchUpAt(page, ['brief']);
+    },
+    after: async (page) => assertTabCatchUpRows(page, 'catch-up-briefs', { kinds: ['brief'] }),
+  },
+  {
+    // Plan (Upcoming): "Plan catch up" then "Concept catch up"; side by side on laptop.
+    name: 'catch-up-plan',
     seed: creator,
     extra: (network) => {
-      seedOneThreadNew(network);
-      seedActivityAllRead(network);
+      seedTab(network);
+      seedTabCatchUps(network);
     },
-    url: '/activity',
+    url: '/plan',
     steps: async (page) => {
-      await activityReady(page);
-      await activitySolidRowsAt(page, { catchUp: false, threads: true });
+      await planTabReady(page);
+      await tabCatchUpAt(page, ['plan-item', 'idea']);
     },
     after: async (page) =>
-      assertActivitySolidRows(
-        page,
-        'activity-threads-new',
-        { catchUp: false, threads: true },
-        { narrow: true },
-      ),
+      assertTabCatchUpRows(page, 'catch-up-plan', { kinds: ['plan-item', 'idea'] }),
   },
   {
-    // Catch up's long-press (phone) / right-click (laptop): one row, Mark all
-    // as read. Both solid rows show under it.
-    name: 'activity-catch-up-menu',
+    // Plan's Bank chip: the same two rows, above the chips on every chip.
+    name: 'catch-up-bank',
+    seed: creator,
+    extra: (network) => {
+      seedTab(network);
+      seedTabCatchUps(network);
+    },
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await tabCatchUpAt(page, ['plan-item', 'idea']);
+    },
+    after: async (page) =>
+      assertTabCatchUpRows(page, 'catch-up-bank', { kinds: ['plan-item', 'idea'] }),
+  },
+  {
+    // Chat list: "Chat catch up" (unread chats and the one new thread); it replaces Threads.
+    name: 'catch-up-chat',
     seed: creator,
     extra: seedOneThreadNew,
-    url: '/activity',
+    url: '/chat',
+    steps: async (page) => {
+      await chatListReady(page);
+      await tabCatchUpAt(page, ['chat']);
+    },
+    after: async (page) => assertTabCatchUpRows(page, 'catch-up-chat', { kinds: ['chat'] }),
+  },
+  {
+    // Laptop hover: "Mark N as read" left of the count (a Tool key, no fill).
+    name: 'catch-up-hover',
+    seed: creator,
+    extra: seedTabCatchUps,
+    only: 'laptop',
     hold: true,
+    url: '/pipeline',
     steps: async (page) => {
-      await activityReady(page);
-      await activitySolidRowsAt(page, { catchUp: true, threads: true });
-      await assertActivitySolidRows(page, 'activity-catch-up-menu', {
-        catchUp: true,
-        threads: true,
-      });
-      await openMenuGesture(page, page.locator('[data-shell="lead"] [data-topbar-catch-up]'));
-      await waitFor(
-        [
-          page.getByRole('menuitem', { name: 'Mark all as read' }),
-          page.getByText('Mark all as read'),
-        ],
-        'Mark all as read',
+      await pipelineReady(page);
+      await tabCatchUpAt(page, ['post']);
+      await page.locator('[data-tab-catch-up="post"]').hover();
+      await waitFor([page.locator('[data-tab-catch-up-mark="post"] button')], 'Mark N as read');
+      await expect(page.locator('[data-tab-catch-up-mark="post"] button')).toHaveText(
+        /^Mark \d+ as read$/,
       );
-      await page.mouse.move(0, 0);
     },
-  },
-  {
-    // Threads tapped: the Threads list (/activity?threads=1), only threads
-    // with something new; this seed has exactly one.
-    name: 'activity-threads-list',
-    seed: creator,
-    extra: (network) => {
-      seedOneThreadNew(network);
-      seedActivityAllRead(network);
-    },
-    url: '/activity',
-    steps: async (page) => {
-      await activityReady(page);
-      await activitySolidRowsAt(page, { catchUp: false, threads: true });
-      await tap([page.locator('[data-shell="lead"] [data-topbar-threads]')], 'Threads');
-      const screen = page.locator('[data-threads-screen]');
-      await waitFor([screen.locator('[data-threads-block]').first()], 'threads list block');
-      expect(new URL(page.url()).searchParams.get('threads')).toBe('1');
-      const blocks = screen.locator('[data-threads-block]');
-      await expect(blocks).toHaveCount(1);
-      await expect(screen.locator('[data-threads-block]:not([data-unread])')).toHaveCount(0);
-    },
-    // Check 14 threads-list: header lines and every message's name and text on
-    // one column, one right edge, text off the band hairlines.
-    after: async (page) => assertAlignment(page, 'activity-threads-list', 'threads-list'),
   },
 );
 for (const screen of SCREENS) {
