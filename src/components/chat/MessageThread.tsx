@@ -114,6 +114,7 @@ import {
   HEADER_NAME_TYPE,
   HEADER_PAD,
   NO_TOUCH_SELECT,
+  SEARCH_PEEK_INDENT,
   sized,
   TYPING_ROW_TYPE,
   useChatLayout,
@@ -370,6 +371,7 @@ import {
   isLinkTarget,
   type RowRail,
   MessageBubble,
+  bubbleMeta as bubbleMetaOf,
   type ThreadRow,
   threadRows,
   type RowHold,
@@ -2019,6 +2021,11 @@ function ThreadBody(
     /** A jump-to request (seq makes a repeat of the same id fire again). */
     /** quiet: a search jump whose message is gone opens the chat with no toast. */
     jumpRequest: { id: string; seq: number; quiet?: boolean } | null;
+    /**
+     * Search inside the chat (13 Nov 2026): the current hit when it is a thread
+     * reply, shown alone under its root's replies row (the thread stays shut).
+     */
+    searchPeek?: { rootId: string; message: ThreadMessage; onOpen: () => void } | null;
     onEnsureLoaded?: (messageId: string) => Promise<FindOlderOutcome>;
     /** A message's post chip (undefined keeps its quote). */
     chipFor?: (message: ThreadMessage) => BubbleChip | undefined;
@@ -2520,6 +2527,19 @@ function ThreadBody(
       else recentreOn(id);
     });
   }, [jumpRequest, reveal, pin, recentreOn]);
+  // A search hit in a reply (13 Nov 2026): the walk lands on its root; once the
+  // reply shows under the root's replies row, the jump moves on to it.
+  const peekId = props.searchPeek?.message.id ?? null;
+  useEffect(() => {
+    if (peekId === null) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        // The reply's row carries its own id, so the chat's jump takes it over.
+        reveal(peekId, JUMP_HIGHLIGHT_MS);
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [peekId, reveal]);
   // New rows: a pending jump owns the position while its pages land; an older
   // page keeps the reader where they were; else an own send takes hold of the
   // bottom again and, while the intent holds, the list pins instantly before
@@ -3331,6 +3351,37 @@ function ThreadBody(
                       coarse={coarsePointer}
                       onOpen={() => repliesRow.onOpen()}
                     />
+                  ) : null}
+                  {props.searchPeek != null && props.searchPeek.rootId === row.message.id ? (
+                    <div data-search-peek="" className={sized(SEARCH_PEEK_INDENT, props.layout)}>
+                      <MessageRow
+                        message={props.searchPeek.message}
+                        profiles={props.profiles}
+                        cache={props.cache}
+                        presignEnabled={props.presignEnabled}
+                        showTicks={props.showTicks}
+                        isGroup={props.isGroup}
+                        head
+                        tail
+                        afterLabel={false}
+                        layout={props.layout}
+                        viewerUserId={props.viewerUserId}
+                        mentions={rowMentions}
+                        workspaceId={props.workspaceId}
+                        meta={bubbleMetaOf(props.searchPeek.message, undefined, {
+                          showTicks: props.showTicks,
+                        })}
+                        onOpen={onOpenRow}
+                        onOpenImage={onOpenImage}
+                        hoverMenu={hoverMenu}
+                        coarsePointer={coarsePointer}
+                        reducedMotion={reducedMotion}
+                        onSwipeReply={props.searchPeek.onOpen}
+                        onTapOpenThread={props.searchPeek.onOpen}
+                        // A thread's reply, as its thread draws it (no quote of its parent).
+                        threadMember
+                      />
+                    </div>
                   ) : null}
                   {strip ? (
                     <RepliesSeparatorRow
@@ -5356,17 +5407,39 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // thread with that reply highlighted; the main chat never holds replies.
   const jumpTarget = jumpRequest !== null ? known.get(jumpRequest.id) : undefined;
   const jumpIsReply = jumpTarget !== undefined && !isTopLevel(jumpTarget);
-  const mainJump = jumpIsReply ? null : jumpRequest;
+  // Search inside the chat (13 Nov 2026, as comments): a hit in a reply stays
+  // in the chat; the walk lands on its root and the reply shows alone under the
+  // root's replies row. A tap on it opens the thread there.
+  const peekJump =
+    jumpIsReply && searching && jumpRequest !== null && chatSearch.currentId === jumpRequest.id;
+  const peekRootId = peekJump ? threadRootOf(jumpTarget) : null;
+  const mainJump =
+    peekRootId !== null && jumpRequest !== null
+      ? { id: peekRootId, seq: jumpRequest.seq, quiet: true }
+      : jumpIsReply
+        ? null
+        : jumpRequest;
   const [viewJump, setViewJump] = useState<{ id: string; seq: number } | null>(null);
+  const searchPeek =
+    peekRootId !== null && jumpTarget !== undefined && jumpRequest !== null
+      ? {
+          rootId: peekRootId,
+          message: jumpTarget,
+          onOpen: () => {
+            openThread(peekRootId);
+            setViewJump({ id: jumpTarget.id, seq: jumpRequest.seq });
+          },
+        }
+      : null;
   const routedJumpRef = useRef<number | null>(null);
   useEffect(() => {
-    if (jumpRequest === null || jumpTarget === undefined || !jumpIsReply) return;
+    if (jumpRequest === null || jumpTarget === undefined || !jumpIsReply || peekJump) return;
     if (routedJumpRef.current === jumpRequest.seq) return;
     routedJumpRef.current = jumpRequest.seq;
     openThread(threadRootOf(jumpTarget));
     setViewJump({ id: jumpTarget.id, seq: jumpRequest.seq });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpRequest, jumpIsReply]);
+  }, [jumpRequest, jumpIsReply, peekJump]);
   // L3: a Talk about (a post's card) opens that card's thread, never a quote bar.
   useEffect(() => {
     if (aboutDraft === null) return;
@@ -5891,6 +5964,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             <ThreadBody
               {...bodyActions}
               jumpRequest={mainJump}
+              searchPeek={searchPeek}
               {...(props.onEnsureLoaded !== undefined
                 ? { onEnsureLoaded: props.onEnsureLoaded }
                 : {})}

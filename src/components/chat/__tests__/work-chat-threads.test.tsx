@@ -359,7 +359,8 @@ describe('L13: Copy link', () => {
 
   it('a jump to a thread reply opens its thread with the reply highlighted', () => {
     const src = read('../MessageThread.tsx') + read('../MessageBubble.tsx');
-    expect(src).toContain('const mainJump = jumpIsReply ? null : jumpRequest;');
+    // Outside a chat search (13 Nov 2026: a search hit in a reply shows under its root instead).
+    expect(src).toMatch(/: jumpIsReply\s+\? null\s+: jumpRequest;/);
     expect(src).toContain('openThread(threadRootOf(jumpTarget));');
   });
 });

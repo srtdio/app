@@ -2106,6 +2106,23 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 13 Nov 2026: a chat search hit in a thread reply stays in the chat: the
+    // walk lands on its root and the reply shows alone under the replies row.
+    name: 'chat-search-reply',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, MAYA_NAME);
+      await threadStill(page);
+      await tap([page.locator('[data-chat-search-key]')], 'search key');
+      await page.locator('[data-chat-search-field]').fill('trimmed');
+      await expect(page.locator('[data-chat-search-count]')).toHaveText('1 of 1');
+      await waitFor([page.locator('[data-search-peek] [data-search-current] mark')], 'reply hit');
+      await expect(page.locator('[data-thread-view]')).toHaveCount(0);
+      await threadStill(page);
+    },
+  },
+  {
     // L3: a root's replies row in the main chat (a post-card thread).
     name: 'chat-replies-row',
     seed: creator,
