@@ -3248,6 +3248,34 @@ const SCREENS: Screen[] = [
     after: planThreadChecks,
   },
   {
+    // 13 Nov 2026: search inside a thread (every thread's frame): the field in
+    // the bar's place, hits coloured, the current one ringed, "N of M" in the
+    // reply box's place.
+    name: 'thread-search-typed',
+    seed: creator,
+    extra: seedChatPlanCommentThreads,
+    url: '/chat',
+    steps: async (page) => {
+      await openPlanItemComments(page);
+      await openPlanCommentThread(page);
+      await tap([page.locator('[data-thread-view] [data-chat-search-key]')], 'thread search key');
+      await page.locator('[data-thread-view] [data-chat-search-field]').fill('the');
+      await expect(page.locator('[data-thread-view] [data-chat-search-count]')).toHaveText(
+        /^1 of [2-9]$/,
+      );
+      // Enter = an older hit (laptop's key; the phone's up key runs the same step).
+      await page.locator('[data-thread-view] [data-chat-search-field]').press('Enter');
+      await expect(page.locator('[data-thread-view] [data-chat-search-count]')).toHaveText(
+        /^2 of [2-9]$/,
+      );
+      await waitFor(
+        [page.locator('[data-thread-view] [data-search-current] mark[data-search-mark]')],
+        'current hit',
+      );
+      await expect(page.locator('[data-thread-view] [data-composer]')).toBeHidden();
+    },
+  },
+  {
     // The same threads on a Bank idea (its own route, no plan).
     name: 'bank-idea-comment-threads',
     seed: creator,

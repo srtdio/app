@@ -13,7 +13,7 @@
 // the push and returns on Back. The header carries the rows' long-press
 // guard. Tokens only; light and dark at parity.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
@@ -26,6 +26,14 @@ import {
 } from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
 import { HeaderBar } from '@/components/ui/HeaderBar';
+import {
+  ChatSearchField,
+  ChatSearchKey,
+  ChatSearchSteps,
+  useLocalSearch,
+} from '@/components/chat/ChatSearch';
+import { SearchCurrentContext, SearchWordsContext } from '@/components/ui/SearchHighlight';
+import type { SearchableRow } from '@/lib/chat/in-chat-search';
 import { textRole } from '@/components/ui/Text';
 import {
   Bone,
@@ -84,6 +92,17 @@ export function ThreadViewFrame(props: {
   onClosedRef.current = props.onClosed;
   const behind = (): HTMLElement | null => props.behindRef?.current ?? null;
   const returnedRef = useRef(false);
+  // Search inside the thread (13 Nov 2026): the bar's search key, the field in
+  // the bar's place, "N of M" in the reply box's place; hits are this thread's rows.
+  const search = useLocalSearch({
+    readRows: () => threadRowsOf(rootRef.current),
+    onJump: (id) => {
+      const row = rootRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
+      row?.scrollIntoView({ block: 'center' });
+    },
+  });
+  const outerWords = useContext(SearchWordsContext);
+  const outerCurrent = useContext(SearchCurrentContext);
   // Push in from the first frame (the view is already painted at rest; the
   // move is laid over it). Its height is held until the push is done, so a
   // rising keyboard never reflows it mid-move. Laptop: instant.
@@ -198,6 +217,7 @@ export function ThreadViewFrame(props: {
       role="dialog"
       aria-label={props.title}
       data-thread-view=""
+      data-thread-searching={search.open ? '' : undefined}
       onKeyDown={onKeyDown}
       {...edgeBack}
       // Flat look: an in-content pane over the thread, no card height or ring.
@@ -211,17 +231,32 @@ export function ThreadViewFrame(props: {
           ? { onContextMenu: (e: { preventDefault: () => void }) => e.preventDefault() }
           : {})}
       >
-        {/* FN23: the dismiss is a chevron, like every other chat layer's back. */}
-        <ThreadViewHeader
-          title={props.title}
-          subtitle={props.subtitle}
-          onBack={() => close()}
-          backLabel="Close thread"
-          buttonRef={closeRef}
-          backData={{ 'data-thread-view-close': '' }}
-        />
+        {search.open ? (
+          <HeaderBar
+            compact
+            title={THREAD_SEARCH_PLACE}
+            titleSlot={<ChatSearchField chatName={THREAD_SEARCH_PLACE} search={search} />}
+          />
+        ) : (
+          // FN23: the dismiss is a chevron, like every other chat layer's back.
+          <ThreadViewHeader
+            title={props.title}
+            subtitle={props.subtitle}
+            onBack={() => close()}
+            backLabel="Close thread"
+            buttonRef={closeRef}
+            backData={{ 'data-thread-view-close': '' }}
+            {...(props.selecting ? {} : { onSearch: search.start })}
+          />
+        )}
       </div>
-      {props.children}
+      {/* Outside a search the screen's own jump words and hit pass through. */}
+      <SearchWordsContext.Provider value={search.open ? search.words : outerWords}>
+        <SearchCurrentContext.Provider value={search.open ? search.currentId : outerCurrent}>
+          {props.children}
+        </SearchCurrentContext.Provider>
+      </SearchWordsContext.Provider>
+      {search.open ? <ChatSearchSteps search={search} /> : null}
     </div>
   );
 }
@@ -238,7 +273,10 @@ export function ThreadViewHeader(props: {
   backLabel: string;
   buttonRef?: RefObject<HTMLButtonElement> | undefined;
   backData: { [hook: `data-${string}`]: string };
+  /** The trailing search key; absent: none. */
+  onSearch?: (() => void) | undefined;
 }): ReactElement {
+  const onSearch = props.onSearch;
   return (
     // 8 Nov 2026: the chat's name under the title reads in the sans
     // secondary role (HeaderBar's own subtitle is the mono meta role),
@@ -259,6 +297,9 @@ export function ThreadViewHeader(props: {
         </>
       }
       onBack={props.onBack}
+      {...(onSearch !== undefined
+        ? { actions: <ChatSearchKey inBar label={THREAD_SEARCH_LABEL} onOpen={onSearch} /> }
+        : {})}
       backProps={{
         label: props.backLabel,
         ...(props.buttonRef !== undefined ? { buttonRef: props.buttonRef } : {}),
@@ -266,6 +307,27 @@ export function ThreadViewHeader(props: {
       }}
     />
   );
+}
+
+/** The thread's search key and field words. */
+export const THREAD_SEARCH_LABEL = 'Search in this thread';
+const THREAD_SEARCH_PLACE = 'this thread';
+
+/**
+ * The rows a thread's search reads, in screen order: every message row's text
+ * and its file names. Empty without a view.
+ */
+export function threadRowsOf(root: HTMLElement | null): SearchableRow[] {
+  if (root === null) return [];
+  const rows: SearchableRow[] = [];
+  root.querySelectorAll<HTMLElement>('[data-msg-id]').forEach((row) => {
+    const id = row.dataset['msgId'];
+    if (id === undefined) return;
+    const parts = row.querySelectorAll('[data-msg-body], [data-file-name]');
+    const text = Array.from(parts, (el) => el.textContent ?? '').join(' ');
+    rows.push({ id, text });
+  });
+  return rows;
 }
 
 /** Placeholder rows (photo, name, line) sized like the reply rows: the family's photo box, 12 to the text. */
