@@ -87,6 +87,8 @@ import {
 } from '@/lib/catch-up/card-swipe';
 import { CatchUpCard, type SentMessage } from '@/components/catch-up/CatchUpCard';
 import { CatchUpThreadView } from '@/components/catch-up/CatchUpThreadView';
+import { ThreadViewHeader } from '@/components/chat/ThreadView';
+import { REPLY_TITLE, type ReplyPlace } from '@/lib/chat/thread-rail';
 import { CatchUpReply } from '@/components/catch-up/CatchUpReply';
 import { CatchUpEnd } from '@/components/catch-up/CatchUpEnd';
 import { useCatchUpActions } from '@/components/catch-up/CatchUpActionLayer';
@@ -213,9 +215,19 @@ export function replyHint(
   return `Message ${item.lead.chatName ?? item.lead.actorName ?? 'chat'}`;
 }
 
-/** The thread sheet's title: "Thread" on chat cards, "Replies" on comment cards. Pure. */
-export function sheetTitle(item: CatchUpItem): string {
-  return wordsFamily(item.kind) === 'chat' ? 'Thread' : 'Replies';
+/** A thread's title by place (13 Nov 2026), the same words as every thread (REPLY_TITLE). Pure. */
+export function threadTitle(item: CatchUpItem): string {
+  const place: ReplyPlace =
+    wordsFamily(item.kind) === 'chat'
+      ? 'chat'
+      : item.kind === 'brief'
+        ? 'brief'
+        : item.kind === 'plan-item'
+          ? 'plan'
+          : item.kind === 'idea'
+            ? 'bank'
+            : 'post';
+  return REPLY_TITLE[place];
 }
 
 /** The root a card's Slack-way target posts under (its author names the box). Pure. */
@@ -976,24 +988,15 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
             data-catch-up-thread-window=""
             className="absolute inset-0 z-nav flex flex-col bg-bg pb-[env(safe-area-inset-bottom)]"
           >
-            <div className={CATCH_UP_BAR_CLASS}>
-              <IconButton
-                label="Back to the card"
-                data-catch-up-thread-back=""
-                onClick={() => closeThread()}
-                className={CATCH_UP_ROUND_KEY}
-              >
-                <IconChevronLeft size={ICON_SIZE.control} />
-              </IconButton>
-              <div className="flex min-w-0 flex-1 flex-col items-center text-center">
-                <Text role="label" as="h2" data-catch-up-thread-title="">
-                  Thread
-                </Text>
-                <Text role="secondary" className="max-w-full truncate text-fg-3">
-                  {menuTitle()}
-                </Text>
-              </div>
-              <span aria-hidden="true" className="w-12 shrink-0" />
+            {/* The same top bar as every thread (13 Nov 2026): "<", the title by place. */}
+            <div className="shrink-0 pt-[var(--shell-safe-top,0px)]">
+              <ThreadViewHeader
+                title={threadTitle(current)}
+                subtitle={menuTitle()}
+                onBack={() => closeThread()}
+                backLabel="Back to the card"
+                backData={{ 'data-catch-up-thread-back': '' }}
+              />
             </div>
             <CatchUpThreadView
               root={thread.root}
@@ -1027,25 +1030,15 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
         >
           {inThread && laptop && thread !== null ? (
             <>
-              {/* Phone: the round key sits on the sheet's 16 edge; laptop: 8, as before. */}
-              <div className="flex h-14 shrink-0 items-center gap-2 px-4 md:px-2">
-                <IconButton
-                  label="Back to the card"
-                  data-catch-up-thread-back=""
-                  onClick={() => closeThread()}
-                  className={CATCH_UP_ROUND_KEY}
-                >
-                  <IconChevronLeft size={ICON_SIZE.control} />
-                </IconButton>
-                <div className="flex min-w-0 flex-1 flex-col items-center text-center">
-                  <Text role="label" as="h2" data-catch-up-thread-title="">
-                    {sheetTitle(current)}
-                  </Text>
-                  <Text role="secondary" className="max-w-full truncate text-fg-3">
-                    {menuTitle()}
-                  </Text>
-                </div>
-                <span aria-hidden="true" className="w-12 shrink-0" />
+              {/* The same top bar as every thread (13 Nov 2026). */}
+              <div className="shrink-0">
+                <ThreadViewHeader
+                  title={threadTitle(current)}
+                  subtitle={menuTitle()}
+                  onBack={() => closeThread()}
+                  backLabel="Back to the card"
+                  backData={{ 'data-catch-up-thread-back': '' }}
+                />
               </div>
               <CatchUpThreadView
                 root={thread.root}

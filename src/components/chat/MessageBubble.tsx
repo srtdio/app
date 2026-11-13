@@ -1622,7 +1622,15 @@ export function MessageBubble(props: {
     sized(MESSAGE_PHOTO_GAP, layout),
     railRowClass(rail, false),
     NO_TOUCH_SELECT,
-    head ? (props.afterLabel === true ? 'pt-0' : replyPlace ? 'pt-4' : 'pt-3') : 'pt-1',
+    // A thread's root: no top step of its own; the thread's list sets the
+    // gap under the top bar (13 Nov 2026).
+    head
+      ? props.afterLabel === true || rootStack
+        ? 'pt-0'
+        : replyPlace
+          ? 'pt-4'
+          : 'pt-3'
+      : 'pt-1',
     // Thread view, laptop only: the root stacks its head over the full-width
     // text (head-to-text step 8); on phone it is a head row like any other.
     // Replies sit 12 from the photo.
@@ -1634,7 +1642,8 @@ export function MessageBubble(props: {
   const photo = rootStack ? (
     // The thread view's root head (Slack, 13 Nov 2026): the photo (laptop 40,
     // phone the family's 36), 12 to the name over the time (phone: on 64).
-    <div data-thread-root-head="" className="flex min-w-0 items-center gap-3">
+    // Photo top-aligned: 12 under the top bar exactly; the name sits on its top.
+    <div data-thread-root-head="" className="flex min-w-0 items-start gap-3">
       {asPerson(
         <Avatar
           name={headerName(message, profiles)}

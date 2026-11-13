@@ -108,7 +108,8 @@ describe('chat thread: opens at the first message (13 Nov 2026, Slack)', () => {
 
   it('with it the list is top aligned and never sticks to the end on open', () => {
     expect(chat).toContain('            props.openAtTop === true,');
-    expect(chat).toContain("className={topAligned ? undefined : 'mt-auto'}");
+    // 13 Nov 2026: 4 more on the list's 8, 12 under the top bar.
+    expect(chat).toContain("className={topAligned ? 'h-1 shrink-0' : 'mt-auto'}");
     expect(chat).toContain("{...(props.openAtTop === true ? { 'data-thread-open-top': '' } : {})}");
     expect(chat).toContain(
       'const stickRef = useRef(props.openAtTop === true ? false : openingIntent());',
@@ -152,7 +153,8 @@ describe('comment thread: focus on open and bottom anchor', () => {
     expect(comments).toContain(
       'className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"',
     );
-    expect(comments).toContain('<ul className="flex shrink-0 flex-col pb-3 pt-4">');
+    // 13 Nov 2026: 12 under the top bar (the root row has no top step of its own).
+    expect(comments).toContain('<ul className="flex shrink-0 flex-col pb-3 pt-3">');
     expect(comments).not.toContain('mt-auto');
     expect(comments).toContain('data-thread-open-top=""');
     expect(comments).toContain('if (!landing) scrollRef.current?.scrollTo({ top: 0 });');

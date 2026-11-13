@@ -2478,7 +2478,12 @@ export async function assertAlignment(
         if (shown(photo)) {
           const p = photo.getBoundingClientRect();
           at('root photo', p.left, 16);
-          f.gaps.push({ label: 'root photo size', gap: p.width, equals: headRoot ? 36 : 40 });
+          // 13 Nov 2026: every thread's root photo, catch up's too: 36 phone, 40 laptop.
+          f.gaps.push({
+            label: 'root photo size',
+            gap: p.width,
+            equals: window.innerWidth < 768 ? 36 : 40,
+          });
         } else f.gaps.push({ label: 'no root photo', gap: -1, min: 0 });
         const text = textOf(root);
         const t = text !== null && shown(text) ? textBox(text) : null;

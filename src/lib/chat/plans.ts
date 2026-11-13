@@ -30,6 +30,7 @@ import type {
 } from '@srtdio/rpc';
 import { DOMAIN_ERROR_CODES, planDraftRows } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
+import { commentTaskEmbed, type CommentTaskEmbed } from '@srtdio/comments';
 import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import type { Precheck } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
@@ -202,6 +203,10 @@ export interface PlanCommentRow {
   attachment_asset_ids?: string[] | null;
   /** A main comment: the viewer's own read point on its thread (null: never opened). */
   thread_read_at?: string | null;
+  /** Add to Tasks (13 Nov 2026, post comments' rule): 'assigned' | 'done' | null. */
+  task_state?: string | null;
+  /** The task link (RLS: creators only; null for approvers and untasked comments). */
+  task_link?: CommentTaskEmbed | null;
 }
 
 /** One plan with everything its card and screen show. */
@@ -249,7 +254,7 @@ const REVIEW_COLUMNS = 'item_id, side, status, reviewed_by, reviewed_at';
  * all of it, as post comments' COMMENT_SELECT does. No N+1.
  */
 export const ITEM_COMMENT_COLUMNS =
-  'id, item_id, author_user_id, body, visibility, created_at, parent_comment_id, attachment_asset_ids, plan_item_comment_thread_reads(last_read_at)';
+  'id, item_id, author_user_id, body, visibility, created_at, parent_comment_id, attachment_asset_ids, task_state, plan_item_comment_tasks(task_id, channel_id, assignee_user_id, group_name), plan_item_comment_thread_reads(last_read_at)';
 
 /** Split ids into IN lists of at most PLAN_READ_CHUNK. Pure. */
 export function planChunks(ids: readonly string[]): string[][] {
@@ -754,8 +759,9 @@ export async function readCommentCounts(
 }
 
 /** One plan_item_comments row as ITEM_COMMENT_COLUMNS reads it (the read-point embed raw). */
-export interface PlanCommentRead extends Omit<PlanCommentRow, 'thread_read_at'> {
+export interface PlanCommentRead extends Omit<PlanCommentRow, 'thread_read_at' | 'task_link'> {
   plan_item_comment_thread_reads?: unknown;
+  plan_item_comment_tasks?: unknown;
 }
 
 /** The read-point embed as a time or null, whatever shape it came in (object, 0..1 array). Pure. */
@@ -768,12 +774,14 @@ export function planThreadReadAt(value: unknown): string | null {
 
 /** A read row with the embed folded into thread_read_at and null thread columns kept. Pure. */
 export function planCommentOfRead(row: PlanCommentRead): PlanCommentRow {
-  const { plan_item_comment_thread_reads: reads, ...rest } = row;
+  const { plan_item_comment_thread_reads: reads, plan_item_comment_tasks: link, ...rest } = row;
   return {
     ...rest,
     parent_comment_id: rest.parent_comment_id ?? null,
     attachment_asset_ids: rest.attachment_asset_ids ?? null,
     thread_read_at: planThreadReadAt(reads),
+    task_state: rest.task_state ?? null,
+    task_link: commentTaskEmbed(link),
   };
 }
 

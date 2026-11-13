@@ -2461,7 +2461,10 @@ const SCREENS: Screen[] = [
         [page.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
         'replies',
       );
-      await waitFor([page.locator('[data-catch-up-thread-title]')], 'Thread title');
+      await waitFor(
+        [page.locator('h1 [data-thread-view-title]', { hasText: 'Chat reply' })],
+        'Chat reply title',
+      );
     },
   },
   {
@@ -2913,10 +2916,8 @@ const SCREENS: Screen[] = [
         [sheet.locator('[data-catch-up-thread-replies] [data-catch-up-message]')],
         'replies',
       );
-      // Phone: the window reads "Thread"; laptop's sheet keeps "Replies".
-      await expect(sheet.locator('[data-catch-up-thread-title]')).toHaveText(
-        isLaptop(page) ? 'Replies' : 'Thread',
-      );
+      // Every thread's top bar, title by place (13 Nov 2026).
+      await expect(sheet.locator('h1 [data-thread-view-title]')).toHaveText('Post comment reply');
       for (const key of ['tasks', 'forward', 'more'])
         await waitFor([sheet.locator(`[data-thread-root-action="${key}"]`)], `${key} key`);
     },

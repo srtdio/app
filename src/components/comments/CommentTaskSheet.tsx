@@ -40,6 +40,7 @@ import {
   TASK_FIELD_LABEL,
   addTaskFailed,
   createCommentTask,
+  type CommentTaskSource,
   localTaskLink,
   sameTarget,
   taskChannelId,
@@ -57,6 +58,8 @@ export interface CommentTaskSheetProps {
   onClose: () => void;
   workspaceId: string;
   commentId: string;
+  /** Post and brief comments (default) or Plan and Bank comments. */
+  source?: CommentTaskSource;
   /** The comment's plain text, already one line and capped (taskTitleFrom). */
   initialTitle: string;
   me: string | null;
@@ -122,6 +125,7 @@ export function CommentTaskSheet(props: CommentTaskSheetProps): ReactElement {
     }
     const result = await createCommentTask({
       client: supabase,
+      source: props.source ?? 'comment',
       commentId: props.commentId,
       channelId,
       title,

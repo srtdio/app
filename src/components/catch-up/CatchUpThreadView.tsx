@@ -1,7 +1,8 @@
 // A thread opened full screen inside catch up (9 Nov 2026): the card frame,
-// the name row and the bottom buttons hide; the top bar reads "Thread" over
-// the item name, "<" returns to the exact card state. Body: the root (40
-// photo, name over its date, the text full width on the 16 gutter), chat's
+// the name row and the bottom buttons hide; the top bar is every thread's
+// (title by place over the item name, 13 Nov 2026), "<" returns to the exact
+// card state. Body: the root (36 photo on phone, 12 under the bar, name
+// over its date, the text full width on the 16 gutter), chat's
 // one thread strip (ui RepliesSeparatorRow: "Reply in thread" focuses the
 // reply box, else "N replies"), the replies oldest first, then the "Reply in
 // thread" box. No reply gesture inside a thread. Pure render.
@@ -82,7 +83,8 @@ export function CatchUpThreadView(props: {
   return (
     <div ref={props.viewRef} data-catch-up-thread="" className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-        {/* Root: 12 from its last text line to the strip's top hairline; replies start 8 under it. */}
+        {/* Root: 12 under the top bar (every thread, 13 Nov 2026); 12 from its last
+            text line to the strip's top hairline; replies start 8 under it. */}
         <ul className="flex flex-col">
           <li
             data-catch-up-message={props.root.id}

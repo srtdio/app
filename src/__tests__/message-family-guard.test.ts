@@ -278,8 +278,8 @@ describe('message family: phone edges and columns (12 Nov 2026)', () => {
     const rail = read('components/chat/ThreadRail.tsx');
     // 16 + the 36 icon column + 12.
     expect(rail).toContain("chat: { x: 'px-4', gap: 'gap-2 max-md:gap-3' }");
-    // 16 + the 40 root photo + 8.
-    expect(rail).toContain('className="flex min-w-0 items-center gap-3 max-md:gap-2"');
+    // 13 Nov 2026: chat's root head (16 + the 36 photo + 12 on phone), top aligned.
+    expect(rail).toContain('className="flex min-w-0 items-start gap-3"');
     // The strip's last key: its ink ends on the 16 edge.
     expect(rail).toContain("cn('flex shrink-0 items-center', TRAILING_PULL, INK_TRAILING_LAST)");
   });

@@ -77,7 +77,15 @@ import { supabase } from '@/lib/supabase';
 import { rowWhen } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
-import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
+import {
+  peekWorkspaceMembers,
+  useMentionCandidates,
+  type WorkspaceMembersData,
+} from '@/lib/workspace-members';
+import { CommentTaskSheet } from '@/components/comments/CommentTaskSheet';
+import { CommentTaskTag } from '@/components/comments/CommentTaskTag';
+import { commentTaskTag, taskStateOf, taskTitleFrom } from '@/lib/comment-tasks';
+import type { CommentTaskEmbed } from '@srtdio/comments';
 import { useReactions, type ReactionsApi } from '@/lib/reactions/use-reactions';
 import type { ReactionSummary } from '@/lib/reactions/model';
 
@@ -106,6 +114,10 @@ export interface ShownComment {
   localAttachments?: MessageAttachment[];
   /** A main comment: my read point on its thread (null: never opened). */
   readAt?: string | null;
+  /** Add to Tasks (13 Nov 2026, post comments' rule): 'assigned' | 'done' | null. */
+  taskState?: string | null;
+  /** The task link (creators only, by RLS). */
+  taskLink?: CommentTaskEmbed | null;
 }
 
 /** Where a plan comment's Reply privately points: the plan, the item, its title. */
@@ -523,6 +535,8 @@ function PlanCommentRow(props: {
   threadPlace?: 'root' | 'reply' | undefined;
   /** The "Creators only" line on a team note (the page and the top of its thread). */
   teamLine: boolean;
+  /** The comment's task tag (post comments' CommentTaskTag); absent: none. */
+  bottomLine?: ReactNode;
 }): ReactElement {
   const c = props.comment;
   return (
@@ -559,15 +573,48 @@ function PlanCommentRow(props: {
         'data-plan-comment-highlight': props.highlighted ? '' : undefined,
       }}
       {...(props.teamLine && c.visibility === 'team' ? { topLine: <TeamOnlyLine /> } : {})}
+      {...(props.bottomLine !== undefined ? { bottomLine: props.bottomLine } : {})}
+    />
+  );
+}
+
+/**
+ * The To-do sheet for a Plan / Bank comment (13 Nov 2026): post comments'
+ * CommentTaskSheet on plan_item_comment_task_create, mounted only while open,
+ * so the members read happens then. 'task_exists' just closes (the screen's
+ * next read shows the tag).
+ */
+function PlanCommentTaskLayer(props: {
+  workspaceId: string;
+  comment: ShownComment;
+  title: string;
+  me: string | null;
+  onClose: () => void;
+  onCreated: (commentId: string, link: CommentTaskEmbed) => void;
+}): ReactElement {
+  const { candidates } = useMentionCandidates(props.workspaceId);
+  return (
+    <CommentTaskSheet
+      open
+      onClose={props.onClose}
+      workspaceId={props.workspaceId}
+      commentId={props.comment.id}
+      source="plan"
+      initialTitle={props.title}
+      me={props.me}
+      candidates={candidates}
+      newTrace={generateTraceId}
+      onCreated={(link) => props.onCreated(props.comment.id, link)}
+      onExists={() => undefined}
     />
   );
 }
 
 /**
  * The open comment's long-press menu: chat's MessageActionMenu with the rows
- * a plan comment has (the quick reactions and "+", Reply, Copy link, Copy
- * text, Reply privately, and a failed own send's Delete). No Forward, Tasks,
- * Mark unread, Edit or Delete: plan comments store none of those. Reply opens
+ * a plan comment has (the quick reactions and "+", Reply, Add to Tasks for a
+ * creator, Copy link, Copy text, Reply privately, and a failed own send's
+ * Delete). No Mark unread, Edit or Delete: plan comments store none of those. Reply opens
  * the comment's thread; inside the thread view there is no Reply. Mounted
  * only while open, so its hooks never run on paint.
  */
@@ -581,6 +628,8 @@ function PlanCommentMenu(props: {
   linkTo: PlanCommentLinkTarget | null;
   onReply: ((comment: ShownComment) => void) | undefined;
   onDiscard: ((id: string) => void) | undefined;
+  /** Add to Tasks for this comment (creators, untasked, recorded); absent: no row. */
+  onAddToTasks: ((comment: ShownComment) => void) | undefined;
   onClose: () => void;
   reactions: ReactionsApi;
 }): ReactElement {
@@ -647,6 +696,8 @@ function PlanCommentMenu(props: {
         if (draft === null || authorId === null) return;
         openDm(authorId, { beforeOpen: (channelId) => setPrivateReplyDraft(channelId, draft) });
       }}
+      canAddToTasks={props.onAddToTasks !== undefined}
+      onAddToTasks={() => props.onAddToTasks?.(c)}
       canDelete={offer.discard && props.onDiscard !== undefined}
       failedSend={offer.discard}
       onDelete={() => props.onDiscard?.(c.id)}
@@ -689,6 +740,8 @@ export function PlanItemThread(props: {
   replyBox?: (root: ShownComment, focus: boolean) => ReactNode;
   /** A linked reply: its thread opens at it (once per id). */
   openReplyId?: string | null;
+  /** Add to Tasks on comments (13 Nov 2026): the viewer is a creator. Absent: never. */
+  canTask?: boolean;
 }): ReactElement {
   const layout = useChatLayout();
   const hoverMenu = useHoverPointer();
@@ -706,6 +759,25 @@ export function PlanItemThread(props: {
       : null;
   const profiles = planCommentProfiles(props.comments, held, props.workspaceId);
   const nameOf = profileNameOf(profiles, props.workspaceId);
+  // Add to Tasks (13 Nov 2026, post comments' rule): the sheet's comment, and
+  // links made on this device so the tag paints at once (no wait for a read).
+  const [taskFor, setTaskFor] = useState<ShownComment | null>(null);
+  const [taskNow, setTaskNow] = useState<Map<string, CommentTaskEmbed>>(new Map());
+  const canTask = props.canTask === true && props.workspaceId !== null;
+  /** A recorded, untasked comment a creator can add to Tasks. Pure read. */
+  const taskable = (c: ShownComment): boolean =>
+    canTask && recorded(c) && taskStateOf(c.taskState) === null && !taskNow.has(c.id);
+  const tagFor = (c: ShownComment): ReactNode => {
+    const link = taskNow.get(c.id) ?? c.taskLink ?? null;
+    const tag = commentTaskTag({
+      state: taskNow.has(c.id) ? 'assigned' : (c.taskState ?? null),
+      link,
+      viewerIsAgency: props.canTask === true,
+      me: props.me,
+      nameOf: (id) => profiles.get(id)?.displayName ?? null,
+    });
+    return tag !== null ? <CommentTaskTag tag={tag} /> : undefined;
+  };
   // The recorded comments' reactions (replies too): one batched read after
   // paint, again whenever the comments refresh (the screen's own read).
   const reactionIds = useMemo(
@@ -852,6 +924,7 @@ export function PlanItemThread(props: {
         onTapOpen={canOpen ? () => openThread(comment.id, !coarsePointer) : undefined}
         onReply={canOpen ? () => openThread(comment.id, true) : undefined}
         teamLine
+        bottomLine={tagFor(comment)}
       />,
     );
     const replies = (lists.replies.get(comment.id) ?? []).filter(recorded);
@@ -917,6 +990,7 @@ export function PlanItemThread(props: {
               onReply={undefined}
               threadPlace="root"
               teamLine
+              bottomLine={tagFor(root)}
             />
             <RepliesSeparatorRow
               label={recordedCount > 0 ? repliesLabel(recordedCount) : null}
@@ -925,6 +999,7 @@ export function PlanItemThread(props: {
               family="chat"
               className="mb-2 mt-3"
               actions={{
+                ...(taskable(root) ? { onTasks: () => setTaskFor(root) } : {}),
                 ...(forward ? { onForward: () => setForwardFor(root) } : {}),
                 onMore: (el: HTMLElement) =>
                   setMenu({
@@ -987,8 +1062,19 @@ export function PlanItemThread(props: {
             canThread ? (c) => (recorded(c) ? openThread(c.id, true) : undefined) : undefined
           }
           onDiscard={props.onDiscard}
+          onAddToTasks={taskable(menu.comment) ? (c) => setTaskFor(c) : undefined}
           onClose={() => setMenu(null)}
           reactions={reactions}
+        />
+      ) : null}
+      {taskFor !== null && props.workspaceId !== null ? (
+        <PlanCommentTaskLayer
+          workspaceId={props.workspaceId}
+          comment={taskFor}
+          title={taskTitleFrom(resolveMentionText(taskFor.body, nameOf))}
+          me={props.me}
+          onClose={() => setTaskFor(null)}
+          onCreated={(commentId, link) => setTaskNow((prev) => new Map(prev).set(commentId, link))}
         />
       ) : null}
       {forwardFor !== null ? (

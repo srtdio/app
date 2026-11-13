@@ -13,13 +13,16 @@ import type { ReactElement } from 'react';
 import { ICON_SIZE, IconChat, IconForward, IconTodo, RailCurveGlyph } from '@/components/ui/icons';
 import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
-import { Text, textRole } from '@/components/ui/Text';
+import { textRole } from '@/components/ui/Text';
 import { INK_TRAILING_LAST, TRAILING_PULL } from '@/components/ui/layout';
 import { ADD_TO_TASKS_LABEL, MORE_ACTIONS_LABEL } from '@/components/chat/MessageActionMenu';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import {
+  MESSAGE_AVATAR_ROLE,
   MESSAGE_PHOTO_COL,
+  SENDER_NAME_TYPE,
+  SENDER_TIME_TYPE,
   NO_TOUCH_SELECT,
   REPLIES_ROW_PAD,
   sized,
@@ -440,12 +443,10 @@ export function RepliesRow(props: {
 }
 
 /**
- * A thread view's root head in catch up (9 Nov 2026; chat's root draws the
- * same on laptop only, MessageBubble rootStack): the 40 square photo on the 16
- * gutter, 12 to the name (line 1) over its threadWhen 'date' time (line 2).
- * The root's text sits full width below it, on the gutter too. Chat's phone
- * root is a normal head row instead (36 photo, text on the 64 column); catch
- * up's thread still stacks on phone until CatchUpThreadView draws a head row.
+ * A thread view's root head in catch up, drawn as chat's thread root (13 Nov
+ * 2026, MessageBubble rootStack): the photo (laptop 40, phone the family's
+ * 36), 12 to the name (line 1) over its time (line 2). The root's text sits
+ * full width below it, on the 16 gutter.
  */
 export function ThreadRootHead(props: {
   name: string;
@@ -453,11 +454,11 @@ export function ThreadRootHead(props: {
   when: string;
   dateTime: string;
 }): ReactElement {
+  const layout = useChatLayout();
   return (
-    // Phone: 8 after the 40 photo, so the name and its time start on 64.
-    <div data-thread-root-head="" className="flex min-w-0 items-center gap-3 max-md:gap-2">
+    <div data-thread-root-head="" className="flex min-w-0 items-start gap-3">
       <Avatar
-        role="row"
+        role={layout === 'laptop' ? 'row' : MESSAGE_AVATAR_ROLE[layout]}
         name={props.name}
         {...(props.avatarUrl !== null ? { src: props.avatarUrl } : {})}
         decorative
@@ -465,13 +466,17 @@ export function ThreadRootHead(props: {
       <span className="flex min-w-0 flex-col">
         <span
           data-sender-name=""
-          className={textRole('label', 'min-w-0 font-semibold text-fg md:truncate')}
+          className={cn('min-w-0 truncate text-fg', sized(SENDER_NAME_TYPE, layout))}
         >
           {props.name}
         </span>
-        <Text role="meta" as="time" dateTime={props.dateTime} data-sender-time="">
+        <time
+          dateTime={props.dateTime}
+          data-sender-time=""
+          className={cn('block truncate text-fg-3', SENDER_TIME_TYPE)}
+        >
           {props.when}
-        </Text>
+        </time>
       </span>
     </div>
   );

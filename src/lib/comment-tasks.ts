@@ -320,6 +320,9 @@ export function addTaskFailed(error: unknown): string {
   return errorText('add the task', error);
 }
 
+/** Where the commented row lives: post / brief comments, or Plan / Bank comments. */
+export type CommentTaskSource = 'comment' | 'plan';
+
 export type CreateCommentTaskResult =
   | { ok: true; taskId: string }
   | { ok: false; exists: boolean; message: string };
@@ -339,6 +342,8 @@ export function parseTaskCreate(data: unknown): string | null {
  */
 export async function createCommentTask(params: {
   client: Client;
+  /** Which comments: post and brief (comment_task_create) or Plan and Bank (plan_item_comment_task_create, 13 Nov 2026). */
+  source?: CommentTaskSource;
   commentId: string;
   channelId: string;
   title: string;
@@ -346,6 +351,7 @@ export async function createCommentTask(params: {
   dueOn: string | null;
   traceId: string;
 }): Promise<CreateCommentTaskResult> {
+  const proc = params.source === 'plan' ? 'plan_item_comment_task_create' : 'comment_task_create';
   const args: Functions['comment_task_create']['Args'] = {
     p_comment_id: params.commentId,
     p_channel_id: params.channelId,
@@ -356,14 +362,15 @@ export async function createCommentTask(params: {
     p_trace_id: params.traceId,
   };
   try {
-    const { data, error } = await params.client.rpc('comment_task_create', args);
+    // Both procs take the same arguments and answer the same shape.
+    const { data, error } = await params.client.rpc(proc, args);
     if (error) {
       return { ok: false, exists: /task_exists/.test(error.message), message: error.message };
     }
     const taskId = parseTaskCreate(data);
     return taskId !== null
       ? { ok: true, taskId }
-      : { ok: false, exists: false, message: 'comment_task_create returned no task' };
+      : { ok: false, exists: false, message: `${proc} returned no task` };
   } catch (error) {
     return { ok: false, exists: false, message: String(error) };
   }

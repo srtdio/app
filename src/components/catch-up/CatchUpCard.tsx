@@ -438,7 +438,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
         ) : (
           <>
             {ready.hasOlder ? <BoneRows count={1} /> : null}
-            <ul data-catch-up-rows="" className="mt-auto flex flex-col py-2">
+            <ul data-catch-up-rows="" className="flex flex-col py-2">
               {drawn}
             </ul>
           </>

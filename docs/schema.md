@@ -15,7 +15,7 @@ Grant hardening: TRUNCATE, TRIGGER, REFERENCES and MAINTAIN are revoked from ano
 
 1. Identity and access: users, user_private, brand_agency_requests, workspaces, workspace_members, workspace_client_domains, workspace_role_permissions, workspace_settings, workspace_onboarding, platform_operators
 2. Content: workspace_buckets, posts, post_versions, post_annotations
-3. Discussion: comments, comment_tasks, comment_reactions, comment_thread_reads
+3. Discussion: comments, comment_tasks, comment_reactions, comment_thread_reads (plan comments: plan_item_comments, plan_item_comment_tasks)
 4. Briefs: briefs
 5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
@@ -473,6 +473,13 @@ Applied 9 Oct 2026 (step 3b plan comments), restated in migration 20261009205500
 - Threads (20261112100000_plan_item_comment_threads, applied 12 Nov 2026): parent_comment_id uuid nullable FK plan_item_comments.id ON DELETE CASCADE (null = top level; a reply points at its root, one level); attachment_asset_ids uuid[] nullable (the asset_version ids sent with the comment, in order; null when none).
 - Indexes: (item_id, created_at) where not deleted; workspace_id; author_user_id where not null; plan_item_comments_parent_idx (parent_comment_id, created_at) where parent_comment_id is not null and not deleted.
 - plan_item_comments_select_member: not deleted, its item readable, and visibility 'everyone' or the caller is_agency_side_member.
+- task_state (20261113060000_plan_item_comment_tasks, applied 13 Nov 2026): text nullable, CHECK assigned / done; set by plan_item_comment_task_create ('assigned') and kept in step with the linked chat task by chat_tasks_comment_sync (comment_task_sync covers both comment tables).
+
+### plan_item_comment_tasks
+
+Plan / Bank comment to task link (20261113060000_plan_item_comment_tasks.sql, applied 13 Nov 2026), comment_tasks' shape: comment_id PK FK plan_item_comments.id CASCADE; task_id NOT NULL UNIQUE FK chat_tasks.id CASCADE; workspace_id FK workspaces.id CASCADE; channel_id FK chat_channels.channel_id CASCADE; assignee_user_id nullable FK auth.users.id SET NULL; group_name; created_by; created_at. Indexes plan_item_comment_tasks_channel_id_idx, plan_item_comment_tasks_workspace_id_idx. RLS on, plan_item_comment_tasks_select_agency (active owner/admin/agency member); authenticated SELECT only, anon none.
+
+plan_item_comment_task_create(p_comment_id, p_channel_id, p_title, p_priority, p_due_on, p_trace_id) returns jsonb {task_id, batch_id}: SECURITY DEFINER, search_path '', EXECUTE authenticated (not anon); comment_task_create's rules (creator side only, the chat in the comment's workspace, one task per comment: 'task_exists'), the task through chat_task_save_batch.
 
 ### plan_item_comment_thread_reads
 
