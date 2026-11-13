@@ -403,12 +403,12 @@ const REQUIRED: readonly string[] = [
   'activity-sections',
   'activity-rows',
   // Catch up per tab (13 Nov 2026): each tab's rows above its chips; Activity has none.
-  'catch-up-pipeline',
-  'catch-up-briefs',
-  'catch-up-plan',
-  'catch-up-bank',
-  'catch-up-chat',
-  'catch-up-hover',
+  'tab-catch-up-pipeline',
+  'tab-catch-up-briefs',
+  'tab-catch-up-plan',
+  'tab-catch-up-bank',
+  'tab-catch-up-chat',
+  'tab-catch-up-hover',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */

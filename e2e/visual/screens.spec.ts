@@ -8443,12 +8443,12 @@ const LAPTOP_DARK_SCREENS = new Set([
   'post-comment-box',
   // Catch up per tab (13 Nov 2026): each tab's rows above its chips, phone
   // and laptop, light and dark.
-  'catch-up-pipeline',
-  'catch-up-briefs',
-  'catch-up-plan',
-  'catch-up-bank',
-  'catch-up-chat',
-  'catch-up-hover',
+  'tab-catch-up-pipeline',
+  'tab-catch-up-briefs',
+  'tab-catch-up-plan',
+  'tab-catch-up-bank',
+  'tab-catch-up-chat',
+  'tab-catch-up-hover',
 ]);
 
 // --- Activity's solid rows: Catch up, then Threads (11 Nov 2026) -----------
@@ -8572,7 +8572,7 @@ async function tabCatchUpAt(page: Page, kinds: readonly TabCatchUpRowsWant['kind
 SCREENS.push(
   {
     // Pipeline: "Post catch up" above the stage chips (an unread post comment).
-    name: 'catch-up-pipeline',
+    name: 'tab-catch-up-pipeline',
     seed: creator,
     extra: seedTabCatchUps,
     url: '/pipeline',
@@ -8580,11 +8580,11 @@ SCREENS.push(
       await pipelineReady(page);
       await tabCatchUpAt(page, ['post']);
     },
-    after: async (page) => assertTabCatchUpRows(page, 'catch-up-pipeline', { kinds: ['post'] }),
+    after: async (page) => assertTabCatchUpRows(page, 'tab-catch-up-pipeline', { kinds: ['post'] }),
   },
   {
     // Briefs: "Brief catch up" (a brief created for me).
-    name: 'catch-up-briefs',
+    name: 'tab-catch-up-briefs',
     seed: creator,
     extra: seedTabCatchUps,
     url: '/briefs',
@@ -8592,11 +8592,11 @@ SCREENS.push(
       await briefsReady(page);
       await tabCatchUpAt(page, ['brief']);
     },
-    after: async (page) => assertTabCatchUpRows(page, 'catch-up-briefs', { kinds: ['brief'] }),
+    after: async (page) => assertTabCatchUpRows(page, 'tab-catch-up-briefs', { kinds: ['brief'] }),
   },
   {
     // Plan (Upcoming): "Plan catch up" then "Concept catch up"; side by side on laptop.
-    name: 'catch-up-plan',
+    name: 'tab-catch-up-plan',
     seed: creator,
     extra: (network) => {
       seedTab(network);
@@ -8608,11 +8608,11 @@ SCREENS.push(
       await tabCatchUpAt(page, ['plan-item', 'idea']);
     },
     after: async (page) =>
-      assertTabCatchUpRows(page, 'catch-up-plan', { kinds: ['plan-item', 'idea'] }),
+      assertTabCatchUpRows(page, 'tab-catch-up-plan', { kinds: ['plan-item', 'idea'] }),
   },
   {
     // Plan's Bank chip: the same two rows, above the chips on every chip.
-    name: 'catch-up-bank',
+    name: 'tab-catch-up-bank',
     seed: creator,
     extra: (network) => {
       seedTab(network);
@@ -8623,11 +8623,11 @@ SCREENS.push(
       await tabCatchUpAt(page, ['plan-item', 'idea']);
     },
     after: async (page) =>
-      assertTabCatchUpRows(page, 'catch-up-bank', { kinds: ['plan-item', 'idea'] }),
+      assertTabCatchUpRows(page, 'tab-catch-up-bank', { kinds: ['plan-item', 'idea'] }),
   },
   {
     // Chat list: "Chat catch up" (unread chats and the one new thread); it replaces Threads.
-    name: 'catch-up-chat',
+    name: 'tab-catch-up-chat',
     seed: creator,
     extra: seedOneThreadNew,
     url: '/chat',
@@ -8635,11 +8635,11 @@ SCREENS.push(
       await chatListReady(page);
       await tabCatchUpAt(page, ['chat']);
     },
-    after: async (page) => assertTabCatchUpRows(page, 'catch-up-chat', { kinds: ['chat'] }),
+    after: async (page) => assertTabCatchUpRows(page, 'tab-catch-up-chat', { kinds: ['chat'] }),
   },
   {
     // Laptop hover: "Mark N as read" left of the count (a Tool key, no fill).
-    name: 'catch-up-hover',
+    name: 'tab-catch-up-hover',
     seed: creator,
     extra: seedTabCatchUps,
     only: 'laptop',
