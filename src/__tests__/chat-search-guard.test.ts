@@ -69,4 +69,15 @@ describe('search inside a chat', () => {
       'body:has([data-comments-search-dock]) [data-decision-bar],\nbody:has([data-comments-search-dock]) [data-plan-comments-composer]',
     );
   });
+
+  it('chat: a hit in a reply shows under its root, the thread stays shut (13 Nov 2026)', () => {
+    const thread = read('src/components/chat/MessageThread.tsx');
+    expect(thread).toContain('searchPeek={searchPeek}');
+    expect(thread).toContain(
+      'if (jumpRequest === null || jumpTarget === undefined || !jumpIsReply || peekJump) return;',
+    );
+    expect(thread).toContain(
+      '<div data-search-peek="" className={sized(SEARCH_PEEK_INDENT, props.layout)}>',
+    );
+  });
 });
