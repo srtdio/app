@@ -188,8 +188,10 @@ export function CommentThreadLayer(props: {
           // thread's spare room sits above the reply box.
           className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
         >
-          {/* pb-3: 12 between the last row (its chips included) and the reply box. */}
-          <ul className="flex shrink-0 flex-col pb-3 pt-4">{props.rows}</ul>
+          {/* pt-3: 12 under the top bar to the first photo, as every thread and
+              chat (13 Nov 2026).
+              pb-3: 12 between the last row (its chips included) and the reply box. */}
+          <ul className="flex shrink-0 flex-col pb-3 pt-3">{props.rows}</ul>
         </div>
         <LatestButton
           visible={below}

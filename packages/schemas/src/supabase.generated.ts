@@ -8339,6 +8339,68 @@ export type Database = {
           },
         ]
       }
+      plan_item_comment_tasks: {
+        Row: {
+          assignee_user_id: string | null
+          channel_id: string
+          comment_id: string
+          created_at: string
+          created_by: string | null
+          group_name: string | null
+          task_id: string
+          workspace_id: string
+        }
+        Insert: {
+          assignee_user_id?: string | null
+          channel_id: string
+          comment_id: string
+          created_at?: string
+          created_by?: string | null
+          group_name?: string | null
+          task_id: string
+          workspace_id: string
+        }
+        Update: {
+          assignee_user_id?: string | null
+          channel_id?: string
+          comment_id?: string
+          created_at?: string
+          created_by?: string | null
+          group_name?: string | null
+          task_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_item_comment_tasks_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "plan_item_comment_tasks_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: true
+            referencedRelation: "plan_item_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_comment_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: true
+            referencedRelation: "chat_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_comment_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_item_comment_thread_reads: {
         Row: {
           last_read_at: string
@@ -8389,6 +8451,7 @@ export type Database = {
           id: string
           item_id: string
           parent_comment_id: string | null
+          task_state: string | null
           visibility: string
           workspace_id: string
         }
@@ -8402,6 +8465,7 @@ export type Database = {
           id?: string
           item_id: string
           parent_comment_id?: string | null
+          task_state?: string | null
           visibility: string
           workspace_id: string
         }
@@ -8415,6 +8479,7 @@ export type Database = {
           id?: string
           item_id?: string
           parent_comment_id?: string | null
+          task_state?: string | null
           visibility?: string
           workspace_id?: string
         }
@@ -10966,6 +11031,17 @@ export type Database = {
           p_visibility: string
         }
         Returns: string
+      }
+      plan_item_comment_task_create: {
+        Args: {
+          p_channel_id: string
+          p_comment_id: string
+          p_due_on: string
+          p_priority: number
+          p_title: string
+          p_trace_id: string
+        }
+        Returns: Json
       }
       plan_item_comment_thread_read_set: {
         Args: { p_root_id: string; p_trace_id: string }

@@ -212,34 +212,59 @@ export function ThreadViewFrame(props: {
           : {})}
       >
         {/* FN23: the dismiss is a chevron, like every other chat layer's back. */}
-        {/* 8 Nov 2026: the chat's name under the title reads in the sans
-            secondary role (HeaderBar's own subtitle is the mono meta role),
-            through the bar's title slot. */}
-        <HeaderBar
-          compact
-          title={<span data-thread-view-title="">{props.title}</span>}
-          titleSlot={
-            <>
-              <h1 className={textRole('title', 'truncate')}>
-                <span data-thread-view-title="">{props.title}</span>
-              </h1>
-              {props.subtitle !== undefined ? (
-                <span data-thread-view-subtitle="" className={textRole('secondary')}>
-                  {props.subtitle}
-                </span>
-              ) : null}
-            </>
-          }
+        <ThreadViewHeader
+          title={props.title}
+          subtitle={props.subtitle}
           onBack={() => close()}
-          backProps={{
-            label: 'Close thread',
-            buttonRef: closeRef,
-            'data-thread-view-close': '',
-          }}
+          backLabel="Close thread"
+          buttonRef={closeRef}
+          backData={{ 'data-thread-view-close': '' }}
         />
       </div>
       {props.children}
     </div>
+  );
+}
+
+/**
+ * A thread's top bar (13 Nov 2026): "<" on the left, the title by place over
+ * the item name. One bar for every thread: chat, post, brief, Plan, Bank and
+ * catch up (CatchUpScreen's phone thread window).
+ */
+export function ThreadViewHeader(props: {
+  title: string;
+  subtitle?: string | undefined;
+  onBack: () => void;
+  backLabel: string;
+  buttonRef?: RefObject<HTMLButtonElement> | undefined;
+  backData: { [hook: `data-${string}`]: string };
+}): ReactElement {
+  return (
+    // 8 Nov 2026: the chat's name under the title reads in the sans
+    // secondary role (HeaderBar's own subtitle is the mono meta role),
+    // through the bar's title slot.
+    <HeaderBar
+      compact
+      title={<span data-thread-view-title="">{props.title}</span>}
+      titleSlot={
+        <>
+          <h1 className={textRole('title', 'truncate')}>
+            <span data-thread-view-title="">{props.title}</span>
+          </h1>
+          {props.subtitle !== undefined ? (
+            <span data-thread-view-subtitle="" className={textRole('secondary')}>
+              {props.subtitle}
+            </span>
+          ) : null}
+        </>
+      }
+      onBack={props.onBack}
+      backProps={{
+        label: props.backLabel,
+        ...(props.buttonRef !== undefined ? { buttonRef: props.buttonRef } : {}),
+        ...props.backData,
+      }}
+    />
   );
 }
 

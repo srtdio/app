@@ -949,6 +949,8 @@ export function PlanItemScreen(props: {
               parentId: c.parent_comment_id ?? null,
               attachmentIds: c.attachment_asset_ids ?? null,
               readAt: c.thread_read_at ?? null,
+              taskState: c.task_state ?? null,
+              taskLink: c.task_link ?? null,
             }),
           )
         : [];
@@ -1869,6 +1871,7 @@ export function PlanItemScreen(props: {
               files={commentFiles}
               threadSubtitle={title}
               replyBox={replyBox}
+              canTask={side === 'agency'}
             />
             {removeButton}
             {askingChanges ? commentDock : null}
@@ -2017,6 +2020,7 @@ export function PlanItemScreen(props: {
                   threadSubtitle={title}
                   replyBox={replyBox}
                   openReplyId={linkedReplyRoot !== null ? highlightId : null}
+                  canTask={side === 'agency'}
                 />
               )}
             </section>
@@ -2433,6 +2437,7 @@ function PlanNotes(props: {
   files: ReadonlyMap<string, CommentFile>;
   threadSubtitle: string;
   replyBox: (root: ShownComment, focus: boolean) => ReactElement;
+  canTask: boolean;
 }): ReactElement | null {
   if (props.notes.length === 0) return null;
   return (
@@ -2453,6 +2458,7 @@ function PlanNotes(props: {
         files={props.files}
         threadSubtitle={props.threadSubtitle}
         replyBox={props.replyBox}
+        canTask={props.canTask}
       />
     </section>
   );

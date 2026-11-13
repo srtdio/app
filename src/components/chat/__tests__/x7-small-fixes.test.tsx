@@ -81,7 +81,7 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
   it('ThreadView dismiss is the HeaderBar back: a 44px chevron named "Close thread"', () => {
     const view = source('../ThreadView.tsx');
     expect(view).toContain('<HeaderBar');
-    expect(view).toContain("label: 'Close thread'");
+    expect(view).toContain('backLabel="Close thread"');
     expect(source('../../ui/HeaderBar.tsx')).toContain(
       '<IconChevronLeft size={ICON_SIZE.control} />',
     );

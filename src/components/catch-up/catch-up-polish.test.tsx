@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
 
 import { stickerOf, CatchUpCard } from '@/components/catch-up/CatchUpCard';
 import { firstLinkOf, firstName, repliedLine } from '@/components/catch-up/CatchUpRows';
-import { replyHint, sheetTitle, targetRootOf } from '@/components/catch-up/CatchUpScreen';
+import { replyHint, threadTitle, targetRootOf } from '@/components/catch-up/CatchUpScreen';
 import { actionKeysOf } from '@/components/catch-up/CatchUpActionLayer';
 import { IconBank, IconBriefs, IconChat, IconPipeline, IconPlan } from '@/components/ui/icons';
 import { cardOf, entry } from '@/lib/catch-up/test-fixtures';
@@ -61,8 +61,9 @@ describe('comment words', () => {
   });
 
   it('the sheet title by family', () => {
-    expect(sheetTitle(item('post'))).toBe('Replies');
-    expect(sheetTitle(item('chat-main'))).toBe('Thread');
+    expect(threadTitle(item('post'))).toBe('Post comment reply');
+    expect(threadTitle(item('chat-main'))).toBe('Chat reply');
+    expect(threadTitle(item('idea'))).toBe('Bank idea comment reply');
   });
 
   it('the Slack-way target names its root author', () => {

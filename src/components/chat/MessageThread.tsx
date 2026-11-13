@@ -1381,7 +1381,9 @@ export function threadListItems(
       aria-hidden="true"
       data-thread-spacer=""
       {...(topAligned ? { 'data-thread-top': '' } : {})}
-      className={topAligned ? undefined : 'mt-auto'}
+      // A thread (top aligned): 4 more on the list's 8, 12 under the top bar,
+      // as every thread (13 Nov 2026).
+      className={topAligned ? 'h-1 shrink-0' : 'mt-auto'}
     />,
   ];
   if (retryOlder !== undefined && !loadingOlder) {

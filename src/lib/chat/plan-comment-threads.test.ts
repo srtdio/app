@@ -92,6 +92,11 @@ describe('the comment read (one select, the read point embedded)', () => {
     expect(ITEM_COMMENT_COLUMNS).toContain('parent_comment_id');
     expect(ITEM_COMMENT_COLUMNS).toContain('attachment_asset_ids');
     expect(ITEM_COMMENT_COLUMNS).toContain('plan_item_comment_thread_reads(last_read_at)');
+    // 13 Nov 2026: Add to Tasks rides in the same read (the tag and its link).
+    expect(ITEM_COMMENT_COLUMNS).toContain('task_state');
+    expect(ITEM_COMMENT_COLUMNS).toContain(
+      'plan_item_comment_tasks(task_id, channel_id, assignee_user_id, group_name)',
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.map((c) => c.id)).toEqual(['m1', 'r1']);
@@ -125,6 +130,8 @@ describe('the comment read (one select, the read point embedded)', () => {
       parent_comment_id: null,
       attachment_asset_ids: null,
       thread_read_at: null,
+      task_state: null,
+      task_link: null,
     });
   });
 
