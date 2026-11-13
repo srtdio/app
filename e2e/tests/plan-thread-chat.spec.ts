@@ -108,8 +108,10 @@ test("a long-press opens chat's menu with the rows a plan comment has @theme", a
   await expect(m.locator('[data-menu-item="reply"]')).toBeVisible();
   await expect(m.locator('[data-menu-item="copy-link"]')).toBeVisible();
   await expect(m.locator('[data-menu-item="copy"]')).toBeVisible();
-  // No Forward, Tasks, Mark unread, Edit or Delete on a plan comment (9 Nov 2026: reactions yes).
-  for (const key of ['forward', 'add-task', 'mark-unread', 'edit', 'delete']) {
+  // Add to Tasks for a creator, as on post comments (13 Nov 2026).
+  await expect(m.locator('[data-menu-item="add-task"]')).toBeVisible();
+  // No Forward, Mark unread, Edit or Delete on a plan comment (9 Nov 2026: reactions yes).
+  for (const key of ['forward', 'mark-unread', 'edit', 'delete']) {
     await expect(m.locator(`[data-menu-item="${key}"]`)).toHaveCount(0);
   }
   await expect(m.getByRole('button', { name: 'More reactions' })).toHaveCount(1);
