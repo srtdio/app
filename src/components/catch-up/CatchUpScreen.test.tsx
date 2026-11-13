@@ -164,7 +164,7 @@ describe('catch-up end screen', () => {
     document.body.appendChild(host);
     root = createRoot(host);
     const onDone = vi.fn();
-    act(() => root?.render(<CatchUpEnd wentThrough={1} onDone={onDone} />));
+    act(() => root?.render(<CatchUpEnd wentThrough={1} keptUnread={0} onDone={onDone} />));
     expect(host.textContent).toContain("Everything's sorted.");
     click('[data-catch-up-done]');
     expect(onDone).toHaveBeenCalledTimes(1);
@@ -182,6 +182,33 @@ describe('catch-up end screen', () => {
 });
 
 describe('catch-up screen', () => {
+  it('end screen: "See you later." after one Keep unread', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-keep]');
+    await settle();
+    click('[data-catch-up-read]');
+    await settle();
+    const end = document.querySelector('[data-catch-up-end]');
+    expect(end?.textContent).toContain('See you later.');
+    expect(end?.querySelector('[data-catch-up-end-line]')?.textContent).toBe(
+      '1 update kept unread.',
+    );
+    expect(end?.textContent).not.toContain("Everything's sorted.");
+  });
+
+  it('end screen: "Everything\'s sorted." when all read', async () => {
+    render([card('p1'), card('p2')]);
+    await settle();
+    click('[data-catch-up-read]');
+    await settle();
+    click('[data-catch-up-read]');
+    await settle();
+    const end = document.querySelector('[data-catch-up-end]');
+    expect(end?.textContent).toContain("Everything's sorted.");
+    expect(end?.querySelector('[data-catch-up-end-line]')?.textContent).toBe(endLine(2));
+  });
+
   it('one card per item: counts what is left, keeps unread without a write', async () => {
     render([card('p1'), card('p2')]);
     await settle();

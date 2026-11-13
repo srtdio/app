@@ -222,6 +222,8 @@ export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
     left: Math.max(0, queue.length - index),
     /** How many cards were gone through (the end screen's count; skipped cards left out). */
     wentThrough: decisions.filter((d) => d.skipped !== true).length,
+    /** How many cards were kept unread (the end screen's other count; Undo pops them). */
+    keptUnread: decisions.filter((d) => !d.read && d.skipped !== true).length,
     done: queue.length > 0 && index >= queue.length,
     decide,
     skip,

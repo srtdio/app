@@ -9127,6 +9127,33 @@ test('catch up: more expands in place', async ({ page }) => {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 
+for (const dark of [false, true]) {
+  test(`catch up: a kept card ends on See you later (${dark ? 'dark' : 'light'})`, async ({
+    page,
+  }) => {
+    if (dark) await page.emulateMedia({ colorScheme: 'dark' });
+    const network = await bootPhone(page, seedCatchUp, `/activity?catchup=${CATCH_UP_COMMENT}`);
+    await catchUpReady(page);
+    const end = page.locator('[data-catch-up-end]');
+    await tap([page.locator('[data-catch-up-keep]')], 'keep unread');
+    for (let n = 0; n < 40 && (await end.count()) === 0; n += 1) {
+      const read = page.locator('[data-catch-up-read]');
+      if ((await read.count()) > 0 && (await read.isEnabled())) await read.click();
+      await page.waitForTimeout(300);
+    }
+    await waitFor([end], 'catch up end');
+    await expect(end.locator('h2')).toHaveText('See you later.');
+    await expect(end.locator('[data-catch-up-end-line]')).toHaveText('1 update kept unread.');
+    // Ink text on the page, in both themes: the title never matches the page.
+    const [ink, page_] = await end.evaluate((el) => [
+      getComputedStyle(el.querySelector('h2') as Element).color,
+      getComputedStyle(document.body).backgroundColor,
+    ]);
+    expect(ink).not.toBe(page_);
+    expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+  });
+}
+
 test('action sheet: no clipped ring on touch open', async ({ page }) => {
   const network = await bootPhone(
     page,
