@@ -82,6 +82,8 @@ export const CU_PLAN_ENTRY = cid(ENTRY, 11);
 export const CU_IDEA_ENTRY = cid(ENTRY, 12);
 /** A brief created for me, no due day. */
 export const CU_BRIEF_ENTRY = cid(ENTRY, 13);
+/** A brief due today: read comments, then one long unread comment (New line). */
+export const CU_BRIEF_NEW_ENTRY = cid(ENTRY, 0x3b1);
 /** A one-message DM (chat-main). */
 export const CU_CHAT_MAIN_ENTRY = cid(ENTRY, 14);
 /** Thread crew's main chat: a mention on a top-level message; the root above has 4 replies. */
@@ -687,6 +689,73 @@ export function seedCatchUpBrief(network: HarnessNetwork, now: number): void {
       entity_type: 'brief',
       entity_id: briefId,
       payload: { title: 'Winter gifting guide' },
+    }),
+  );
+}
+
+/**
+ * A brief due today with three read comments and one long unread comment by
+ * PEER: the card must open with its New line at the top of the rows.
+ */
+export function seedCatchUpBriefNew(network: HarnessNetwork, now: number): void {
+  const t = network.world.tables;
+  const briefId = cid(BRIEF, 0x3b);
+  (t.briefs ??= []).push({
+    id: briefId,
+    number: 311,
+    workspace_id: WORKSPACE_ID,
+    title: 'Cane crushing season starts',
+    objective: 'The unit had a pooja to kickstart the crushing season.',
+    format_requested: 'single_image',
+    brand_requirements: null,
+    target_date: iso(now).slice(0, 10),
+    reference_links: null,
+    status: 'open',
+    closed_at: null,
+    closed_by: null,
+    created_by: PEER,
+    legacy_author_name: null,
+    created_via: 'app',
+    row_version: 1,
+    updated_at: iso(now - 60 * MINUTE),
+    created_at: iso(now - 60 * MINUTE),
+    deleted_at: null,
+  });
+  const read = [
+    [ME, 'Sharing a first draft by noon.'],
+    [PEER, 'Keep it short, one photo from the pooja.'],
+    [ME, 'Noted. Draft below.'],
+  ] as const;
+  read.forEach(([author, body], i) => {
+    (t.comments ??= []).push(
+      commentRow(
+        cid(COMMENT, 0x3b0 + i),
+        'brief',
+        briefId,
+        author,
+        body,
+        now - (40 - i * 5) * MINUTE,
+      ),
+    );
+  });
+  const newId = cid(COMMENT, 0x3bf);
+  const long = [
+    'I wrote this and got the feedback above (no last season, no tonnage).',
+    '',
+    'A new season, a new milestone to work towards.',
+    '',
+    'The crushing season is set to begin at our unit. The occasion was marked with a traditional pooja, attended by all department heads and team members.',
+    '',
+    'We look forward to the collective efforts, teamwork and dedication that keep us moving forward.',
+  ].join('\n');
+  (t.comments ??= []).push(commentRow(newId, 'brief', briefId, PEER, long, now - 3 * MINUTE));
+  (t.inbox_entries ??= []).push(
+    entry(CU_BRIEF_NEW_ENTRY, now, 3, {
+      actor_user_id: PEER,
+      event_type: 'comment',
+      entity_type: 'brief',
+      entity_id: briefId,
+      payload: { comment_id: newId, title: 'Cane crushing season starts' },
     }),
   );
 }
