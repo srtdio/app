@@ -187,6 +187,12 @@ Manual Skip per item and manual Dismiss for the whole card.
 - Chips and single-choice picks: outline pill, 32 visible / 44 tap; rest hairline + fg-2; picked = ink line + fg, no fill.
 - Phone nav: centred, as wide as its tabs; only the open tab shows its name; Chat is its own circle; always 52; scrolling never changes it, only a tab change does.
 
+### Homepage and /demo type (13 Nov 2026)
+
+- One family, Montserrat, self-hosted from the app (never Google): headlines 800, sub-headlines and labels 600, body 400, buttons 600. The app and emails stay on Inter.
+- Text is black on white or white on the black band; no grey text (disabled calendar days and the email placeholder excepted). The grey second line of the headlines is gone.
+- No word alone on the last line of a heading or paragraph at any width: the copy joins its last two words with a no-break space. The hero keeps its breaks: phone "Social media / teams hate / WhatsApp.", wider "Social media teams / hate WhatsApp."; "WhatsApp." alone is deliberate.
+
 ### Iconography
 
 | Item | Decision |

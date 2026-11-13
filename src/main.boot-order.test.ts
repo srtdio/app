@@ -34,10 +34,16 @@ describe('src/main.tsx boot order (FRONTEND-N)', () => {
 });
 
 describe('src/main.tsx font preload', () => {
-  it('preloads Inter 400/500/600 latin woff2 via ?url imports', () => {
+  it('preloads Inter 400/500/600 (app) and Montserrat (homepage) latin woff2 via ?url imports', () => {
     for (const weight of ['400', '500', '600']) {
       expect(code).toContain(`@fontsource/inter/files/inter-latin-${weight}-normal.woff2?url'`);
     }
+    expect(code).toContain(
+      `@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2?url'`,
+    );
+    expect(code).toMatch(
+      /preloadFonts\(homeBoot \? \[montserrat\] : \[inter400, inter500, inter600\]\)/,
+    );
     expect(code).toMatch(/link\.rel = 'preload'/);
     expect(code).toMatch(/link\.as = 'font'/);
     expect(code).toMatch(/link\.type = 'font\/woff2'/);

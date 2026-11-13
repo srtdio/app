@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import '@fontsource/inter/latin-400.css';
-import '@fontsource/inter/latin-500.css';
-import '@fontsource/inter/latin-600.css';
-import '@fontsource/inter/latin-700.css';
 import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { ClipVideo } from './ClipVideo';
 import { SiteShell, Tick } from './Chrome';
 import { DEMO_HREF } from './config';
 import { FEATURES, featureFromHash, featureId, showFeature } from './features';
 import { HOME_MEDIA_BASE, clipFor, mediaUrl } from './media';
+import { NBSP, keepLastWords } from './no-orphan';
 import './home.css';
 
 // Small lines under the hero buttons, the signup email box and the closing buttons.
@@ -103,8 +100,8 @@ function SignupBand() {
   return (
     <section className="band" id="signup-mid">
       <div className="wrap">
-        <h2 className="d">You&apos;ve scrolled this far. Might as well sign up.</h2>
-        <p>Set up a client in two minutes. Invite them with a link.</p>
+        <h2 className="d">{keepLastWords("You've scrolled this far. Might as well sign up.")}</h2>
+        <p>{keepLastWords('Set up a client in two minutes. Invite them with a link.')}</p>
         <form onSubmit={onSubmit} noValidate>
           <input
             type="email"
@@ -121,7 +118,7 @@ function SignupBand() {
           </button>
         </form>
         <small id="home-signup-note" aria-live="polite">
-          {message}
+          {keepLastWords(message)}
         </small>
       </div>
     </section>
@@ -304,8 +301,8 @@ function FeatureRail() {
               data-active={index === current ? '' : undefined}
             >
               <div className="k">{feature.name}</div>
-              <h3>{feature.title}</h3>
-              <p>{feature.body}</p>
+              <h3>{keepLastWords(feature.title)}</h3>
+              <p>{keepLastWords(feature.body)}</p>
               {clip ? (
                 <div className="mock">
                   <div className="clipbox">
@@ -356,11 +353,12 @@ export default function HomePage() {
             Social media teams <em>hate WhatsApp.</em>
           </h1>
           <p className="lede">
-            Approvals, feedback and files get buried in group chats that never switch off. Sorted
-            gives each client one workspace, so WhatsApp goes back to being WhatsApp.
+            {keepLastWords(
+              'Approvals, feedback and files get buried in group chats that never switch off. Sorted gives each client one workspace, so WhatsApp goes back to being WhatsApp.',
+            )}
           </p>
           <Cta />
-          <div className="note">{HERO_NOTE}</div>
+          <div className="note">{keepLastWords(HERO_NOTE)}</div>
         </div>
       </section>
 
@@ -380,8 +378,8 @@ export default function HomePage() {
       <section className="sec" id="features">
         <div className="wrap">
           <div className="head">
-            <h2 className="d">Chat. Plan. Approve.</h2>
-            <p>The three jobs WhatsApp was never built to do.</p>
+            <h2 className="d">{keepLastWords('Chat. Plan. Approve.')}</h2>
+            <p>{keepLastWords('The three jobs WhatsApp was never built to do.')}</p>
           </div>
         </div>
         <FeatureRail />
@@ -392,8 +390,8 @@ export default function HomePage() {
       <section className="sec" id="why">
         <div className="wrap">
           <div className="head">
-            <h2 className="d">What Sorted sorts.</h2>
-            <p>Four arguments you’ll never have again.</p>
+            <h2 className="d">{keepLastWords('What Sorted sorts.')}</h2>
+            <p>{keepLastWords('Four arguments you’ll never have again.')}</p>
           </div>
           <div className="stack">
             {REASONS.map((reason) => {
@@ -402,11 +400,11 @@ export default function HomePage() {
                 <div key={reason.kick} className={src ? 'sb' : 'sb text-only'}>
                   <div className="tx">
                     <div className="kick">{reason.kick}</div>
-                    <h3>{reason.title}</h3>
-                    <p>{reason.body}</p>
+                    <h3>{keepLastWords(reason.title)}</h3>
+                    <p>{keepLastWords(reason.body)}</p>
                     <div className="proof">
                       <Tick />
-                      {reason.proof}
+                      {keepLastWords(reason.proof)}
                     </div>
                   </div>
                   {src ? (
@@ -432,10 +430,11 @@ export default function HomePage() {
       <section className="close">
         <div className="wrap">
           <h2 className="d">
-            Get your social media work <em>sorted.</em>
+            Get your social media work{NBSP}
+            <em>sorted.</em>
           </h2>
           <Cta />
-          <div className="note">{CLOSE_NOTE}</div>
+          <div className="note">{keepLastWords(CLOSE_NOTE)}</div>
         </div>
       </section>
     </SiteShell>

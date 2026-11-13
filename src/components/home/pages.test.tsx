@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import DemoPage from './DemoPage';
 import { FEATURES, FEATURE_KEYS, featureFromHash, featureId } from './features';
@@ -12,6 +13,13 @@ import { homePageFor } from './HomeEntry';
 import HomePage from './HomePage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// The copy joins each line's last two words with a no-break space (no-orphan.ts);
+// these checks read words, so a no-break space reads as a space.
+const NBSP_RE = /\u00a0/g;
+function markup(element: ReactElement): string {
+  return renderToStaticMarkup(element).replace(NBSP_RE, ' ');
+}
 
 // jsdom has no IntersectionObserver; the clips never mount without a media base anyway.
 const send = vi.hoisted(() => ({
@@ -53,7 +61,7 @@ describe('routes', () => {
 
   it('/pricing is no page of its own, and no home page shows a price or a trial', () => {
     expect(homePageFor('/pricing')).toBe('home');
-    for (const html of [renderToStaticMarkup(<HomePage />), renderToStaticMarkup(<DemoPage />)]) {
+    for (const html of [markup(<HomePage />), markup(<DemoPage />)]) {
       expect(html).not.toContain('₹');
       expect(html).not.toContain('15 days');
       expect(html).not.toContain('/pricing');
@@ -62,7 +70,7 @@ describe('routes', () => {
 });
 
 describe('homepage copy', () => {
-  const html = renderToStaticMarkup(<HomePage />);
+  const html = markup(<HomePage />);
 
   it('the new hero and features lines are present, the old ones gone', () => {
     expect(html).not.toContain('top-line');
@@ -95,7 +103,7 @@ describe('homepage copy', () => {
 
 describe('sidebar', () => {
   it('every tile targets exactly one feature card, from the same key list', () => {
-    const html = renderToStaticMarkup(<HomePage />);
+    const html = markup(<HomePage />);
     const cardIds = attrs(html, /<article id="([^"]+)"/g);
     const tiles = attrs(html, /href="([^"]+)" data-feature-tile/g);
     expect(cardIds).toEqual(FEATURE_KEYS.map(featureId));
@@ -104,7 +112,7 @@ describe('sidebar', () => {
   });
 
   it('on /demo the tiles load "/#feature-<key>"', () => {
-    const html = renderToStaticMarkup(<DemoPage />);
+    const html = markup(<DemoPage />);
     expect(attrs(html, /href="([^"]+)" data-feature-tile/g)).toEqual(
       FEATURE_KEYS.map((key) => `/#${featureId(key)}`),
     );
@@ -117,7 +125,7 @@ describe('sidebar', () => {
   });
 
   it('no section labels; one Book a demo row and no Pricing row; stories are not links', () => {
-    const html = renderToStaticMarkup(<HomePage />);
+    const html = markup(<HomePage />);
     const panel = html.slice(html.indexOf('class="panel"'), html.indexOf('class="foot"'));
     expect(panel).not.toContain('class="lbl');
     for (const word of ['>Product<', '>Company<', '>Stories<']) expect(panel).not.toContain(word);
@@ -154,7 +162,9 @@ describe('/demo', () => {
     await act(async () => {
       host.querySelector('form')?.requestSubmit();
     });
-    const errors = Array.from(host.querySelectorAll('.err')).map((e) => e.textContent);
+    const errors = Array.from(host.querySelectorAll('.err')).map((e) =>
+      e.textContent?.replace(NBSP_RE, ' '),
+    );
     expect(errors).toEqual([
       'Enter your name.',
       'Enter an email like you@agency.com.',
@@ -182,7 +192,7 @@ describe('/demo', () => {
     await act(async () => {
       slot?.click();
     });
-    expect(host.querySelector('[data-demo-summary]')?.textContent).toMatch(
+    expect(host.querySelector('[data-demo-summary]')?.textContent?.replace(NBSP_RE, ' ')).toMatch(
       /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, 11:00 am IST · 30 min$/,
     );
     return input('demo-name');
@@ -192,7 +202,8 @@ describe('/demo', () => {
     send.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const host = await mountDemo();
     await fillValid(host);
-    const summary = host.querySelector('[data-demo-summary]')?.textContent ?? '';
+    const summary =
+      host.querySelector('[data-demo-summary]')?.textContent?.replace(NBSP_RE, ' ') ?? '';
     const shown = summary.slice(0, summary.indexOf(','));
     await act(async () => {
       host.querySelector('form')?.requestSubmit();
@@ -214,13 +225,13 @@ describe('/demo', () => {
 
     expect(host.querySelector('form')).toBeNull();
     const booked = host.querySelector('[data-demo-booked]');
-    expect(booked?.querySelector('h2')?.textContent).toBe('Booked');
-    expect(booked?.querySelector('p')?.textContent).toBe(
+    expect(booked?.querySelector('h2')?.textContent?.replace(NBSP_RE, ' ')).toBe('Booked');
+    expect(booked?.querySelector('p')?.textContent?.replace(NBSP_RE, ' ')).toBe(
       `${shown} · 11:00 am IST. The team sends a Google Meet link to your email before the call.`,
     );
     expect(booked?.querySelector('a')?.getAttribute('href')).toBe('/');
-    expect(booked?.querySelector('a')?.textContent).toBe('Back to home');
-    expect(host.textContent).not.toMatch(/opens soon/i);
+    expect(booked?.querySelector('a')?.textContent?.replace(NBSP_RE, ' ')).toBe('Back to home');
+    expect(host.textContent?.replace(NBSP_RE, ' ')).not.toMatch(/opens soon/i);
   });
 
   it('a failed send keeps the form, shows the error and re-enables the button', async () => {
@@ -232,11 +243,13 @@ describe('/demo', () => {
     await act(async () => {
       host.querySelector('form')?.requestSubmit();
     });
-    expect(host.querySelector('[role="alert"].err')?.textContent).toBe("Couldn't send. Try again.");
+    expect(host.querySelector('[role="alert"].err')?.textContent?.replace(NBSP_RE, ' ')).toBe(
+      "Couldn't send. Try again.",
+    );
     expect(host.querySelector('form')).not.toBeNull();
     expect(name.value).toBe('Asha');
     expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
-    expect(host.textContent).not.toMatch(/booked/i);
+    expect(host.textContent?.replace(NBSP_RE, ' ')).not.toMatch(/booked/i);
   });
 
   it('the honeypot is hidden from people and sent as website', async () => {
@@ -249,8 +262,8 @@ describe('/demo', () => {
 
   it('slots wait for a day; weekends and today are not pickable', async () => {
     const host = await mountDemo();
-    expect(host.textContent).toContain('Pick a time (IST, 30 min)');
-    expect(host.textContent).toContain('Choose a day first. Weekdays only.');
+    expect(host.textContent?.replace(NBSP_RE, ' ')).toContain('Pick a time (IST, 30 min)');
+    expect(host.textContent?.replace(NBSP_RE, ' ')).toContain('Choose a day first. Weekdays only.');
     expect(host.querySelector('.slot')).toBeNull();
     const today = host.querySelector<HTMLButtonElement>('[aria-current="date"]');
     if (today !== null) expect(today.disabled).toBe(true);

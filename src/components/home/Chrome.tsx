@@ -4,6 +4,7 @@ import { IconCheck, IconChevronLeft } from '@/components/ui/icons';
 import { DEMO_HREF } from './config';
 import { FEATURES, featureId, showFeature, type FeatureKey } from './features';
 import { Wordmark } from './Wordmark';
+import { keepLastWords } from './no-orphan';
 
 // The header, sidebar and footer shared by / and /demo. There is no
 // router on the home bundle, so every link is a plain anchor: on / the sidebar
@@ -129,7 +130,7 @@ function Menu({
               onClick={(e) => onTile(e, feature.key)}
             >
               {feature.name}
-              <small>{feature.sub}</small>
+              <small>{keepLastWords(feature.sub)}</small>
             </a>
           ))}
         </div>
@@ -149,7 +150,7 @@ function Menu({
               </span>
               <span className="st">
                 <span className="tag">{story.tag}</span>
-                <span className="title">{story.title}</span>
+                <span className="title">{keepLastWords(story.title)}</span>
               </span>
               <span className="soon">Coming soon</span>
             </li>
