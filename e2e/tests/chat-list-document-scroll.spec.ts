@@ -122,8 +122,19 @@ test('phone: the chat list scrolls the document under a pinned header @theme', a
   const back = await listState(page);
   expect(back.mainOverflowY).toBe('visible');
   expect(back.innerScrollers).toBe(0);
-  const rowTopBack = await chipRow.evaluate((el) => el.getBoundingClientRect().top);
-  expect(Math.abs(rowTopBack - rowTopAfter)).toBeLessThanOrEqual(1);
+  // Opening the chat read it, so the Chat catch up strip above the chips may
+  // have changed or gone and the restored scroll lands on a different spot:
+  // the header is never under the Topbar and the chips keep their place in it.
+  const backBox = await chipRow.evaluate((el) => {
+    let node: Element | null = el;
+    while (node !== null && getComputedStyle(node).position !== 'sticky') node = node.parentElement;
+    return {
+      row: el.getBoundingClientRect().top,
+      header: node === null ? Number.NaN : node.getBoundingClientRect().top,
+    };
+  });
+  expect(backBox.header).toBeGreaterThanOrEqual(topbarBottom - 1);
+  expect(Math.abs(backBox.row - backBox.header - (rowTopAfter - headerTop))).toBeLessThanOrEqual(1);
   expect(network.blocked).toEqual([]);
 });
 
