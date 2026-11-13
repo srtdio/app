@@ -128,8 +128,10 @@ describe('chat headers on ui/HeaderBar: one exit each', () => {
     act(() => root?.render(node));
     const bar = host.querySelector('[data-header-bar]');
     expect(bar).not.toBeNull();
+    // One exit: the back "<"; the other key is the thread's search (13 Nov 2026).
     const buttons = bar?.querySelectorAll('button') ?? [];
-    expect(buttons).toHaveLength(1);
+    expect(buttons).toHaveLength(2);
+    expect(bar?.querySelectorAll('[data-chat-search-key]')).toHaveLength(1);
     const close = host.querySelector<HTMLButtonElement>('[data-thread-view-close]');
     expect(close?.getAttribute('aria-label')).toBe('Close thread');
     expect(close?.className).toContain('-ml-3');

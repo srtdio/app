@@ -31,4 +31,17 @@ describe('search inside a chat', () => {
       'p_channel_id is not null and exists',
     );
   });
+
+  it('every thread searches its own rows in the one frame (13 Nov 2026)', () => {
+    const frame = read('src/components/chat/ThreadView.tsx');
+    expect(frame).toContain('useLocalSearch({');
+    expect(frame).toContain('<ChatSearchSteps search={search} />');
+    expect(frame).toContain("data-thread-searching={search.open ? '' : undefined}");
+    expect(frame).toContain('{...(props.selecting ? {} : { onSearch: search.start })}');
+    expect(read('src/index.css')).toContain('[data-thread-searching] [data-composer]');
+    // Comment and Plan rows read the hit words and current hit from the screen.
+    expect(read('src/components/chat/ThreadCommentRow.tsx')).toContain(
+      'searchCurrent={searchCurrent !== null && searchCurrent === props.message.id}',
+    );
+  });
 });

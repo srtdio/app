@@ -30,8 +30,10 @@ import {
 import {
   canStepNewer,
   canStepOlder,
+  localHits,
   searchPlaceholder,
   stepLabel,
+  type SearchableRow,
   type StepState,
 } from '@/lib/chat/in-chat-search';
 
@@ -39,13 +41,18 @@ import {
 export const CHAT_SEARCH_LABEL = 'Search in this chat';
 
 /** The chat bar's search key (trailing, 44, its glyph on the content edge). */
-export function ChatSearchKey(props: { onOpen: () => void }): ReactElement {
+export function ChatSearchKey(props: {
+  onOpen: () => void;
+  /** Inside HeaderBar's actions slot (the slot applies the trailing rule). */
+  inBar?: boolean;
+  label?: string;
+}): ReactElement {
   return (
     <IconButton
-      label={CHAT_SEARCH_LABEL}
+      label={props.label ?? CHAT_SEARCH_LABEL}
       data-chat-search-key=""
       onClick={props.onOpen}
-      className={cn('ml-auto shrink-0', TRAILING_PULL)}
+      className={props.inBar === true ? 'shrink-0' : cn('ml-auto shrink-0', TRAILING_PULL)}
     >
       <IconSearch size={ICON_SIZE.control} />
     </IconButton>
@@ -181,6 +188,60 @@ export function useChatSearch(input: {
     setQuery,
     older,
     newer,
+  };
+}
+
+/**
+ * The walk over a thread's own rows (13 Nov 2026): a thread holds all its
+ * replies on screen, so its hits are read from the rows themselves
+ * (`readRows`, screen order), no network read. Same walk and bar as a chat:
+ * newest hit first, up = older, down = newer; `onJump` brings a row into view.
+ */
+export function useLocalSearch(input: {
+  readRows: () => readonly SearchableRow[];
+  onJump: (messageId: string) => void;
+}): ChatSearch {
+  const [open, setOpen] = useState(false);
+  const [query, setQueryState] = useState('');
+  const [hits, setHits] = useState<readonly string[]>([]);
+  const [index, setIndex] = useState(-1);
+  const latest = useRef(input);
+  latest.current = input;
+  const asked = query.trim().length >= 2;
+  const words = useMemo(() => (open && asked ? queryWords(query) : []), [open, asked, query]);
+  const currentId = index >= 0 ? (hits[index] ?? null) : null;
+  useEffect(() => {
+    if (currentId !== null) latest.current.onJump(currentId);
+  }, [currentId]);
+  const close = useCallback(() => {
+    setOpen(false);
+    setQueryState('');
+    setHits([]);
+    setIndex(-1);
+  }, []);
+  const setQuery = useCallback((raw: string) => {
+    setQueryState(raw);
+    const next = localHits(latest.current.readRows(), raw);
+    setHits(next);
+    setIndex(next.length > 0 ? 0 : -1);
+  }, []);
+  const steps: StepState = { count: hits.length, index, hasMore: false };
+  return {
+    open,
+    query,
+    words,
+    currentId,
+    steps,
+    loading: false,
+    start: useCallback(() => setOpen(true), []),
+    close,
+    setQuery,
+    older: () => {
+      if (index + 1 < hits.length) setIndex(index + 1);
+    },
+    newer: () => {
+      if (index > 0) setIndex(index - 1);
+    },
   };
 }
 

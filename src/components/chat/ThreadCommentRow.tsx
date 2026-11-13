@@ -10,9 +10,13 @@
 // Enter / Space / Shift+F10, or the laptop chevron opens the menu. Pending and
 // failed rows never swipe (chat's rule). Pure render: no reads.
 
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { tintTarget } from '@/components/ui/SearchHighlight';
+import {
+  SearchCurrentContext,
+  SearchWordsContext,
+  tintTarget,
+} from '@/components/ui/SearchHighlight';
 import { cancelPendingLongPressesWithin, useLongPress } from '@/components/ui/useLongPress';
 import type { ChatLayout } from '@/components/chat/chat-type';
 import {
@@ -73,6 +77,9 @@ export interface ThreadCommentRowProps {
 
 export function ThreadCommentRow(props: ThreadCommentRowProps): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
+  // A search's words and its current hit (13 Nov 2026: a thread's own search).
+  const searchWords = useContext(SearchWordsContext);
+  const searchCurrent = useContext(SearchCurrentContext);
   const iconRef = useRef<HTMLSpanElement>(null);
   const deleteIconRef = useRef<HTMLSpanElement>(null);
   const rowRef = useRef<HTMLLIElement>(null);
@@ -171,6 +178,8 @@ export function ThreadCommentRow(props: ThreadCommentRowProps): ReactElement {
   const id = props.message.id;
   return (
     <MessageBubble
+      searchWords={searchWords}
+      searchCurrent={searchCurrent !== null && searchCurrent === props.message.id}
       message={props.message}
       profiles={props.profiles}
       cache={sharedCardPresignCache()}
