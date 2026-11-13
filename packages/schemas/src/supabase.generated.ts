@@ -10799,6 +10799,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      inbox_unread_comment_marks: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          first_new_at: string
+          latest_at: string
+          latest_comment_id: string
+          plan_id: string
+          reply_root_ids: string[]
+          unread: number
+        }[]
+      }
       inbox_unread_entity_counts: {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: {

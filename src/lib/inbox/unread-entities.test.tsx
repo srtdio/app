@@ -42,7 +42,7 @@ type Row = {
 function answer(rows: Row[]): void {
   rpc.mockImplementation((fn: string) =>
     Promise.resolve(
-      fn === 'inbox_unread_entity_targets'
+      fn === 'inbox_unread_comment_marks'
         ? { data: rows, error: null }
         : { data: null, error: null },
     ),
@@ -114,10 +114,11 @@ describe('pure helpers', () => {
         { entity_type: 'post', entity_id: 'p1', unread: 3 },
         { entity_type: 'plan_item', entity_id: 'i1', unread: '2' },
         { entity_type: 'brief', entity_id: 'b1', unread: 4 },
+        { entity_type: 'chat_channel', entity_id: 'c1', unread: 4 },
         { entity_type: 'post', entity_id: '', unread: 1 },
         { entity_type: 'post', entity_id: 'p2', unread: 0 },
       ]),
-    ).toEqual({ 'post:p1': 3, 'plan_item:i1': 2 });
+    ).toEqual({ 'post:p1': 3, 'plan_item:i1': 2, 'brief:b1': 4 });
     expect(mapUnreadEntities(null)).toEqual({});
   });
 
@@ -141,8 +142,8 @@ describe('the shared store', () => {
     mount('ws-1');
     await settle();
     expect(shown()).toBe('3|2|2');
-    expect(calls('inbox_unread_entity_targets')).toHaveLength(1);
-    expect(calls('inbox_unread_entity_targets')[0]?.[1]).toMatchObject({ p_workspace_id: 'ws-1' });
+    expect(calls('inbox_unread_comment_marks')).toHaveLength(1);
+    expect(calls('inbox_unread_comment_marks')[0]?.[1]).toMatchObject({ p_workspace_id: 'ws-1' });
   });
 
   it('reads 0 with no driver mounted and makes no call', () => {
@@ -160,7 +161,7 @@ describe('the shared store', () => {
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
     });
     await settle();
-    expect(calls('inbox_unread_entity_targets')).toHaveLength(2);
+    expect(calls('inbox_unread_comment_marks')).toHaveLength(2);
     expect(shown()).toBe('0|0|0');
   });
 
@@ -201,7 +202,7 @@ describe('the shared store', () => {
   it('a failed mark restores the count quietly', async () => {
     rpc.mockImplementation((fn: string) =>
       Promise.resolve(
-        fn === 'inbox_unread_entity_targets'
+        fn === 'inbox_unread_comment_marks'
           ? { data: [{ entity_type: 'plan_item', entity_id: 'i1', unread: 2 }], error: null }
           : { data: null, error: { message: 'boom' } },
       ),
@@ -235,21 +236,49 @@ describe('jump to the newest unread comment', () => {
           plan_id: 'pl1',
           latest_at: '2026-11-05T11:00:00Z',
         },
-        { entity_type: 'brief', entity_id: 'b1', unread: 1, latest_comment_id: 'x' },
+        {
+          entity_type: 'brief',
+          entity_id: 'b1',
+          unread: 1,
+          latest_comment_id: 'x',
+          first_new_at: '2026-11-05T09:00:00Z',
+          reply_root_ids: ['r1'],
+        },
         { entity_type: 'post', entity_id: 'p2', unread: 0, latest_comment_id: 'x' },
+        { entity_type: 'chat_channel', entity_id: 'c1', unread: 1, latest_comment_id: 'x' },
       ]),
     ).toEqual({
-      'post:p1': { commentId: 'c9', planId: null, at: '2026-11-05T10:00:00Z' },
-      'plan_item:i1': { commentId: 'pc1', planId: 'pl1', at: '2026-11-05T11:00:00Z' },
+      'post:p1': {
+        commentId: 'c9',
+        planId: null,
+        at: '2026-11-05T10:00:00Z',
+        firstNewAt: null,
+        replyRootIds: [],
+      },
+      'plan_item:i1': {
+        commentId: 'pc1',
+        planId: 'pl1',
+        at: '2026-11-05T11:00:00Z',
+        firstNewAt: null,
+        replyRootIds: [],
+      },
+      'brief:b1': {
+        commentId: 'x',
+        planId: null,
+        at: null,
+        firstNewAt: '2026-11-05T09:00:00Z',
+        replyRootIds: ['r1'],
+      },
     });
   });
 
   it('the Plan badge picks the newest unread plan item comment across plans', () => {
     const counts = { 'plan_item:i1': 1, 'plan_item:i2': 3, 'post:p1': 5 };
+    const none = { firstNewAt: null, replyRootIds: [] };
     const targets = {
-      'plan_item:i1': { commentId: 'a', planId: 'pl1', at: '2026-11-05T09:00:00Z' },
-      'plan_item:i2': { commentId: 'b', planId: 'pl2', at: '2026-11-05T12:00:00Z' },
-      'post:p1': { commentId: 'z', planId: null, at: '2026-11-06T00:00:00Z' },
+      'plan_item:i1': { commentId: 'a', planId: 'pl1', at: '2026-11-05T09:00:00Z', ...none },
+      'plan_item:i2': { commentId: 'b', planId: 'pl2', at: '2026-11-05T12:00:00Z', ...none },
+      'post:p1': { commentId: 'z', planId: null, at: '2026-11-06T00:00:00Z', ...none },
     };
     expect(newestPlanUnread(counts, targets)).toEqual({
       planId: 'pl2',

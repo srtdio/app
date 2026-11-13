@@ -1872,6 +1872,7 @@ export function PlanItemScreen(props: {
               threadSubtitle={title}
               replyBox={replyBox}
               canTask={side === 'agency'}
+              itemId={item.id}
             />
             {removeButton}
             {askingChanges ? commentDock : null}
@@ -2021,6 +2022,7 @@ export function PlanItemScreen(props: {
                   replyBox={replyBox}
                   openReplyId={linkedReplyRoot !== null ? highlightId : null}
                   canTask={side === 'agency'}
+                  unreadItemId={item.id}
                 />
               )}
             </section>
@@ -2438,6 +2440,8 @@ function PlanNotes(props: {
   threadSubtitle: string;
   replyBox: (root: ShownComment, focus: boolean) => ReactElement;
   canTask: boolean;
+  /** The plan item: its New lines. */
+  itemId: string;
 }): ReactElement | null {
   if (props.notes.length === 0) return null;
   return (
@@ -2459,6 +2463,7 @@ function PlanNotes(props: {
         threadSubtitle={props.threadSubtitle}
         replyBox={props.replyBox}
         canTask={props.canTask}
+        unreadItemId={props.itemId}
       />
     </section>
   );

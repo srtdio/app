@@ -75,13 +75,22 @@ function usePopIn<T extends HTMLElement>(visible: boolean): RefObject<T> {
 }
 
 /** The "New" line above the first unread message: thick ink rule + ink "New" pill (L7). */
-export function UnreadDivider({ count }: { count: number }): ReactElement {
+export function UnreadDivider({
+  count,
+  label = 'New',
+}: {
+  count: number;
+  /** The pill's word: "New", or "New reply" above an older comment with an unread reply. */
+  label?: 'New' | 'New reply';
+}): ReactElement {
   // L7 (8 Nov 2026): a thick ink line and an ink "New" pill on the right
-  // (replaces "N unread"); the main chat and the thread screen share it.
+  // (replaces "N unread"); the main chat, the thread screen and comments
+  // (13 Nov 2026, also "New reply") share it.
   return (
     <li
       role="separator"
-      aria-label={`New, ${unreadLabel(count)}`}
+      aria-label={count > 0 ? `${label}, ${unreadLabel(count)}` : label}
+      data-new-label={label}
       data-unread-divider=""
       data-new-line=""
       className={cn('flex items-center gap-2 px-4 pb-1 pt-3', NO_TOUCH_SELECT)}
@@ -92,7 +101,7 @@ export function UnreadDivider({ count }: { count: number }): ReactElement {
         data-new-pill=""
         className="flex h-5 shrink-0 items-center rounded-full bg-fg px-2 text-xs font-semibold text-bg"
       >
-        New
+        {label}
       </span>
     </li>
   );
