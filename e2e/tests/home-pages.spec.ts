@@ -329,14 +329,14 @@ test.describe('phone', () => {
     expectMinTouchTarget(await slot.boundingBox());
     await slot.click();
     await expect(page.locator('[data-demo-summary]')).toHaveText(
-      /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, 12:30 pm IST · 30 min$/,
+      /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, 12:30 pm IST · 30\smin$/,
     );
 
     await submit.click();
     await expect(page.getByRole('heading', { name: 'Booked' })).toBeVisible();
     await expect(
       page.getByText(
-        /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} · 12:30 pm IST\. The team sends a Google Meet link to your email before the call\.$/,
+        /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} · 12:30 pm IST\. The team sends a Google Meet link to your email before the\scall\.$/,
       ),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Back to home' }).last()).toBeVisible();
@@ -662,4 +662,112 @@ test.describe('prerendered "/" first paint, built output', () => {
       expect(frame.bg).toBe(DARK);
     }
   });
+});
+
+// Type (13 Nov 2026): Montserrat only, black and white text, and no word alone
+// on the last line of any heading or paragraph at any width. The hero headline
+// is the one exception: "WhatsApp." alone on its line is deliberate.
+
+const LINE_BLOCKS = 'h1, h2, h3, p, small, .points li, .note, .proof, .story .title';
+
+/** The hero headline's rendered lines, joined with " / ". */
+async function heroLines(page: Page): Promise<string> {
+  await page.evaluate(() => document.fonts.ready);
+  return page.evaluate(() => {
+    const el = document.querySelector('.home .hero h1');
+    if (el === null) return '';
+    const lines = new Map<number, string[]>();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.textContent ?? '';
+      for (const match of text.matchAll(/\S+/g)) {
+        const range = document.createRange();
+        range.setStart(node, match.index);
+        range.setEnd(node, match.index + match[0].length);
+        const top = Math.round((range.getClientRects()[0]?.top ?? 0) / 4);
+        lines.set(top, [...(lines.get(top) ?? []), match[0]]);
+      }
+    }
+    return [...lines.values()].map((words) => words.join(' ')).join(' / ');
+  });
+}
+
+/** Every block whose last rendered line holds one word, plus any grey text. */
+async function typeFaults(page: Page): Promise<{ orphans: string[]; grey: string[] }> {
+  await page.evaluate(() => document.fonts.ready);
+  return page.evaluate((selector) => {
+    const orphans: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(`.home :is(${selector})`)) {
+      if (el.offsetParent === null || el.closest('.hero h1')) continue;
+      const tops: number[] = [];
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        const text = node.textContent ?? '';
+        for (const match of text.matchAll(/\S+/g)) {
+          const range = document.createRange();
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          const rect = range.getClientRects()[0];
+          if (rect && rect.width > 0) tops.push(Math.round(rect.top));
+        }
+      }
+      if (tops.length < 2) continue;
+      const last = Math.max(...tops);
+      const lines = new Set(tops.map((t) => Math.round(t / 4))).size;
+      const onLast = tops.filter((t) => Math.abs(t - last) < 4).length;
+      if (lines > 1 && onLast === 1) orphans.push((el.textContent ?? '').trim().slice(0, 60));
+    }
+    const grey: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>('.home *')) {
+      const own = [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim());
+      if (!own || el.offsetParent === null || el.closest('.cal-day:disabled, .cal-out')) continue;
+      const [r = 0, g = 0, b = 0] = (getComputedStyle(el).color.match(/[\d.]+/g) ?? []).map(Number);
+      const spread = Math.max(r, g, b) - Math.min(r, g, b);
+      const mid = (r + g + b) / 3;
+      if (spread < 20 && mid > 20 && mid < 235)
+        grey.push((el.textContent ?? '').trim().slice(0, 40));
+    }
+    return { orphans, grey };
+  }, LINE_BLOCKS);
+}
+
+test.describe('type: no lone last word, no grey text', () => {
+  test.skip(({ isMobile }) => !isMobile, 'phone widths');
+
+  for (const width of [320, 360, 390, 430]) {
+    test(`homepage and /demo at ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await serveHome(page);
+      for (const path of ['/', '/demo']) {
+        await page.goto(path);
+        await expect(page.locator('.home h1')).toBeVisible();
+        expect(await typeFaults(page)).toEqual({ orphans: [], grey: [] });
+      }
+      await page.goto('/');
+      expect(await heroLines(page)).toBe('Social media / teams hate / WhatsApp.');
+      const font = await page.evaluate(
+        () => getComputedStyle(document.querySelector('.home .lede')!).fontFamily,
+      );
+      expect(font).toContain('Montserrat Variable');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    });
+  }
+});
+
+test.describe('type: no lone last word, no grey text @desktop', () => {
+  test.skip(({ isMobile }) => isMobile, 'tablet and laptop widths');
+
+  for (const width of [768, 1024, 1440, 1920]) {
+    test(`homepage and /demo at ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await serveHome(page);
+      for (const path of ['/', '/demo']) {
+        await page.goto(path);
+        await expect(page.locator('.home h1')).toBeVisible();
+        expect(await typeFaults(page)).toEqual({ orphans: [], grey: [] });
+      }
+      await page.goto('/');
+      expect(await heroLines(page)).toBe('Social media teams / hate WhatsApp.');
+    });
+  }
 });

@@ -21,10 +21,12 @@ import { captureEarlyErrors, scheduleSentry } from '@/lib/sentry-lazy';
 import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
 import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?url';
 import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url';
+import montserrat from '@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2?url';
 
-// Preload Inter 400/500/600 (latin) before anything renders, so first paint
-// does not wait for the stylesheet to discover them. The same hashed files the
-// @fontsource CSS points at; font-display: swap stays. Synchronous, no await:
+// Preload the first paint's fonts before anything renders, so it does not wait
+// for the stylesheet to discover them: Montserrat (one variable file) for the
+// homepage and /demo, Inter 400/500/600 (latin) for the app. The same hashed
+// files the CSS points at; font-display: swap stays. Synchronous, no await:
 // link tags only, and no file is fetched that the page would not fetch anyway.
 function preloadFonts(hrefs: readonly string[]): void {
   for (const href of hrefs) {
@@ -38,7 +40,14 @@ function preloadFonts(hrefs: readonly string[]): void {
     document.head.appendChild(link);
   }
 }
-preloadFonts([inter400, inter500, inter600]);
+const guest = isGuestHome({
+  pathname: window.location.pathname,
+  search: window.location.search,
+  hash: window.location.hash,
+  storageKeys: localStorageKeys,
+});
+const homeBoot = guest || isHomeBundlePath(window.location.pathname);
+preloadFonts(homeBoot ? [montserrat] : [inter400, inter500, inter600]);
 
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).
@@ -191,15 +200,8 @@ async function bootHome(root: HTMLElement): Promise<void> {
   scheduleSentry();
 }
 
-const guest = isGuestHome({
-  pathname: window.location.pathname,
-  search: window.location.search,
-  hash: window.location.hash,
-  storageKeys: localStorageKeys,
-});
-
 mark('boot:path');
-if (guest || isHomeBundlePath(window.location.pathname)) {
+if (homeBoot) {
   bootHome(rootElement).catch(recoverFromFailedBoot);
 } else {
   bootApp(rootElement).catch(recoverFromFailedBoot);
