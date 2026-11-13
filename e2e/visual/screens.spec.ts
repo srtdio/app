@@ -6359,6 +6359,20 @@ async function newLinesReady(page: Page): Promise<void> {
   await postDetailReady(page);
   await waitFor([commentBubble(page, NL_OLD_ROOT)], 'old comment');
   await waitFor([page.locator('[data-new-label="New reply"]')], 'New reply line');
+  // The landing keeps the line centred while the page settles: shoot once it holds still.
+  const line = page.locator('[data-comments-list] [data-new-line]').first();
+  let last = Number.NaN;
+  await expect
+    .poll(
+      async () => {
+        const top = (await line.boundingBox())?.y ?? Number.NaN;
+        const still = top === last;
+        last = top;
+        return still;
+      },
+      { intervals: [300], timeout: 5000 },
+    )
+    .toBe(true);
 }
 
 /**
