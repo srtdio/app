@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canStepNewer,
   canStepOlder,
+  localHits,
   searchPlaceholder,
   stepLabel,
 } from '@/lib/chat/in-chat-search';
@@ -26,5 +27,30 @@ describe('search inside a chat: the step bar (13 Nov 2026)', () => {
   it('the field names the chat', () => {
     expect(searchPlaceholder('Launch crew')).toBe('Search in Launch crew');
     expect(searchPlaceholder('  ')).toBe('Search in this chat');
+  });
+});
+
+describe('search inside a thread: hits from the rows on screen (13 Nov 2026)', () => {
+  const rows = [
+    { id: 'root', text: 'Can we open on the product, not the team?' },
+    { id: 'r1', text: 'Yes, the hero shot goes first.' },
+    { id: 'r2', text: 'Swapped it in the cut. Shot list.pdf' },
+  ];
+
+  it('returns the rows holding every word as a word start, newest first', () => {
+    expect(localHits(rows, 'the')).toEqual(['r2', 'r1', 'root']);
+    expect(localHits(rows, 'sho')).toEqual(['r2', 'r1']);
+    expect(localHits(rows, 'hero first')).toEqual(['r1']);
+    expect(localHits(rows, 'HERO')).toEqual(['r1']);
+  });
+
+  it('matches file names and never a word middle', () => {
+    expect(localHits(rows, 'list')).toEqual(['r2']);
+    expect(localHits(rows, 'ero')).toEqual([]);
+  });
+
+  it('asks nothing under 2 characters', () => {
+    expect(localHits(rows, 't')).toEqual([]);
+    expect(localHits(rows, '  ')).toEqual([]);
   });
 });

@@ -313,6 +313,7 @@ const REQUIRED: readonly string[] = [
   'chat-replies-row',
   'chat-search-open',
   'chat-search-typed',
+  'thread-search-typed',
   'chat-thread-screen',
   'chat-thread-screen-plan',
   // Catch up (8 Nov 2026): the cards, the swipe frames, typing, the end
