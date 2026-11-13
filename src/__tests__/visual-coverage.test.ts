@@ -379,6 +379,8 @@ const REQUIRED: readonly string[] = [
   'post-comment-thread-files',
   // 12 Nov 2026: a comment thread with replies on two days (each says its day).
   'post-comment-thread-two-days',
+  'post-comments-new-lines',
+  'post-comments-new-reply',
   // Thread polish 2 (11 Nov 2026): the one-page menu on a voice note, on
   // someone else's group message and on a file-only comment; the comment
   // thread's replies bar menu (laptop).

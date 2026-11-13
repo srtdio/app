@@ -88,6 +88,9 @@ import { commentTaskTag, taskStateOf, taskTitleFrom } from '@/lib/comment-tasks'
 import type { CommentTaskEmbed } from '@srtdio/comments';
 import { useReactions, type ReactionsApi } from '@/lib/reactions/use-reactions';
 import type { ReactionSummary } from '@/lib/reactions/model';
+import { UnreadDivider } from '@/components/chat/ReadingLayer';
+import { useEntityNewMarks, useUnreadTargetsKnown } from '@/lib/inbox/unread-entities';
+import { newLinePlaces, useLandOnNewLine } from '@/lib/inbox/new-lines';
 
 /** A comment shown in the thread: a recorded row, or a pending own one. */
 export interface ShownComment {
@@ -742,6 +745,8 @@ export function PlanItemThread(props: {
   openReplyId?: string | null;
   /** Add to Tasks on comments (13 Nov 2026): the viewer is a creator. Absent: never. */
   canTask?: boolean;
+  /** The plan item (or Bank idea) these comments belong to: its New lines. Absent: none. */
+  unreadItemId?: string;
 }): ReactElement {
   const layout = useChatLayout();
   const hoverMenu = useHoverPointer();
@@ -752,6 +757,14 @@ export function PlanItemThread(props: {
   const [forwardFor, setForwardFor] = useState<ShownComment | null>(null);
   // Local read points, so an opened thread's dot goes at once (no wait for the write).
   const [readNow, setReadNow] = useState<Map<string, string>>(new Map());
+  const listRef = useRef<HTMLUListElement>(null);
+  const newMarks = useEntityNewMarks('plan_item', props.unreadItemId ?? '');
+  const targetsKnown = useUnreadTargetsKnown();
+  useLandOnNewLine(listRef, {
+    ready: targetsKnown,
+    hasLines: newMarks !== null,
+    linked: (props.highlightedId ?? null) !== null || (props.openReplyId ?? null) !== null,
+  });
   const files = props.files ?? NO_FILES;
   const held =
     props.me !== null && props.workspaceId !== null
@@ -898,6 +911,14 @@ export function PlanItemThread(props: {
   // ---- the main list ------------------------------------------------------
   const rows = planThreadRows(lists.mains, Date.now());
   const items: ReactElement[] = [];
+  // "New" / "New reply" lines (13 Nov 2026), from the marks held on open.
+  const linePlaces = newLinePlaces(
+    lists.mains
+      .filter(recorded)
+      .map((c) => ({ id: c.id, authorId: c.authorUserId, createdAt: c.createdAt })),
+    props.me,
+    newMarks,
+  );
   let afterLabel = false;
   for (const row of rows) {
     if (row.kind === 'day') {
@@ -909,6 +930,10 @@ export function PlanItemThread(props: {
     const under = afterLabel;
     afterLabel = false;
     const canOpen = canThread && recorded(comment);
+    const lineLabel = linePlaces.get(comment.id);
+    if (lineLabel !== undefined) {
+      items.push(<UnreadDivider key={`new:${comment.id}`} count={0} label={lineLabel} />);
+    }
     items.push(
       <PlanCommentRow
         key={comment.id}
@@ -1045,7 +1070,7 @@ export function PlanItemThread(props: {
 
   return (
     <>
-      <ul data-plan-thread="" className={cn(PAGE_BLEED, 'flex flex-col')}>
+      <ul ref={listRef} data-plan-thread="" className={cn(PAGE_BLEED, 'flex flex-col')}>
         {items}
       </ul>
       {threadLayer}

@@ -1,4 +1,5 @@
 import { mark } from '@/lib/perf-marks';
+import { markEntityReadOnOpen } from '@/lib/inbox/unread-entities';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { appPresignCache } from '@/lib/shared-presign';
@@ -420,6 +421,12 @@ export function BriefDetailPage({
     // Keep the entry's router state (an in-app open's ref id).
     setSearchParams(next, { replace: true, state: currentEntryState() });
   }, [searchParams, setSearchParams]);
+
+  // Opening the brief reads its comments (13 Nov 2026, as posts do): the rows
+  // are marked read in the background (after paint, no wait).
+  useEffect(() => {
+    if (briefId !== undefined) markEntityReadOnOpen('brief', briefId);
+  }, [briefId]);
 
   // "Add note" from the create toast (?note=1): captured, stripped, then the
   // comment box is focused once Comments has rendered it.

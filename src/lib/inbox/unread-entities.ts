@@ -1,5 +1,5 @@
 // Unread comment markers: the caller's unread comment and mention entries per
-// post and per plan item (inbox_unread_entity_targets), the one source for the
+// post, brief and plan item (inbox_unread_comment_marks), the one source for the
 // Pipeline card marker, the Plan row marker and the Plan nav badge. The same
 // read names each entity's newest unread comment, so every unread marker opens
 // straight onto it (the jump-to-latest rule). Activity
@@ -17,7 +17,7 @@
 // inbox change lets Activity and its badge re-read. A failed call restores the
 // count quietly.
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { withTraceHeader, type Client, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { supabase } from '@/lib/supabase';
@@ -33,8 +33,12 @@ import {
   sharedRead,
 } from '@/lib/session-read';
 
-/** The entities that carry unread comment markers. */
-export type UnreadEntityType = 'post' | 'plan_item';
+/** The entities that carry unread comment markers (briefs: the New lines and mark read on open). */
+export type UnreadEntityType = 'post' | 'brief' | 'plan_item';
+
+function isEntityType(value: unknown): value is UnreadEntityType {
+  return value === 'post' || value === 'brief' || value === 'plan_item';
+}
 
 /** Unread counts keyed by entityKey(type, id); absent means zero. */
 export type UnreadEntities = Readonly<Record<string, number>>;
@@ -47,6 +51,10 @@ export interface UnreadTarget {
   planId: string | null;
   /** When the newest unread entry arrived (ISO); null when unknown. */
   at: string | null;
+  /** The oldest unread top-level comment's time (the "New" line); null: none. */
+  firstNewAt: string | null;
+  /** Top-level comments whose threads hold an unread reply (the "New reply" lines). */
+  replyRootIds: readonly string[];
 }
 
 /** Newest unread targets keyed by entityKey(type, id); absent means none. */
@@ -95,7 +103,7 @@ export function mapUnreadEntities(data: unknown): UnreadEntities {
   for (const row of data as unknown[]) {
     if (typeof row !== 'object' || row === null) continue;
     const rec = row as { entity_type?: unknown; entity_id?: unknown; unread?: unknown };
-    if (rec.entity_type !== 'post' && rec.entity_type !== 'plan_item') continue;
+    if (!isEntityType(rec.entity_type)) continue;
     if (typeof rec.entity_id !== 'string' || rec.entity_id === '') continue;
     const n = toCount(rec.unread);
     if (n > 0) out[entityKey(rec.entity_type, rec.entity_id)] = n;
@@ -114,13 +122,17 @@ export function mapUnreadTargets(data: unknown): UnreadTargets {
   for (const row of data as unknown[]) {
     if (typeof row !== 'object' || row === null) continue;
     const rec = row as Record<string, unknown>;
-    if (rec.entity_type !== 'post' && rec.entity_type !== 'plan_item') continue;
+    if (!isEntityType(rec.entity_type)) continue;
     if (typeof rec.entity_id !== 'string' || rec.entity_id === '') continue;
     if (toCount(rec.unread) === 0) continue;
     out[entityKey(rec.entity_type, rec.entity_id)] = {
       commentId: nonEmpty(rec.latest_comment_id),
       planId: rec.entity_type === 'plan_item' ? nonEmpty(rec.plan_id) : null,
       at: nonEmpty(rec.latest_at),
+      firstNewAt: nonEmpty(rec.first_new_at),
+      replyRootIds: Array.isArray(rec.reply_root_ids)
+        ? rec.reply_root_ids.filter((id): id is string => typeof id === 'string' && id !== '')
+        : [],
     };
   }
   return out;
@@ -181,18 +193,18 @@ export function planItemsUnreadTotal(map: UnreadEntities): number {
   return total;
 }
 
-/** One inbox_unread_entity_targets rpc. The actor is auth.uid() server side. Never throws. */
+/** One inbox_unread_comment_marks rpc. The actor is auth.uid() server side. Never throws. */
 export async function fetchUnreadEntities(
   client: Client,
   params: { workspaceId: string; traceId: string },
 ): Promise<Result<UnreadRead>> {
-  const args: Functions['inbox_unread_entity_targets']['Args'] = {
+  const args: Functions['inbox_unread_comment_marks']['Args'] = {
     p_trace_id: params.traceId,
     p_workspace_id: params.workspaceId,
   };
   try {
     const res = await withTraceHeader(
-      client.rpc('inbox_unread_entity_targets', args),
+      client.rpc('inbox_unread_comment_marks', args),
       args.p_trace_id,
     );
     if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
@@ -361,6 +373,51 @@ export function peekEntityUnreadComment(type: UnreadEntityType, id: string): str
   return targetsSnapshot()[key]?.commentId ?? null;
 }
 
+/** Where the New lines go on one screen: the "New" time and the "New reply" roots. */
+export interface NewMarks {
+  firstNewAt: string | null;
+  replyRootIds: readonly string[];
+}
+
+/** The marks a target carries, or null when it has none. Pure. */
+export function newMarksOf(target: UnreadTarget | undefined): NewMarks | null {
+  if (target === undefined) return null;
+  if (target.firstNewAt === null && target.replyRootIds.length === 0) return null;
+  return { firstNewAt: target.firstNewAt, replyRootIds: target.replyRootIds };
+}
+
+/**
+ * The New lines for one post, brief or plan item, held for as long as the
+ * screen stays open (13 Nov 2026): the first marks seen for it are kept, so
+ * opening it (which marks it read and drops its target on the next read)
+ * never takes the lines away mid-read; the next open starts fresh. Reads the
+ * targets the shell already holds: no read of its own.
+ */
+export function useEntityNewMarks(type: UnreadEntityType, id: string): NewMarks | null {
+  const targets = useSyncExternalStore(subscribe, targetsSnapshot, targetsSnapshot);
+  const key = entityKey(type, id);
+  const current = newMarksOf(targets[key]);
+  const [held, setHeld] = useState<{ key: string; marks: NewMarks | null }>({
+    key,
+    marks: current,
+  });
+  if (held.key !== key || (held.marks === null && current !== null)) {
+    setHeld({ key, marks: current });
+    return current;
+  }
+  return held.marks;
+}
+
+function targetsKnownSnapshot(): boolean {
+  if (active === null) return false;
+  return peekKept<UnreadTargets>(unreadTargetsKey(active.key)) !== undefined;
+}
+
+/** Whether the unread targets have been read (or restored) for the active workspace. */
+export function useUnreadTargetsKnown(): boolean {
+  return useSyncExternalStore(subscribe, targetsKnownSnapshot, targetsKnownSnapshot);
+}
+
 function markNow(type: UnreadEntityType, id: string): void {
   const current = active;
   if (current === null) return;
@@ -393,7 +450,7 @@ function markNow(type: UnreadEntityType, id: string): void {
 }
 
 /**
- * A post page or plan item screen opened: its unread comments are read. Zeroes
+ * A post, brief or plan item screen opened: its unread comments are read. Zeroes
  * the marker at once and marks the rows read in the background; does nothing
  * when the entity has no unread comments. When the map is still loading (a
  * cold deep link), it waits for that read first. A command: returns nothing.

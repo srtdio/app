@@ -6244,6 +6244,146 @@ function seedTwoDayThread(network: HarnessNetwork): void {
   );
 }
 
+/** New lines (13 Nov 2026): an old comment with a reply today, older read comments, a new one. */
+const NL_OLD_ROOT = '0190f300-0000-7000-8000-0000000000e1';
+const NL_NEW_REPLY = '0190f300-0000-7000-8000-0000000000e3';
+const NL_NEW_TOP = '0190f300-0000-7000-8000-0000000000e9';
+function seedNewLines(network: HarnessNetwork, withNewTop: boolean): void {
+  const day = 24 * 3_600_000;
+  const reply = { parent_comment_id: NL_OLD_ROOT };
+  const t = network.world.tables;
+  (t.comments ??= []).push(
+    threadComment(NL_OLD_ROOT, PEER, 'Can we try the cover in the brand blue?', NOW - 60 * day),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000e2',
+      ME,
+      'Trying it now.',
+      NOW - 60 * day + 3_600_000,
+      reply,
+    ),
+    threadComment(
+      NL_NEW_REPLY,
+      PEER,
+      'Client asked for the blue again, can we revisit?',
+      NOW - 20 * 60_000,
+      reply,
+    ),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000e4',
+      ME,
+      'Moved the logo to the right.',
+      NOW - 45 * day,
+    ),
+    threadComment('0190f300-0000-7000-8000-0000000000e5', PEER, 'Looks clean now.', NOW - 30 * day),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000e6',
+      ME,
+      'Final copy is in the caption.',
+      NOW - 12 * day,
+    ),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000e7',
+      PEER,
+      'Approved from my side.',
+      NOW - 3 * day,
+    ),
+  );
+  if (withNewTop) {
+    t.comments.push(
+      threadComment(
+        NL_NEW_TOP,
+        PEER,
+        'One more: can we add the date on the cover?',
+        NOW - 10 * 60_000,
+      ),
+    );
+  }
+  (t.comment_thread_reads ??= []).push({
+    root_comment_id: NL_OLD_ROOT,
+    user_id: ME,
+    last_read_at: new Date(NOW - 59 * day).toISOString(),
+  });
+  const entry = (id: string, commentId: string, minsAgo: number): Row => ({
+    id,
+    user_id: ME,
+    workspace_id: WORKSPACE_ID,
+    tier: 'active',
+    scope_key: null,
+    read_at: null,
+    snoozed_until: null,
+    email_sent_at: null,
+    deleted_at: null,
+    created_at: new Date(NOW - minsAgo * 60_000).toISOString(),
+    actor_user_id: PEER,
+    event_type: 'comment',
+    entity_type: 'post',
+    entity_id: POST,
+    scope: 'posts',
+    payload: { comment_id: commentId },
+  });
+  (t.inbox_entries ??= []).push(entry('0190f300-0000-7000-8000-0000000000f1', NL_NEW_REPLY, 20));
+  if (withNewTop) {
+    t.inbox_entries.push(entry('0190f300-0000-7000-8000-0000000000f2', NL_NEW_TOP, 10));
+  }
+}
+
+async function newLinesReady(page: Page): Promise<void> {
+  await postDetailReady(page);
+  await waitFor([commentBubble(page, NL_OLD_ROOT)], 'old comment');
+  await waitFor([page.locator('[data-new-label="New reply"]')], 'New reply line');
+}
+
+/**
+ * The New lines measured: each rule starts 16 in from the list's left edge and
+ * its pill ends 16 in from the right (the chat line's frame), the line sits
+ * right above its comment, and the page opened on the first line (it is in view).
+ */
+async function assertNewLines(page: Page, name: string, first: 'New' | 'New reply'): Promise<void> {
+  const out = await page.evaluate(() => {
+    const list = document.querySelector('[data-comments-list]');
+    const lines = [
+      ...document.querySelectorAll<HTMLElement>('[data-comments-list] [data-new-line]'),
+    ];
+    if (list === null) return null;
+    const box = list.getBoundingClientRect();
+    return {
+      vh: window.innerHeight,
+      lines: lines.map((line) => {
+        const rule = line.querySelector('[data-new-rule]')?.getBoundingClientRect();
+        const pill = line.querySelector('[data-new-pill]')?.getBoundingClientRect();
+        const sib = line.nextElementSibling;
+        const next =
+          sib === null
+            ? null
+            : sib.matches('[data-comment-id]')
+              ? sib
+              : sib.querySelector('[data-comment-id]');
+        return {
+          label: line.dataset.newLabel ?? '',
+          top: line.getBoundingClientRect().top,
+          bottom: line.getBoundingClientRect().bottom,
+          ruleLeft: (rule?.left ?? 0) - box.left,
+          pillRight: box.right - (pill?.right ?? 0),
+          aboveComment: next !== null && next !== undefined,
+        };
+      }),
+    };
+  });
+  expect(out, `${name}: comments list`).not.toBeNull();
+  if (out === null) return;
+  expect(out.lines.length, `${name}: lines`).toBeGreaterThan(0);
+  expect(out.lines[0]?.label, `${name}: first line`).toBe(first);
+  for (const l of out.lines) {
+    expect(Math.abs(l.ruleLeft - 16), `${name}: ${l.label} rule left`).toBeLessThanOrEqual(1);
+    expect(Math.abs(l.pillRight - 16), `${name}: ${l.label} pill right`).toBeLessThanOrEqual(1);
+    expect(l.aboveComment, `${name}: ${l.label} sits on its comment`).toBe(true);
+  }
+  const top = out.lines[0];
+  if (top !== undefined) {
+    expect(top.top >= 0 && top.bottom <= out.vh, `${name}: opens on the first line`).toBe(true);
+  }
+}
+
 /** The comment's chat bubble on the page (never one inside an open thread). */
 function commentBubble(page: Page, id: string): Locator {
   return page.locator(`[data-comments-list] [data-comment-id="${id}"] [data-bubble]`).first();
@@ -6564,6 +6704,29 @@ SCREENS.push(
       await expect(thread.getByText(/Today at /).first()).toBeVisible();
     },
     after: async (page) => assertCommentThreadEnd(page, 'post-comment-thread-two-days'),
+  },
+  {
+    // 13 Nov 2026: a comment from two months ago got a reply today and a new
+    // comment came in today: "New reply" above the old comment, "New" above
+    // today's; the post opens on the first line (New reply).
+    name: 'post-comments-new-lines',
+    seed: creator,
+    extra: (network) => seedNewLines(network, true),
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await newLinesReady(page);
+      await waitFor([page.locator('[data-new-label="New"]')], 'New line');
+    },
+    after: async (page) => assertNewLines(page, 'post-comments-new-lines', 'New reply'),
+  },
+  {
+    // The same old comment's reply alone: only "New reply", the post opens on it.
+    name: 'post-comments-new-reply',
+    seed: creator,
+    extra: (network) => seedNewLines(network, false),
+    url: `/posts/${POST}`,
+    steps: newLinesReady,
+    after: async (page) => assertNewLines(page, 'post-comments-new-reply', 'New reply'),
   },
   {
     // Thread polish 2, laptop: the replies bar's three-dot key on the right
