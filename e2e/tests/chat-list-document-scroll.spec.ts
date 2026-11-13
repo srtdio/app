@@ -67,19 +67,26 @@ test('phone: the chat list scrolls the document under a pinned header @theme', a
     .first()
     .evaluate((el) => el.getBoundingClientRect().bottom);
   const rowTopBefore = await chipRow.evaluate((el) => el.getBoundingClientRect().top);
+  // Chat catch up (13 Nov 2026) sits above the chips while there is unread:
+  // it scrolls away with the page, so the pinned chips end up its height higher.
+  const strip = page.locator('main [data-shell="catch-up"]');
+  const stripHeight =
+    (await strip.count()) > 0
+      ? await strip.first().evaluate((el) => el.getBoundingClientRect().height)
+      : 0;
 
   await page.evaluate(() => window.scrollTo(0, 400));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
-  // The Topbar stays at the top; the chip row stays where it was, pinned
-  // below it (same offset as at rest: no jump, no gap).
+  // The Topbar stays at the top; the chip row pins below it (where it was at
+  // rest, less the catch-up strip that scrolled away: no jump, no gap).
   const topbarTop = await page
     .locator('header')
     .first()
     .evaluate((el) => el.getBoundingClientRect().top);
   expect(Math.abs(topbarTop)).toBeLessThanOrEqual(1);
   const rowTopAfter = await chipRow.evaluate((el) => el.getBoundingClientRect().top);
-  expect(Math.abs(rowTopAfter - rowTopBefore)).toBeLessThanOrEqual(1);
+  expect(Math.abs(rowTopAfter - (rowTopBefore - stripHeight))).toBeLessThanOrEqual(1);
   // The pinned header box starts right at the Topbar's bottom edge.
   const headerTop = await chipRow.evaluate((el) => {
     let node: Element | null = el;
@@ -116,7 +123,7 @@ test('phone: the chat list scrolls the document under a pinned header @theme', a
   expect(back.mainOverflowY).toBe('visible');
   expect(back.innerScrollers).toBe(0);
   const rowTopBack = await chipRow.evaluate((el) => el.getBoundingClientRect().top);
-  expect(Math.abs(rowTopBack - rowTopBefore)).toBeLessThanOrEqual(1);
+  expect(Math.abs(rowTopBack - rowTopAfter)).toBeLessThanOrEqual(1);
   expect(network.blocked).toEqual([]);
 });
 
