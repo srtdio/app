@@ -488,6 +488,8 @@ const LAPTOP_LIGHT_NAMES = [
   // The comment thread fills beside the post on a laptop only (light here;
   // dark through the spec's LAPTOP_DARK_SCREENS).
   'post-comment-thread-more-menu',
+  // A tab catch-up row's hover key (Mark N as read) shows on a hover pointer only.
+  'tab-catch-up-hover',
 ];
 
 /** Laptop dark shots taken in the laptop-light project (`only: 'laptop', dark: true`). */
