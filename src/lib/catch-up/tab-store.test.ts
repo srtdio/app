@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Catch up per tab (13 Nov 2026): each tab's queue holds only its kind, the
 // counts are the cards each stack would open (own entries never count), one
 // read state both ways (an item opened anywhere leaves its tab's catch up; a
