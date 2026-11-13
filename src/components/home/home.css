@@ -9,13 +9,15 @@
   --srtd-home: 1;
 }
 
-/* Bricolage Grotesque variable (opsz + wght axes), latin subset only. */
+/* Montserrat variable (wght 100-900), latin subset only, self-hosted from the
+   app (never Google). Weights by role (13 Nov 2026): headlines 800,
+   sub-headlines and labels 600, body 400, buttons 600. */
 @font-face {
-  font-family: 'Bricolage Grotesque Variable';
+  font-family: 'Montserrat Variable';
   font-style: normal;
   font-display: swap;
-  font-weight: 200 800;
-  src: url('@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-opsz-normal.woff2')
+  font-weight: 100 900;
+  src: url('@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2')
     format('woff2-variations');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
@@ -58,29 +60,32 @@ html:has(.home) body {
 
 .home {
   /* Feature tints: one neutral grey fill and ink for every story. No app token
-     covers these; the ink is 13:1 on the fill. */
+     covers these. Text is black and white only (13 Nov 2026): the ink is the
+     page ink. */
   --t1: #f1f2f4;
-  --t1-ink: #26282c;
+  --t1-ink: #08090a;
   --t2: #f1f2f4;
-  --t2-ink: #26282c;
+  --t2-ink: #08090a;
   --t3: #f1f2f4;
-  --t3-ink: #26282c;
+  --t3-ink: #08090a;
   --t4: #f1f2f4;
-  --t4-ink: #26282c;
+  --t4-ink: #08090a;
   --t5: #f1f2f4;
-  --t5-ink: #26282c;
+  --t5-ink: #08090a;
   /* The signup band's own dark surface. */
   --band: #08090a;
   --band-2: #121315;
   --band-line: #26272b;
+  /* Placeholder text in the band's email box only; band text is --band-fg. */
   --band-muted: #8a8f98;
   --band-fg: #ffffff;
   --shadow: var(--shadow-card);
   /* Phone frame shadow under the mock screenshots and clips. */
   --shadow-frame: 0 16px 40px rgba(8, 9, 10, 0.14), 0 2px 6px rgba(8, 9, 10, 0.06);
-  --display: 'Bricolage Grotesque Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* One family on the homepage and /demo: Montserrat (13 Nov 2026). */
+  --display: 'Montserrat Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sans: var(--display);
+  --mono: var(--display);
   --g: clamp(16px, 4vw, 64px);
   /* Sticky header height; the feature cards size themselves against it. */
   --top-h: 68px;
@@ -92,7 +97,7 @@ html:has(.home) body {
   background: var(--panel);
   color: var(--fg);
   font-family: var(--sans);
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+  font-weight: 400;
   letter-spacing: -0.006em;
   line-height: 1.5;
   font-size: 15px;
@@ -132,11 +137,18 @@ html:has(.home) body {
   text-wrap: balance;
 }
 
+/* No word alone on a last line (13 Nov 2026). The copy joins its last two words
+   with a no-break space (keepLastWords in no-orphan.ts); pretty evens the rest. */
+.home p,
+.home small,
+.home li {
+  text-wrap: pretty;
+}
+
 .home .d {
   font-family: var(--display);
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.022em;
-  font-variation-settings: 'opsz' 96;
 }
 
 /* buttons: the app's Button (src/components/ui/Button.tsx). Primary is the
@@ -150,7 +162,7 @@ html:has(.home) body {
   min-width: 168px;
   padding: 0 20px;
   border-radius: 9999px;
-  font: 500 14px var(--sans);
+  font: 600 14px var(--sans);
   text-decoration: none;
   cursor: pointer;
   border: 1px solid transparent;
@@ -195,7 +207,7 @@ html:has(.home) body {
 }
 .home .note {
   font-size: 13px;
-  color: var(--fg-3);
+  color: var(--fg);
   margin-top: 14px;
 }
 .home .tick {
@@ -360,7 +372,7 @@ html:has(.home) body {
   padding: 10px 12px;
   border-radius: 14px;
   text-decoration: none;
-  font: 700 15px var(--display);
+  font: 600 15px var(--display);
   letter-spacing: -0.01em;
 }
 .home .nav-feat a small {
@@ -394,8 +406,8 @@ html:has(.home) body {
 }
 .home .nav-main a span {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--fg-3);
+  font-weight: 400;
+  color: var(--fg);
 }
 .home .panel .foot {
   margin-top: auto;
@@ -438,7 +450,7 @@ html:has(.home) body {
   border-radius: 12px;
   background: var(--accent-soft);
   color: var(--accent-text);
-  font: 800 15px var(--display);
+  font: 600 15px var(--display);
 }
 .home .story .st {
   display: grid;
@@ -446,10 +458,10 @@ html:has(.home) body {
   min-width: 0;
 }
 .home .story .tag {
-  font: 500 11px var(--mono);
+  font: 600 11px var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--fg-3);
+  color: var(--fg);
 }
 .home .story .title {
   font-size: 14px;
@@ -464,7 +476,7 @@ html:has(.home) body {
   padding: 3px 9px;
   border-radius: 999px;
   background: var(--panel-2);
-  color: var(--fg-3);
+  color: var(--fg);
 }
 
 /* hero */
@@ -477,18 +489,19 @@ html:has(.home) body {
   z-index: 2;
 }
 .home .hero h1 {
-  font-size: clamp(46px, 7.4vw, 112px);
+  /* Under 360 wide it shrinks so "Social media" stays on one line. */
+  font-size: clamp(min(46px, 12.8vw), 7.4vw, 112px);
   line-height: 0.96;
 }
 .home .hero h1 em,
 .home .close h2 em {
   font-style: normal;
-  color: #8a8f98;
+  color: inherit;
 }
 .home .hero p {
   font-size: 20px;
   line-height: 1.5;
-  color: var(--fg-2);
+  color: var(--fg);
   max-width: 46ch;
   margin: 22px auto 0;
 }
@@ -562,7 +575,7 @@ html:has(.home) body {
 .home .sec .head p {
   margin: 14px auto 0;
   font-size: 17px;
-  color: var(--fg-2);
+  color: var(--fg);
   max-width: 50ch;
 }
 @media (max-width: 800px) {
@@ -638,7 +651,7 @@ html:has(.home) body {
 .home .card .k {
   justify-self: start;
   font-family: var(--display);
-  font-weight: 800;
+  font-weight: 600;
   font-size: 14px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -652,8 +665,7 @@ html:has(.home) body {
   font-size: 28px;
   line-height: 1.06;
   letter-spacing: -0.03em;
-  font-weight: 700;
-  font-variation-settings: 'opsz' 96;
+  font-weight: 600;
 }
 .home .card p {
   margin: 0 0 6px;
@@ -792,7 +804,7 @@ html:has(.home) body {
 }
 .home .band p {
   margin: 12px auto 0;
-  color: var(--band-muted);
+  color: var(--band-fg);
   font-size: 15px;
   max-width: 40ch;
 }
@@ -842,7 +854,7 @@ html:has(.home) body {
 .home .band small {
   display: block;
   margin-top: 12px;
-  color: var(--band-muted);
+  color: var(--band-fg);
   font-size: 13px;
 }
 @media (min-width: 640px) {
@@ -884,7 +896,7 @@ html:has(.home) body {
   padding: 16px 10px 20px;
 }
 .home .sb .kick {
-  font: 700 12px var(--sans);
+  font: 600 12px var(--sans);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -893,14 +905,13 @@ html:has(.home) body {
   font-size: clamp(30px, 3.3vw, 50px);
   line-height: 1.04;
   letter-spacing: -0.03em;
-  font-weight: 700;
-  font-variation-settings: 'opsz' 96;
+  font-weight: 600;
 }
 .home .sb p {
   margin: 0;
   font-size: 17px;
   line-height: 1.55;
-  color: var(--fg-2);
+  color: var(--fg);
   max-width: 42ch;
 }
 .home .sb .proof {
@@ -1039,7 +1050,7 @@ html:has(.home) body {
   border-top: 1px solid var(--border);
   padding-block: 28px;
   font-size: 13px;
-  color: var(--fg-3);
+  color: var(--fg);
   text-align: left;
 }
 .home footer .wrap {
@@ -1070,7 +1081,7 @@ html:has(.home) body {
   padding-inline: 4px;
   margin-inline: -4px;
   text-decoration: none;
-  color: var(--fg-3);
+  color: var(--fg);
 }
 .home footer a:hover {
   color: var(--fg);
@@ -1168,7 +1179,7 @@ html:has(.home) body {
   text-decoration: none;
   font-size: 15px;
   font-weight: 600;
-  color: var(--fg-2);
+  color: var(--fg);
 }
 .home .back:hover {
   color: var(--fg);
@@ -1208,7 +1219,7 @@ html:has(.home) body {
   margin: 18px 0 0;
   max-width: 46ch;
   font-size: 17px;
-  color: var(--fg-2);
+  color: var(--fg);
 }
 .home .points {
   list-style: none;
@@ -1276,12 +1287,12 @@ html:has(.home) body {
   background: var(--panel-2);
   border-right: 1px solid var(--border);
   font-weight: 600;
-  color: var(--fg-2);
+  color: var(--fg);
 }
 .home .err {
   margin: 0;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--bad);
 }
 .home .cal-head {
@@ -1292,7 +1303,7 @@ html:has(.home) body {
 }
 .home .cal-title {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .home .cal-grid {
   display: grid;
@@ -1310,9 +1321,9 @@ html:has(.home) body {
 .home .cal-wd {
   padding: 4px 0;
   text-align: center;
-  font: 500 11px var(--mono);
+  font: 600 11px var(--mono);
   text-transform: uppercase;
-  color: var(--fg-3);
+  color: var(--fg);
 }
 .home .cal-day {
   min-width: 44px;
@@ -1369,7 +1380,7 @@ html:has(.home) body {
 .home .hint {
   margin: 0;
   font-size: 14px;
-  color: var(--fg-3);
+  color: var(--fg);
 }
 .home .summary {
   margin: 0;

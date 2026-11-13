@@ -8,10 +8,6 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import '@fontsource/inter/latin-400.css';
-import '@fontsource/inter/latin-500.css';
-import '@fontsource/inter/latin-600.css';
-import '@fontsource/inter/latin-700.css';
 import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { BackHome, SiteShell, Tick } from './Chrome';
 import { DEMO, type DemoSlot } from './config';
@@ -40,6 +36,7 @@ import {
   type DemoForm,
 } from './demo';
 import './home.css';
+import { keepLastWords } from './no-orphan';
 
 // /demo: Book a demo. A valid submit posts to the demo-request-send edge
 // function, which mails the request to the team; on { ok } the form gives way
@@ -105,7 +102,7 @@ function FieldError({ id, message }: { id: string; message: string | undefined }
   if (message === undefined) return null;
   return (
     <p className="err" id={id}>
-      {message}
+      {keepLastWords(message)}
     </p>
   );
 }
@@ -305,16 +302,17 @@ export default function DemoPage() {
           <BackHome />
           <div className="demo-grid">
             <div className="demo-intro">
-              <h1 className="d">See it with your own client work.</h1>
+              <h1 className="d">{keepLastWords('See it with your own client work.')}</h1>
               <p>
-                A 30 minute call. We set up one of your clients in Sorted while you watch, then hand
-                it over.
+                {keepLastWords(
+                  'A 30 minute call. We set up one of your clients in Sorted while you watch, then hand it over.',
+                )}
               </p>
               <ul className="points">
                 {POINTS.map((point) => (
                   <li key={point}>
                     <Tick />
-                    {point}
+                    {keepLastWords(point)}
                   </li>
                 ))}
               </ul>
@@ -323,9 +321,9 @@ export default function DemoPage() {
             {booked !== null ? (
               <div className="demo-form" data-demo-booked="">
                 <h2 className="d" ref={bookedRef} tabIndex={-1}>
-                  {DEMO_BOOKED_HEADING}
+                  {keepLastWords(DEMO_BOOKED_HEADING)}
                 </h2>
-                <p className="notice">{demoBookedLine(booked.day, booked.slot)}</p>
+                <p className="notice">{keepLastWords(demoBookedLine(booked.day, booked.slot))}</p>
                 <a className="btn" href="/">
                   Back to home
                 </a>
@@ -401,10 +399,10 @@ export default function DemoPage() {
 
                 <div className="field" role="group" aria-labelledby="demo-slot-label">
                   <p className="slot-label" id="demo-slot-label">
-                    Pick a time ({DEMO.timeZoneLabel}, {DEMO.durationLabel})
+                    {keepLastWords(`Pick a time (${DEMO.timeZoneLabel}, ${DEMO.durationLabel})`)}
                   </p>
                   {form.day === null ? (
-                    <p className="hint">Choose a day first. Weekdays only.</p>
+                    <p className="hint">{keepLastWords('Choose a day first. Weekdays only.')}</p>
                   ) : (
                     <div className="slots" ref={slotsRef}>
                       {DEMO.slots.map((slot: DemoSlot) => (
@@ -426,7 +424,7 @@ export default function DemoPage() {
 
                 {form.day !== null && form.slot !== null ? (
                   <p className="summary" data-demo-summary="">
-                    {bookingSummary(form.day, form.slot)}
+                    {keepLastWords(bookingSummary(form.day, form.slot))}
                   </p>
                 ) : null}
 
@@ -446,7 +444,7 @@ export default function DemoPage() {
                 </button>
                 {failed ? (
                   <p className="err" role="alert">
-                    {DEMO_SEND_ERROR}
+                    {keepLastWords(DEMO_SEND_ERROR)}
                   </p>
                 ) : null}
               </form>
