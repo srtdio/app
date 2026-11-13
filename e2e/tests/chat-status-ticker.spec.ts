@@ -290,6 +290,9 @@ test.describe('chat status ticker', () => {
     seedOpenTasks(network, 7);
     const bar = await openDm(page);
 
+    // The tasks count lands from its own read after the bar paints: wait for it
+    // before reading the order once (a one-shot read raced it on a slow runner).
+    await expect(bar.locator('[data-status-item="tasks"]')).toBeVisible();
     const keys = await bar
       .locator('[data-status-item]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('data-status-item')));
