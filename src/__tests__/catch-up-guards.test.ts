@@ -93,10 +93,21 @@ describe('catch-up guards', () => {
     expect(queue[0]?.entries.map((e) => e.id)).toEqual(['bb', 'a']);
   });
 
-  it('cards live only in Catch up: an Activity row tap opens the real place', () => {
+  it("cards live only in a tab's catch up: Activity opens the real place, never a stack (13 Nov 2026)", () => {
     const page = readFileSync(join(SRC, 'components/pages/NotificationsPage.tsx'), 'utf8');
     expect(page).not.toMatch(/\(entry: ActivityItem\) => openCatchUp\(entry\)/);
-    expect(page).toContain('onCatchUp: () => openCatchUp(null),');
+    expect(page).not.toMatch(/<CatchUpScreen\b|openCatchUp/);
+    // The stack mounts only through a tab's catch up (Pipeline, Briefs, Plan, Chat).
+    const tab = FILES.find((f) => f.rel === 'components/catch-up/TabCatchUp.tsx')?.src ?? '';
+    expect(tab).toContain('<CatchUpScreen');
+    for (const page of [
+      'components/pages/PipelinePage.tsx',
+      'components/pages/BriefsPage.tsx',
+      'components/pages/PlanTabPage.tsx',
+      'components/chat/ChannelList.tsx',
+    ]) {
+      expect(readFileSync(join(SRC, page), 'utf8')).toContain('useTabCatchUp(');
+    }
   });
 
   it('read-only cards: no edit, resolve or delete write in catch up', () => {

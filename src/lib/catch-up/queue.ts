@@ -35,9 +35,10 @@ export interface CatchUpItem {
   /** The newest card-making entry's time (the queue order). */
   latestAt: string;
   /**
-   * 'threads': a card of the Threads button's queue (catch-up/threads.ts). Its
-   * entries are stand-ins, never inbox ids: a decision writes the thread's
-   * read point only. Absent on every inbox card.
+   * 'threads': a stand-in card (an unread thread, catch-up/threads.ts, or a
+   * chat with unread messages and no inbox entry, catch-up/tab-store.ts). Its
+   * entries are stand-ins, never inbox ids: a decision writes the chat's read
+   * point only. Absent on every inbox card.
    */
   source?: 'threads';
 }
@@ -148,6 +149,8 @@ export function buildCatchUpQueue(input: {
   follow?: readonly ActivityItem[];
   workspaceId?: string | null;
   selfId?: string | null;
+  /** Only these card kinds (a tab's catch up, 13 Nov 2026); absent: every kind. */
+  kinds?: readonly CatchUpItemKind[];
 }): CatchUpItem[] {
   const { tapped, nowMs } = input;
   const selfId = input.selfId ?? null;
@@ -180,6 +183,7 @@ export function buildCatchUpQueue(input: {
     // A tapped item is a card even when its tapped entry alone would not make one.
     const lead = cardEntries[0] ?? (key === tappedKey ? entries[0] : undefined);
     if (lead === undefined) continue;
+    if (input.kinds !== undefined && !input.kinds.includes(at.kind)) continue;
     out.push({
       key,
       kind: at.kind,

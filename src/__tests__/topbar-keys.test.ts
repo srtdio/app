@@ -83,7 +83,8 @@ describe('top bar keys: the 36 strip stays in the top bar, below md only', () =>
     // Activity publishes no sort and no "+": both slots stay empty boxes.
     const activity = read('pages/NotificationsPage.tsx');
     expect(activity).not.toMatch(/\buseTopbarActions\(/);
-    expect(activity).toContain('lead={leadRow}');
+    // Catch up lives on each tab (13 Nov 2026): no lead row on Activity.
+    expect(activity).not.toContain('lead={leadRow}');
   });
 
   it('CLAUDE.md records the exception', () => {

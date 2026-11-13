@@ -40,7 +40,6 @@ import {
   BottomTabs,
   PHONE_BAR_OFFSETS,
   chatTabLabel,
-  planTabLabel,
   tabClass,
 } from '@/components/shell/BottomTabs';
 import { MOVE_CLASS } from '@/lib/motion';
@@ -271,23 +270,18 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
   });
 
   it('badge ring: panel-3 on the open tab (its fill), surface-top on the others', () => {
-    counts.plan = 3;
-    const onPlan = render('/plan', 0, 4);
+    const onPipeline = render('/pipeline', 0, 4);
     const ring = (view: HTMLElement, sel: string): string[] =>
       classes(view.querySelector(`${sel} [data-count-badge]`) ?? view);
-    expect(ring(onPlan, '[data-selected="true"]')).toEqual(
-      expect.arrayContaining(['border-2', 'border-panel-3']),
-    );
-    expect(ring(onPlan, '[data-selected="true"]')).not.toContain('border-surface-top');
-    expect(ring(onPlan, '[data-activity-tab]')).toContain('border-surface-top');
+    expect(ring(onPipeline, '[data-activity-tab]')).toContain('border-surface-top');
+    expect(ring(onPipeline, '[data-activity-tab]')).not.toContain('border-panel-3');
     act(() => root?.unmount());
-    onPlan.remove();
+    onPipeline.remove();
     const onActivity = render('/notifications', 0, 4);
     expect(ring(onActivity, '[data-activity-tab]')).toEqual(
       expect.arrayContaining(['border-2', 'border-panel-3']),
     );
     expect(ring(onActivity, '[data-activity-tab]')).not.toContain('border-surface-top');
-    expect(ring(onActivity, 'a[href="/plan"]')).toContain('border-surface-top');
   });
 
   it('Activity badge: the inbox unread count with the lit surface-top ring and the "Activity, N unread" name', () => {
@@ -390,32 +384,24 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
   });
 });
 
-describe('Plan tab unread comments badge', () => {
-  it('shows the shared count pill on the Plan tab only when plan items have unread comments', () => {
+describe('nav numbers: only Activity and Chat (13 Nov 2026)', () => {
+  it('the Plan tab carries no badge, plain label and plain /plan link, even with unread plan comments', () => {
     counts.plan = 3;
-    const view = render('/pipeline');
-    const plan = pillLinks(view).find((a) => a.getAttribute('href') === '/plan');
-    expect(plan?.querySelector('[data-count-badge]')?.textContent).toBe('3');
-    expect(plan?.getAttribute('aria-label')).toBe('Plan, 3 unread comments');
-    const others = pillLinks(view).filter((a) => a.getAttribute('href') !== '/plan');
-    for (const link of others) expect(link.querySelector('[data-count-badge]')).toBeNull();
-  });
-
-  it('with unread, the Plan tab opens the newest unread plan comment (jump to latest)', () => {
-    counts.plan = 2;
     counts.newest = { planId: 'pl1', itemId: 'i1', commentId: 'c1' };
-    const view = render('/pipeline');
-    const plan = pillLinks(view).find((a) => a.getAttribute('aria-label')?.startsWith('Plan'));
-    expect(plan?.getAttribute('href')).toBe('/plan/pl1?item=i1&comment=c1');
+    const view = render('/pipeline', 2, 4);
+    const plan = pillLinks(view).find((a) => a.getAttribute('aria-label') === 'Plan');
+    expect(plan?.getAttribute('href')).toBe('/plan');
+    expect(plan?.querySelector('[data-count-badge]')).toBeNull();
+    // Pipeline, Briefs, Assets, Plan: no number at all.
+    for (const link of pillLinks(view).filter((a) => !a.hasAttribute('data-activity-tab'))) {
+      expect(link.querySelector('[data-count-badge]')).toBeNull();
+    }
   });
 
-  it('no unread: no badge and the plain label', () => {
-    const view = render('/pipeline');
-    const plan = pillLinks(view).find((a) => a.getAttribute('href') === '/plan');
-    expect(plan?.querySelector('[data-count-badge]')).toBeNull();
-    expect(plan?.getAttribute('aria-label')).toBe('Plan');
-    expect(planTabLabel('Plan', 0)).toBe('Plan');
-    expect(planTabLabel('Plan', 1)).toBe('Plan, 1 unread comment');
+  it('Activity and Chat keep their numbers', () => {
+    const view = render('/pipeline', 2, 4);
+    expect(view.querySelector('[data-activity-tab] [data-count-badge]')?.textContent).toBe('4');
+    expect(view.querySelectorAll('[data-count-badge]').length).toBe(2);
   });
 });
 

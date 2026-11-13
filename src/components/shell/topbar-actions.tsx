@@ -11,26 +11,14 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
   type ReactElement,
   type ReactNode,
   type Ref,
 } from 'react';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
-import {
-  IconActivity,
-  IconPlus,
-  IconThreads,
-  IconTickDouble,
-  ICON_SIZE,
-} from '@/components/ui/icons';
-import { LIST_CARD_SOLID_GROUP, ListCard } from '@/components/ui/ListCard';
+import { IconPlus, ICON_SIZE } from '@/components/ui/icons';
 import { useOptionalToast } from '@/components/ui/toast';
-import { useMenuGesture } from '@/components/ui/useLongPress';
-import { CATCH_UP } from '@/lib/catch-up/copy';
-import { useWorkspaceThreads, unreadThreadCount } from '@/lib/catch-up/threads';
 import { cn } from '@/lib/cn';
 
 export interface TopbarActions {
@@ -173,169 +161,5 @@ const TOPBAR_PLUS_PHONE_FACE =
 const TOPBAR_PLUS_LAPTOP_FACE =
   'hidden h-8 w-28 items-center justify-center gap-2 rounded-lg px-2 text-accent-fg md:inline-flex';
 
-// --- Activity: Catch up and Threads, solid rows (11 Nov 2026) ----------------
-//
-// The top bar is the same on every tab; Activity's Catch up and Threads are
-// solid list rows (ui/ListCard solid + count) on top of the notification
-// list, in ListScreen's lead slot under the filter chips: Catch up first, then
-// Threads. A row shows only while its count is above 0; both at 0, the lead
-// slot is not rendered at all. Rows appear and leave at once (no motion).
-
-/** Threads' accessible name: "Threads, N new" / "Threads". Pure. */
-export function threadsLabel(count: number): string {
-  return count > 0 ? `Threads, ${count} new` : 'Threads';
-}
-
-/** Catch up's accessible name: "Catch up, N unread" / "Catch up". Pure. */
-export function catchUpLabel(count: number): string {
-  return count > 0 ? `${CATCH_UP}, ${count} unread` : CATCH_UP;
-}
-
-/** The long-press menu's one row. */
-export const MARK_ALL_AS_READ = 'Mark all as read';
-
-/** The rows' second line: the short count line. Pure. */
-export function catchUpLine(count: number): string {
-  return `${count} unread`;
-}
-export function threadsLine(count: number): string {
-  return `${count} new`;
-}
-
-/** Threads: the unread threads I am in. A tap opens the Threads list. */
-function ThreadsRow(props: { count: number; onOpen: () => void }): ReactElement {
-  return (
-    <ListCard
-      solid
-      unread
-      count={props.count}
-      picture={{ kind: 'icon', icon: IconThreads }}
-      title="Threads"
-      preview={threadsLine(props.count)}
-      onPress={props.onOpen}
-      press={{
-        'aria-label': threadsLabel(props.count),
-        'data-topbar-threads': '',
-        'data-count': String(props.count),
-      }}
-    />
-  );
-}
-
-/**
- * Catch up: the unread count. A tap opens catch up; a long-press (touch) or
- * right-click (laptop) opens the menu with one row, Mark all as read: the
- * whole inbox read at once, no toast, no Undo.
- */
-function CatchUpRow(props: {
-  count: number;
-  onOpen: () => void;
-  onMenu: () => void;
-}): ReactElement {
-  const gesture = useMenuGesture(props.onMenu);
-  return (
-    <ListCard
-      solid
-      unread
-      count={props.count}
-      picture={{ kind: 'icon', icon: IconActivity }}
-      title={CATCH_UP}
-      preview={catchUpLine(props.count)}
-      onPress={() => {
-        if (gesture.consumeClickSuppression()) return;
-        props.onOpen();
-      }}
-      press={{
-        ...gesture.handlers,
-        'aria-label': catchUpLabel(props.count),
-        'data-topbar-catch-up': '',
-        'data-count': String(props.count),
-      }}
-    />
-  );
-}
-
-/** The solid rows and Catch up's menu. Renders nothing when both counts are 0. */
-export function ActivitySolidRows(props: {
-  unread: number;
-  threads: number;
-  onCatchUp: () => void;
-  onThreads: () => void;
-  onMarkAllRead: () => void;
-}): ReactElement | null {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const showCatchUp = props.unread > 0;
-  const showThreads = props.threads > 0;
-  if (!showCatchUp && !showThreads) return null;
-  const items: ActionMenuItem[] = [
-    {
-      id: 'mark-all-read',
-      label: MARK_ALL_AS_READ,
-      icon: IconTickDouble,
-      onSelect: props.onMarkAllRead,
-    },
-  ];
-  return (
-    <div data-activity-solid-rows="" className="relative">
-      <div className={LIST_CARD_SOLID_GROUP}>
-        {showCatchUp ? (
-          <CatchUpRow
-            count={props.unread}
-            onOpen={props.onCatchUp}
-            onMenu={() => setMenuOpen(true)}
-          />
-        ) : null}
-        {showThreads ? <ThreadsRow count={props.threads} onOpen={props.onThreads} /> : null}
-      </div>
-      {/* The menu anchors to the rows' box (its trailing edge, under it). */}
-      {showCatchUp ? (
-        <span className="pointer-events-none absolute inset-0 flex justify-end">
-          <ActionMenu
-            title={CATCH_UP}
-            items={items}
-            trigger={null}
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-          />
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Activity's solid rows, for ListScreen's `lead` slot: null when both counts
- * are 0 (ListScreen then skips the slot). Pure render from the two stores
- * already held: totalUnread from the inbox store, the threads the device
- * holds (the threads read starts after the first paint in
- * useWorkspaceThreads' effect and is never awaited; 0 before it lands).
- * Handlers ride a ref so the rows change only with the counts. `ready` is
- * kept for the callers' shape; nothing waits on it.
- */
-export function useActivitySolidRows(input: {
-  workspaceId: string | null;
-  totalUnread: number;
-  ready: boolean;
-  onCatchUp: () => void;
-  onThreads: () => void;
-  onMarkAllRead: () => void;
-}): ReactElement | null {
-  const threads = useWorkspaceThreads(input.workspaceId);
-  const threadCount = unreadThreadCount(threads);
-  const handlers = useRef(input);
-  handlers.current = input;
-  const { totalUnread } = input;
-  return useMemo(
-    () =>
-      totalUnread > 0 || threadCount > 0 ? (
-        <ActivitySolidRows
-          unread={totalUnread}
-          threads={threadCount}
-          onCatchUp={() => handlers.current.onCatchUp()}
-          onThreads={() => handlers.current.onThreads()}
-          onMarkAllRead={() => handlers.current.onMarkAllRead()}
-        />
-      ) : null,
-    [threadCount, totalUnread],
-  );
-}
+// Activity's Catch up and Threads solid rows were removed on 13 Nov 2026:
+// catch up lives on each tab (catch-up/TabCatchUp), above its chip row.

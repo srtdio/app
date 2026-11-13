@@ -1,12 +1,11 @@
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadMore } from '@/components/ui/LoadMore';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { useActivitySolidRows } from '@/components/shell/topbar-actions';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { ICON_SIZE, IconActivity, IconAt } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
@@ -41,13 +40,11 @@ import {
   groupDigest,
   ACTIVITY_LOAD_FAILED,
   MARKED_READ_LABEL,
-  markAllTargets,
-  markAllEntriesRead,
   markEntryRead,
   mergeFresh,
+  fetchActivityEntry,
   msUntilZonedMidnight,
   openAction,
-  fetchActivityEntry,
   type ActivityDirection,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -71,21 +68,8 @@ import {
   ACTIVITY_SECTION,
   ActivityBoxes,
 } from '@/components/pages/activity/ActivityBoxes';
-import { CatchUpScreen } from '@/components/catch-up/CatchUpScreen';
-import { ThreadsListScreen } from '@/components/pages/activity/ThreadsListScreen';
-import { chatMessageHref } from '@/lib/inbox/bell-types';
-import type { ThreadForMeAll } from '@/lib/chat/thread-signals';
-import { buildCatchUpQueue, heldEntries, type CatchUpItem } from '@/lib/catch-up/queue';
-import { peekThreadsQueue } from '@/lib/catch-up/threads';
-import {
-  CATCH_UP_NEWEST,
-  CATCH_UP_PARAM,
-  CATCH_UP_THREADS,
-  catchUpReturnOf,
-  takeCatchUpSeed,
-  THREADS_LIST_ON,
-  THREADS_LIST_PARAM,
-} from '@/lib/catch-up/route';
+import { heldEntries } from '@/lib/catch-up/queue';
+import { CATCH_UP_PARAM, THREADS_LIST_PARAM, oldCatchUpTarget } from '@/lib/catch-up/route';
 import { activityLoadMore, readViewport } from '@/lib/load-more-rule';
 import { fillColumns } from '@/lib/use-fill-count';
 import { ROW_HEIGHT, ROW_HEIGHT_PHONE } from '@/components/ui/layout';
@@ -161,11 +145,7 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
 
 export function NotificationsPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const catchUpParam = searchParams.get(CATCH_UP_PARAM);
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
+  const [searchParams] = useSearchParams();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   // Today and Yesterday follow the workspace's timezone, not the device's.
   const tz = workspaces.find((row) => row.id === workspaceId)?.timezone ?? null;
@@ -564,32 +544,6 @@ export function NotificationsPage() {
     [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
-  // Catch up's long-press "Mark all as read" (the solid row): every unread row
-  // of the workspace read at once by ONE inbox_mark_all_read, whatever chip is
-  // on; no Undo and no toast. A failure puts the rows back with the fixed
-  // toast. Then the Mentions count and the nav badge refetch.
-  const handleMarkAll = useCallback(() => {
-    if (workspaceId === null) return;
-    const targets = markAllTargets(items, 'all', nowMs);
-    const ids = new Set(targets.map((item) => item.id));
-    const stamp = new Date().toISOString();
-    editItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
-    const traceId = newTrace();
-    void markAllEntriesRead(supabase, workspaceId, traceId).then((result) => {
-      if (!result.ok) {
-        logger.warn('notifications: mark all read failed', {
-          trace_id: traceId,
-          error: result.error.message,
-        });
-        revertRead(ids, stamp);
-        toast?.show({ title: MARK_READ_FAILED });
-        return;
-      }
-      void loadMentionCount();
-      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-    });
-  }, [workspaceId, items, nowMs, newTrace, toast, loadMentionCount, editItems, revertRead]);
-
   // Load more only when there is more (src/lib/load-more-rule, 10 Nov 2026):
   // the depth is ITEM ROWS after grouping, never entries. The first depth is
   // the rows that fill 1.45 viewports from the list's top, each Load more adds
@@ -669,169 +623,45 @@ export function NotificationsPage() {
     workspaceId === null ||
     (loading && items.length === 0) ||
     (filling && buckets.length === 0 && !error);
-  // The solid rows under the chips: Catch up, then Threads (topbar-actions),
-  // each only while its count is above 0. Threads opens the Threads list
-  // (?threads=1); ?catchup=threads (old links) still opens the threads-only
-  // card stack.
-  // Catch up from its row opens on the newest unread (?catchup=newest);
-  // an entry id opens the queue at that entry (a cold link does the same).
-  const openCatchUp = useCallback(
-    (entryId: string | null) => {
-      const next = new URLSearchParams(searchParams);
-      next.set(CATCH_UP_PARAM, entryId ?? CATCH_UP_NEWEST);
-      setSearchParams(next);
-    },
-    [searchParams, setSearchParams],
-  );
-  const leadRow = useActivitySolidRows({
-    workspaceId,
-    totalUnread,
-    ready: !listLoading,
-    onCatchUp: () => openCatchUp(null),
-    // Threads (10 Nov 2026): the Threads list screen, not the card stack.
-    onThreads: () => {
-      const next = new URLSearchParams(searchParams);
-      next.set(THREADS_LIST_PARAM, THREADS_LIST_ON);
-      setSearchParams(next);
-    },
-    onMarkAllRead: handleMarkAll,
-  });
-  // Catch up (/activity?catchup=<entryId>): the queue is fixed when it opens
-  // (Slack): the tapped entry (the row or toast handed it over, else the
-  // list's copy, else one read by id for a cold link), then the unread
-  // entries the screen holds. New arrivals wait for next time.
-  const [catchUp, setCatchUp] = useState<{ param: string; queue: CatchUpItem[] } | null>(null);
-  const fetchingEntryRef = useRef<string | null>(null);
+  // Catch up moved to each tab (13 Nov 2026): Activity has no catch-up rows,
+  // no Threads list and never opens a card stack. An old link
+  // (/activity?catchup=<entry | newest | threads>, /activity?threads=1) lands
+  // on the right tab's catch up: an entry on its item's tab with it first
+  // (the entry this screen holds is handed over, else the tab reads it by id).
+  const oldCatchUp = searchParams.get(CATCH_UP_PARAM);
+  const oldThreads = searchParams.get(THREADS_LIST_PARAM);
   useEffect(() => {
-    if (catchUpParam === null) {
-      if (catchUp !== null) setCatchUp(null);
-      return;
-    }
-    if (catchUp?.param === catchUpParam || workspaceId === null || userId === null) return;
-    const held = heldEntries(
-      items,
-      peekActivityPage(activityPageKey(userId, workspaceId, 'unread', sort)),
-      peekActivityPage(activityPageKey(userId, workspaceId, 'all', sort)),
-    );
-    const fix = (tapped: ActivityItem | null, follow: readonly ActivityItem[] = []): void => {
-      mark('catch-up:queue');
-      setCatchUp({
-        param: catchUpParam,
-        queue: buildCatchUpQueue({
-          tapped,
-          held,
-          follow,
-          nowMs: Date.now(),
-          workspaceId,
-          selfId: userId,
-        }),
+    if (oldCatchUp === null && oldThreads === null) return;
+    const go = (entry: ActivityItem | null): void =>
+      navigate(oldCatchUpTarget({ catchUp: oldCatchUp, threads: oldThreads, entry }), {
+        replace: true,
       });
-    };
-    if (catchUpParam === CATCH_UP_THREADS) {
-      mark('catch-up:queue');
-      setCatchUp({ param: catchUpParam, queue: peekThreadsQueue(workspaceId, userId) });
+    const isEntry = oldCatchUp !== null && oldCatchUp !== 'newest' && oldCatchUp !== 'threads';
+    if (!isEntry || workspaceId === null) {
+      go(null);
       return;
     }
-    if (catchUpParam === CATCH_UP_NEWEST) {
-      if (listLoading) return;
-      fix(null);
-      return;
-    }
-    // One card per item: the card needs every entry of the tapped item the list
-    // holds, so a deep link waits for the list (as the newest link does); a
-    // handed-over seed paints at once with what the opener held.
-    const seed = takeCatchUpSeed(catchUpParam);
-    if (seed !== undefined) {
-      fix(seed.item, seed.follow);
-      return;
-    }
-    if (listLoading) return;
-    const known = held.find((item) => item.id === catchUpParam);
+    const held =
+      userId !== null
+        ? heldEntries(
+            items,
+            peekActivityPage(activityPageKey(userId, workspaceId, 'unread', sort)),
+            peekActivityPage(activityPageKey(userId, workspaceId, 'all', sort)),
+          )
+        : items;
+    const known = held.find((item) => item.id === oldCatchUp);
     if (known !== undefined) {
-      fix(known);
+      go(known);
       return;
     }
-    if (fetchingEntryRef.current === catchUpParam) return;
-    fetchingEntryRef.current = catchUpParam;
-    const param = catchUpParam;
-    void fetchActivityEntry(supabase, workspaceId, param).then((res) => {
-      fetchingEntryRef.current = null;
-      if (searchParamsRef.current.get(CATCH_UP_PARAM) !== param) return;
-      if (!res.ok) logger.warn('catch-up: entry read failed', { error: res.error });
-      fix(res.ok ? res.data : null);
+    // A cold link: the entry by id (its tab is its item's), then the tab.
+    void fetchActivityEntry(supabase, workspaceId, oldCatchUp).then((res) => {
+      if (!res.ok) logger.warn('catch-up: old link entry read failed', { error: res.error });
+      go(res.ok ? res.data : null);
     });
-    // `items` and `listLoading` matter only until the queue is fixed.
+    // Runs once per old link; the list it reads is whatever the screen holds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catchUpParam, catchUp, workspaceId, userId, sort, items.length > 0, listLoading]);
-
-  // Back, Esc and Done: return to where catch up was opened. A link from
-  // another screen (a toast) carries its return path; on Activity the param
-  // goes with replace (never a push). Untouched cards stay unread.
-  const closeCatchUp = useCallback(() => {
-    void loadMentionCount();
-    window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-    const back = catchUpReturnOf(location.state);
-    if (back !== null) {
-      navigate(back, { replace: true });
-      return;
-    }
-    const next = new URLSearchParams(searchParamsRef.current);
-    next.delete(CATCH_UP_PARAM);
-    setSearchParams(next, { replace: true });
-  }, [location.state, navigate, setSearchParams, loadMentionCount]);
-
-  // The Threads list (?threads=1): Back drops the param with replace (as catch
-  // up does); a block's tap opens the thread in the chat (the route a chat row
-  // in Activity uses), at its newest reply.
-  const threadsOpen = searchParams.get(THREADS_LIST_PARAM) === THREADS_LIST_ON;
-  const closeThreads = useCallback(() => {
-    const next = new URLSearchParams(searchParamsRef.current);
-    next.delete(THREADS_LIST_PARAM);
-    setSearchParams(next, { replace: true });
-  }, [setSearchParams]);
-  const openThreadFromList = useCallback(
-    (thread: ThreadForMeAll) => navigate(chatMessageHref(thread.channelId, thread.lastReplyId)),
-    [navigate],
-  );
-
-  // Catch up's decisions land in the list at once (and in every kept page).
-  const setReadAt = useCallback(
-    (ids: readonly string[], read: boolean) => {
-      if (ids.length === 0) return;
-      const set = new Set(ids);
-      const stamp = new Date().toISOString();
-      editItems((prev) =>
-        prev.map((item) =>
-          set.has(item.id) ? { ...item, readAt: read ? (item.readAt ?? stamp) : null } : item,
-        ),
-      );
-    },
-    [editItems],
-  );
-  // The card menu's "Open ...": the real place at the comment; catch up closes
-  // (the push replaces the catch-up step, so Back returns to Activity).
-  const openPlaceFromCatchUp = useCallback(
-    (href: string) => {
-      void loadMentionCount();
-      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-      navigate(href, { replace: true });
-    },
-    [navigate, loadMentionCount],
-  );
-  const onCatchUpRead = useCallback((ids: readonly string[]) => setReadAt(ids, true), [setReadAt]);
-  const onCatchUpUnread = useCallback(
-    (ids: readonly string[]) => setReadAt(ids, false),
-    [setReadAt],
-  );
-  const onCatchUpAllRead = useCallback(() => {
-    void loadMentionCount();
-    window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
-  }, [loadMentionCount]);
-  // Nothing to catch up on (no unread, nothing tapped): the param goes.
-  const emptyCatchUp = catchUp !== null && catchUp.queue.length === 0;
-  useEffect(() => {
-    if (emptyCatchUp) closeCatchUp();
-  }, [emptyCatchUp, closeCatchUp]);
+  }, [oldCatchUp, oldThreads]);
 
   if (!listLoading) mark('activity:paint');
   // What the first frame painted (?paintlog): the kept or device-saved page,
@@ -850,9 +680,8 @@ export function NotificationsPage() {
   return (
     <>
       {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page
-          starts with the shell's chip row, then the Catch up and Threads
-          solid rows in the lead slot while their counts are above 0 (Mark all
-          read is Catch up's long-press); ListScreen keeps
+          starts with the shell's chip row (All, Unread, Mentions); no
+          catch-up rows (they live on each tab, 13 Nov 2026). ListScreen keeps
           the sr-only h1 for screen readers and e2e. The
           list sits in the shell's content: 16 under the chips, the gutter. */}
       <ListScreen
@@ -865,7 +694,6 @@ export function NotificationsPage() {
             mentionCount={mentionCount}
           />
         }
-        lead={leadRow}
       >
         {error && items.length === 0 ? (
           <LoadFailed onRetry={() => void loadActivity()} />
@@ -938,34 +766,6 @@ export function NotificationsPage() {
           </div>
         )}
       </ListScreen>
-
-      {catchUp !== null && catchUp.queue.length > 0 && workspaceId !== null && userId !== null ? (
-        <CatchUpScreen
-          key={catchUp.param}
-          queue={catchUp.queue}
-          workspaceId={workspaceId}
-          workspaceKey={workspaceKey}
-          currentUserId={userId}
-          selfName={selfName}
-          side={side}
-          timeZone={tz ?? undefined}
-          onClose={closeCatchUp}
-          onOpenPlace={openPlaceFromCatchUp}
-          onRead={onCatchUpRead}
-          onUnread={onCatchUpUnread}
-          onAllRead={onCatchUpAllRead}
-        />
-      ) : null}
-
-      {threadsOpen && workspaceId !== null && userId !== null ? (
-        <ThreadsListScreen
-          workspaceId={workspaceId}
-          currentUserId={userId}
-          timeZone={tz ?? undefined}
-          onClose={closeThreads}
-          onOpenThread={openThreadFromList}
-        />
-      ) : null}
     </>
   );
 }

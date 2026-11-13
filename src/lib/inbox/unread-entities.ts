@@ -1,6 +1,6 @@
 // Unread comment markers: the caller's unread comment and mention entries per
 // post, brief and plan item (inbox_unread_comment_marks), the one source for the
-// Pipeline card marker, the Plan row marker and the Plan nav badge. The same
+// Pipeline card marker and the Plan row marker (no Plan nav badge, 13 Nov 2026). The same
 // read names each entity's newest unread comment, so every unread marker opens
 // straight onto it (the jump-to-latest rule). Activity
 // reads the same inbox rows, so reading a comment in either place clears both.
@@ -24,6 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
+import { ENTITY_READ_ON_OPEN_EVENT, type EntityReadOnOpen } from '@/lib/inbox/entity-open-event';
 import {
   invalidateReads,
   onSessionReadsHydrated,
@@ -456,7 +457,15 @@ function markNow(type: UnreadEntityType, id: string): void {
  * cold deep link), it waits for that read first. A command: returns nothing.
  */
 export function markEntityReadOnOpen(type: UnreadEntityType, id: string): void {
-  if (active === null || id === '') return;
+  if (id === '') return;
+  // One read state (13 Nov 2026): every other unread entry of the item (a
+  // stage change, a brief created) is read too, by the tab catch-up store.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent<EntityReadOnOpen>(ENTITY_READ_ON_OPEN_EVENT, { detail: { type, id } }),
+    );
+  }
+  if (active === null) return;
   if (peekKept<UnreadEntities>(active.key) === undefined && pending !== null) {
     void pending.then(() => markNow(type, id));
     return;

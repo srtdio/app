@@ -36,6 +36,7 @@ import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ScreenFailed } from '@/components/chat/PlanScreen';
 import { useInduction } from '@/components/induction/InductionProvider';
 import { ListScreen } from '@/components/shell/ListScreen';
+import { useTabCatchUp } from '@/components/catch-up/TabCatchUp';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SortMenu } from '@/components/ui/SortMenu';
@@ -163,6 +164,9 @@ function PlanTabFlatList(props: {
   );
 }
 
+/** Plan's catch-up rows: plan items, then bank ideas. */
+const PLAN_CATCH_UP = ['plan-item', 'idea'] as const;
+
 export function PlanTabPage(): ReactElement {
   const navigate = useNavigate();
   mark('plan-tab:mount');
@@ -286,6 +290,8 @@ export function PlanTabPage(): ReactElement {
   // (none for anyone who can't create). On the Bank chip the sort opens its
   // Filter and sort sheet and the "+" is Add idea. Pure render: published in
   // a layout effect, no read, no await.
+  // Plan catch up, then Concept catch up (13 Nov 2026), above the chips on every chip.
+  const catchUp = useTabCatchUp({ tabs: PLAN_CATCH_UP, userId, workspaceId });
   useTopbarActions(
     onBank
       ? {
@@ -403,11 +409,12 @@ export function PlanTabPage(): ReactElement {
 
   return (
     <>
-      <ListScreen title="Plan" chips={chipRow}>
+      <ListScreen title="Plan" chips={chipRow} catchUp={catchUp.rows}>
         <div ref={landedRef} className="contents">
           {body}
         </div>
       </ListScreen>
+      {catchUp.screen}
       {workspaceId !== null ? (
         <BankFilterSheet
           open={bankSheet === 'filter'}

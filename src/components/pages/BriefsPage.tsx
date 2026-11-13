@@ -11,6 +11,8 @@ import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
 import { ListScreen, type ListScreenChips } from '@/components/shell/ListScreen';
+import { useTabCatchUp } from '@/components/catch-up/TabCatchUp';
+import { hydratedUserId } from '@/lib/session-read';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
@@ -428,6 +430,9 @@ export function briefsEmptyView(state: BriefsEmpty): ReactElement {
   }
 }
 
+/** Briefs' catch-up row. */
+const BRIEFS_CATCH_UP = ['brief'] as const;
+
 export function BriefsPage() {
   const navigate = useNavigate();
   const toast = useOptionalToast();
@@ -839,11 +844,18 @@ export function BriefsPage() {
   // re-renders when it changes.
   const topbar = useMemo(() => briefsTopbarActions({ canCreate: briefCreate }), [briefCreate]);
   useTopbarActions(topbar);
+  // Brief catch up (13 Nov 2026): the row above the chips and its card stack.
+  const catchUp = useTabCatchUp({
+    tabs: BRIEFS_CATCH_UP,
+    userId: viewUserId ?? hydratedUserId(),
+    workspaceId,
+  });
 
   return (
     <>
       <ListScreen
         title="Briefs"
+        catchUp={catchUp.rows}
         {...briefsHeader({
           filter,
           onFilterChange: setFilter,
@@ -897,6 +909,7 @@ export function BriefsPage() {
           </div>
         )}
       </ListScreen>
+      {catchUp.screen}
 
       <CreateBriefSheet
         open={createOpen}

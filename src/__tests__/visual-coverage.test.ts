@@ -404,11 +404,13 @@ const REQUIRED: readonly string[] = [
   // Activity twins Plan (10 Nov 2026): sections and rows.
   'activity-sections',
   'activity-rows',
-  // Activity's Catch up and Threads solid rows (11 Nov 2026); activity-all-read re-shot above.
-  'activity-threads-new',
-  'activity-catch-up-menu',
-  'activity-solid-rows',
-  'activity-threads-list',
+  // Catch up per tab (13 Nov 2026): each tab's rows above its chips; Activity has none.
+  'tab-catch-up-pipeline',
+  'tab-catch-up-briefs',
+  'tab-catch-up-plan',
+  'tab-catch-up-bank',
+  'tab-catch-up-chat',
+  'tab-catch-up-hover',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
@@ -488,6 +490,8 @@ const LAPTOP_LIGHT_NAMES = [
   // The comment thread fills beside the post on a laptop only (light here;
   // dark through the spec's LAPTOP_DARK_SCREENS).
   'post-comment-thread-more-menu',
+  // A tab catch-up row's hover key (Mark N as read) shows on a hover pointer only.
+  'tab-catch-up-hover',
 ];
 
 /** Laptop dark shots taken in the laptop-light project (`only: 'laptop', dark: true`). */

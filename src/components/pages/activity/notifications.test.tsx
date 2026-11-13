@@ -216,30 +216,28 @@ describe('Mark all read', () => {
     }
   });
 
-  it('the page makes one inbox_mark_all_read call on All, never a per-row or per-type top-up', () => {
+  it('the page makes no inbox_mark_all_read call (catch up moved to the tabs, 13 Nov 2026)', () => {
     const page = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // Catch up's long-press is always the whole inbox (10 Nov), whatever chip is on.
+    // Each tab's row marks only its kind (swipe / hover); Activity marks no whole inbox.
     expect(page).not.toMatch(/marksWholeInbox|markChipRead/);
-    expect(count(page, 'markAllEntriesRead(supabase, workspaceId, traceId)')).toBe(1);
+    expect(count(page, 'markAllEntriesRead(supabase, workspaceId, traceId)')).toBe(0);
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
-  it('the double-tick Mark all read is gone: Catch up long-press marks all (10 Nov)', () => {
+  it('the double-tick Mark all read is gone, and so is the Catch up long-press (13 Nov)', () => {
     const page = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // The lead slot holds the solid rows, Catch up then Threads
-    // (useActivitySolidRows); Catch up's long-press "Mark all as read" is the
-    // whole-inbox write.
+    // No solid rows (13 Nov 2026): catch up lives on each tab.
     expect(page).not.toContain('MARK_ALL_READ_LABEL');
     expect(page).not.toContain('IconTickDouble');
     expect(page).not.toContain('data-activity-mark-all');
-    expect(page).toContain('onMarkAllRead: handleMarkAll,');
-    expect(page).toContain("const targets = markAllTargets(items, 'all', nowMs);");
+    expect(page).not.toContain('onMarkAllRead');
+    expect(page).not.toContain('markAllTargets(');
     // Moved up from the day line: no link there any more, no count text.
     expect(page).not.toContain('<Button variant="link" onClick={handleMarkAll}>');
     expect(page).not.toContain('bucketIndex === 0 && chipUnread > 0');
@@ -576,7 +574,7 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).not.toContain('SEARCH_PARAM');
     expect(page).not.toContain('useServerSearch');
     expect(page).not.toContain('searchActivityEntries');
-    // The only query param Activity reads is catch up's (?catchup=), never a search.
+    // The only query params Activity reads are the old catch-up links' (redirected), never a search.
     expect(page).not.toMatch(/searchParams\.get\('q'\)/);
     expect(page).not.toContain('NoResults');
     expect(page).not.toContain('searching');
