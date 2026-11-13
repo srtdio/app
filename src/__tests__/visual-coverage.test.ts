@@ -402,11 +402,13 @@ const REQUIRED: readonly string[] = [
   // Activity twins Plan (10 Nov 2026): sections and rows.
   'activity-sections',
   'activity-rows',
-  // Activity's Catch up and Threads solid rows (11 Nov 2026); activity-all-read re-shot above.
-  'activity-threads-new',
-  'activity-catch-up-menu',
-  'activity-solid-rows',
-  'activity-threads-list',
+  // Catch up per tab (13 Nov 2026): each tab's rows above its chips; Activity has none.
+  'catch-up-pipeline',
+  'catch-up-briefs',
+  'catch-up-plan',
+  'catch-up-bank',
+  'catch-up-chat',
+  'catch-up-hover',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
