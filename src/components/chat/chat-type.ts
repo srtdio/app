@@ -108,6 +108,15 @@ export const REPLIES_ROW_PAD: ChatSize = {
 };
 
 /**
+ * A search hit's reply shown under its comment's replies row (13 Nov 2026):
+ * its photo starts on the comment's text column: 64 - 16 = 48 touch, 56 - 16 = 40 laptop.
+ */
+export const SEARCH_PEEK_INDENT: ChatSize = {
+  touch: 'ml-12',
+  laptop: 'ml-10',
+};
+
+/**
  * The Seen line's left pad (no inner pad), so its words start on the row's
  * text column: 64 touch, 56 laptop.
  */

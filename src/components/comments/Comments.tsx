@@ -55,6 +55,14 @@ import {
   sized,
   useChatLayout,
 } from '@/components/chat/chat-type';
+import {
+  CommentsSearchDock,
+  CommentsSearchHead,
+  CommentsSearchScope,
+  SearchPeek,
+  peekReply,
+  useCommentsSearch,
+} from '@/components/comments/CommentsSearch';
 import { useInduction } from '@/components/induction/InductionProvider';
 import {
   CommentForwardLayer,
@@ -913,6 +921,19 @@ export function Comments(props: CommentsProps): ReactElement {
     openThread(replyLink, false, focusId);
   }, [focusId, replyLink, props.focusRequestKey, openThread]);
   const listRef = useRef<HTMLDivElement>(null);
+  // Search the comments (13 Nov 2026): the key on the "Comments" row, the field
+  // in its place, "N of M" in the comment box's place. Every comment and reply
+  // is on the device, so no read. A hit in a reply shows that reply alone under
+  // its comment's replies row (the thread stays shut); a tap opens the thread there.
+  const search = useCommentsSearch({
+    threads: () =>
+      lists.roots.map((root) => ({
+        root: messageOf(root),
+        replies: (lists.replies.get(root.id) ?? []).map(messageOf),
+      })),
+    scope: listRef,
+  });
+  const peek = peekReply(search, lists.replies);
   // Laptop, post page (item 6): the thread panel fills beside the post column
   // and takes the comments' place; elsewhere it stays the default 380.
   const postColumnRight = useCallback(() => postColumnRightOf(listRef.current), []);
@@ -1300,6 +1321,17 @@ export function Comments(props: CommentsProps): ReactElement {
         />,
       );
     }
+    if (root !== undefined && peek !== undefined && peek.parent_comment_id === root.id) {
+      mainRows.push(
+        <SearchPeek key={`peek:${peek.id}`} layout={layout}>
+          {renderRow(
+            messageOf(peek),
+            { head: true, tail: true, afterLabel: false },
+            { onOpen: () => openThread(root.id, false, peek.id), highlighted: false },
+          )}
+        </SearchPeek>,
+      );
+    }
   }
 
   const composerShared = {
@@ -1367,6 +1399,9 @@ export function Comments(props: CommentsProps): ReactElement {
           openThread(guide, !coarsePointer);
       }}
     >
+      <div className="mb-2">
+        <CommentsSearchHead search={search} searchable={!loading && lists.roots.length > 0} />
+      </div>
       {loading ? (
         <ul data-comments-loading="" aria-busy="true" className="flex flex-col gap-3 py-2">
           <li className="sr-only">Loading comments</li>
@@ -1391,11 +1426,15 @@ export function Comments(props: CommentsProps): ReactElement {
           {COMMENTS_EMPTY}
         </Text>
       ) : (
-        <ul data-comments-list="" className={cn(PAGE_BLEED, 'flex flex-col')}>
-          {mainRows}
-        </ul>
+        <CommentsSearchScope search={search}>
+          <ul data-comments-list="" className={cn(PAGE_BLEED, 'flex flex-col')}>
+            {mainRows}
+          </ul>
+        </CommentsSearchScope>
       )}
-      {canComment ? (
+      {search.open ? (
+        <CommentsSearchDock search={search} />
+      ) : canComment ? (
         <div data-comments-composer="" className={cn('mt-6', PHONE_BLEED)}>
           <Composer
             key={`root:${entityKey}`}

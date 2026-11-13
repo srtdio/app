@@ -44,4 +44,29 @@ describe('search inside a chat', () => {
       'searchCurrent={searchCurrent !== null && searchCurrent === props.message.id}',
     );
   });
+
+  it('comments search: key on the Comments row, a reply hit shown under its comment (13 Nov 2026)', () => {
+    // One set of parts for post, brief, Plan and Bank comments.
+    const plan = read('src/components/chat/PlanItemThread.tsx');
+    for (const part of [
+      'useCommentsSearch({',
+      '<CommentsSearchHead',
+      '<SearchPeek',
+      '<CommentsSearchDock',
+    ])
+      expect(plan).toContain(part);
+    const comments = read('src/components/comments/Comments.tsx');
+    expect(comments).toContain('<CommentsSearchHead');
+    expect(comments).toContain('<SearchPeek');
+    const parts = read('src/components/comments/CommentsSearch.tsx');
+    expect(parts).toContain(
+      '<ChatSearchKey label={COMMENTS_SEARCH_LABEL} onOpen={search.start} />',
+    );
+    expect(parts).toContain('data-search-peek=""');
+    expect(comments).toContain('onOpen: () => openThread(root.id, false, peek.id)');
+    expect(comments).toContain('<CommentsSearchDock search={search} />');
+    expect(read('src/index.css')).toContain(
+      'body:has([data-comments-search-dock]) [data-decision-bar],\nbody:has([data-comments-search-dock]) [data-plan-comments-composer]',
+    );
+  });
 });

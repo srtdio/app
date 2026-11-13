@@ -314,6 +314,8 @@ const REQUIRED: readonly string[] = [
   'chat-search-open',
   'chat-search-typed',
   'thread-search-typed',
+  'comments-search-reply',
+  'bank-comments-search-reply',
   'chat-thread-screen',
   'chat-thread-screen-plan',
   // Catch up (8 Nov 2026): the cards, the swipe frames, typing, the end

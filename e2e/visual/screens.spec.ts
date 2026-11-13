@@ -3287,6 +3287,28 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 13 Nov 2026: the comments search on a Bank idea (Plan's same parts): the
+    // hit is a reply, shown alone under its comment; the comment box hides.
+    name: 'bank-comments-search-reply',
+    seed: creator,
+    extra: seedBankIdeaCommentThreads,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-came-from]')], 'bank idea');
+      await planCommentsReady(page);
+      await page.locator('[data-comments-head] [data-chat-search-key]').evaluate((key) => {
+        (key as HTMLElement).click();
+      });
+      await page.locator('[data-comments-head] [data-chat-search-field]').fill('hero');
+      await expect(page.locator('[data-comments-search-dock] [data-chat-search-count]')).toHaveText(
+        '1 of 1',
+      );
+      await waitFor([page.locator('[data-search-peek] [data-search-current] mark')], 'reply hit');
+      await expect(page.locator('[data-thread-view]')).toHaveCount(0);
+      await expect(page.locator('[data-plan-comments-composer]')).toBeHidden();
+    },
+  },
+  {
     // The Bank idea's thread opened from its replies row.
     name: 'bank-idea-thread-open',
     seed: creator,
@@ -6696,6 +6718,40 @@ SCREENS.push(
       await waitFor([page.getByText('To make changes, move it to Parked.')], 'approved lock');
     },
     after: async (page) => assertPinnedBarOnScroll(page, 'post-detail-approved'),
+  },
+  {
+    // 13 Nov 2026: search the comments (the key on the "Comments" row). The
+    // second hit is a reply: it shows alone under its comment's replies row,
+    // its photo on the comment's text column; "N of M" in the decision bar's place.
+    name: 'comments-search-reply',
+    seed: creator,
+    extra: seedConversation,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postConversationReady(page);
+      // A plain click: the key's 44 box hangs 12 past the column (the trailing
+      // rule), so a scripted tap would slide the laptop column sideways first.
+      await page.locator('[data-comments-head] [data-chat-search-key]').evaluate((key) => {
+        (key as HTMLElement).click();
+      });
+      const field = page.locator('[data-comments-head] [data-chat-search-field]');
+      await field.fill('the');
+      const count = page.locator('[data-comments-search-dock] [data-chat-search-count]');
+      await expect(count).toHaveText('1 of 3');
+      await field.press('Enter');
+      await expect(count).toHaveText('2 of 3');
+      await waitFor([page.locator('[data-search-peek] [data-search-current] mark')], 'reply hit');
+      await expect(page.locator('[data-thread-view]')).toHaveCount(0);
+      await expect(page.locator('[data-comments-composer]')).toHaveCount(0);
+    },
+    after: async (page) => {
+      // The reply's photo starts on its comment's text column (±1).
+      const [photo, text] = await Promise.all([
+        page.locator('[data-search-peek] [data-avatar-role]').first().boundingBox(),
+        page.locator(`[data-msg-id="${THREAD_ROOT}"] [data-msg-body]`).boundingBox(),
+      ]);
+      expect(Math.abs((photo?.x ?? 0) - (text?.x ?? -9))).toBeLessThanOrEqual(1);
+    },
   },
   {
     // A comment's thread open (11 Nov 2026): chat's ThreadViewFrame ("<",

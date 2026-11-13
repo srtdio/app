@@ -39,6 +39,14 @@ import { ThreadCommentRow } from '@/components/chat/ThreadCommentRow';
 import { THREAD_REPLY_PLACEHOLDER } from '@/components/chat/MessageThread';
 import { RepliesRow, RepliesSeparatorRow } from '@/components/chat/ThreadRail';
 import {
+  CommentsSearchDock,
+  CommentsSearchHead,
+  CommentsSearchScope,
+  SearchPeek,
+  peekReply,
+  useCommentsSearch,
+} from '@/components/comments/CommentsSearch';
+import {
   CommentForwardLayer,
   CommentThreadLayer,
   useCommentThreadStick,
@@ -892,6 +900,16 @@ export function PlanItemThread(props: {
     props.comments.find((c) => c.authorUserId === id)?.authorName ??
     '';
 
+  const search = useCommentsSearch({
+    threads: () =>
+      lists.mains.filter(recorded).map((root) => ({
+        root: messageOf(root),
+        replies: (lists.replies.get(root.id) ?? []).filter(recorded).map(messageOf),
+      })),
+    scope: listRef,
+  });
+  const peek = peekReply(search, lists.replies);
+
   const rowProps = {
     profiles,
     workspaceId: props.workspaceId,
@@ -973,6 +991,24 @@ export function PlanItemThread(props: {
         onOpen={() => openThread(comment.id, !coarsePointer)}
       />,
     );
+    if (peek !== undefined && peek.parentId === comment.id) {
+      items.push(
+        <SearchPeek key={`peek:${peek.id}`} layout={layout}>
+          <PlanCommentRow
+            {...rowProps}
+            comment={peek}
+            message={messageOf(peek)}
+            head
+            tail
+            afterLabel={false}
+            highlighted={false}
+            onTapOpen={() => openThread(comment.id, false, peek.id)}
+            onReply={() => openThread(comment.id, false, peek.id)}
+            teamLine={false}
+          />
+        </SearchPeek>,
+      );
+    }
   }
 
   // ---- the open thread ----------------------------------------------------
@@ -1070,9 +1106,13 @@ export function PlanItemThread(props: {
 
   return (
     <>
-      <ul ref={listRef} data-plan-thread="" className={cn(PAGE_BLEED, 'flex flex-col')}>
-        {items}
-      </ul>
+      <CommentsSearchHead search={search} searchable />
+      <CommentsSearchScope search={search}>
+        <ul ref={listRef} data-plan-thread="" className={cn(PAGE_BLEED, 'flex flex-col')}>
+          {items}
+        </ul>
+      </CommentsSearchScope>
+      {search.open ? <CommentsSearchDock search={search} /> : null}
       {threadLayer}
       {menu !== null ? (
         <PlanCommentMenu
