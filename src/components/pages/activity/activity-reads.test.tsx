@@ -459,23 +459,11 @@ describe('Activity: the bell press prefetch', () => {
   });
 });
 
-describe('Activity: the solid rows under the pills', () => {
-  const SOLID = '[data-shell="lead"] [data-activity-solid-rows]';
-  const catchUp = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>(`${SOLID} button[data-topbar-catch-up]`);
-  const threads = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>(`${SOLID} button[data-topbar-threads]`);
-
-  it('Catch up then Threads as solid rows; empty top bar slots, no Mark all read double tick', async () => {
-    // Catch up's count is the inbox store's server count (Part 6), not the rows'.
+describe('Activity: chips only, no catch-up rows (13 Nov 2026)', () => {
+  it('unread and an unread thread held: still no solid row, no lead slot, empty top bar slots', async () => {
     inboxUnread.count = 20;
     render();
     await settle();
-    expect(catchUp()?.getAttribute('aria-label')).toBe('Catch up, 20 unread');
-    expect(catchUp()?.getAttribute('data-count')).toBe('20');
-    // No unread thread held: the Threads row is not in the DOM.
-    expect(threads()).toBeNull();
-    // One unread thread lands: its row shows under Catch up.
     act(() =>
       setThreads('w1', [
         {
@@ -490,47 +478,21 @@ describe('Activity: the solid rows under the pills', () => {
         },
       ]),
     );
-    expect(threads()?.getAttribute('aria-label')).toBe('Threads, 1 new');
-    expect(threads()?.getAttribute('data-count')).toBe('1');
-    // Catch up first, then Threads; nothing in the sort and "+" slots.
-    const order = [...document.querySelectorAll(`${SOLID} button[data-list-card-press]`)].map(
-      (b) => (b.hasAttribute('data-topbar-threads') ? 'threads' : 'catch-up'),
-    );
-    expect(order).toEqual(['catch-up', 'threads']);
-    const lines = [...document.querySelectorAll(`${SOLID} [data-list-card-preview]`)].map(
-      (el) => el.textContent,
-    );
-    expect(lines).toEqual(['20 unread', '1 new']);
-    expect(document.querySelectorAll(`${SOLID} [data-count-badge="on-fill"]`)).toHaveLength(2);
+    expect(document.querySelector('[data-list-card-solid]')).toBeNull();
+    expect(document.querySelector('[data-shell="lead"]')).toBeNull();
+    expect(document.querySelector('[data-topbar-catch-up], [data-topbar-threads]')).toBeNull();
     expect(document.querySelector('[data-probe-sort]')?.childElementCount).toBe(0);
     expect(document.querySelector('[data-probe-primary]')?.childElementCount).toBe(0);
-    expect(document.querySelector('[data-probe-topbar] [data-topbar-threads]')).toBeNull();
     expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
-    expect(document.querySelector('[data-activity-bucket-head] button')).toBeNull();
     inboxUnread.count = 0;
   });
 
-  it('at 0 unread and 0 threads there are no rows and no lead slot', async () => {
-    h.fetchActivityEntries.mockResolvedValue({
-      ok: true,
-      data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
-    } satisfies LoadResult);
-    render();
-    await settle();
-    expect(document.body.textContent).toContain('Q3 Launch');
-    expect(document.querySelector('[data-topbar-catch-up]')).toBeNull();
-    expect(document.querySelector('[data-topbar-threads]')).toBeNull();
-    expect(document.querySelector('[data-activity-solid-rows]')).toBeNull();
-    expect(document.querySelector('[data-shell="lead"]')).toBeNull();
-  });
-
-  it('reads the workspace threads once, after the first paint', async () => {
+  it('no threads read on Activity (it moved to Chat catch up)', async () => {
     h.rpc.mockClear();
     render();
     await settle();
     const calls = h.rpc.mock.calls.filter((c) => c[0] === 'chat_threads_for_me_all');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.[1]).toMatchObject({ p_workspace_id: 'w1' });
+    expect(calls).toHaveLength(0);
   });
 
   it('reads newest first, also when an old Oldest first is stored', async () => {

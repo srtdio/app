@@ -12,11 +12,6 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { dispatchSorted } from '@/lib/events';
 import { CountBadge } from '@/components/ui/CountBadge';
-import {
-  planTabHref,
-  useNewestPlanUnread,
-  usePlanItemsUnreadTotal,
-} from '@/lib/inbox/unread-entities';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
@@ -37,7 +32,6 @@ interface SidebarProps {
 export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
-  const planUnread = usePlanItemsUnreadTotal();
   return (
     // Positioning only. Pinned while the document scrolls (page mode on a touch
     // tablet, src/lib/scroll-mode.ts): sticky to the window at one viewport
@@ -71,7 +65,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
       </div>
       <nav aria-label="Primary" className="flex flex-col gap-1 px-3">
         {PRIMARY_NAV.map((item) => (
-          <SideNavItem key={item.to} item={item} chatUnread={total} planUnread={planUnread} />
+          <SideNavItem key={item.to} item={item} chatUnread={total} />
         ))}
         <ActivityNavItem />
       </nav>
@@ -84,20 +78,13 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
  * (bg-accent, lit-pill); hover is the lit-hover overlay. The Chat icon nudges when
  * its unread count rises.
  */
-function SideNavItem(props: {
-  item: (typeof PRIMARY_NAV)[number];
-  chatUnread: number;
-  planUnread: number;
-}) {
-  const { item, chatUnread, planUnread } = props;
+function SideNavItem(props: { item: (typeof PRIMARY_NAV)[number]; chatUnread: number }) {
+  const { item, chatUnread } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
   const nudgeRef = useNudgeOnRise(item.showChatBadge === true ? chatUnread : 0);
-  // Plan with unread comments: the tap lands on the newest one (jump to latest).
-  const newest = useNewestPlanUnread();
-  const to = item.showPlanBadge === true && planUnread > 0 ? planTabHref(item.to, newest) : item.to;
   return (
     <NavLink
-      to={to}
+      to={item.to}
       data-selected={active ? 'true' : undefined}
       {...navPrefetchProps(item.to)}
       {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
@@ -116,9 +103,6 @@ function SideNavItem(props: {
         </span>
         {item.showChatBadge === true && chatUnread > 0 ? (
           <CountBadge count={chatUnread} className={NAV_BADGE_CLASS} />
-        ) : null}
-        {item.showPlanBadge === true && planUnread > 0 ? (
-          <CountBadge count={planUnread} className={NAV_BADGE_CLASS} />
         ) : null}
       </span>
       <span>{item.label}</span>

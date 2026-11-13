@@ -57,6 +57,22 @@ function patchThread(item: CatchUpItem, unread: boolean): void {
   patchThreadUnread(item.workspaceId, item.entityId, item.threadRootId, unread);
 }
 
+/** Who hears each card read or put back (a tab's chat count follows at once, 13 Nov 2026). */
+type ItemListener = (item: CatchUpItem, read: boolean) => void;
+const itemListeners = new Set<ItemListener>();
+
+/** Hear every card marked read (true) or put back unread (false); returns the unsubscribe. */
+export function onCatchUpItem(listener: ItemListener): () => void {
+  itemListeners.add(listener);
+  return () => {
+    itemListeners.delete(listener);
+  };
+}
+
+function tellItem(item: CatchUpItem, read: boolean): void {
+  for (const listener of itemListeners) listener(item, read);
+}
+
 /** The state after `decisions` on `queue`: the next card's index. Pure. */
 export function nextIndex(queueLength: number, decisions: number): number {
   return Math.min(queueLength, Math.max(0, decisions));
@@ -98,6 +114,7 @@ export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
       const h = hooksRef.current;
       h.onRead(ids);
       patchThread(item, false);
+      tellItem(item, true);
       const traceId = generateTraceId();
       void markCatchUpRead(supabase, {
         workspaceId: h.workspaceId,
@@ -108,6 +125,7 @@ export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
         if (result.ok) return;
         logger.warn('catch-up: mark read failed', { trace_id: traceId, error: result.message });
         patchThread(item, true);
+        tellItem(item, false);
         hooksRef.current.onUnread(ids);
         hooksRef.current.onFailed('mark as read');
         putBack(item.key);
@@ -151,6 +169,7 @@ export function useCatchUp(queue: readonly CatchUpItem[], hooks: CatchUpHooks) {
     const h = hooksRef.current;
     h.onUnread(ids);
     patchThread(last.item, true);
+    tellItem(last.item, false);
     const traceId = generateTraceId();
     void undoCatchUpRead(supabase, { workspaceId: h.workspaceId, item: last.item, traceId }).then(
       (result) => {

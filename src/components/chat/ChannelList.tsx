@@ -18,8 +18,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import {
   LIST_SCREEN_CONTENT_TOP,
   LIST_SCREEN_GUTTER,
+  listScreenCatchUp,
   listScreenChipRow,
 } from '@/components/shell/ListScreen';
+import { useTabCatchUp } from '@/components/catch-up/TabCatchUp';
+import { useWorkspaceThreads } from '@/lib/catch-up/threads';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { selectCountLabel } from '@/components/ui/SelectBar';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
@@ -831,6 +834,8 @@ export function searchChips(props: {
 }
 
 interface ChannelListContentProps extends ChannelListProps {
+  /** Chat catch up's row (13 Nov 2026), above the chip row; null: none. */
+  catchUp?: ReactNode;
   /** Read-only store summaries; absent in pure tests (every card reads empty). */
   summaryFor?: SummaryLookup;
   /** Clock for relative-time labels, threaded to the cards. */
@@ -1083,6 +1088,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
     notesInList && props.notes !== undefined ? [...props.channels, props.notes] : props.channels;
   return (
     <div className={layout.column}>
+      {listScreenCatchUp(props.catchUp)}
       {/* The shell's chip row (no line under it); the body takes the shell's
           16 under the chips and, on the list, its side gutter (a chip view
           draws its own edges). */}
@@ -1175,6 +1181,9 @@ class HideFailed extends Error {
  * laptop's list pane), so it publishes New chat and the sort into the app top
  * bar; on the phone a thread replaces it and the bar clears with it.
  */
+/** The chat list's catch-up row. */
+const CHAT_CATCH_UP = ['chat'] as const;
+
 export function ChannelList(props: ChannelListProps): ReactElement {
   const listWorkspaceId = props.workspaceId ?? null;
   // The list order: persisted per page like the other sorts; a stale value heals.
@@ -1195,7 +1204,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   // hide (chat_channel_clear) runs only when the toast ends; Undo puts them back.
   const [pendingHidden, setPendingHidden] = useState<ReadonlySet<string>>(new Set());
   const undoable = useUndoableAction();
-  const { state } = useChatStore();
+  const { state, markConversationRead } = useChatStore();
   // Delete for me: a card whose last message is hidden reads the latest
   // visible one the device holds (no read), else the empty line.
   const hiddenIds = useHiddenIds(listWorkspaceId);
@@ -1266,6 +1275,19 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   // registry, never per row.
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;
+  // Chat catch up (13 Nov 2026): unread chats (plain messages too) and unread
+  // threads, one row above the chips; it replaces Activity's Threads.
+  const catchUpThreads = useWorkspaceThreads(listWorkspaceId);
+  const catchUp = useTabCatchUp({
+    tabs: CHAT_CATCH_UP,
+    userId: currentUserId,
+    workspaceId: listWorkspaceId,
+    chat: {
+      threads: catchUpThreads,
+      conversations: state.status === 'ready' ? state.conversations : null,
+      markConversationRead,
+    },
+  });
   // A chip view's Delete for me: hidden at once, written when the Undo ends.
   const deleteForMe = useDeleteForMe({ userId: currentUserId, workspaceId: listWorkspaceId });
   const onForwardMessages = props.onForwardMessages;
@@ -1400,8 +1422,10 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   useTopbarActions({ sort: sortNode, primary: plusNode });
   return (
     <>
+      {catchUp.screen}
       {channelListContent({
         ...props,
+        catchUp: catchUp.rows,
         input,
         sort,
         kind,

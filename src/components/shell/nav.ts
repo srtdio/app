@@ -7,12 +7,11 @@ interface NavItem {
   Icon: ComponentType<{ size?: number; className?: string }>;
   /** When set, this item shows the chat unread badge (from the chat store). */
   showChatBadge?: boolean;
-  /** When set, this item shows the unread plan comments badge (inbox rows on plan items). */
-  showPlanBadge?: boolean;
 }
 
 /**
- * The primary nav. This single list is the source for both the desktop Sidebar
+ * The primary nav. Only Chat (and Activity, outside this list) carries a
+ * number (13 Nov 2026); Pipeline, Briefs, Assets and Plan never do. This single list is the source for both the desktop Sidebar
  * and the mobile BottomTabs, so every surface stays in sync. Assets is a
  * workspace-global library and lives here alongside the other surfaces.
  * Activity is not in this list: on laptop it is the top bar's button; on phone
@@ -23,6 +22,6 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/pipeline', label: 'Pipeline', Icon: IconPipeline },
   { to: '/briefs', label: 'Briefs', Icon: IconBriefs },
   { to: '/assets', label: 'Assets', Icon: IconAssets },
-  { to: '/plan', label: 'Plan', Icon: IconPlan, showPlanBadge: true },
+  { to: '/plan', label: 'Plan', Icon: IconPlan },
   { to: '/chat', label: 'Chat', Icon: IconChat, showChatBadge: true },
 ];

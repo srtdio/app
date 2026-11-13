@@ -17,6 +17,7 @@ import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ListScreen, type ListScreenChips } from '@/components/shell/ListScreen';
+import { useTabCatchUp } from '@/components/catch-up/TabCatchUp';
 import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import {
   ICON_SIZE,
@@ -729,6 +730,9 @@ export function shownPipelineQuery(
     : fromUrl;
 }
 
+/** Pipeline's catch-up row. */
+const PIPELINE_CATCH_UP = ['post'] as const;
+
 export function PipelinePage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const { session } = useSession();
@@ -1224,11 +1228,14 @@ export function PipelinePage() {
     ],
   );
   useTopbarActions(topbar);
+  // Post catch up (13 Nov 2026): the row above the chips and its card stack.
+  const catchUp = useTabCatchUp({ tabs: PIPELINE_CATCH_UP, userId, workspaceId });
 
   return (
     <>
       <ListScreen
         title="Pipeline"
+        catchUp={catchUp.rows}
         {...pipelineHeader({
           stage,
           onStageChange: setStage,
@@ -1275,6 +1282,7 @@ export function PipelinePage() {
           </div>
         )}
       </ListScreen>
+      {catchUp.screen}
 
       {selectMode.on ? (
         <SelectBar

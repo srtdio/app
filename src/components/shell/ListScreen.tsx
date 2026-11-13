@@ -22,6 +22,11 @@ export const LIST_SCREEN_CONTENT_TOP = 'pt-4';
 export const LIST_SCREEN_GUTTER = 'px-4 md:px-6';
 /** The lead strip (between chips and content): 12 under the chips, on the gutter. */
 export const LIST_SCREEN_LEAD = 'pt-3';
+/**
+ * The catch-up rows (13 Nov 2026), above the chip row: 12 under the top bar,
+ * then the chip row's own 12 + 4 here = 16 from the last row to the chips.
+ */
+export const LIST_SCREEN_CATCH_UP = 'pt-3 pb-1';
 
 export interface ListScreenChips {
   /** The filter chips (only chips: no Select key); they scroll sideways. */
@@ -35,6 +40,8 @@ export interface ListScreenChips {
 export interface ListScreenProps extends ListScreenChips {
   /** The screen's title: the sr-only h1 (PageHead hidden). */
   title: string;
+  /** The tab's catch-up rows (catch-up/TabCatchUp), above the chips; null renders nothing. */
+  catchUp?: ReactNode;
   /** An optional strip between the chip row and the content (a count line, a hint). */
   lead?: ReactNode;
   /** The content: the list, its loading boxes, empty or error state. */
@@ -66,6 +73,19 @@ export function listScreenChipRow({
 }
 
 /**
+ * The catch-up rows' strip above the chip row, or null when there are none
+ * (nothing reserved at 0). Pure.
+ */
+export function listScreenCatchUp(rows: ReactNode): ReactElement | null {
+  if (rows === undefined || rows === null || rows === false) return null;
+  return (
+    <div data-shell="catch-up" className={cn(LIST_SCREEN_CATCH_UP, LIST_SCREEN_GUTTER)}>
+      {rows}
+    </div>
+  );
+}
+
+/**
  * A list tab under the top bar: the hidden title, the chip row, the 16 to the
  * first content, the side gutter, the content and its footer. A tab passes
  * its parts and never sets these spaces itself. Pure render: no data, no
@@ -76,6 +96,7 @@ export function ListScreen({
   chips,
   stickyChips,
   chipsHook,
+  catchUp,
   lead,
   children,
   footer,
@@ -83,6 +104,7 @@ export function ListScreen({
   return (
     <>
       <PageHead title={title} hidden />
+      {listScreenCatchUp(catchUp)}
       {listScreenChipRow({
         chips,
         ...(stickyChips !== undefined ? { stickyChips } : {}),

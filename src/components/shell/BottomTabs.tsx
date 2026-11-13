@@ -11,12 +11,6 @@ import {
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { MOVE_CLASS, useNudgeOnRise } from '@/lib/motion';
-import {
-  planTabHref,
-  unreadCommentsLabel,
-  useNewestPlanUnread,
-  usePlanItemsUnreadTotal,
-} from '@/lib/inbox/unread-entities';
 import { cn } from '@/lib/cn';
 import { activityPrefetchProps, navPrefetchProps } from '@/lib/route-prefetch';
 import { IconNotifications, ICON_SIZE } from '@/components/ui/icons';
@@ -34,11 +28,6 @@ const CHAT_NAV = PRIMARY_NAV.find((item) => item.showChatBadge === true);
  */
 export const PHONE_BAR_OFFSETS =
   'left-1/2 -translate-x-1/2 bottom-[calc(16px+env(safe-area-inset-bottom))]';
-
-/** The Plan tab's accessible name: the label, plus its unread comments. Pure. */
-export function planTabLabel(label: string, unread: number): string {
-  return unread > 0 ? `${label}, ${unreadCommentsLabel(unread)}` : label;
-}
 
 /** The Chat circle's accessible name: "Chat", plus the unread count. Pure. */
 export function chatTabLabel(unread: number): string {
@@ -80,35 +69,22 @@ function TabLabel({ show, label }: { show: boolean; label: string }) {
   ) : null;
 }
 
-/** One pill tab of the primary nav (Pipeline, Briefs, Assets, Plan). */
-function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
-  const { item, planUnread } = props;
+/**
+ * One pill tab of the primary nav (Pipeline, Briefs, Assets, Plan): no number
+ * (13 Nov 2026: only Activity and Chat keep one; catch up lives on each tab).
+ */
+function PillTab(props: { item: (typeof PILL_NAV)[number] }) {
+  const { item } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
-  // Plan with unread comments: the tap lands on the newest one (jump to latest).
-  const newest = useNewestPlanUnread();
-  const to = item.showPlanBadge === true && planUnread > 0 ? planTabHref(item.to, newest) : item.to;
   return (
     <NavLink
-      to={to}
+      to={item.to}
       data-selected={active ? 'true' : undefined}
-      aria-label={item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label}
+      aria-label={item.label}
       {...navPrefetchProps(item.to)}
       className={() => tabClass(active)}
     >
-      {item.showPlanBadge === true ? (
-        // Plan: the icon carries the unread plan comments badge.
-        <span className="relative inline-flex">
-          <item.Icon size={ICON_SIZE.control} />
-          {planUnread > 0 ? (
-            <CountBadge
-              count={planUnread}
-              className={cn('absolute -right-2 -top-2', badgeRing(active))}
-            />
-          ) : null}
-        </span>
-      ) : (
-        <item.Icon size={ICON_SIZE.control} />
-      )}
+      <item.Icon size={ICON_SIZE.control} />
       <TabLabel show={active} label={item.label} />
     </NavLink>
   );
@@ -127,7 +103,6 @@ export function BottomTabs() {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   const { unreadCount } = useInboxStore();
-  const planUnread = usePlanItemsUnreadTotal();
   const { pathname } = useLocation();
   const activityActive = onNotifications(pathname);
   const activityNudgeRef = useNudgeOnRise(unreadCount);
@@ -156,7 +131,7 @@ export function BottomTabs() {
           )}
         >
           {PILL_NAV.map((item) => (
-            <PillTab key={item.to} item={item} planUnread={planUnread} />
+            <PillTab key={item.to} item={item} />
           ))}
           {/* Activity: last in the pill on phone (the top bar's button is laptop only). */}
           <NavLink

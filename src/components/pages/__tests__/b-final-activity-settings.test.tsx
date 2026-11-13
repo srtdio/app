@@ -140,16 +140,16 @@ function listProps(
 }
 
 describe('Activity: the day line and the card with no trailing ⋯', () => {
-  it("the section heading is Plan's (section role, no count); Mark all read is Catch up's long-press; no avatar beside the label", () => {
+  it("the section heading is Plan's (section role, no count); no catch-up rows on Activity; no avatar beside the label", () => {
     const page = src('pages/NotificationsPage.tsx');
     // Activity twins Plan's list: the heading is a bare section-role h2, no count.
     expect(page).toContain('<Text as="h2" role="section" data-activity-heading="">');
     expect(page).not.toContain('data-activity-bucket-head');
     expect(page).not.toContain('data-bucket-count');
-    // Mark all read is Catch up's long-press on its solid row, never a page button.
+    // Catch up lives on each tab (13 Nov 2026): no solid rows, no Mark all button here.
     expect(page).not.toContain('data-activity-mark-all');
-    expect(page).toContain('useActivitySolidRows({');
-    expect(page).toContain('lead={leadRow}');
+    expect(page).not.toContain('useActivitySolidRows');
+    expect(page).not.toContain('lead={leadRow}');
     expect(page).not.toContain('AvatarStack');
   });
 
