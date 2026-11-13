@@ -37,7 +37,8 @@ describe('chat visual pass', () => {
 
   it('a mention never breaks across lines, and the own-name tint has room', () => {
     expect(mentionClass(false, true)).toContain('whitespace-nowrap');
-    expect(mentionClass(false, true)).toContain('px-1');
+    // No box around a name (13 Nov 2026): the row that mentions me is tinted instead.
+    expect(mentionClass(false, true)).not.toContain('px-1');
     expect(mentionClass(true, false)).toContain('whitespace-nowrap');
   });
 

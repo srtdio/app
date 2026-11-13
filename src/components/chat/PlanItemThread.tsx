@@ -43,7 +43,7 @@ import {
   CommentsSearchHead,
   CommentsSearchScope,
   SearchPeek,
-  peekReply,
+  peekReplies,
   useCommentsSearch,
 } from '@/components/comments/CommentsSearch';
 import {
@@ -908,7 +908,6 @@ export function PlanItemThread(props: {
       })),
     scope: listRef,
   });
-  const peek = peekReply(search, lists.replies);
 
   const rowProps = {
     profiles,
@@ -991,7 +990,8 @@ export function PlanItemThread(props: {
         onOpen={() => openThread(comment.id, !coarsePointer)}
       />,
     );
-    if (peek !== undefined && peek.parentId === comment.id) {
+    // Every reply hit under its comment (13 Nov 2026), the current one ringed.
+    for (const peek of peekReplies(search, lists.replies, comment.id)) {
       items.push(
         <SearchPeek key={`peek:${peek.id}`} layout={layout}>
           <PlanCommentRow

@@ -3473,8 +3473,8 @@ describe('F5 mentions are bold and the peer ink clears 4.5:1 in both themes', ()
       expect(mentionClass(mine, false)).not.toContain(MENTION_ME_PEER);
       expect(mentionClass(mine, true)).not.toContain('bg-accent-soft');
     }
-    // L8: ink on fg at 12%, one tint for every row.
-    expect(MENTION_ME_PEER).toBe('bg-fg/[.12] text-fg');
+    // 13 Nov 2026 (Slack way): no box; my name in ink, the row carries the tint.
+    expect(MENTION_ME_PEER).toBe('mention-me');
     expect(MENTION_ME_OWN).toBe(MENTION_ME_PEER);
     expect(mentionClass(true, false)).toContain('text-accent-fg');
   });

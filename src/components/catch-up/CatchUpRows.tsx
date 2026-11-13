@@ -13,7 +13,8 @@
 // day lines (DateLine, only when the card spans more than one day), the New
 // line (a thin bad rule, "NEW" in meta at the right), long text (over 250
 // words or 30 lines shows its head, then a quiet "more" that unfolds the rest
-// in place and never opens the thread), tappable short links, my @name lit (MENTION_ME_PEER), the
+// in place and never opens the thread), tappable short links, every @name bold (mine in ink, MENTION_ME_PEER) and
+// the row that mentions me tinted (MENTION_ME_ROW), the
 // context strip (closed by default, a reading window when open; read only)
 // and the error state. Tokens only; light and dark at parity.
 
@@ -45,10 +46,9 @@ import {
 } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { CheckpointCircle, CHECKPOINT_HIT_CLASS } from '@/components/comments/CheckpointCircle';
-import { DateLine, MENTION_ME_PEER } from '@/components/chat/MessageBubble';
+import { DateLine, MENTION_ME_PEER, MENTION_ME_ROW } from '@/components/chat/MessageBubble';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import type { PresignCache } from '@/lib/asset-presign';
-import { segmentSelfMentions } from '@/components/pages/activity/data';
 import { formatDayLabel, formatTime, threadWhen } from '@/lib/time';
 import { cutLongText, linkRuns } from '@/lib/catch-up/text';
 import { defaultPointOpen } from '@/lib/catch-up/body';
@@ -84,13 +84,72 @@ export const OPEN_THREAD_HIT =
   "relative block min-h-0 before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-['']";
 const OPEN_THREAD_TEXT = 'relative block';
 
+const NAME_CHAR = /[\p{L}\p{N}_]/u;
+
+/** One run of a text: plain, or a mention ("@name") that draws bold; `self` = mine. */
+export interface MentionRun {
+  text: string;
+  mention: boolean;
+  self: boolean;
+}
+
 /**
- * A text with links (new tab, short labels) and my own @name lit, in the
- * message text token (17/20 on a phone; laptop is the body role, unchanged).
+ * A text split around its mentions (13 Nov 2026, Slack way): each "@name" of
+ * `labels` (the row's mentions) and my own "@name" as whole words. Pure.
+ */
+export function mentionRuns(
+  text: string,
+  labels: readonly string[],
+  selfName: string | null,
+): MentionRun[] {
+  const self = selfName !== null && selfName !== '' ? `@${selfName}` : null;
+  const all = [...new Set([...labels, ...(self !== null ? [self] : [])])]
+    .filter((label) => label.length > 1)
+    .sort((a, b) => b.length - a.length);
+  const runs: MentionRun[] = [];
+  let plain = '';
+  let at = 0;
+  while (at < text.length) {
+    const before = at === 0 ? '' : (text[at - 1] ?? '');
+    const hit =
+      text[at] === '@' && !NAME_CHAR.test(before)
+        ? all.find((label) => {
+            if (!text.startsWith(label, at)) return false;
+            const after = text[at + label.length] ?? '';
+            return after === '' || !NAME_CHAR.test(after);
+          })
+        : undefined;
+    if (hit === undefined) {
+      plain += text[at] ?? '';
+      at += 1;
+      continue;
+    }
+    if (plain !== '') runs.push({ text: plain, mention: false, self: false });
+    plain = '';
+    runs.push({ text: hit, mention: true, self: hit === self });
+    at += hit.length;
+  }
+  if (plain !== '') runs.push({ text: plain, mention: false, self: false });
+  return runs;
+}
+
+/** Whether a row's mentions name me (the row tint). Pure. */
+export function rowMentionsMe(
+  labels: readonly string[] | undefined,
+  selfName: string | null,
+): boolean {
+  return selfName !== null && selfName !== '' && (labels ?? []).includes(`@${selfName}`);
+}
+
+/**
+ * A text with links (new tab, short labels) and its mentions bold (mine in
+ * ink), in the message text token (17/20 on a phone; laptop is the body role).
  */
 export function RichText(props: {
   text: string;
   selfName: string | null;
+  /** The row's mention labels (catchUpText); absent: only my own @name. */
+  mentions?: readonly string[] | undefined;
   className?: string;
 }): ReactElement {
   const layout = useChatLayout();
@@ -128,14 +187,15 @@ export function RichText(props: {
         let inner = 0;
         return (
           <span key={key}>
-            {segmentSelfMentions(run.text, props.selfName).map((seg) => {
+            {mentionRuns(run.text, props.mentions ?? [], props.selfName).map((seg) => {
               const k = inner;
               inner += seg.text.length;
-              return seg.self ? (
+              return seg.mention ? (
                 <span
                   key={k}
-                  data-catch-up-mention-me=""
-                  className={cn('rounded-sm', MENTION_ME_PEER)}
+                  data-catch-up-mention=""
+                  data-catch-up-mention-me={seg.self ? '' : undefined}
+                  className={cn('font-semibold', seg.self ? MENTION_ME_PEER : 'text-accent-hover')}
                 >
                   {seg.text}
                 </span>
@@ -160,6 +220,8 @@ export function RichText(props: {
 export function LongText(props: {
   text: string;
   selfName: string | null;
+  /** The row's mention labels, drawn bold (RichText). */
+  mentions?: readonly string[] | undefined;
   /** Wraps the text (the open-thread button); "more" always sits outside it. */
   wrap?: ((text: ReactElement) => ReactElement) | undefined;
 }): ReactElement {
@@ -167,11 +229,11 @@ export function LongText(props: {
   const [open, setOpen] = useState(false);
   const wrap = props.wrap ?? ((text: ReactElement) => text);
   if (!cut.long || open) {
-    return wrap(<RichText text={props.text} selfName={props.selfName} />);
+    return wrap(<RichText text={props.text} selfName={props.selfName} mentions={props.mentions} />);
   }
   return (
     <>
-      {wrap(<RichText text={cut.head} selfName={props.selfName} />)}
+      {wrap(<RichText text={cut.head} selfName={props.selfName} mentions={props.mentions} />)}
       <PressableRow
         inline
         type="button"
@@ -213,11 +275,22 @@ function RowFrame(props: {
   reactions?: ReactNode;
   /** False: the corner smiley shows from md only (a phone card row with no reactions). */
   phoneKey?: boolean | undefined;
+  /** It mentions me: the row tint + left bar (MENTION_ME_ROW, Slack way). */
+  mentionsMe?: boolean | undefined;
 }): ReactElement {
   const reacts = props.reactions !== undefined && props.reactions !== null;
   const layout = useChatLayout();
+  const frame = cn('relative flex gap-3 py-2', CATCH_UP_ROW_X);
   return (
-    <li {...props.hook} className={cn('relative flex gap-3 py-2', CATCH_UP_ROW_X)}>
+    <li
+      {...props.hook}
+      data-mentions-me={props.mentionsMe === true ? '' : undefined}
+      // The tint sits under the row's own layer (isolate), never over its text.
+      className={cn(frame, props.mentionsMe === true && 'isolate')}
+    >
+      {props.mentionsMe === true ? (
+        <span aria-hidden="true" data-mention-me-tint="" className={MENTION_ME_ROW} />
+      ) : null}
       <span data-catch-up-photo="" className={cn('shrink-0', sized(MESSAGE_PHOTO_COL, layout))}>
         {props.photo ?? (
           <Avatar
@@ -362,6 +435,7 @@ export function MessageRow(props: {
     <LongText
       text={row.text}
       selfName={props.selfName}
+      mentions={row.mentions}
       wrap={
         onOpenThread !== null
           ? (inner) => (
@@ -385,6 +459,8 @@ export function MessageRow(props: {
     <RowFrame
       reactions={props.reactions}
       phoneKey={props.phoneKey}
+      // My own rows (a reply sent from here) are never tinted.
+      mentionsMe={!('state' in row) && rowMentionsMe(row.mentions, props.selfName)}
       author={row.author}
       createdAt={row.createdAt}
       timeZone={props.timeZone}

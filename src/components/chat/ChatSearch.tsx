@@ -65,6 +65,8 @@ export interface ChatSearch {
   words: readonly string[];
   /** The message the walk stands on; null while none. */
   currentId: string | null;
+  /** Every hit loaded so far (newest first): a comments list shows each reply hit. */
+  hitIds: readonly string[];
   steps: StepState;
   loading: boolean;
   start: () => void;
@@ -181,6 +183,7 @@ export function useChatSearch(input: {
     query,
     words,
     currentId: ready ? currentId : null,
+    hitIds: state.status === 'ready' ? state.hits.map((hit) => hit.id) : [],
     steps,
     loading: state.status === 'loading' || state.loadingMore,
     start,
@@ -231,6 +234,7 @@ export function useLocalSearch(input: {
     query,
     words,
     currentId,
+    hitIds: hits,
     steps,
     loading: false,
     start: useCallback(() => setOpen(true), []),

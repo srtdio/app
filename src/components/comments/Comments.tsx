@@ -60,7 +60,7 @@ import {
   CommentsSearchHead,
   CommentsSearchScope,
   SearchPeek,
-  peekReply,
+  peekReplies,
   useCommentsSearch,
 } from '@/components/comments/CommentsSearch';
 import { useInduction } from '@/components/induction/InductionProvider';
@@ -933,7 +933,6 @@ export function Comments(props: CommentsProps): ReactElement {
       })),
     scope: listRef,
   });
-  const peek = peekReply(search, lists.replies);
   // Laptop, post page (item 6): the thread panel fills beside the post column
   // and takes the comments' place; elsewhere it stays the default 380.
   const postColumnRight = useCallback(() => postColumnRightOf(listRef.current), []);
@@ -1321,16 +1320,19 @@ export function Comments(props: CommentsProps): ReactElement {
         />,
       );
     }
-    if (root !== undefined && peek !== undefined && peek.parent_comment_id === root.id) {
-      mainRows.push(
-        <SearchPeek key={`peek:${peek.id}`} layout={layout}>
-          {renderRow(
-            messageOf(peek),
-            { head: true, tail: true, afterLabel: false },
-            { onOpen: () => openThread(root.id, false, peek.id), highlighted: false },
-          )}
-        </SearchPeek>,
-      );
+    // Every reply hit under its comment (13 Nov 2026), the current one ringed.
+    if (root !== undefined) {
+      for (const peek of peekReplies(search, lists.replies, root.id)) {
+        mainRows.push(
+          <SearchPeek key={`peek:${peek.id}`} layout={layout}>
+            {renderRow(
+              messageOf(peek),
+              { head: true, tail: true, afterLabel: false },
+              { onOpen: () => openThread(root.id, false, peek.id), highlighted: false },
+            )}
+          </SearchPeek>,
+        );
+      }
     }
   }
 

@@ -106,6 +106,10 @@
   --search-mark-bg: #ffe9b8;
   --search-mark-bg-rgb: 255 233 184;
   --search-mark-fg: #1b1c20;
+  /* A message or comment that mentions me (13 Nov 2026, Slack way): the row
+     tint and its 4px left bar. Light: ink at 9% + ink bar; dark: warm amber. */
+  --mention-row-bg: rgba(8, 9, 10, 0.09);
+  --mention-row-bar: #08090a;
   /* Stage inks clear 4.5:1 on bg, panel, panel-2 and panel-3. Review is the
      status amber: 4.54:1 on panel-3 here, 10.5:1 on dark panel-3. */
   --stage-review: #8f6300;
@@ -329,6 +333,8 @@
   --search-mark-bg: #e8b84a;
   --search-mark-bg-rgb: 232 184 74;
   --search-mark-fg: #16171b;
+  --mention-row-bg: #2e2610;
+  --mention-row-bar: #e8b84a;
   --stage-review: #f2c94c;
   --stage-review-rgb: 242 201 76;
   --stage-approved: #46b47a;
@@ -937,6 +943,17 @@
   .fmt-quote {
     border-left: 3px solid color-mix(in srgb, currentColor 45%, transparent);
   }
+}
+
+/* Mentions (13 Nov 2026, Slack way): every @name is bold, no box; a mention of
+   me keeps the ink (fg). A row that mentions me gets the row tint with a 4px
+   left bar (tokens --mention-row-*, light ink, dark warm amber). */
+.mention-me {
+  color: var(--fg);
+}
+.mention-me-row {
+  background-color: var(--mention-row-bg);
+  box-shadow: inset 4px 0 0 var(--mention-row-bar);
 }
 
 /* Search inside a chat (13 Nov 2026): the hit the step bar stands on rings its

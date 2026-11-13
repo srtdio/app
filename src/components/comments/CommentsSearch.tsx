@@ -4,9 +4,9 @@
  * the field takes the row; "N of M" takes the comment box's place (phone:
  * fixed in the bottom bar's place, which index.css hides while it shows;
  * laptop: sticky under the list). Every comment and reply is on the device,
- * so the hits come from memory (searchRowsOf + localHits), no read. A hit in a
- * reply shows that reply alone under its comment's replies row (SearchPeek);
- * the thread stays shut until the reply is tapped.
+ * so the hits come from memory (searchRowsOf + localHits), no read. Every
+ * reply hit shows under its comment's replies row (SearchPeek, peekReplies),
+ * the current one ringed; the thread stays shut until a reply is tapped.
  */
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { useContext } from 'react';
@@ -105,17 +105,19 @@ export function SearchPeek(props: { layout: ChatLayout; children: ReactNode }): 
   );
 }
 
-/** The current hit when it is a reply: the reply, from the replies by comment. */
-export function peekReply<T extends { id: string }>(
+/**
+ * The reply hits under one comment (13 Nov 2026): every reply of `rootId`
+ * that the search matched, in screen order, each shown under the comment's
+ * replies row (the current one ringed). None while not searching. Pure.
+ */
+export function peekReplies<T extends { id: string }>(
   search: ChatSearch,
   replies: ReadonlyMap<string, readonly T[]>,
-): T | undefined {
-  if (!search.open || search.currentId === null) return undefined;
-  for (const list of replies.values()) {
-    const hit = list.find((r) => r.id === search.currentId);
-    if (hit !== undefined) return hit;
-  }
-  return undefined;
+  rootId: string,
+): readonly T[] {
+  if (!search.open || search.hitIds.length === 0) return [];
+  const hits = new Set(search.hitIds);
+  return (replies.get(rootId) ?? []).filter((reply) => hits.has(reply.id));
 }
 
 /**
