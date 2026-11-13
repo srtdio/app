@@ -12,6 +12,7 @@ vi.mock('agora-chat', () => ({
 import {
   bodyMetaOf,
   MENTION_ME_PEER,
+  MENTION_ME_ROW,
   mentionClass,
   MessageBubble,
   metaIsEmpty,
@@ -272,12 +273,31 @@ describe('L7: the New line', () => {
   });
 });
 
-describe('L8: a mention of me', () => {
-  it('ink on fg at 12%, others unchanged', () => {
+describe('L8: a mention of me (Slack way, 13 Nov 2026)', () => {
+  it('bold name in ink, no box; others bold in accent-hover', () => {
     expect(mentionClass(false, true)).toContain(MENTION_ME_PEER);
-    expect(MENTION_ME_PEER).toBe('bg-fg/[.12] text-fg');
+    expect(MENTION_ME_PEER).toBe('mention-me');
     expect(mentionClass(false, false)).toContain('text-accent-hover');
     expect(mentionClass(false, true)).not.toContain('outline');
+    expect(mentionClass(false, true)).not.toContain('rounded');
+  });
+
+  it('a row that mentions me carries the row tint + left bar; others and my own rows do not', () => {
+    const tinted = bubbleHtml(msg({ body: '@[me] can you check?', mentions: ['me'] }), {
+      isGroup: true,
+    });
+    expect(tinted).toContain('data-mentions-me=""');
+    expect(tinted).toContain('data-mention-me-tint=""');
+    expect(tinted).toContain(MENTION_ME_ROW);
+    const other = bubbleHtml(msg({ body: '@[leo] can you check?', mentions: ['leo'] }), {
+      isGroup: true,
+    });
+    expect(other).not.toContain('data-mention-me-tint');
+    const own = bubbleHtml(
+      msg({ body: '@[me] note to self', mine: true, senderUserId: 'me', mentions: ['me'] }),
+      { isGroup: true },
+    );
+    expect(own).not.toContain('data-mention-me-tint');
   });
 });
 

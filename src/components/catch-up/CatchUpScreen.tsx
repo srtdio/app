@@ -62,6 +62,7 @@ import {
 } from '@/lib/catch-up/tip';
 import type { CatchUpItem } from '@/lib/catch-up/queue';
 import {
+  catchUpText,
   readCatchUpBodies,
   readCatchUpOlder,
   readCatchUpThread,
@@ -645,7 +646,8 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
       avatarUrl: personAvatar(workspaceId, currentUserId),
     },
     createdAt: new Date().toISOString(),
-    text,
+    // As loaded rows read: a mention shows "@name", never the stored token.
+    ...catchUpText(workspaceId, text),
     replyCount: 0,
     state: 'sending',
   });

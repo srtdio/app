@@ -960,14 +960,6 @@ export function mentionsMe(
 }
 
 /**
- * A mention's ink in a message, always bold: accent-hover (others' mentions,
- * unchanged). L8 (8 Nov 2026): a mention of me is the bold name in ink (fg) on
- * a stronger tint, fg at 12%, inline, no outline; the radius is rounded-sm
- * (6, the highlight token: there is no 4px radius token). `mine` is kept for
- * callers; with no own bubble since L1 every row passes false. Tokens only, so
- * light and dark stay at parity.
- */
-/**
  * A message head's name line. From 768 up: one block line that truncates
  * whole. Under 768: a baseline row, so the name is the part that gives way.
  */
@@ -976,12 +968,21 @@ export const SENDER_LINE_CLASS =
 /** The name's box in that row (the person trigger stays inline inside it): it shrinks and ends in "…". */
 export const SENDER_NAME_GIVES = 'max-md:min-w-0 max-md:truncate';
 
-export const MENTION_ME_PEER = 'bg-fg/[.12] text-fg';
+/**
+ * A mention's ink, always bold, never a box (13 Nov 2026, Slack way): others'
+ * mentions in accent-hover; a mention of me in ink (mention-me, index.css).
+ * The row that mentions me carries the tint (MENTION_ME_ROW). `mine` is kept
+ * for callers; with no own bubble since L1 every row passes false.
+ */
+export const MENTION_ME_PEER = 'mention-me';
+
+/** A row that mentions me: the tint + 4px left bar across the full row (index.css). */
+export const MENTION_ME_ROW = 'pointer-events-none absolute inset-0 -z-raised mention-me-row';
 
 export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
     'whitespace-nowrap font-semibold',
-    self ? cn('rounded-sm px-1', MENTION_ME_PEER) : mine ? 'text-accent-fg' : 'text-accent-hover',
+    self ? MENTION_ME_PEER : mine ? 'text-accent-fg' : 'text-accent-hover',
   );
 }
 
@@ -1776,6 +1777,8 @@ export function MessageBubble(props: {
   const hasAttachments = message.attachments.length > 0;
   const quotedMine =
     reply !== null && reply.authorUserId !== null && reply.authorUserId === props.viewerUserId;
+  // Slack way (13 Nov 2026): a row that mentions me is tinted, bar on the left.
+  const mentionedMe = mentionsMe(message, props.viewerUserId ?? null, isGroup);
   // A div: a list or quote in the body is a block (never inside a p).
   const body = (
     <div
@@ -1788,7 +1791,7 @@ export function MessageBubble(props: {
         viewerUserId: props.viewerUserId ?? null,
         // Inert while selecting: a mention is plain "@Name" text in the selection.
         mentions: pressOn ? props.mentions : undefined,
-        mentionedMe: mentionsMe(message, props.viewerUserId ?? null, isGroup),
+        mentionedMe: mentionedMe,
         highlight: props.searchWords ?? [],
       })}
       {spacer}
@@ -1816,9 +1819,11 @@ export function MessageBubble(props: {
       data-selection={selection?.role}
       data-checked={checked ? '' : undefined}
       data-thread-root={rootPlace ? '' : undefined}
+      data-mentions-me={mentionedMe ? '' : undefined}
       className={cn(
         rowClass,
         checked && 'isolate',
+        mentionedMe && !checked && 'relative isolate',
         // The whole row is the swipe's grab area (own rows as freely as others').
         swipe?.handlers !== undefined && SWIPE_ROW_TOUCH,
       )}
@@ -1832,6 +1837,8 @@ export function MessageBubble(props: {
     >
       {checked ? (
         <span aria-hidden="true" data-selected-tint="" className={SELECTED_ROW_TINT} />
+      ) : mentionedMe ? (
+        <span aria-hidden="true" data-mention-me-tint="" className={MENTION_ME_ROW} />
       ) : null}
       {selection?.role === 'selectable' ? (
         <SelectCheckbox

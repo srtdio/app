@@ -466,6 +466,7 @@ export {
   type BubbleMentions,
   mentionsMe,
   MENTION_ME_PEER,
+  MENTION_ME_ROW,
   mentionClass,
   profileNameOf,
   renderBodyWithMentions,

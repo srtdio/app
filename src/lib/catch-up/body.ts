@@ -16,7 +16,12 @@ import { entryLine, lineWithoutName } from '@/components/pages/activity/data';
 
 export { lineWithoutName };
 import { personAvatar, personName, resolvePeople } from '@/lib/people-names';
-import { mentionNamesIn, resolveMentionPreview } from '@/lib/chat/mentions';
+import {
+  mentionLabel,
+  mentionNamesIn,
+  resolveMentionPreview,
+  splitMentions,
+} from '@/lib/chat/mentions';
 import { logger } from '@/lib/logger';
 import { formatDue, formatOverdue, daysFromToday } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
@@ -45,6 +50,8 @@ export interface CatchUpMessageRow {
   createdAt: string;
   /** Mentions resolved to @names, formatting stripped, newlines folded. */
   text: string;
+  /** The "@name" labels of its mentions (catchUpText), drawn bold; absent: none. */
+  mentions?: string[];
   /** Replies under it (a thread); 0 when none or the item has no threads. */
   replyCount: number;
   /** Up to 2 unique repliers, newest first (the replies row's photos). */
@@ -193,6 +200,25 @@ function cleanText(workspaceId: string, body: string): string {
   return foldNewlines(stripFormat(resolveMentionPreview(body, mentionNamesIn(workspaceId))));
 }
 
+/**
+ * A message row's text (cleanText) plus its mentions as drawn ("@name", the
+ * labels the text holds), so the row can draw them bold and tint itself when
+ * one is me. Also the optimistic row of a reply sent from Catch up, so a
+ * just-sent mention reads "@name", never the stored token. Pure.
+ */
+export function catchUpText(
+  workspaceId: string,
+  body: string,
+): { text: string; mentions: string[] } {
+  const nameOf = mentionNamesIn(workspaceId);
+  const mentions = splitMentions(body).flatMap((segment) => {
+    if (segment.kind !== 'mention') return [];
+    const label = mentionLabel(segment.userId, nameOf);
+    return label === '' ? [] : [label];
+  });
+  return { text: cleanText(workspaceId, body), mentions: [...new Set(mentions)] };
+}
+
 interface CommentRowLite {
   id: string;
   entity_id: string;
@@ -270,7 +296,7 @@ function messageOf(
     id: c.id,
     author: nameOf(workspaceId, c.author_user_id),
     createdAt: c.created_at,
-    text: cleanText(workspaceId, c.body),
+    ...catchUpText(workspaceId, c.body),
     replyCount: counts.get(c.id) ?? 0,
     ...repliesOf(workspaceId, info.get(c.id)),
   };
@@ -288,7 +314,7 @@ function planMessageOf(
     id: c.id,
     author: nameOf(workspaceId, c.author_user_id),
     createdAt: c.created_at,
-    text: cleanText(workspaceId, c.body),
+    ...catchUpText(workspaceId, c.body),
     replyCount: counts.get(c.id) ?? 0,
     ...repliesOf(workspaceId, info.get(c.id)),
   };
@@ -1043,7 +1069,7 @@ export async function readCatchUpOlder(
           id: m.id,
           author: nameOf(workspaceId, m.sender_user_id),
           createdAt: m.created_at,
-          text: cleanText(workspaceId, m.body ?? ''),
+          ...catchUpText(workspaceId, m.body ?? ''),
           replyCount: counts.get(m.id) ?? 0,
         })),
         hasOlder: list.length >= CATCH_UP_PAGE,
@@ -1117,7 +1143,7 @@ export async function readCatchUpThread(
           id: m.id,
           author: nameOf(workspaceId, m.sender_user_id),
           createdAt: m.created_at,
-          text: cleanText(workspaceId, m.body ?? ''),
+          ...catchUpText(workspaceId, m.body ?? ''),
           replyCount: 0,
         })),
       };
@@ -1147,7 +1173,7 @@ export async function readCatchUpThread(
           id: c.id,
           author: nameOf(workspaceId, c.author_user_id),
           createdAt: c.created_at,
-          text: cleanText(workspaceId, c.body),
+          ...catchUpText(workspaceId, c.body),
           replyCount: 0,
         })),
       };
@@ -1173,7 +1199,7 @@ export async function readCatchUpThread(
         id: c.id,
         author: nameOf(workspaceId, c.author_user_id),
         createdAt: c.created_at,
-        text: cleanText(workspaceId, c.body),
+        ...catchUpText(workspaceId, c.body),
         replyCount: 0,
       })),
     };
