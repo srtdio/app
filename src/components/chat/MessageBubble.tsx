@@ -1339,6 +1339,8 @@ export function MessageBubble(props: {
   savedFrom?: SavedFromWiring | null;
   /** A search jump's words; absent or [] draws no marks. */
   searchWords?: readonly string[];
+  /** The chat's own search stands on this message: its hit words are ringed (13 Nov 2026). */
+  searchCurrent?: boolean;
   profiles: Map<string, ChatProfile>;
   cache: PresignCache;
   presignEnabled: boolean;
@@ -1810,6 +1812,7 @@ export function MessageBubble(props: {
       ref={props.rowRef}
       data-msg-id={message.id}
       data-state={message.state}
+      data-search-current={props.searchCurrent === true ? '' : undefined}
       data-selection={selection?.role}
       data-checked={checked ? '' : undefined}
       data-thread-root={rootPlace ? '' : undefined}

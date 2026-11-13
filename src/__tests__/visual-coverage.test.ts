@@ -311,6 +311,8 @@ const REQUIRED: readonly string[] = [
   // thread screen.
   'chat-group-work',
   'chat-replies-row',
+  'chat-search-open',
+  'chat-search-typed',
   'chat-thread-screen',
   'chat-thread-screen-plan',
   // Catch up (8 Nov 2026): the cards, the swipe frames, typing, the end

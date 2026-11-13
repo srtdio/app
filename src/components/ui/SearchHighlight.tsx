@@ -34,6 +34,12 @@ export function highlightNodes(text: string, words: readonly string[]): ReactNod
 /** The words a jump destination colours; empty outside a search jump. */
 export const SearchWordsContext = createContext<readonly string[]>([]);
 
+/**
+ * The message a chat's own search stands on (13 Nov 2026): its row carries
+ * data-search-current, which rings its hit words (index.css). Null outside it.
+ */
+export const SearchCurrentContext = createContext<string | null>(null);
+
 /** Text with the searched words marked: `words` when given, else the screen's jump words. */
 export function Highlight(props: { text: string; words?: readonly string[] }): ReactElement {
   const fromScreen = useContext(SearchWordsContext);
