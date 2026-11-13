@@ -142,6 +142,9 @@ import {
   type Result,
 } from '@srtdio/comments';
 import { REPLY_TITLE } from '@/lib/chat/thread-rail';
+import { UnreadDivider } from '@/components/chat/ReadingLayer';
+import { useEntityNewMarks, useUnreadTargetsKnown } from '@/lib/inbox/unread-entities';
+import { newLinePlaces, useLandOnNewLine } from '@/lib/inbox/new-lines';
 import { DOMAIN_ERROR_CODES, type DomainErrorCode } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 
@@ -938,6 +941,13 @@ export function Comments(props: CommentsProps): ReactElement {
   useLayoutEffect(() => {
     setBesidePost(laptop && openRootId !== null && postColumnRight() !== null);
   }, [laptop, openRootId, postColumnRight]);
+  const newMarks = useEntityNewMarks(entityType, entityId);
+  const targetsKnown = useUnreadTargetsKnown();
+  useLandOnNewLine(listRef, {
+    ready: !loading && targetsKnown,
+    hasLines: newMarks !== null,
+    linked: focusId !== null && focusId !== '',
+  });
   useFocusTarget({
     targetId: replyLink === null ? focusId : null,
     targetKey: props.focusRequestKey ?? null,
@@ -1256,6 +1266,12 @@ export function Comments(props: CommentsProps): ReactElement {
   ];
   const nowMs = Date.now();
   const mainRows: ReactElement[] = [];
+  // "New" / "New reply" lines (13 Nov 2026), from the marks held on open.
+  const linePlaces = newLinePlaces(
+    lists.roots.map((r) => ({ id: r.id, authorId: r.author_user_id, createdAt: r.created_at })),
+    me,
+    newMarks,
+  );
   let afterLabel = false;
   for (const r of threadRows(listMessages, nowMs, undefined)) {
     if (r.kind === 'day') {
@@ -1269,6 +1285,10 @@ export function Comments(props: CommentsProps): ReactElement {
     afterLabel = false;
     const root = rowById.get(message.id);
     const canOpen = root !== undefined && root.id.startsWith('pending:') === false;
+    const lineLabel = linePlaces.get(message.id);
+    if (lineLabel !== undefined) {
+      mainRows.push(<UnreadDivider key={`new:${message.id}`} count={0} label={lineLabel} />);
+    }
     mainRows.push(
       renderRow(
         message,

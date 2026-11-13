@@ -1220,6 +1220,72 @@ const BADGE_RPC: Record<string, RpcHandler> = {
     }
     return [...rows.values()];
   },
+  /**
+   * public.inbox_unread_comment_marks over the fixture inbox: the targets rows
+   * (posts, briefs, plan items) plus first_new_at (the oldest unread top-level
+   * comment's time) and reply_root_ids (roots with an unread reply).
+   */
+  inbox_unread_comment_marks: (args, tables) => {
+    const now = new Date().toISOString();
+    type Mark = {
+      entity_type: string;
+      entity_id: string;
+      unread: number;
+      latest_comment_id: string | null;
+      plan_id: string | null;
+      latest_at: string;
+      first_new_at: string | null;
+      reply_root_ids: string[];
+    };
+    const rows = new Map<string, Mark>();
+    const comments = [...(tables.comments ?? []), ...(tables.plan_item_comments ?? [])];
+    for (const e of tables.inbox_entries ?? []) {
+      if (e.workspace_id !== args.p_workspace_id || e.user_id !== ME) continue;
+      if ((e.read_at ?? null) !== null || (e.deleted_at ?? null) !== null) continue;
+      if ((e.snoozed_until ?? null) !== null && String(e.snoozed_until) > now) continue;
+      const type = String(e.entity_type ?? '');
+      const event = String(e.event_type ?? '');
+      const counted =
+        ((type === 'post' || type === 'brief') && (event === 'comment' || event === 'mention')) ||
+        (type === 'plan_item' && (event === 'plan_comment' || event === 'mention'));
+      if (!counted || typeof e.entity_id !== 'string' || e.entity_id === '') continue;
+      const payload = (e.payload ?? {}) as Record<string, unknown>;
+      const commentId = typeof payload.comment_id === 'string' ? payload.comment_id : null;
+      const planId = typeof payload.plan_id === 'string' ? payload.plan_id : null;
+      const at = String(e.created_at ?? '');
+      const key = `${type}:${e.entity_id}`;
+      let hit = rows.get(key);
+      if (hit === undefined) {
+        hit = {
+          entity_type: type,
+          entity_id: e.entity_id,
+          unread: 0,
+          latest_comment_id: commentId,
+          plan_id: planId,
+          latest_at: at,
+          first_new_at: null,
+          reply_root_ids: [],
+        };
+        rows.set(key, hit);
+      }
+      hit.unread += 1;
+      if (at > hit.latest_at) {
+        hit.latest_at = at;
+        hit.latest_comment_id = commentId;
+        hit.plan_id = planId;
+      }
+      const c = comments.find((r) => r.id === commentId && (r.deleted_at ?? null) === null);
+      if (c === undefined) continue;
+      const parent = (c.parent_comment_id ?? null) as string | null;
+      if (parent !== null) {
+        if (!hit.reply_root_ids.includes(parent)) hit.reply_root_ids.push(parent);
+      } else {
+        const cAt = String(c.created_at ?? '');
+        if (hit.first_new_at === null || cAt < hit.first_new_at) hit.first_new_at = cAt;
+      }
+    }
+    return [...rows.values()];
+  },
   /** public.inbox_mark_entity_read: acknowledged; the fixture inbox is left as seeded. */
   inbox_mark_entity_read: () => null,
 };

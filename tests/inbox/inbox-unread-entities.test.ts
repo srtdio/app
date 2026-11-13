@@ -1,5 +1,5 @@
 // Unread comment markers (inbox_unread_entity_counts, inbox_unread_entity_targets,
-// inbox_mark_entity_read),
+// inbox_unread_comment_marks, inbox_mark_entity_read),
 // exercised end to end against the local stack as the authenticated role. The
 // read counts only the caller's unread comment + mention rows per post and per
 // plan item; the write marks only the caller's rows for one entity, rejects
@@ -33,6 +33,7 @@ type CountsArgs = Database['public']['Functions']['inbox_unread_entity_counts'][
 type MarkArgs = Database['public']['Functions']['inbox_mark_entity_read']['Args'];
 type TargetsArgs = Database['public']['Functions']['inbox_unread_entity_targets']['Args'];
 type TargetRow = Database['public']['Functions']['inbox_unread_entity_targets']['Returns'][number];
+type MarksArgs = Database['public']['Functions']['inbox_unread_comment_marks']['Args'];
 
 describe.runIf(INBOX_SUITE)('inbox unread entity procs', () => {
   let env: RlsEnv;
@@ -198,8 +199,30 @@ describe.runIf(INBOX_SUITE)('inbox unread entity procs', () => {
     expect((await counts(member.id))[`post:${postA}`]).toBeUndefined();
   });
 
+  it('briefs: the marks read them and opening a brief marks its comment rows read', async () => {
+    const brief = crypto.randomUUID();
+    const mine = await insertEntry(member.id, {
+      entity_type: 'brief',
+      entity_id: brief,
+      scope: 'briefs',
+      payload: { comment_id: crypto.randomUUID() },
+    });
+    const args: MarksArgs = { p_trace_id: generateTraceId(), p_workspace_id: ws.id };
+    const res = await clientFor(member.id).rpc('inbox_unread_comment_marks', args);
+    expect(res.error).toBeNull();
+    const row = (res.data ?? []).find((r) => r.entity_type === 'brief' && r.entity_id === brief);
+    expect(row?.unread).toBe(1);
+    // The comment is unknown (not in comments): no New line, no New reply.
+    expect(row?.first_new_at ?? null).toBeNull();
+    expect(row?.reply_root_ids ?? []).toEqual([]);
+    expect((await markRead(member.id, 'brief', brief)).error).toBeNull();
+    expect(await readAt(mine)).not.toBeNull();
+  });
+
   it('mark read rejects other entity types, a blank id and non-members', async () => {
-    expect((await markRead(member.id, 'brief', postA)).error?.message).toContain('invalid_payload');
+    expect((await markRead(member.id, 'chat_channel', postA)).error?.message).toContain(
+      'invalid_payload',
+    );
     expect((await markRead(member.id, 'post', '')).error?.message).toContain('invalid_payload');
     expect((await markRead(outsider.id, 'post', postA)).error?.message).toContain(
       'workspace_member_only',
