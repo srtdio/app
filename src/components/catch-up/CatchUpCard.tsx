@@ -208,14 +208,17 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
   // it, so the newest row never ends under the reply box.
   const place = (el: HTMLDivElement): void => {
     const line = el.querySelector<HTMLElement>('[data-new-line]');
+    const rowEls = el.querySelectorAll<HTMLElement>('[data-catch-up-rows] > li');
+    // offsetTop counts from the card (the positioned parent), not from this
+    // scroll body: take the body's own offset off, or the New line lands
+    // above the visible rows by the name row + strip height.
+    const base = rowEls[0]?.offsetParent === el ? 0 : el.offsetTop;
     const top = fillScrollTop({
-      newTop: line !== null ? line.offsetTop : null,
+      newTop: line !== null ? line.offsetTop - base : null,
       contentHeight: el.scrollHeight,
       bodyHeight: el.clientHeight,
     });
     // No half-cut row at the top: start the first visible row whole.
-    const rowEls = el.querySelectorAll<HTMLElement>('[data-catch-up-rows] > li');
-    const base = rowEls[0]?.offsetParent === el ? 0 : el.offsetTop;
     el.scrollTop = snapToRowTop(
       top,
       Array.from(rowEls, (r) => r.offsetTop - base),

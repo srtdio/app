@@ -344,6 +344,7 @@ const REQUIRED: readonly string[] = [
   'catch-up-strip-more-open',
   'catch-up-link-preview',
   'catch-up-blank-lines',
+  'catch-up-brief-new-line',
   'catch-up-brief-no-due',
   'catch-up-caption-open',
   'catch-up-carousel',

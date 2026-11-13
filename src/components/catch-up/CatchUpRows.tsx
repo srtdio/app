@@ -909,13 +909,18 @@ export function ContextStrip(props: {
             ) : null}
           </span>
         ) : null}
-        <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span data-catch-up-strip-text="" className="flex min-w-0 flex-1 items-center gap-2">
           <Text role="label" className="shrink-0 text-fg">
             {context.label}
           </Text>
           {context.due !== null ? (
-            <Text role="meta" className={cn('shrink-0', context.due.bad && 'text-bad')}>
+            <Text role="secondary" className={cn('shrink-0', context.due.bad && 'text-bad')}>
               {context.due.text}
+            </Text>
+          ) : null}
+          {context.due !== null && !open && firstLine !== '' ? (
+            <Text role="secondary" aria-hidden="true" className="shrink-0">
+              ·
             </Text>
           ) : null}
           {!open && firstLine !== '' ? (

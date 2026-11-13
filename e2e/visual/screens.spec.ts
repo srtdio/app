@@ -130,6 +130,8 @@ import {
   seedCatchUpBankIdea,
   seedCatchUpBlankLines,
   seedCatchUpBrief,
+  seedCatchUpBriefNew,
+  CU_BRIEF_NEW_ENTRY,
   seedCatchUpChatMain,
   seedCatchUpEmoji,
   seedCatchUpFeedback,
@@ -2736,6 +2738,52 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await catchUpReady(page);
       await waitFor([page.locator('[data-catch-up-kind="idea"]')], 'idea card');
+    },
+  },
+  {
+    // A brief due today: read comments, then a long unread one. The card opens
+    // with its New line at the top of the rows (not scrolled past it).
+    name: 'catch-up-brief-new-line',
+    seed: creator,
+    extra: (network) => seedCatchUpBriefNew(network, NOW),
+    url: `/activity?catchup=${CU_BRIEF_NEW_ENTRY}`,
+    steps: async (page) => {
+      await catchUpReady(page);
+      await waitFor([page.locator('[data-catch-up] [data-new-line]')], 'new line');
+      // Measured, not looked at: the New line is fully in view, and at the
+      // top of the rows when what follows it is taller than the body (the
+      // fill rule); the strip reads "Due Today" in the preview's size with
+      // equal 8 gaps around the dot.
+      const m = await page.evaluate(() => {
+        const line = document
+          .querySelector('[data-catch-up] [data-new-line]')
+          ?.getBoundingClientRect();
+        const el = document.querySelector('[data-catch-up] [data-catch-up-rows]')?.parentElement;
+        const body = el?.getBoundingClientRect();
+        const parts = Array.from(
+          document.querySelectorAll('[data-catch-up] [data-catch-up-strip-text] > *'),
+        ).map((e) => ({ b: e.getBoundingClientRect(), size: getComputedStyle(e).fontSize }));
+        const lineTop = line?.top ?? -1;
+        const bodyTop = body?.top ?? -1;
+        const after = el != null ? el.scrollHeight - (lineTop - bodyTop + el.scrollTop) : 0;
+        return {
+          lineTop,
+          lineBottom: line?.bottom ?? -1,
+          bodyTop,
+          bodyBottom: body?.bottom ?? -1,
+          tall: el != null && after > el.clientHeight,
+          gaps: parts.slice(1).map((p, i) => p.b.left - (parts[i]?.b.right ?? 0)),
+          sizes: parts.slice(1).map((p) => p.size),
+        };
+      });
+      expect(m.lineTop, 'New line not above the rows').toBeGreaterThanOrEqual(m.bodyTop - 1);
+      expect(m.lineBottom, 'New line not below the rows').toBeLessThanOrEqual(m.bodyBottom + 1);
+      if (m.tall) {
+        expect(Math.abs(m.lineTop - m.bodyTop), 'New line at the top').toBeLessThanOrEqual(1);
+      }
+      expect(m.gaps.length, 'Brief, Due Today, dot, preview').toBe(3);
+      for (const gap of m.gaps) expect(Math.abs(gap - 8), 'strip gap 8').toBeLessThanOrEqual(1);
+      expect(new Set(m.sizes).size, 'Due Today, dot and preview one size').toBe(1);
     },
   },
   {
