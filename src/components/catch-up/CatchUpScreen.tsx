@@ -865,7 +865,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
 
   let body: ReactElement;
   if (cu.done) {
-    body = <CatchUpEnd wentThrough={cu.wentThrough} onDone={close} />;
+    body = <CatchUpEnd wentThrough={cu.wentThrough} keptUnread={cu.keptUnread} onDone={close} />;
   } else if (current === null) {
     body = <div className="flex-1" />;
   } else {

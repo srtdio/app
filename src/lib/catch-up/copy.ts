@@ -109,6 +109,14 @@ export function endLine(n: number): string {
   return `You went through ${n} ${n === 1 ? 'update' : 'updates'}.`;
 }
 
+/** The end screen's title when any card was kept unread. */
+export const END_TITLE_LATER = 'See you later.';
+
+/** The end screen's line when cards were kept unread: "1 update kept unread." / "<N> updates kept unread." Pure. */
+export function keptLine(n: number): string {
+  return `${n} ${n === 1 ? 'update' : 'updates'} kept unread.`;
+}
+
 /** The two decision labels and the screen's words. */
 export const KEEP_UNREAD = 'Keep unread';
 export const MARK_AS_READ = 'Mark as read';

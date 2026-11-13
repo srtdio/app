@@ -5,6 +5,7 @@ import {
   catchUpReplyHint,
   catchUpTitle,
   endLine,
+  keptLine,
   leftLabel,
   unreadHeading,
 } from '@/lib/catch-up/copy';
@@ -102,5 +103,7 @@ describe('catch up copy', () => {
     expect(unreadHeading(12)).toBe('12 unread');
     expect(endLine(1)).toBe('You went through 1 update.');
     expect(endLine(5)).toBe('You went through 5 updates.');
+    expect(keptLine(1)).toBe('1 update kept unread.');
+    expect(keptLine(4)).toBe('4 updates kept unread.');
   });
 });
