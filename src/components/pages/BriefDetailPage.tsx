@@ -938,7 +938,6 @@ export function BriefDetailPage({
           {/* No workspace: nothing at all, never a dead-end line. */}
           {workspaceId !== null && briefId !== undefined ? (
             <section ref={commentsRef} className="min-w-0">
-              <div className={`${SECTION_LABEL} mb-2`}>Comments</div>
               <Comments
                 // The brief's own workspace: a link can open a brief outside the active one.
                 workspaceId={brief.workspace_id}

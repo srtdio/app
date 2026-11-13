@@ -951,3 +951,8 @@
 [data-thread-searching] form:has([data-composer]) {
   display: none;
 }
+
+/* Comments search (13 Nov 2026): on phone "N of M" takes the decision bar's place. */
+body:has([data-comments-search-dock]) [data-decision-bar] {
+  display: none;
+}

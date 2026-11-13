@@ -4,6 +4,7 @@
 // up = an older hit, down = a newer one. Pure pieces only; the hook lives in
 // components/chat/ChatSearch.tsx.
 
+import { stripFormat } from '@srtdio/comments';
 import { queryWords } from '@/lib/chat/search';
 
 /** Where the walk stands: the loaded hits (newest first) and the current one. */
@@ -61,4 +62,26 @@ export function localHits(rows: readonly SearchableRow[], query: string): string
     if (asked.every((q) => words.some((w) => w.startsWith(q)))) hits.push(row.id);
   }
   return hits;
+}
+
+/** A message a comments search reads: its id, saved text and files. */
+export interface SearchableMessage {
+  id: string;
+  body: string;
+  attachments: readonly { name: string }[];
+}
+
+/**
+ * The rows a comments search reads (13 Nov 2026), in screen order: every
+ * comment, each followed by its replies; text without format marks, then
+ * file names. Pure.
+ */
+export function searchRowsOf(
+  threads: readonly { root: SearchableMessage; replies: readonly SearchableMessage[] }[],
+): SearchableRow[] {
+  const rowOf = (m: SearchableMessage): SearchableRow => ({
+    id: m.id,
+    text: [stripFormat(m.body), ...m.attachments.map((a) => a.name)].join(' '),
+  });
+  return threads.flatMap((t) => [rowOf(t.root), ...t.replies.map(rowOf)]);
 }

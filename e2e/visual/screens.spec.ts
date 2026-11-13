@@ -6544,6 +6544,40 @@ SCREENS.push(
     after: async (page) => assertPinnedBarOnScroll(page, 'post-detail-approved'),
   },
   {
+    // 13 Nov 2026: search the comments (the key on the "Comments" row). The
+    // second hit is a reply: it shows alone under its comment's replies row,
+    // its photo on the comment's text column; "N of M" in the decision bar's place.
+    name: 'comments-search-reply',
+    seed: creator,
+    extra: seedConversation,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postConversationReady(page);
+      // A plain click: the key's 44 box hangs 12 past the column (the trailing
+      // rule), so a scripted tap would slide the laptop column sideways first.
+      await page.locator('[data-comments-head] [data-chat-search-key]').evaluate((key) => {
+        (key as HTMLElement).click();
+      });
+      const field = page.locator('[data-comments-head] [data-chat-search-field]');
+      await field.fill('the');
+      const count = page.locator('[data-comments-search-dock] [data-chat-search-count]');
+      await expect(count).toHaveText('1 of 3');
+      await field.press('Enter');
+      await expect(count).toHaveText('2 of 3');
+      await waitFor([page.locator('[data-search-peek] [data-search-current] mark')], 'reply hit');
+      await expect(page.locator('[data-thread-view]')).toHaveCount(0);
+      await expect(page.locator('[data-comments-composer]')).toHaveCount(0);
+    },
+    after: async (page) => {
+      // The reply's photo starts on its comment's text column (±1).
+      const [photo, text] = await Promise.all([
+        page.locator('[data-search-peek] [data-avatar-role]').first().boundingBox(),
+        page.locator(`[data-msg-id="${THREAD_ROOT}"] [data-msg-body]`).boundingBox(),
+      ]);
+      expect(Math.abs((photo?.x ?? 0) - (text?.x ?? -9))).toBeLessThanOrEqual(1);
+    },
+  },
+  {
     // A comment's thread open (11 Nov 2026): chat's ThreadViewFrame ("<",
     // "Thread" over the post's title), the root, chat's "3 replies" strip, the
     // replies, the docked "Reply" box. Phone: over the post; laptop: the side panel.

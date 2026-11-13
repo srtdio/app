@@ -44,4 +44,17 @@ describe('search inside a chat', () => {
       'searchCurrent={searchCurrent !== null && searchCurrent === props.message.id}',
     );
   });
+
+  it('comments search: key on the Comments row, a reply hit shown under its comment (13 Nov 2026)', () => {
+    const comments = read('src/components/comments/Comments.tsx');
+    expect(comments).toContain(
+      '<ChatSearchKey label={COMMENTS_SEARCH_LABEL} onOpen={search.start} />',
+    );
+    expect(comments).toContain('data-search-peek=""');
+    expect(comments).toContain('onOpen: () => openThread(root.id, false, peek.id)');
+    expect(comments).toContain('<ChatSearchSteps search={search} />');
+    expect(read('src/index.css')).toContain(
+      'body:has([data-comments-search-dock]) [data-decision-bar]',
+    );
+  });
 });
