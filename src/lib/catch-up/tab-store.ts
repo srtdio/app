@@ -284,11 +284,12 @@ function heldSnapshot(): readonly ActivityItem[] {
 function read(target: Active): void {
   if (running.has(target.key)) return;
   running.add(target.key);
-  const load = (): Promise<LoadResult> =>
-    fetchActivityEntries(supabase, target.workspaceId, {
+  // Always a promise of a result (a stubbed reader that answers nothing reads as a failure).
+  const load = async (): Promise<LoadResult> =>
+    ((await fetchActivityEntries(supabase, target.workspaceId, {
       state: 'unread',
       pageSize: CATCH_UP_READ_SIZE,
-    });
+    })) as LoadResult | undefined) ?? { ok: false, error: 'no result' };
   void sharedRead(target.key, load, { isOk: (res) => res.ok }).then(
     (res) => {
       running.delete(target.key);
