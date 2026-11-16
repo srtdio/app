@@ -26,14 +26,43 @@ import { logger } from '@/lib/logger';
 import { formatDue, formatOverdue, daysFromToday } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { readCatchUpChat } from '@/lib/catch-up/reads';
+import { chatPointOf } from '@/lib/catch-up/writes';
 import { isOwnEntry, unreadIdsOf, type CatchUpItem } from '@/lib/catch-up/queue';
 import { foldNewlines } from '@/lib/catch-up/text';
 import { replyStatsOf, type ReplyInfo } from '@/lib/catch-up/types';
+import { parseAttachmentMeta, type MessageAttachment } from '@/lib/chat/attachments';
+import {
+  fetchCommentFiles,
+  toCommentFileAttachments,
+  type CommentFile,
+} from '@/components/comments/comment-files';
 
 export { replyStatsOf, type ReplyInfo };
 
 /** Most rows a card reads per page (and per "load older" page). */
 export const CATCH_UP_PAGE = 20;
+
+/**
+ * Most unread rows a card reads from its first unread one (16 Nov 2026,
+ * Slack): the card starts at its first unread row, so 50 new comments open
+ * with the New line on top, never mid-way. Bounded: <= 2 cards are read.
+ */
+export const CATCH_UP_UNREAD_MAX = 200;
+
+/** The unread read starts this far before the oldest unread entry (entry vs row clock). */
+const SINCE_MARGIN_MS = 5 * 60_000;
+
+/**
+ * Where a card's unread read starts: the oldest unread entry (not my own)
+ * less the margin; null when nothing is unread (the newest page). Pure.
+ */
+export function unreadSinceOf(item: CatchUpItem): string | null {
+  const unread = item.entries.filter((e) => e.readAt === null && !isOwnEntry(e, null));
+  const oldest = [...unread].sort(byTime)[0];
+  if (oldest === undefined) return null;
+  const at = Date.parse(oldest.createdAt);
+  return Number.isNaN(at) ? null : new Date(at - SINCE_MARGIN_MS).toISOString();
+}
 
 /** Who wrote a row. */
 export interface CatchUpAuthor {
@@ -62,6 +91,10 @@ export interface CatchUpMessageRow {
   earlierCaption?: string | null;
   /** A reply drawn on its card: the thread it sits in ("Replied in thread: ..."). */
   threadRoot?: CatchUpMessageRow;
+  /** The stored file ids (comments, 16 Nov 2026); the bodies read fills `files` from them. */
+  fileIds?: string[];
+  /** Its photos and files, drawn under the text as chat draws them. */
+  files?: MessageAttachment[];
 }
 
 /** One feedback point. */
@@ -231,10 +264,11 @@ interface CommentRowLite {
   resolved_at: string | null;
   closed_at: string | null;
   accepted_at: string | null;
+  attachment_asset_ids?: string[] | null;
 }
 
 const COMMENT_COLUMNS =
-  'id, entity_id, author_user_id, body, created_at, parent_comment_id, ledger_batch_id, ledger_seq, resolved_at, closed_at, accepted_at';
+  'id, entity_id, author_user_id, body, created_at, parent_comment_id, ledger_batch_id, ledger_seq, resolved_at, closed_at, accepted_at, attachment_asset_ids';
 
 interface PlanCommentLite {
   id: string;
@@ -244,10 +278,11 @@ interface PlanCommentLite {
   created_at: string;
   visibility: string;
   parent_comment_id: string | null;
+  attachment_asset_ids?: string[] | null;
 }
 
 const PLAN_COMMENT_COLUMNS =
-  'id, item_id, author_user_id, body, created_at, visibility, parent_comment_id';
+  'id, item_id, author_user_id, body, created_at, visibility, parent_comment_id, attachment_asset_ids';
 
 /** Comments into rows: consecutive points of one batch become one points row. Pure. */
 export function commentRows(
@@ -299,7 +334,38 @@ function messageOf(
     ...catchUpText(workspaceId, c.body),
     replyCount: counts.get(c.id) ?? 0,
     ...repliesOf(workspaceId, info.get(c.id)),
+    ...fileIdsOf(c.attachment_asset_ids),
   };
+}
+
+function fileIdsOf(ids: readonly string[] | null | undefined): { fileIds?: string[] } {
+  return ids != null && ids.length > 0 ? { fileIds: [...ids] } : {};
+}
+
+/** Every stored file id on `rows` (and their thread roots), deduped. Pure. */
+export function rowFileIds(rows: readonly CatchUpRow[]): string[] {
+  const out = new Set<string>();
+  for (const row of rows) {
+    if (row.kind !== 'message') continue;
+    for (const id of row.fileIds ?? []) out.add(id);
+    for (const id of row.threadRoot?.fileIds ?? []) out.add(id);
+  }
+  return [...out];
+}
+
+/** `rows` with `files` filled from their stored ids and the read details. Pure. */
+export function withFiles(
+  rows: readonly CatchUpRow[],
+  files: ReadonlyMap<string, CommentFile>,
+): CatchUpRow[] {
+  const fill = (row: CatchUpMessageRow): CatchUpMessageRow => {
+    const out =
+      row.fileIds !== undefined
+        ? { ...row, files: toCommentFileAttachments(row.fileIds, files) }
+        : row;
+    return out.threadRoot !== undefined ? { ...out, threadRoot: fill(out.threadRoot) } : out;
+  };
+  return rows.map((row) => (row.kind === 'message' ? fill(row) : row));
 }
 
 /** A plan or idea comment as a message row, its replies row from counts / info. Pure. */
@@ -317,6 +383,7 @@ function planMessageOf(
     ...catchUpText(workspaceId, c.body),
     replyCount: counts.get(c.id) ?? 0,
     ...repliesOf(workspaceId, info.get(c.id)),
+    ...fileIdsOf(c.attachment_asset_ids),
   };
 }
 
@@ -426,29 +493,113 @@ export async function planReplyCountsFor(
   );
 }
 
-// Top-level comments, one query per entity in parallel, so a busy item never
+interface PageRead {
+  data: unknown;
+  error: unknown;
+}
+
+/**
+ * One card's top-level rows, newest first: from `newer` (the unread rows,
+ * oldest first) when given, then `older` (the page before them, newest
+ * first). olderFull: the older page came back full (more above). Never throws.
+ */
+async function unreadPage<T>(
+  newer: (() => PromiseLike<PageRead>) | null,
+  older: () => PromiseLike<PageRead>,
+): Promise<{ rows: T[]; error: unknown; olderFull: boolean }> {
+  const [a, b] = await Promise.all([newer !== null ? newer() : null, older()]);
+  const error = a?.error ?? b.error ?? null;
+  const fresh = a !== null && Array.isArray(a.data) ? ([...a.data] as T[]).reverse() : [];
+  const before = Array.isArray(b.data) ? (b.data as T[]) : [];
+  return { rows: [...fresh, ...before], error, olderFull: before.length >= CATCH_UP_PAGE };
+}
+
+// Top-level comments, one read per entity in parallel, so a busy item never
 // pushes another's rows out of a shared limit. Bounded, not N+1: the bodies
-// read only ever gets the current and next card (<= 2 entities, <= 2 queries).
+// read only ever gets the current and next card (<= 2 entities). With an
+// unread start (`since`, 16 Nov 2026) a card reads every row from its first
+// unread one (up to CATCH_UP_UNREAD_MAX) plus one page before it, in parallel.
 export async function topLevelComments(
   client: Client,
   entityIds: readonly string[],
-): Promise<{ data: CommentRowLite[]; error: unknown }> {
+  since: ReadonlyMap<string, string> = new Map(),
+): Promise<{ data: CommentRowLite[]; error: unknown; olderFull: Set<string> }> {
   const all = await Promise.all(
-    entityIds.map((id) =>
-      client
-        .from('comments')
-        .select(COMMENT_COLUMNS)
-        .eq('entity_id', id)
-        .is('parent_comment_id', null)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(CATCH_UP_PAGE),
-    ),
+    entityIds.map((id) => {
+      const base = () =>
+        client
+          .from('comments')
+          .select(COMMENT_COLUMNS)
+          .eq('entity_id', id)
+          .is('parent_comment_id', null)
+          .is('deleted_at', null);
+      const from = since.get(id);
+      return from === undefined
+        ? unreadPage<CommentRowLite>(null, () =>
+            base().order('created_at', { ascending: false }).limit(CATCH_UP_PAGE),
+          )
+        : unreadPage<CommentRowLite>(
+            () =>
+              base()
+                .gte('created_at', from)
+                .order('created_at', { ascending: true })
+                .limit(CATCH_UP_UNREAD_MAX),
+            () =>
+              base()
+                .lt('created_at', from)
+                .order('created_at', { ascending: false })
+                .limit(CATCH_UP_PAGE),
+          );
+    }),
   );
   const failed = all.find((r) => r.error !== null);
   return {
-    data: all.flatMap((r) => (r.data ?? []) as CommentRowLite[]),
+    data: all.flatMap((r) => r.rows),
     error: failed?.error ?? null,
+    olderFull: new Set(entityIds.filter((_, i) => all[i]?.olderFull === true)),
+  };
+}
+
+// Plan / idea top-level comments: the same shape as topLevelComments, one
+// read per item (<= 2), from its first unread one when it has one.
+async function planTopLevelComments(
+  client: Client,
+  itemIds: readonly string[],
+  since: ReadonlyMap<string, string>,
+): Promise<{ data: PlanCommentLite[]; error: unknown; olderFull: Set<string> }> {
+  const all = await Promise.all(
+    itemIds.map((id) => {
+      const base = () =>
+        client
+          .from('plan_item_comments')
+          .select(PLAN_COMMENT_COLUMNS)
+          .eq('item_id', id)
+          .is('parent_comment_id', null)
+          .is('deleted_at', null);
+      const from = since.get(id);
+      return from === undefined
+        ? unreadPage<PlanCommentLite>(null, () =>
+            base().order('created_at', { ascending: false }).limit(CATCH_UP_PAGE),
+          )
+        : unreadPage<PlanCommentLite>(
+            () =>
+              base()
+                .gte('created_at', from)
+                .order('created_at', { ascending: true })
+                .limit(CATCH_UP_UNREAD_MAX),
+            () =>
+              base()
+                .lt('created_at', from)
+                .order('created_at', { ascending: false })
+                .limit(CATCH_UP_PAGE),
+          );
+    }),
+  );
+  const failed = all.find((r) => r.error !== null);
+  return {
+    data: all.flatMap((r) => r.rows),
+    error: failed?.error ?? null,
+    olderFull: new Set(itemIds.filter((_, i) => all[i]?.olderFull === true)),
   };
 }
 
@@ -593,6 +744,12 @@ export async function readCatchUpBodies(
   const commentEntityIds = [...postIds, ...briefIds];
   const entryIds = items.flatMap(unreadIdsOf);
   const chatItems = items.filter((i) => i.kind === 'chat-main' || i.kind === 'chat-thread');
+  // Each card reads from its first unread row (16 Nov 2026): its New line is always drawn.
+  const since = new Map<string, string>();
+  for (const i of items) {
+    const at = unreadSinceOf(i);
+    if (at !== null) since.set(i.entityId, at);
+  }
 
   try {
     const [posts, briefs, planItems, pictures, comments, planComments, entries, chat] =
@@ -627,18 +784,9 @@ export async function readCatchUpBodies(
               .order('attached_at', { ascending: true })
           : Promise.resolve(null),
         commentEntityIds.length > 0
-          ? topLevelComments(client, commentEntityIds)
+          ? topLevelComments(client, commentEntityIds, since)
           : Promise.resolve(null),
-        itemIds.length > 0
-          ? client
-              .from('plan_item_comments')
-              .select(PLAN_COMMENT_COLUMNS)
-              .in('item_id', itemIds)
-              .is('parent_comment_id', null)
-              .is('deleted_at', null)
-              .order('created_at', { ascending: false })
-              .limit(CATCH_UP_PAGE * itemIds.length)
-          : Promise.resolve(null),
+        itemIds.length > 0 ? planTopLevelComments(client, itemIds, since) : Promise.resolve(null),
         entryIds.length > 0
           ? client.from('inbox_entries').select('id, read_at').in('id', entryIds)
           : Promise.resolve(null),
@@ -658,7 +806,7 @@ export async function readCatchUpBodies(
     ];
     const commentRowsAll = (comments?.data ?? []) as CommentRowLite[];
     const planRowsAll = (planComments?.data ?? []) as PlanCommentLite[];
-    const [plans, stats, inThread, planStats, planInThread] = await Promise.all([
+    const [plans, stats, inThread, planStats, planInThread, files] = await Promise.all([
       planIds.length > 0
         ? client.from('plans').select('id, title').in('id', planIds)
         : Promise.resolve(null),
@@ -676,6 +824,11 @@ export async function readCatchUpBodies(
         client,
         threadReplyIds(items, planRowsAll, ['plan-item', 'idea']),
         planRowsAll,
+      ),
+      // Every shown comment's files in ONE IN read, beside the reply counts (no new wave).
+      fetchCommentFiles(
+        client,
+        [...commentRowsAll, ...planRowsAll].flatMap((c) => c.attachment_asset_ids ?? []),
       ),
     ]);
     // Comment and plan comment ids are distinct uuids: one map serves both.
@@ -697,7 +850,22 @@ export async function readCatchUpBodies(
         ]),
       ]),
     ];
-    await resolvePeople(client, workspaceId, authors);
+    // Thread replies' and roots' files arrive with their rows: read only the
+    // ones not asked yet, beside the names (no new wave; usually none).
+    const fileMap = new Map(files ?? []);
+    const replyFileIds = [
+      ...inThread.replies,
+      ...inThread.roots,
+      ...planInThread.replies,
+      ...planInThread.roots,
+    ]
+      .flatMap((c) => c.attachment_asset_ids ?? [])
+      .filter((id) => !fileMap.has(id));
+    const [moreFiles] = await Promise.all([
+      replyFileIds.length > 0 ? fetchCommentFiles(client, replyFileIds) : Promise.resolve(null),
+      resolvePeople(client, workspaceId, authors),
+    ]);
+    for (const [id, f] of moreFiles ?? []) fileMap.set(id, f);
 
     const failed =
       posts?.error != null ||
@@ -756,8 +924,16 @@ export async function readCatchUpBodies(
           ),
           counts,
           replyInfo,
+          olderFull: (item.kind === 'plan-item' || item.kind === 'idea'
+            ? planComments?.olderFull
+            : comments?.olderFull
+          )?.has(item.entityId),
         }),
       );
+      const got = out.get(item.key);
+      if (got !== undefined && got !== 'skip' && got !== 'error') {
+        out.set(item.key, { ...got, rows: withFiles(got.rows, fileMap) });
+      }
     }
   } catch (error) {
     logger.warn('catch-up: body read threw', { error: String(error) });
@@ -819,6 +995,8 @@ interface BodyParts {
   /** Plan / idea: unread thread replies and their roots by id. */
   planThreadReplies?: readonly PlanCommentLite[];
   planThreadRoots?: ReadonlyMap<string, PlanCommentLite>;
+  /** The page before the unread rows came back full (more above); absent: by count. */
+  olderFull?: boolean | undefined;
 }
 
 /** One non-chat card's body from its read rows; 'skip' when gone or hidden. Pure. */
@@ -849,7 +1027,7 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
           };
     rows = commentRows(workspaceId, [...parts.comments].reverse(), parts.counts, parts.replyInfo);
     rows.push(...threadReplyRows(workspaceId, parts));
-    hasOlder = parts.comments.length >= CATCH_UP_PAGE;
+    hasOlder = parts.olderFull ?? parts.comments.length >= CATCH_UP_PAGE;
   } else if (item.kind === 'brief') {
     const brief = parts.brief;
     if (brief === undefined || brief.deleted_at !== null) return 'skip';
@@ -863,7 +1041,7 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
     };
     rows = commentRows(workspaceId, [...parts.comments].reverse(), parts.counts, parts.replyInfo);
     rows.push(...threadReplyRows(workspaceId, parts));
-    hasOlder = parts.comments.length >= CATCH_UP_PAGE;
+    hasOlder = parts.olderFull ?? parts.comments.length >= CATCH_UP_PAGE;
   } else {
     const planItem = parts.planItem;
     if (planItem === undefined || planItem.deleted_at !== null) return 'skip';
@@ -894,7 +1072,7 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
         ),
       }),
     );
-    hasOlder = parts.planComments.length >= CATCH_UP_PAGE;
+    hasOlder = parts.olderFull ?? parts.planComments.length >= CATCH_UP_PAGE;
   }
   rows = [...rows, ...eventRows(item, rows)].sort(byTime);
   if (rows.length === 0 && context === null) return 'skip';
@@ -909,20 +1087,39 @@ export function bodyOf(item: CatchUpItem, parts: BodyParts): CatchUpBodyResult {
   };
 }
 
-/** Chat cards through readCatchUpChat (by the lead entry), as card bodies. */
+/**
+ * A chat card's oldest unread card entry that names a message (its New line
+ * sits there); else the lead (the newest). Pure.
+ */
+export function firstUnreadEntry(item: CatchUpItem): CatchUpItem['lead'] {
+  const lead = chatPointOf(item.lead);
+  // Same chat and same thread as the lead only (a thread-started entry points elsewhere).
+  const unread = item.cardEntries.filter((e) => {
+    if (e.readAt !== null || isOwnEntry(e, null)) return false;
+    const point = chatPointOf(e);
+    return point !== null && lead !== null && point.rootId === lead.rootId;
+  });
+  return [...unread].sort(byTime)[0] ?? item.lead;
+}
+
+/** Chat cards through readCatchUpChat (from the first unread entry), as card bodies. */
 async function readCatchUpChatItems(
   client: Client,
   workspaceId: string,
   items: readonly CatchUpItem[],
 ): Promise<Map<string, CatchUpBodyResult>> {
   const out = new Map<string, CatchUpBodyResult>();
-  const got = await readCatchUpChat(
-    client,
-    workspaceId,
-    items.map((i) => i.lead),
-  );
+  // Each card reads from its oldest unread message, which carries the New line.
+  const points = new Map(items.map((i) => [i.key, firstUnreadEntry(i)] as const));
+  const since = new Map<string, string>();
   for (const item of items) {
-    const chat = got.get(item.lead.id);
+    const at = unreadSinceOf(item);
+    const point = points.get(item.key);
+    if (at !== null && point !== undefined) since.set(point.id, at);
+  }
+  const got = await readCatchUpChat(client, workspaceId, [...points.values()], since);
+  for (const item of items) {
+    const chat = got.get(points.get(item.key)?.id ?? item.lead.id);
     if (chat === undefined) {
       out.set(item.key, 'error');
       continue;
@@ -935,6 +1132,7 @@ async function readCatchUpChatItems(
       text: foldNewlines(m.text),
       replyCount: chat.replyCounts.get(m.id) ?? 0,
       ...repliesOf(workspaceId, chat.replyInfo?.get(m.id)),
+      ...(m.files !== undefined ? { files: m.files } : {}),
     });
     const cardRoot = chat.root !== null ? toRow(chat.root) : undefined;
     const rows: CatchUpRow[] = [
@@ -981,11 +1179,15 @@ export async function readCatchUpOlder(
         .limit(CATCH_UP_PAGE);
       if (res.error !== null) return null;
       const list = (res.data ?? []) as CommentRowLite[];
-      const [stats] = await Promise.all([
+      const [stats, files] = await Promise.all([
         replyCountsFor(
           client,
           'comments',
           list.map((c) => c.id),
+        ),
+        fetchCommentFiles(
+          client,
+          list.flatMap((c) => c.attachment_asset_ids ?? []),
         ),
         resolvePeople(
           client,
@@ -999,7 +1201,10 @@ export async function readCatchUpOlder(
         [...stats.info.values()].flatMap((r) => r.repliers),
       );
       return {
-        rows: commentRows(workspaceId, [...list].reverse(), stats.counts, stats.info),
+        rows: withFiles(
+          commentRows(workspaceId, [...list].reverse(), stats.counts, stats.info),
+          files ?? new Map(),
+        ),
         hasOlder: list.length >= CATCH_UP_PAGE,
       };
     }
@@ -1017,10 +1222,14 @@ export async function readCatchUpOlder(
       const list = ((res.data ?? []) as PlanCommentLite[]).filter(
         (c) => !(input.side === 'client' && c.visibility === 'team'),
       );
-      const [stats] = await Promise.all([
+      const [stats, files] = await Promise.all([
         planReplyCountsFor(
           client,
           list.map((c) => c.id),
+        ),
+        fetchCommentFiles(
+          client,
+          list.flatMap((c) => c.attachment_asset_ids ?? []),
         ),
         resolvePeople(
           client,
@@ -1034,16 +1243,17 @@ export async function readCatchUpOlder(
         [...stats.info.values()].flatMap((r) => r.repliers),
       );
       return {
-        rows: [...list]
-          .reverse()
-          .map((c) => planMessageOf(workspaceId, c, stats.counts, stats.info)),
+        rows: withFiles(
+          [...list].reverse().map((c) => planMessageOf(workspaceId, c, stats.counts, stats.info)),
+          files ?? new Map(),
+        ),
         hasOlder: (res.data ?? []).length >= CATCH_UP_PAGE,
       };
     }
     if (item.kind === 'chat-main') {
       const res = await client
         .from('chat_messages')
-        .select('id, sender_user_id, body, created_at')
+        .select('id, sender_user_id, body, created_at, attachment_asset_ids, attachment_meta')
         .eq('channel_id', item.entityId)
         .is('thread_root_message_id', null)
         .is('deleted_at', null)
@@ -1071,6 +1281,7 @@ export async function readCatchUpOlder(
           createdAt: m.created_at,
           ...catchUpText(workspaceId, m.body ?? ''),
           replyCount: counts.get(m.id) ?? 0,
+          ...chatFilesOf(m.attachment_meta, m.attachment_asset_ids),
         })),
         hasOlder: list.length >= CATCH_UP_PAGE,
       };
@@ -1080,6 +1291,24 @@ export async function readCatchUpOlder(
     logger.warn('catch-up: older read threw', { error: String(error) });
     return null;
   }
+}
+
+/** A comment's files from its stored ids and the read details (none: nothing). Pure. */
+function commentFilesOf(
+  ids: readonly string[] | null | undefined,
+  files: ReadonlyMap<string, CommentFile> | null,
+): { files?: MessageAttachment[] } {
+  return ids != null && ids.length > 0
+    ? { files: toCommentFileAttachments(ids, files ?? new Map()) }
+    : {};
+}
+
+/** A chat row's files as the card draws them (none: nothing). Pure. */
+export function chatFilesOf(
+  meta: unknown,
+  ids: readonly string[] | null | undefined,
+): { files?: MessageAttachment[] } {
+  return ids != null && ids.length > 0 ? { files: parseAttachmentMeta(meta, ids) } : {};
 }
 
 /** Reply counts of chat roots: one IN read. */
@@ -1122,7 +1351,7 @@ export async function readCatchUpThread(
     if (input.kind === 'chat') {
       const res = await client
         .from('chat_messages')
-        .select('id, sender_user_id, body, created_at')
+        .select('id, sender_user_id, body, created_at, attachment_asset_ids, attachment_meta')
         .eq('thread_root_message_id', root.id)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
@@ -1145,27 +1374,34 @@ export async function readCatchUpThread(
           createdAt: m.created_at,
           ...catchUpText(workspaceId, m.body ?? ''),
           replyCount: 0,
+          ...chatFilesOf(m.attachment_meta, m.attachment_asset_ids),
         })),
       };
     }
     if (input.kind === 'plan') {
       const res = await client
         .from('plan_item_comments')
-        .select('id, author_user_id, body, created_at')
+        .select('id, author_user_id, body, created_at, attachment_asset_ids')
         .eq('parent_comment_id', root.id)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
         .limit(200);
       if (res.error !== null) return null;
       const list = res.data ?? [];
-      await resolvePeople(
-        client,
-        workspaceId,
-        list.flatMap((c) => [
-          ...(c.author_user_id !== null ? [c.author_user_id] : []),
-          ...parseMentions(c.body),
-        ]),
-      );
+      const [files] = await Promise.all([
+        fetchCommentFiles(
+          client,
+          list.flatMap((c) => c.attachment_asset_ids ?? []),
+        ),
+        resolvePeople(
+          client,
+          workspaceId,
+          list.flatMap((c) => [
+            ...(c.author_user_id !== null ? [c.author_user_id] : []),
+            ...parseMentions(c.body),
+          ]),
+        ),
+      ]);
       return {
         root,
         replies: list.map((c) => ({
@@ -1175,23 +1411,30 @@ export async function readCatchUpThread(
           createdAt: c.created_at,
           ...catchUpText(workspaceId, c.body),
           replyCount: 0,
+          ...commentFilesOf(c.attachment_asset_ids, files),
         })),
       };
     }
     const res = await client
       .from('comments')
-      .select('id, author_user_id, body, created_at')
+      .select('id, author_user_id, body, created_at, attachment_asset_ids')
       .eq('parent_comment_id', root.id)
       .is('deleted_at', null)
       .order('created_at', { ascending: true })
       .limit(200);
     if (res.error !== null) return null;
     const list = res.data ?? [];
-    await resolvePeople(
-      client,
-      workspaceId,
-      list.flatMap((c) => [c.author_user_id, ...parseMentions(c.body)]),
-    );
+    const [files] = await Promise.all([
+      fetchCommentFiles(
+        client,
+        list.flatMap((c) => c.attachment_asset_ids ?? []),
+      ),
+      resolvePeople(
+        client,
+        workspaceId,
+        list.flatMap((c) => [c.author_user_id, ...parseMentions(c.body)]),
+      ),
+    ]);
     return {
       root,
       replies: list.map((c) => ({
@@ -1201,6 +1444,7 @@ export async function readCatchUpThread(
         createdAt: c.created_at,
         ...catchUpText(workspaceId, c.body),
         replyCount: 0,
+        ...commentFilesOf(c.attachment_asset_ids, files),
       })),
     };
   } catch (error) {

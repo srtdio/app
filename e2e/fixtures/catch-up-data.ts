@@ -328,6 +328,19 @@ export function seedCatchUpRest(network: HarnessNetwork, now: number): void {
       { author: COLLEAGUE_A, body: `@[${ME}] the scarf shot is ready in Assets.`, minsAgo: 6 },
     ],
   });
+  // 16 Nov 2026: the newest comment carries a photo (a comment photo shows on its card).
+  const photo = cid(VERSION, 11);
+  const newest = (network.world.tables.comments ?? []).find((r) => r.id === cid(COMMENT, 0x11));
+  if (newest !== undefined) newest.attachment_asset_ids = [photo];
+  (network.world.tables.asset_versions ??= []).push({
+    id: photo,
+    mime_type: 'image/png',
+    size_bytes: 120_000,
+    page_count: null,
+    width: 960,
+    height: 720,
+    assets: { display_name: 'Scarf shot', filename: 'scarf.png' },
+  });
   const reply = commentRow(cid(COMMENT, 0x1f), 'post', CU_REST_POST, ME, 'Yes, swapping now.', 0, {
     parent_comment_id: cid(COMMENT, 0x10),
     created_at: iso(now - 30 * MINUTE),

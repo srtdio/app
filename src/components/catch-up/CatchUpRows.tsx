@@ -47,7 +47,10 @@ import {
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { CheckpointCircle, CHECKPOINT_HIT_CLASS } from '@/components/comments/CheckpointCircle';
 import { DateLine, MENTION_ME_PEER, MENTION_ME_ROW } from '@/components/chat/MessageBubble';
-import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
+import { MessageAttachments, useAttachmentUrl } from '@/components/chat/MessageAttachments';
+import { classifyAttachment, type MessageAttachment } from '@/lib/chat/attachments';
+import { appPresignCache } from '@/lib/shared-presign';
+import { env } from '@/lib/env';
 import type { PresignCache } from '@/lib/asset-presign';
 import { formatDayLabel, formatTime, threadWhen } from '@/lib/time';
 import { cutLongText, linkRuns } from '@/lib/catch-up/text';
@@ -422,6 +425,8 @@ export function MessageRow(props: {
   onHold?: ((from: HTMLElement) => void) | undefined;
   /** False: no corner smiley on a phone (its reactions part hides it there too). */
   phoneKey?: boolean | undefined;
+  /** Tap a photo: the card's lightbox over the row's photos at that index. */
+  onOpenPicture?: ((pictures: string[], index: number) => void) | undefined;
 }): ReactElement {
   const { row } = props;
   const rowRef = useRef<HTMLDivElement>(null);
@@ -505,6 +510,9 @@ export function MessageRow(props: {
         className="flex min-w-0 flex-col gap-1"
       >
         {text}
+        {row.files !== undefined && row.files.length > 0 ? (
+          <RowFiles files={row.files} onOpenPicture={props.onOpenPicture} />
+        ) : null}
         {link !== null ? (
           // relative: above the text's hit area, so its top edge keeps its own tap.
           <LinkPreviewCard
@@ -526,6 +534,31 @@ export function MessageRow(props: {
       ) : null}
       {props.trailing}
     </RowFrame>
+  );
+}
+
+/**
+ * A row's photos and files (16 Nov 2026), under its text as chat draws them:
+ * photos as one album (chat's AlbumGrid, the album's 240 width), other files
+ * as chat's file rows. A photo tap opens the card's lightbox at that photo.
+ */
+export function RowFiles(props: {
+  files: readonly MessageAttachment[];
+  onOpenPicture: ((pictures: string[], index: number) => void) | undefined;
+}): ReactElement {
+  const images = props.files.filter((f) => classifyAttachment(f.mime) === 'image');
+  const ids = images.map((f) => f.assetId);
+  return (
+    <div data-catch-up-files="" className={cn('min-w-0 max-w-full', images.length > 0 && 'w-60')}>
+      <MessageAttachments
+        attachments={props.files}
+        cache={appPresignCache()}
+        presignEnabled={env.VITE_ASSET_READ_URL !== undefined}
+        album={images.length > 0}
+        albumCorners="rounded-lg"
+        onImageClick={(file) => props.onOpenPicture?.(ids, Math.max(0, ids.indexOf(file.assetId)))}
+      />
+    </div>
   );
 }
 

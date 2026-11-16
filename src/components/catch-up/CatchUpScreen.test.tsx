@@ -438,9 +438,9 @@ describe('catch up thread sheet (10 Nov 2026)', () => {
     expect(boxDraft(true, false, draft)).toEqual(EMPTY_DRAFT);
   });
 
-  it('the fill rule never leaves a half-cut row at the top', () => {
+  it('the fill rule starts a whole row and never cuts the newest one (16 Nov 2026)', () => {
     const tops = [0, 72, 144, 216, 288];
-    expect(snapToRowTop(100, tops)).toBe(72);
+    expect(snapToRowTop(100, tops)).toBe(144);
     expect(snapToRowTop(144, tops)).toBe(144);
     expect(snapToRowTop(0, tops)).toBe(0);
     expect(snapToRowTop(40, [])).toBe(40);

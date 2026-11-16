@@ -191,7 +191,7 @@ describe('catch up: every message is tappable (C2)', () => {
     const got = await readCatchUpThread(client, { workspaceId: 'w1', kind: 'plan', root });
     expect(calls).toEqual([
       ['from', 'plan_item_comments'],
-      ['select', 'id, author_user_id, body, created_at'],
+      ['select', 'id, author_user_id, body, created_at, attachment_asset_ids'],
       ['eq', 'parent_comment_id', 'pc1'],
       ['is', 'deleted_at', null],
       ['order', 'created_at', { ascending: true }],
