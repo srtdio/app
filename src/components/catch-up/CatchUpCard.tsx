@@ -116,14 +116,15 @@ export interface CatchUpCardProps {
   >;
 }
 
-/** The fill rule's scrollTop moved up to the top of the row it lands inside (tops ascending). Pure. */
+/**
+ * The fill rule's scrollTop moved DOWN to the next row top (tops ascending),
+ * so the top row starts whole and the newest rows are never cut under the
+ * reply box (16 Nov 2026, Slack: a photo on the last comment was cut). The
+ * browser clamps past the bottom, so the newest row always ends in view. Pure.
+ */
 export function snapToRowTop(scrollTop: number, rowTops: readonly number[]): number {
-  let at = scrollTop;
-  for (const top of rowTops) {
-    if (top > scrollTop) break;
-    at = top;
-  }
-  return Math.max(0, at);
+  const next = rowTops.find((top) => top >= scrollTop);
+  return Math.max(0, next ?? scrollTop);
 }
 
 /** The kind sticker on a card's name row: the nav icon + word. Pure. */
@@ -218,7 +219,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
       contentHeight: el.scrollHeight,
       bodyHeight: el.clientHeight,
     });
-    // No half-cut row at the top: start the first visible row whole.
+    // No half-cut row at the top, never a cut row at the bottom: the next row top.
     el.scrollTop = snapToRowTop(
       top,
       Array.from(rowEls, (r) => r.offsetTop - base),
@@ -310,6 +311,7 @@ export function CatchUpCard(props: CatchUpCardProps): ReactElement {
           }
           // Phone: no corner smiley on a row with no reactions (the long-press sheet reacts).
           phoneKey={false}
+          onOpenPicture={props.onOpenPicture}
           reactions={
             <CatchUpRowReactions
               id={row.id}

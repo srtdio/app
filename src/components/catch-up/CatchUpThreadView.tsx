@@ -18,6 +18,7 @@ import {
   CardError,
   LongText,
   MessageRow,
+  RowFiles,
 } from '@/components/catch-up/CatchUpRows';
 import type { SentMessage } from '@/components/catch-up/CatchUpCard';
 import {
@@ -60,6 +61,8 @@ export function CatchUpThreadView(props: {
   onHold?:
     | ((row: CatchUpMessageRow, from: HTMLElement, reactions: ReactionsApi) => void)
     | undefined;
+  /** Tap a photo: the lightbox over that row's photos. */
+  onOpenPicture?: ((pictures: string[], index: number) => void) | undefined;
 }): ReactElement {
   const replies = props.thread !== null && props.thread !== 'error' ? props.thread.replies : [];
   const source = props.reactionsOf;
@@ -98,6 +101,9 @@ export function CatchUpThreadView(props: {
               dateTime={props.root.createdAt}
             />
             <LongText text={props.root.text} selfName={props.selfName} />
+            {props.root.files !== undefined && props.root.files.length > 0 ? (
+              <RowFiles files={props.root.files} onOpenPicture={props.onOpenPicture} />
+            ) : null}
             {/* Chips sit under the root text, above the strip (12 to it stays the li's pb-3). */}
             {rowReactions(props.root.id, true)}
           </li>
@@ -125,6 +131,7 @@ export function CatchUpThreadView(props: {
                 onOpenThread={null}
                 threadTime
                 reactions={rowReactions(row.id)}
+                onOpenPicture={props.onOpenPicture}
                 onHold={
                   props.onHold !== undefined
                     ? (from) => props.onHold?.(row, from, reactions)

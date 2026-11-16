@@ -1001,6 +1001,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
               />
             </div>
             <CatchUpThreadView
+              onOpenPicture={(pictures, index) => setLightbox({ pictures, index })}
               root={thread.root}
               thread={thread.data}
               sent={sent.get(threadKey) ?? []}
@@ -1043,6 +1044,7 @@ export function CatchUpScreen(props: CatchUpScreenProps): ReactElement {
                 />
               </div>
               <CatchUpThreadView
+                onOpenPicture={(pictures, index) => setLightbox({ pictures, index })}
                 root={thread.root}
                 thread={thread.data}
                 sent={sent.get(threadKey) ?? []}
