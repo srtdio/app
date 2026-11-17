@@ -55,12 +55,13 @@ describe('chat visual pass', () => {
     expect(read('../ChannelList.tsx')).not.toContain('<Tile');
   });
 
-  it('filter chips fade at the trailing edge so a clipped chip reads as more', () => {
+  it('filter chips have no static fade: the mask follows the scroll', () => {
+    // Behaviour (start / middle / end, no overflow, keyboard inset) lives in
+    // src/components/ui/use-chip-row-fade.test.tsx.
     const html = renderToStaticMarkup(searchChips({ kind: null, onChange: () => undefined }));
-    expect(html).toContain(
-      '[mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)]',
-    );
-    expect(html).toContain('pr-10');
+    expect(html).not.toContain('[mask-image:');
+    expect(html).not.toContain('pr-10');
+    expect(html).toContain('mask-image:none');
   });
 
   it('the list has no search field: search lives only in the top bar', () => {

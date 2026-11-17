@@ -28,6 +28,7 @@ import { selectCountLabel } from '@/components/ui/SelectBar';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { textRole } from '@/components/ui/Text';
 import { Chip } from '@/components/ui/Chip';
+import { useChipRowFade } from '@/components/ui/use-chip-row-fade';
 import {
   ICON_SIZE,
   IconChat,
@@ -800,19 +801,16 @@ export function toggleHomeChip(current: HomeChip | null, tapped: HomeChip): Home
  * to clear and return to the list (no All chip). Each is ui/Chip with its
  * selected style, as on the other list pages (no counts: these filter
  * messages, nothing is tallied); the row scrolls on X when it overflows (no
- * scrollbar), chips never wrap or shrink. Tokens only, no motion. Hook-free.
+ * scrollbar), chips never wrap or shrink. Tokens only, no motion. Hook-free:
+ * the row itself is SearchChipRow, whose fade follows the scroll (a fade only
+ * at an edge that still has chips past it, none when nothing is cut off).
  */
 export function searchChips(props: {
   kind: HomeChip | null;
   onChange: (kind: HomeChip | null) => void;
 }): ReactElement {
   return (
-    <div
-      data-search-chips=""
-      role="group"
-      aria-label="Filter messages"
-      className="flex min-w-0 flex-1 touch-pan-x flex-nowrap gap-2 overflow-x-auto overflow-y-hidden pr-10 [mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [scrollbar-width:none] [-webkit-mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [&::-webkit-scrollbar]:hidden"
-    >
+    <SearchChipRow>
       {HOME_CHIPS.map((chip) => {
         const on = props.kind === chip.kind;
         return (
@@ -829,6 +827,27 @@ export function searchChips(props: {
           />
         );
       })}
+    </SearchChipRow>
+  );
+}
+
+/**
+ * The chat home's chip row: scrolls on X, with useChipRowFade's scroll-aware
+ * edge fades. scroll-px-6 keeps a keyboard-focused chip 24px clear of a fade.
+ */
+function SearchChipRow({ children }: { children: ReactNode }): ReactElement {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const mask = useChipRowFade(rowRef);
+  return (
+    <div
+      ref={rowRef}
+      data-search-chips=""
+      role="group"
+      aria-label="Filter messages"
+      className="flex min-w-0 flex-1 touch-pan-x scroll-px-6 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{ WebkitMaskImage: mask, maskImage: mask }}
+    >
+      {children}
     </div>
   );
 }
