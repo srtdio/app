@@ -102,22 +102,6 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
     expect(document.querySelector('[data-activity-line-body]')).toBeNull();
   });
 
-  it('"N new" rides line 1: the name truncates first, the chip never does', () => {
-    mount([
-      item({ id: 'a', title: 'Q3 Launch' }),
-      item({ id: 'b', title: 'Q3 Launch', createdAt: '2026-06-13T00:00:00.000Z' }),
-    ]);
-    expectRole(byText('Q3 Launch'), ['min-w-0', 'truncate']);
-    const chip = byText('2 new');
-    expectRole(chip, ['shrink-0', 'rounded-full', 'font-medium', 'bg-accent', 'text-accent-fg']);
-    // 18 high (NEW_CHIP_HEIGHT: the 16 box plus 1 above and below), text 11.
-    expectRole(chip, ['h-4', 'box-content', 'py-px', 'text-xs']);
-    expect(chip.className).not.toMatch(/\b(compact|calm):/);
-    const classes = chip.className.split(/\s+/);
-    expect(classes).not.toContain('truncate');
-    expect(classes).not.toContain('border');
-  });
-
   it('the time is the meta role: mono, tabular, fg-3', () => {
     mount([item({ title: 'Q3 Launch' })]);
     const time = document.querySelector('[data-activity-time]');

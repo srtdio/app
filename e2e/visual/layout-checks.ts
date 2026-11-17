@@ -1,6 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-  NEW_CHIP_HEIGHT,
   ROW_HEIGHT,
   ROW_HEIGHT_PHONE,
   ROW_INSET,
@@ -2915,7 +2914,15 @@ export function activityTwinViolations(
     eq('picture left', activity.row.pictureLeft, plan.row.pictureLeft);
     eq('picture right', activity.row.pictureRight, plan.row.pictureRight);
     eq('title x', activity.row.titleLeft, plan.row.titleLeft);
-    eq('time right edge', activity.row.timeRight, plan.row.timeRight);
+    // Laptop: Activity is one 720 column (17 Nov 2026), Plan a grid cell, so
+    // their right edges differ by design; phone rows share the screen's edge.
+    if ((activity.viewport ?? 0) < 768) {
+      eq('time right edge', activity.row.timeRight, plan.row.timeRight);
+    } else if (activity.row.timeRight - activity.row.pictureLeft > 720 + 0.5) {
+      out.push(
+        `Activity's row runs ${r1(activity.row.timeRight - activity.row.pictureLeft)} wide on laptop, more than its 720 column`,
+      );
+    }
   }
   for (const h of activity.rowHeights) {
     const base = plan.row?.height ?? activity.row?.height ?? h;
@@ -2958,24 +2965,8 @@ export function activityTwinViolations(
       eq(`section ${i + 1} last row to the next heading`, next.top - sec.lastRowBottom, planGap);
   });
   if (activity.headings.length < 2) out.push('Activity shows fewer than 2 sections to space');
-  const want = NEW_CHIP_HEIGHT;
-  if (activity.chips.length === 0) out.push('Activity shows no "N new" chip');
-  for (const c of activity.chips) {
-    if (!same(c.height, want)) out.push(`"${c.text}" is ${r1(c.height)} tall, not ${want}`);
-    if (!same(c.left - c.nameRight, 8))
-      out.push(`"${c.text}" sits ${r1(c.left - c.nameRight)} after the name, not 8`);
-    if (activity.row !== null && !same(c.rowHeight, activity.row.height)) {
-      out.push(
-        `the row with "${c.text}" is ${r1(c.rowHeight)} tall, not ${r1(activity.row.height)}`,
-      );
-    }
-    if (c.bg !== activity.ink.bg || c.fg !== activity.ink.fg) {
-      out.push(
-        `"${c.text}" is ${c.bg} / ${c.fg}, not the primary Button's ${activity.ink.bg} / ${activity.ink.fg}`,
-      );
-    }
-    if (c.border !== '0' && c.border !== '0px') out.push(`"${c.text}" has a ${c.border} border`);
-  }
+  // One row per notification (17 Nov 2026): the "N new" chip is retired.
+  if (activity.chips.length > 0) out.push('Activity still shows an "N new" chip');
   if (activity.oldHooks > 0) out.push(`${activity.oldHooks} retired Activity hooks still render`);
   if (boxes === null) out.push('Activity painted no loading boxes');
   if (boxes !== null && aHead !== undefined && aSec !== undefined) {
@@ -3695,11 +3686,11 @@ export async function assertTabCatchUpRows(
 }
 
 /**
- * Activity's Load more (10 Nov 2026): depth in item rows, never entries. When
+ * Activity's Load more (10 Nov 2026): depth in rows (one per notification
+ * since 17 Nov 2026). When
  * more exists, the button's bottom sits between the fold + 0.35 and the fold +
  * 0.65 viewports (page top, before any scroll). Read before the steps
- * scroll. Also the "N new" chip: flat (no shadow, no background image), 18
- * tall (NEW_CHIP_HEIGHT), padding-x 7.
+ * scroll.
  */
 export async function assertActivityLoadMoreBand(page: Page, screenName: string): Promise<void> {
   const got = await page.evaluate(() => {
@@ -3708,20 +3699,9 @@ export async function assertActivityLoadMoreBand(page: Page, screenName: string)
     for (let el = btn?.parentElement ?? null; el !== null; el = el.parentElement) {
       y += el.scrollTop;
     }
-    const chip = document.querySelector('[data-activity-new-chip]');
-    const cs = chip === null ? null : getComputedStyle(chip);
     return {
       bottom: btn === null ? null : btn.getBoundingClientRect().bottom + y + window.scrollY,
       vh: window.innerHeight,
-      chip:
-        chip === null || cs === null
-          ? null
-          : {
-              height: chip.getBoundingClientRect().height,
-              padding: parseFloat(cs.paddingLeft),
-              shadow: cs.boxShadow,
-              image: cs.backgroundImage,
-            },
     };
   });
   const out: string[] = [];
@@ -3733,17 +3713,6 @@ export async function assertActivityLoadMoreBand(page: Page, screenName: string)
       out.push(
         `Load more ends at ${Math.round(got.bottom)}, not between the fold + 0.35 (${Math.round(lo)}) and + 0.65 (${Math.round(hi)}) viewports`,
       );
-    }
-  }
-  const want = { h: NEW_CHIP_HEIGHT, px: 7 };
-  if (got.chip !== null) {
-    if (got.chip.shadow !== 'none') out.push(`the "N new" chip has a shadow (${got.chip.shadow})`);
-    if (got.chip.image !== 'none') out.push('the "N new" chip has a background image');
-    if (Math.abs(got.chip.height - want.h) > 0.5) {
-      out.push(`the "N new" chip is ${got.chip.height} tall, not ${want.h}`);
-    }
-    if (Math.abs(got.chip.padding - want.px) > 0.1) {
-      out.push(`the "N new" chip padding-x is ${got.chip.padding}, not ${want.px}`);
     }
   }
   settleFindings(

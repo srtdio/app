@@ -13,7 +13,6 @@ import {
   alertBody,
   alertTitle,
   alertTopLine,
-  entityKey,
   filterByState,
   mapEntry,
   openAction,
@@ -238,10 +237,5 @@ describe('idea bank rows: chip, tier, grouping', () => {
       expect(eventLabel(t)).toBe('Idea bank');
       expect(eventVerb({ eventType: t })).not.toBeNull();
     }
-  });
-
-  it('none combine: each bank row is its own card, even on the same idea', () => {
-    const keys = all().map(entityKey);
-    expect(new Set(keys).size).toBe(keys.length);
   });
 });

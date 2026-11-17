@@ -240,7 +240,7 @@ export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full 
  */
 export const LIST_CARD_SUB_INSET = 'pl-12 md:pl-15';
 
-/** The list the rows stack in: rows touching, no divider (phone, and the chat list pane). */
+/** The list the rows stack in: rows touching, no divider (phone, the chat list pane, Activity). */
 export const LIST_CARD_STACK = 'flex flex-col';
 
 /**
@@ -248,8 +248,8 @@ export const LIST_CARD_STACK = 'flex flex-col';
  * laptop (grid-cols-list-cards); rows touching, 32 between laptop columns: the
  * rows' -mx-4 bleed (16 each side) meets exactly in the gap, so neighbouring
  * columns' fills and tap targets never overlap.
- * Pipeline, Briefs, Assets, Activity, the Plan tab and Bank; the chat list
- * stays LIST_CARD_STACK.
+ * Pipeline, Briefs, Assets, the Plan tab and Bank; the chat list and Activity
+ * stay LIST_CARD_STACK.
  */
 export const LIST_CARD_GRID = 'grid grid-cols-1 md:grid-cols-list-cards md:gap-x-8';
 

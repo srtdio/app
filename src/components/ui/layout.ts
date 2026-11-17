@@ -105,8 +105,6 @@ export const CHIP_TAP = 44;
 export const PLAN_STACK = 8;
 /** A Plan day's top and bottom padding (PLAN_DAY_PAD). */
 export const PLAN_PAD = 12;
-/** Activity's ink "N new" chip height. */
-export const NEW_CHIP_HEIGHT = 18;
 
 /*
  * The list-screen shell (shell/ListScreen): what sits under the top bar on a

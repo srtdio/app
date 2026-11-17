@@ -910,11 +910,10 @@ const LONG_ACTIVITY_TITLE =
 
 /**
  * Activity's three sections (10 Nov 2026), and nothing else in the feed:
- * Weekend sale with `saleCount` unread comments today ("8 new" by default), a
- * long-titled post with 3 unread comments yesterday ("3 new"), and a read
- * post three days back (Earlier, no chip). A phone's first page holds 11
- * entries, so the rows screens take 5 on Weekend sale and
- * every section lands on page one.
+ * Weekend sale with `saleCount` unread comments today (8 by default), a
+ * long-titled post with 3 unread comments yesterday, and a read post three
+ * days back (Earlier). One row per notification (17 Nov 2026), so the rows
+ * screens take 3 on Weekend sale and every section lands on page one.
  */
 function seedActivitySections(network: HarnessNetwork, saleCount = 8): void {
   seedEightComments(network);
@@ -1040,15 +1039,18 @@ function seedPreviewRows(network: HarnessNetwork): void {
 }
 
 /** The rows screens' feed: every section on page one. */
-const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 5);
+const seedActivityRows = (network: HarnessNetwork): void => seedActivitySections(network, 3);
 
 /**
  * Activity's sections painted (below the fold on a phone): Today and
- * Yesterday with their rows, Earlier too when `earlier` (the 8-new feed holds
- * 12 entries, past a phone's first page).
+ * Yesterday with their rows, Earlier too when `earlier` (the 8-comment feed holds
+ * 12 rows, past a phone's first page).
  */
 async function activitySectionsReady(page: Page, earlier = true): Promise<void> {
-  await waitFor([page.locator('[data-activity-new-chip]').first()], 'N new');
+  await waitFor(
+    [page.locator('[data-activity-section] [data-list-card]').first()],
+    'Activity rows',
+  );
   for (const key of earlier ? ['today', 'yesterday', 'earlier'] : ['today', 'yesterday']) {
     await expect(
       page.locator(`[data-activity-section="${key}"] [data-list-card]`).first(),
@@ -2300,15 +2302,16 @@ const SCREENS: Screen[] = [
   },
   {
     // Activity twins Plan (10 Nov 2026): Today / Yesterday / Earlier, one
-    // ui/ListCard row per item; "8 new" on Weekend sale, a long title with
-    // "3 new" (the name truncates, the chip never does), a read item Earlier.
+    // ui/ListCard row per notification (17 Nov 2026): Weekend sale's comments
+    // each their own row, a long title (truncates), a read item Earlier.
     name: 'activity-sections',
     seed: creator,
     extra: seedActivitySections,
     url: '/activity',
+    // Today and Yesterday on every width; with one row per notification
+    // (17 Nov 2026) the 12-row feed runs past the first page, Earlier too.
     steps: async (page) => {
-      await waitFor([page.locator('[data-activity-new-chip]', { hasText: '8 new' })], '8 new');
-      await activitySectionsReady(page, isLaptop(page));
+      await activitySectionsReady(page, false);
     },
   },
   {
@@ -9201,8 +9204,8 @@ for (const screen of SCREENS.filter((s) => TABLET_SCREENS.has(s.name))) {
 // rows, sections and headings are measured against the Plan tab's on the same
 // page (row height, picture x, title x, time right edge, chips to the first
 // heading, heading to rows, a section's last row to the next heading, the
-// heading's computed style); the "N new" chip (18 tall, 8 after
-// the name, the primary Button's ink); none of the retired hooks; and the
+// heading's computed style); no "N new" chip (retired 17 Nov 2026;
+// one row per notification); none of the retired hooks; and the
 // loading boxes' first heading and first row land on the same pixel (0 delta).
 // No screenshot (the shots are activity-rows*).
 test('activity twins plan (cozy)', async ({ page }) => {
