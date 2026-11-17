@@ -9,7 +9,7 @@ import { ErrorNote } from '@/components/ui/ErrorNote';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { ICON_SIZE, IconActivity, IconAt } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
-import { LIST_CARD_GRID } from '@/components/ui/ListCard';
+import { LIST_CARD_STACK } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ActivityFilterBar, activityChip } from '@/components/pages/activity/ActivityFilterBar';
 import { Text } from '@/components/ui/Text';
@@ -71,7 +71,6 @@ import {
 import { heldEntries } from '@/lib/catch-up/queue';
 import { CATCH_UP_PARAM, THREADS_LIST_PARAM, oldCatchUpTarget } from '@/lib/catch-up/route';
 import { activityLoadMore, readViewport } from '@/lib/load-more-rule';
-import { fillColumns } from '@/lib/use-fill-count';
 import { ROW_HEIGHT, ROW_HEIGHT_PHONE } from '@/components/ui/layout';
 
 /** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
@@ -563,7 +562,8 @@ export function NotificationsPage() {
   const more = activityLoadMore({
     layout: {
       sections: buckets.map((bucket) => bucket.groups.length),
-      columns: fillColumns(viewport.width),
+      // One column on every width (17 Nov 2026).
+      columns: 1,
       // A row not measured yet: the row height at this width (60 under 768).
       rowPx: viewport.width < 768 ? ROW_HEIGHT_PHONE : ROW_HEIGHT,
       headingPx: ACTIVITY_HEADING_PX,
@@ -716,7 +716,7 @@ export function NotificationsPage() {
         ) : (
           // Plan's list frame (PlanTabList): 24 between sections, 16 heading
           // to rows; one heading per section, no count.
-          <div ref={listRef} data-activity-list="" className={ACTIVITY_LIST}>
+          <div ref={listRef} data-activity-list="" className={ACTIVITY_LIST_FRAME}>
             {shownBuckets.map((bucket, bucketIndex) => (
               <section
                 key={bucket.key}
@@ -726,7 +726,7 @@ export function NotificationsPage() {
                 <Text as="h2" role="section" data-activity-heading="">
                   {bucket.label}
                 </Text>
-                <div className={LIST_CARD_GRID}>
+                <div className={LIST_CARD_STACK}>
                   {bucket.groups.map((group, groupIndex) => {
                     const id = group[0]?.id ?? bucket.key;
                     const card = (
@@ -769,6 +769,14 @@ export function NotificationsPage() {
     </>
   );
 }
+
+/**
+ * Activity reads top to bottom on every width (17 Nov 2026): one column, at
+ * most 720 wide (max-w-activity), on the chips' left edge, so a row whose
+ * preview unfolds only pushes the rows under it. LIST_CARD_STACK, never the
+ * list-card grid.
+ */
+const ACTIVITY_LIST_FRAME = `${ACTIVITY_LIST} w-full max-w-activity`;
 
 /** Before the list paints: a guess at its top (top bar + chip row + the lead slot + the 16 under it). */
 const ACTIVITY_LIST_TOP_GUESS = 168;

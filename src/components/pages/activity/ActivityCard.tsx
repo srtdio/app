@@ -15,7 +15,6 @@ import {
   type ComponentType,
   type MouseEvent,
   type ReactElement,
-  type ReactNode,
 } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { ALL_MARK } from '@/lib/chat/mentions';
@@ -380,14 +379,6 @@ export function hasItem(lead: ActivityItem): boolean {
   return lead.entityType !== null && ITEM_ENTITIES.has(lead.entityType);
 }
 
-/** "N new" after an item's name (only while 2+ of its entries are unread). Pure. */
-export function newLabel(n: number): string {
-  return `${n} new`;
-}
-
-/** The fewest unread entries that show "N new" (one unread is the dot alone). */
-export const NEW_CHIP_MIN = 2;
-
 /**
  * The item a non-chat card is about, by name: the post, brief, plan item or
  * idea title; an alert names its item or plan; else the card title. Pure.
@@ -401,48 +392,13 @@ export function itemCardTitle(lead: ActivityItem, side: ViewerSide = 'unknown'):
 }
 
 /**
- * The unread entries of an item that count toward "N new": own actions left
- * out. Pure.
- */
-export function unreadEntries(group: readonly ActivityItem[]): ActivityItem[] {
-  return group.filter((entry) => entry.own !== true && entry.readAt === null);
-}
-
-/**
- * The "N new" chip (Activity twins Plan, 10 Nov 2026): ink, the primary
- * Button's own fill and text tokens (bg-accent / text-accent-fg: ink with
- * white text in light, white with ink text in dark), no border, rounded-full,
- * medium. 18 high (NEW_CHIP_HEIGHT: the 16 box plus 1 above and below,
- * box-content), text 11, sides 7 (named padding new-chip). Flat (10 Nov 2026): no lit-badge, so no
- * shine and no shadow. Not a button; never truncates.
- */
-export const ACTIVITY_NEW_CHIP =
-  'box-content inline-flex h-4 shrink-0 items-center rounded-full bg-accent px-new-chip py-px text-xs font-medium text-accent-fg';
-
-/** Line 1 of an item row: the name (truncates first), then "N new" 8 after it. */
-function itemTitleNode(name: string, unread: number): ReactNode {
-  if (unread < NEW_CHIP_MIN) return name;
-  return (
-    <span data-activity-title="" className="flex min-w-0 items-center gap-2">
-      <span data-activity-name="" className="min-w-0 truncate">
-        {name}
-      </span>
-      <span data-activity-new-chip="" className={ACTIVITY_NEW_CHIP}>
-        {newLabel(unread)}
-      </span>
-    </span>
-  );
-}
-
-/**
  * One item as one ui/ListCard row, exactly as Plan and Chat use it (Activity
  * twins Plan, 10 Nov 2026): the 72 row (ROW_HEIGHT; 60 under 768, ROW_HEIGHT_PHONE).
  * - A chat row (isChatRow, or a chat task alert), and a row with no item
  *   (deleted files, an invite, the welcome row): the who-did-what title
- *   ("Priya mentioned you"), its preview, its tag; no "N new".
- * - Every other item (post, brief, plan, plan item, idea): its name, then
- *   "N new" while 2+ of its entries are unread; line 2 the newest entry's
- *   line and the kind tag (Post / Brief / Plan / Idea).
+ *   ("Priya mentioned you"), its preview, its tag.
+ * - Every other item (post, brief, plan, plan item, idea): its name; line 2
+ *   the entry's line and the kind tag (Post / Brief / Plan / Idea).
  * Time: the newest entry. The unread dot while anything is unread. A tap opens
  * the newest entry at its exact place and marks the item's entries read.
  */
@@ -469,7 +425,6 @@ export function ActivityCard({
   const chat = isChatRow(lead) || lead.alert?.kind === 'task' || !hasItem(lead);
   const newest = newestEntry(group) ?? lead;
   const alert = lead.alert ?? null;
-  const unread = unreadEntries(group).length;
   const name = chat ? activityCardTitle(group, side) : itemCardTitle(lead, side);
   // The preview is plain text (@mentions included), up to 2 lines, cut at a
   // whole word with the more toggle (Part 6, 10 Nov 2026).
@@ -479,9 +434,8 @@ export function ActivityCard({
       : activityPreviewText(group)
     : itemPreviewText(newest, side);
   const tappable = !opensNothing(newest, side);
-  const titleText = !chat && unread >= NEW_CHIP_MIN ? `${name}, ${newLabel(unread)}` : name;
   // The row's one link is named by its title, the FULL preview and Unread.
-  const rowName = [titleText, previewText, groupHasUnread(group) ? 'Unread' : '']
+  const rowName = [name, previewText, groupHasUnread(group) ? 'Unread' : '']
     .filter((part) => part !== '')
     .join(', ');
 
@@ -500,7 +454,7 @@ export function ActivityCard({
         : lead.entityType === PLAN_ITEM_ENTITY
           ? { pictureHooks: { 'data-activity-plan-icon': '' } }
           : {})}
-      title={chat ? name : itemTitleNode(name, unread)}
+      title={name}
       unread={groupHasUnread(group)}
       preview={
         previewText === '' ? undefined : (

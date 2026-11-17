@@ -1490,53 +1490,10 @@ export function msUntilZonedMidnight(nowMs: number, tz: string | null): number {
   return Math.max(1000, 86_400_000 - elapsed - (nowMs % 1000));
 }
 
-/**
- * The threading key for an entry. Post/brief entries that share an entity collapse
- * into one thread; everything else (and any entry without an entity) stays solo so
- * it never threads with an unrelated row.
- */
-export function entityKey(item: ActivityItem): string {
-  // Idea bank alerts never combine: each is its own card.
-  if (item.alert?.kind === 'bank') return `solo:${item.id}`;
-  if (
-    (item.entityType === 'post' ||
-      item.entityType === 'brief' ||
-      item.entityType === PLAN_ITEM_ENTITY) &&
-    item.entityId !== null
-  ) {
-    return `${item.entityType}:${item.entityId}`;
-  }
-  return `solo:${item.id}`;
-}
-
-const newestFirst = (a: ActivityItem, b: ActivityItem): number =>
-  Date.parse(b.createdAt) - Date.parse(a.createdAt);
-
 /** An entry's instant; an unreadable one sorts last. */
 function entryMs(item: ActivityItem): number {
   const ms = Date.parse(item.createdAt);
   return Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms;
-}
-
-/**
- * Group the list into one group per item (entityKey), entries newest first
- * ('oldest' reverses), across every day: an item is never split by midnight.
- */
-function itemGroups(
-  items: readonly ActivityItem[],
-  direction: ActivityDirection,
-): ActivityItem[][] {
-  const byKey = new Map<string, ActivityItem[]>();
-  for (const item of items) {
-    const key = entityKey(item);
-    const existing = byKey.get(key);
-    if (existing) existing.push(item);
-    else byKey.set(key, [item]);
-  }
-  return [...byKey.values()].map((entries) => {
-    const sorted = [...entries].sort(newestFirst);
-    return direction === 'oldest' ? sorted.reverse() : sorted;
-  });
 }
 
 /** The newest instant a group holds (whatever its entry order). */
@@ -1545,12 +1502,11 @@ function groupNewestMs(group: readonly ActivityItem[]): number {
 }
 
 /**
- * The list's sections (Activity twins Plan's list): one group per item, each
- * placed ONCE in Today / Yesterday / Earlier by the calendar day (workspace
- * timezone, clock.tz, as of clock.nowMs) of its NEWEST entry, its older
- * entries riding along whatever their day. 'newest' = Today -> Yesterday ->
- * Earlier with the newest item first; 'oldest' reverses sections, items and
- * entries. Empty sections dropped. Pure: it never reads the device clock.
+ * The list's sections (Activity twins Plan's list): one row per notification
+ * (17 Nov 2026; was one row per item), each in Today / Yesterday / Earlier by
+ * its calendar day (workspace timezone, clock.tz, as of clock.nowMs).
+ * 'newest' = Today -> Yesterday -> Earlier, newest first; 'oldest' reverses
+ * sections and rows. Empty sections dropped. Pure: it never reads the device clock.
  */
 export function groupDigest(
   items: readonly ActivityItem[],
@@ -1565,7 +1521,9 @@ export function groupDigest(
     yesterday: [],
     earlier: [],
   };
-  const groups = itemGroups(items, direction).sort((a, b) => groupNewestMs(b) - groupNewestMs(a));
+  const groups = items
+    .map((item): ActivityItem[] => [item])
+    .sort((a, b) => groupNewestMs(b) - groupNewestMs(a));
   if (direction === 'oldest') groups.reverse();
   for (const group of groups) {
     const t = groupNewestMs(group);

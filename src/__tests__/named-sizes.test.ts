@@ -7,7 +7,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   CHIP_FACE,
   CHIP_TAP,
-  NEW_CHIP_HEIGHT,
   PLAN_PAD,
   PLAN_STACK,
   ROW_HEIGHT,
@@ -40,7 +39,6 @@ import {
 import { CHIP_FACE_SIZE, CHIP_HIT } from '@/components/ui/Chip';
 import { Avatar, AVATAR_CARD_PHONE_PX, AVATAR_CARD_SIZE, AVATAR_PX } from '@/components/ui/Avatar';
 import { PLAN_DAY_PAD, PLAN_DAY_STACK } from '@/components/chat/PlanScreen';
-import { ACTIVITY_NEW_CHIP } from '@/components/pages/activity/ActivityCard';
 
 /**
  * The px of the one `<prefix>-<step>` class in `classes` (4px grid). No
@@ -70,7 +68,6 @@ describe('named sizes: each part class equals its ui/layout constant', () => {
       CHIP_FACE_SIZE,
       PLAN_DAY_STACK,
       PLAN_DAY_PAD,
-      ACTIVITY_NEW_CHIP,
     ]) {
       expect(cls).not.toMatch(/(^|\s)(compact|calm):/);
     }
@@ -136,12 +133,6 @@ describe('named sizes: each part class equals its ui/layout constant', () => {
   it('PLAN_STACK, PLAN_PAD: the Plan day', () => {
     expect(px(PLAN_DAY_STACK, 'gap')).toBe(PLAN_STACK);
     expect(px(PLAN_DAY_PAD, 'py')).toBe(PLAN_PAD);
-  });
-
-  it('NEW_CHIP_HEIGHT: the "N new" chip is its 16 box plus 1 above and below', () => {
-    expect(ACTIVITY_NEW_CHIP).toMatch(/(^|\s)box-content(\s|$)/);
-    expect(ACTIVITY_NEW_CHIP).toMatch(/(^|\s)py-px(\s|$)/);
-    expect(px(ACTIVITY_NEW_CHIP, 'h') + 2).toBe(NEW_CHIP_HEIGHT);
   });
 
   it('SCREEN_*: the list-screen shell (shell/ListScreen)', () => {

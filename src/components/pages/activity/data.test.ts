@@ -27,7 +27,6 @@ import {
   deletedFilesBody,
   deletedFilesOf,
   entityHref,
-  entityKey,
   fetchActivityEntries,
   fileKindLabel,
   filesPhrase,
@@ -613,7 +612,7 @@ describe('groupDigest', () => {
     expect(buckets.map((b) => b.key)).toEqual(['today']);
   });
 
-  it('threads entries that share a post/brief entity and leaves the rest solo', () => {
+  it('one row per notification (17 Nov 2026): entries on the same post never fold together', () => {
     const a = item({ id: 'a', entityType: 'post', entityId: 'p1', createdAt: todayTs });
     const b = item({
       id: 'b',
@@ -628,10 +627,10 @@ describe('groupDigest', () => {
       createdAt: new Date(startOfToday + 7 * 3_600_000).toISOString(),
     });
     const buckets = groupDigest([a, b, c], 'newest', clock);
-    expect(buckets[0]?.groups.map((g) => g.map((i) => i.id))).toEqual([['b', 'a'], ['c']]);
+    expect(buckets[0]?.groups.map((g) => g.map((i) => i.id))).toEqual([['b'], ['c'], ['a']]);
   });
 
-  it('places an item ONCE, in the section of its newest entry, its older entries riding along', () => {
+  it('places each notification in the section of its own day', () => {
     const old = item({ id: 'old-p1', entityType: 'post', entityId: 'p1', createdAt: olderTs });
     const yest = item({
       id: 'yest-p1',
@@ -640,46 +639,19 @@ describe('groupDigest', () => {
       createdAt: yesterdayTs,
     });
     const now = item({ id: 'today-p1', entityType: 'post', entityId: 'p1', createdAt: todayTs });
-    const other = item({ id: 'old-p2', entityType: 'post', entityId: 'p2', createdAt: olderTs });
-    const buckets = groupDigest([old, other, yest, now], 'newest', clock);
-    expect(buckets.map((b) => b.key)).toEqual(['today', 'earlier']);
-    expect(buckets[0]?.groups.map((g) => g.map((i) => i.id))).toEqual([
-      ['today-p1', 'yest-p1', 'old-p1'],
+    const buckets = groupDigest([old, yest, now], 'newest', clock);
+    expect(buckets.map((b) => b.key)).toEqual(['today', 'yesterday', 'earlier']);
+    expect(buckets.map((b) => b.groups.map((g) => g.map((i) => i.id)))).toEqual([
+      [['today-p1']],
+      [['yest-p1']],
+      [['old-p1']],
     ]);
-    expect(buckets[1]?.groups.map((g) => g.map((i) => i.id))).toEqual([['old-p2']]);
-  });
-
-  it('orders items within a section by their newest entry, newest first', () => {
-    const a = item({ id: 'a', entityType: 'post', entityId: 'p1', createdAt: todayTs });
-    const b = item({
-      id: 'b',
-      entityType: 'post',
-      entityId: 'p2',
-      createdAt: new Date(startOfToday + 2 * 3_600_000).toISOString(),
-    });
-    const a2 = item({
-      id: 'a2',
-      entityType: 'post',
-      entityId: 'p1',
-      createdAt: new Date(startOfToday + 1 * 3_600_000).toISOString(),
-    });
-    const buckets = groupDigest([b, a2, a], 'newest', clock);
-    expect(buckets[0]?.groups.map((g) => g[0]?.id)).toEqual(['a', 'b']);
   });
 
   it('hides empty sections (only Yesterday here)', () => {
     const buckets = groupDigest([item({ createdAt: yesterdayTs })], 'newest', clock);
     expect(buckets.map((b) => b.key)).toEqual(['yesterday']);
     expect(buckets[0]?.label).toBe('Yesterday');
-  });
-});
-
-describe('entityKey', () => {
-  it('threads by entity for post/brief and stays solo otherwise', () => {
-    expect(entityKey(item({ entityType: 'post', entityId: 'p1' }))).toBe('post:p1');
-    expect(entityKey(item({ entityType: 'brief', entityId: 'b2' }))).toBe('brief:b2');
-    expect(entityKey(item({ id: 'z', entityType: 'post', entityId: null }))).toBe('solo:z');
-    expect(entityKey(item({ id: 'q', entityType: null, entityId: null }))).toBe('solo:q');
   });
 });
 
@@ -1890,13 +1862,6 @@ describe('plan comments and approvals', () => {
     delete noPlanField.planId;
     expect(entityHref(noPlanField)).toBe(bankHref);
     expect(entityHref({ ...comment, entityId: null })).toBeNull();
-  });
-
-  it('entityKey threads plan events on the same item, never with an unrelated row', () => {
-    const a = item({ id: 'a', eventType: 'plan_comment', entityType: 'plan_item', entityId: ITEM });
-    const b = item({ id: 'b', eventType: 'plan_review', entityType: 'plan_item', entityId: ITEM });
-    expect(entityKey(a)).toBe(entityKey(b));
-    expect(entityKey(a)).not.toBe(entityKey(item({ entityId: ITEM })));
   });
 
   it('fetch: one IN read per table; titles from plan_items / posts; snippets only from plan_item_comments', async () => {

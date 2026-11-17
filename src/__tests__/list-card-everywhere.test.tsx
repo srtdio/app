@@ -4,7 +4,7 @@
 // through ui/ListCard, and every card has the identical height structure
 // (the flat 72 row bled 16 each side: md:h-18, the 48 picture; under 768 the 60 row: h-15, the 36 picture; a 20 title + time
 // line, a 20 preview + tag + unread line; one size since 10 Nov 2026). The page lists sit in LIST_CARD_GRID (one
-// column on phone, auto-fill on laptop); the chat list in LIST_CARD_STACK.
+// column on phone, auto-fill on laptop); the chat list and Activity in LIST_CARD_STACK.
 // The old hand-built layouts (the PostCard frame, AssetCard / AssetGrid,
 // PEOPLE_TILE_GRID, the Plan tab's own cards and calendar, the Bank's own
 // card, the board columns) are gone from those screens.
@@ -390,12 +390,19 @@ describe('all six lists (and the Bank) render ui/ListCard', () => {
     },
   );
 
-  it.each(['pipeline', 'briefs', 'assets', 'activity', 'planTab', 'bank'] as const)(
+  it.each(['pipeline', 'briefs', 'assets', 'planTab', 'bank'] as const)(
     '%s lays its list out in LIST_CARD_GRID',
     (screen) => {
       expect(source(screen)).toContain('LIST_CARD_GRID');
     },
   );
+
+  it('Activity is one reading column on every width (LIST_CARD_STACK, 17 Nov 2026)', () => {
+    const src = source('activity');
+    expect(src).toContain('LIST_CARD_STACK');
+    expect(src).not.toContain('LIST_CARD_GRID');
+    expect(src).toContain('max-w-activity');
+  });
 
   it('the chat list is one column in its pane (LIST_CARD_STACK)', () => {
     const src = source('chat');

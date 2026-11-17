@@ -91,15 +91,15 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(html).not.toContain('w-1 shrink-0');
     expect(html).not.toContain('data-activity-thread');
     expect(html).not.toContain('aria-expanded="false">+');
-    // One row per item (Activity twins Plan): the name, "N new", no lines; no KEY-N.
-    expect(html).toMatch(/data-activity-name=""[^>]*>Q3 Launch</);
+    // One row per item (Activity twins Plan): the name, no lines; no KEY-N.
+    expect(html).toMatch(/data-list-card-title=""[^>]*>Q3 Launch</);
     expect(html).not.toContain('data-activity-line');
     expect(html).not.toContain('data-activity-lines');
     expect(html).not.toContain('data-activity-more');
     expect(html).not.toMatch(/GBL-\d/);
   });
 
-  it('a group is one row: "N new" after the name at 2+ unread, the newest entry as line 2', () => {
+  it('a group is one row: the name, never an "N new" chip, the newest entry as line 2', () => {
     const group = [
       item({
         id: 'a',
@@ -115,40 +115,12 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(activityPreviewText(group)).toBe('');
     const html = renderCard(group);
     expect(count(html, 'data-list-card=""')).toBe(1);
-    expect(html).toMatch(/data-activity-new-chip=""[^>]*>3 new</);
+    expect(html).not.toContain('new-chip');
     expect(html).toMatch(/data-activity-preview=""[^>]*>Maya approved Q3</);
     expect(html).toMatch(/data-activity-time=""[^>]*>10m</);
-    // The chip is ink on the primary Button's tokens, inside the one title line.
-    expect(html).toMatch(
-      /data-list-card-title=""[^]*data-activity-new-chip=""[^]*data-list-card-time/,
-    );
-    expect(html).toMatch(
-      /data-activity-new-chip="" class="[^"]*\bbg-accent\b[^"]*\btext-accent-fg\b/,
-    );
   });
 
-  it('"N new" shows only at 2+ unread entries: never at 1, never on a read item', () => {
-    const one = renderCard([
-      item({ id: 'a', title: 'Q3' }),
-      item({ id: 'b', title: 'Q3', readAt: '2026-06-14T00:30:00.000Z' }),
-    ]);
-    expect(one).not.toContain('data-activity-new-chip');
-    expect(one).toContain('data-list-card-unread');
-    const read = renderCard([
-      item({ id: 'a', title: 'Q3', readAt: '2026-06-14T00:30:00.000Z' }),
-      item({ id: 'b', title: 'Q3', readAt: '2026-06-14T00:30:00.000Z' }),
-    ]);
-    expect(read).not.toContain('data-activity-new-chip');
-    expect(read).not.toContain('data-list-card-unread');
-    // Own actions never count toward "N new".
-    const own = renderCard([
-      item({ id: 'a', title: 'Q3' }),
-      item({ id: 'b', title: 'Q3', own: true }),
-    ]);
-    expect(own).not.toContain('data-activity-new-chip');
-  });
-
-  it('a chat mention row keeps "<actor> mentioned you" and never a chip', () => {
+  it('a chat mention row keeps "<actor> mentioned you"', () => {
     const mention = (id: string) =>
       item({
         id,
@@ -163,7 +135,6 @@ describe('ActivityCard on ui/ListCard', () => {
       });
     const html = renderCard([mention('m1'), mention('m2')]);
     expect(html).toMatch(/data-list-card-title=""[^>]*>Bob mentioned you/);
-    expect(html).not.toContain('data-activity-new-chip');
     expect(html).toContain('data-activity-row="chat"');
   });
 

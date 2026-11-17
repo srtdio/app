@@ -324,6 +324,10 @@ export default {
         // A phone top bar key's hit strip: 36 wide, 44 tall, 36 apart (shell/Topbar).
         'topbar-key': '36px',
       },
+      maxWidth: {
+        // Activity's one reading column on laptop (NotificationsPage, 17 Nov 2026).
+        activity: '720px',
+      },
       height: {
         // Catch up's centred window on laptop: at most 85vh (9 Nov 2026).
         'catch-up': '85vh',
@@ -345,8 +349,6 @@ export default {
       padding: {
         // Text field vertical inset (10px): a one-line Textarea / MentionInput is 44 with its edge.
         'field-y': '0.625rem',
-        // Activity's "N new" chip padding-x (7) (activity/ActivityCard).
-        'new-chip': '7px',
       },
       // Auto-fill grids that fill the laptop width (ui/Tile TILE_GRID, ui/Card CARD_GRID).
       gridTemplateColumns: {
