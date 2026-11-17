@@ -869,12 +869,17 @@ html:has(.home) body {
   gap: 40px;
 }
 .home .sb {
+  /* The visual's radius = card radius minus painted inset, clamped at zero;
+     set --sb-inset per breakpoint, never the radii. */
+  --sb-radius: 28px;
+  --sb-border: 1px;
+  --sb-inset: 16px;
   position: sticky;
   top: calc(84px + env(safe-area-inset-top, 0px));
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 28px;
-  padding: 16px;
+  border: var(--sb-border) solid var(--border);
+  border-radius: var(--sb-radius);
+  padding: var(--sb-inset);
   display: grid;
   gap: 8px;
   box-shadow: var(--shadow);
@@ -930,7 +935,7 @@ html:has(.home) body {
   height: 16px;
 }
 .home .sb .vis {
-  border-radius: 20px;
+  border-radius: max(0px, calc(var(--sb-radius) - var(--sb-border) - var(--sb-inset)));
   padding: 24px;
   display: flex;
   justify-content: center;
@@ -970,7 +975,7 @@ html:has(.home) body {
 @media (max-width: 959px) {
   .home .sb {
     top: calc(76px + env(safe-area-inset-top, 0px));
-    padding: 12px;
+    --sb-inset: 12px;
     gap: 4px;
   }
   .home .sb:nth-child(2) {
@@ -1015,7 +1020,9 @@ html:has(.home) body {
   .home .sb {
     grid-template-columns: 1fr 1.15fr;
     align-items: center;
-    padding: 20px 20px 20px 52px;
+    --sb-inset: 20px;
+    /* The visual sits on the right, so only its sides share the inset. */
+    padding: var(--sb-inset) var(--sb-inset) var(--sb-inset) 52px;
     gap: 52px;
   }
   .home .sb.text-only {

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import type { ReactElement } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import type { Stage } from '@srtdio/posts';
 import { StageDot } from '@/components/pages/pipeline/stage-meta';
+import { chipRowMask, useChipRowFade } from '@/components/ui/use-chip-row-fade';
 
 export interface StageChipItem {
   /** The chip's filter key: a Stage, or the UI-only 'all'. */
@@ -20,18 +21,9 @@ interface StageChipsProps {
   onChange: (key: string) => void;
 }
 
-// The scroll hint: a fade at each edge that still has chips past it. A mask is
-// alpha only (the keyword colours carry no hue), so it reads the same in light
-// and dark with no token.
-const FADE = '24px';
-
-/** The mask for the row's scroll position; 'none' when nothing is cut off. */
-export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {
-  if (!fadeStart && !fadeEnd) return 'none';
-  const left = fadeStart ? `transparent 0, black ${FADE}` : 'black 0';
-  const right = fadeEnd ? `black calc(100% - ${FADE}), transparent 100%` : 'black 100%';
-  return `linear-gradient(to right, ${left}, ${right})`;
-}
+// The row's scroll-aware fade lives in ui/use-chip-row-fade; re-exported so
+// existing imports of chipRowMask still resolve.
+export { chipRowMask };
 
 /**
  * The Pipeline stage switcher: one horizontally scrollable, non-wrapping row of
@@ -44,30 +36,7 @@ export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {
  */
 export function StageChips({ items, active, onChange }: StageChipsProps): ReactElement {
   const rowRef = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ start: false, end: false });
-
-  useEffect(() => {
-    const row = rowRef.current;
-    if (row === null) return;
-    const measure = (): void => {
-      const max = row.scrollWidth - row.clientWidth;
-      const next = {
-        start: max > 2 && row.scrollLeft > 2,
-        end: max > 2 && row.scrollLeft < max - 2,
-      };
-      setEdges((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
-    };
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(row);
-    row.addEventListener('scroll', measure, { passive: true });
-    return () => {
-      observer?.disconnect();
-      row.removeEventListener('scroll', measure);
-    };
-  }, []);
-
-  const mask = chipRowMask(edges.start, edges.end);
+  const mask = useChipRowFade(rowRef);
 
   return (
     <div
