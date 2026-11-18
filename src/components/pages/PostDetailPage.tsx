@@ -213,7 +213,10 @@ export function postPageGrid(embedded: boolean): {
     // sticks clear of it; unset (embedded) it is 0, the old top-4. While a
     // comment thread fills beside the post (data-comments-covered) the whole
     // column is hidden, its scrollbar included; only the panel shows.
-    side: 'min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-[calc(var(--pin-h,0px)+1rem)] lg:self-start lg:max-h-[calc(100dvh-6rem-var(--pin-h,0px))] lg:overflow-y-auto lg:overscroll-contain has-[[data-comments-covered]]:invisible',
+    // overflow-x-hidden (17 Nov 2026): overflow-y-auto alone makes x auto too,
+    // and the comment list bleeds -mx-4 past the column, so a trackpad swipe
+    // slid the whole column sideways (cut photos, "Today" read "day").
+    side: 'min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-[calc(var(--pin-h,0px)+1rem)] lg:self-start lg:max-h-[calc(100dvh-6rem-var(--pin-h,0px))] lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain has-[[data-comments-covered]]:invisible',
   };
 }
 

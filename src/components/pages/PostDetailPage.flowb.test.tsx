@@ -392,6 +392,15 @@ describe('28. one meta line', () => {
 });
 
 describe('34. laptop two columns, one grid for skeleton and page', () => {
+  it('D1b lg: the comments column scrolls up and down only, never sideways (17 Nov 2026)', () => {
+    // The comment list bleeds -mx-4 past the column; overflow-y-auto alone
+    // turns x to auto, so a trackpad swipe slid the column and cut the rows.
+    const side = postPageGrid(false).side;
+    expect(side).toContain('lg:overflow-y-auto');
+    expect(side).toContain('lg:overflow-x-hidden');
+    expect(side).not.toContain('lg:overflow-x-auto');
+  });
+
   it('D1 lg: two columns, gallery and caption left, comments right from the top, sticky; below lg one column', () => {
     const grid = postPageGrid(false);
     expect(grid.page).toContain('grid-cols-1');

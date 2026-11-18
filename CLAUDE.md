@@ -160,6 +160,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Long text >6 lines: a quiet "more" opens a bordered window that scrolls itself. Links shortened (host/…/last part). Names ≤25 (users_display_name_max25; inputs count from 20).
 - Behaviour: hide what a person can't do; Delete = UndoStrip; ⋯ menus = ActionMenu (Open, Copy link, others, Delete last); decisions only via PostDecisionBar; phone vs laptop via useIsLaptop; svh/dvh only.
 - Speed: first paint from what the device holds; no new await, hold, gate or read on a paint or tap path; parts are pure render.
+- Scrollers: a box with overflow-y-auto that holds bleeding rows (-mx-4) also sets overflow-x-hidden, or a trackpad swipe slides it sideways (post page comments column, 17 Nov 2026).
 - Pinned exit bar: every HeaderBar with a back "<" on a screen that opens over the app stays pinned while the page scrolls (phone page mode: sticky at --shell-sticky-top, safe area kept).
 - Annotations: caption highlight only, ink never gold: selecting caption text drops the quote into the comment box; the highlight is an fg underline, the comment's quote chip an fg rail; no numbers; a tap on either jumps to the other. No photo pins.
 - Comment and slot composers = chat composer: leading "+" tray with Photos, File, Assets only; no paper clip.
