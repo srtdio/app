@@ -121,6 +121,8 @@ const TASKS_EVENT_HANDLER_ID = 'chat-tasks';
 const TASKS_STALE_MS = 60_000;
 /** The live "is editing" command's event name. */
 const TASK_EDITING_EVENT = 'task_editing';
+/** A Save with no answer by then lands as failed (Retry); the write itself is idempotent for deletes. */
+export const SAVE_TIMEOUT_MS = 15_000;
 /** Most event pages one older-history read walks before it lets the page go. */
 const MAX_EVENT_PAGES = 20;
 /**
@@ -576,7 +578,19 @@ export function useChatTasks(params: {
       const traceId = generateTraceId();
       const before = stateRef.current.tasks;
       apply(forChannel, (prev) => ({ ...prev, tasks: paintPayload(prev.tasks, payload) }));
-      const result = await saveTaskBatch({ client: db, channelId: forChannel, payload, traceId });
+      // A Save that never answers (a dropped connection) lands as failed after
+      // SAVE_TIMEOUT_MS, so the sheet shows Retry instead of saving forever.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = new Promise<{ ok: false; message: string }>((resolve) => {
+        timer = setTimeout(
+          () => resolve({ ok: false, message: 'save timed out' }),
+          SAVE_TIMEOUT_MS,
+        );
+      });
+      const result = await Promise.race([
+        saveTaskBatch({ client: db, channelId: forChannel, payload, traceId }),
+        timedOut,
+      ]).finally(() => clearTimeout(timer));
       if (!result.ok) {
         logger.warn('chat: task save failed', {
           trace_id: traceId,
