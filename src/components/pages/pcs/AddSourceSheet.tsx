@@ -6,8 +6,7 @@
 // gallery write.
 
 import type { ReactNode } from 'react';
-import { trayIcon } from '@/components/ui/ActionRow';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { ActionRow } from '@/components/ui/ActionRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconAssets, IconFile, IconPhoto } from '@/components/ui/icons';
 import { textRole } from '@/components/ui/Text';
@@ -62,22 +61,16 @@ export function AddSourceSheet({ open, onClose, replaceIndex, onPick }: AddSourc
             {ADD_SOURCE_REPLACE_NOTE}
           </p>
         ) : null}
+        {/* The app's one sheet row (ui/ActionRow): icon, label, the hint as its
+            sub line under the label. No type or alignment of this sheet's own. */}
         {ADD_SOURCE_ROWS.map((row) => (
-          <PressableRow
+          <ActionRow
             key={row.source}
-            type="button"
-            data-add-source-row={row.source}
+            icon={ROW_ICON[row.source]}
+            label={row.label}
+            sub={row.hint}
             onClick={() => onPick(row.source)}
-            className="flex items-center gap-3 px-3 py-2 mv-tint"
-          >
-            <span className="flex shrink-0 items-center justify-center text-fg-2">
-              {trayIcon(ROW_ICON[row.source])}
-            </span>
-            <span className={textRole('body', 'min-w-0 flex-1 truncate font-medium text-fg')}>
-              {row.label}
-            </span>
-            <span className={textRole('secondary', 'shrink-0 text-fg-3')}>{row.hint}</span>
-          </PressableRow>
+          />
         ))}
       </div>
     </Sheet>

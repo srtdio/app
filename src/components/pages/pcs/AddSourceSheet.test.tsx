@@ -11,6 +11,7 @@ import {
 // The post's Add / Replace source sheet (18 Nov 2026). node environment, no
 // DOM: the pure parts are called, the page wiring is pinned against the source.
 
+const SHEET = readFileSync(fileURLToPath(new URL('./AddSourceSheet.tsx', import.meta.url)), 'utf8');
 const PAGE = readFileSync(fileURLToPath(new URL('../PostDetailPage.tsx', import.meta.url)), 'utf8');
 
 describe('AddSourceSheet', () => {
@@ -21,6 +22,15 @@ describe('AddSourceSheet', () => {
       'Document',
       'Assets',
     ]);
+  });
+
+  it("rows are the app's sheet row (ui/ActionRow), with no type or alignment of their own", () => {
+    expect(SHEET).toContain('<ActionRow');
+    expect(SHEET).toContain('sub={row.hint}');
+    expect(SHEET).not.toContain('PressableRow');
+    // No hand-set font weight, size or text alignment in this sheet.
+    expect(SHEET).not.toMatch(/\bfont-(medium|semibold|bold|normal)\b/);
+    expect(SHEET).not.toMatch(/\btext-(xs|sm|base|lg|xl|center|right)\b/);
   });
 
   it("the title says Add, or Replace with the picture's place", () => {
