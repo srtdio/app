@@ -119,7 +119,7 @@ describe('6. gallery hints and picture actions', () => {
     // 18 Nov 2026: the slide actions sheet is gone. Remove sits on the opened
     // picture and in Arrange; new files land last.
     expect(PAGE).not.toContain('Add image after this');
-    expect(LIGHTBOX).toContain('label="Remove image"');
+    expect(LIGHTBOX).toContain('data-lightbox-remove=""');
   });
 });
 

@@ -141,7 +141,10 @@ jobs:
     name: visual-shard (${{ matrix.shard }}/${{ needs.select.outputs.total }})
     needs: select
     if: needs.select.outputs.mode != 'none'
-    runs-on: ubuntu-latest
+    # Pinned (18 Nov 2026): ubuntu-latest moved to 26.04 while the cached
+    # WebKit build and system packages are 24.04's, so no browser started.
+    # Move this and the Playwright version together, in their own PR.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

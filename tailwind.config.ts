@@ -210,6 +210,8 @@ export default {
         'stage-rejected': 'rgb(var(--stage-rejected-rgb) / <alpha-value>)',
         'stage-parked': 'rgb(var(--stage-parked-rgb) / <alpha-value>)',
         overlay: 'var(--overlay)',
+        // The post picture viewer's full-screen page: the overlay dark, opaque.
+        'overlay-solid': 'var(--overlay-solid)',
         'overlay-fg': 'rgb(var(--overlay-fg-rgb) / <alpha-value>)',
         'overlay-fg-dim': 'var(--overlay-fg-dim)',
         'overlay-surface': 'var(--overlay-surface)',

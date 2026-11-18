@@ -490,12 +490,12 @@ export function frameCut(
 }
 
 /**
- * Whether the in-place viewer takes the ribbon's slot: a tile is open (openIndex
- * set) and the gallery has images. Empty and upload states carry no open index,
- * so they always fall through to the ribbon branch. Pure so the ribbon<->viewer
- * swap is unit-testable without a DOM renderer.
+ * Whether the viewer is open: a tile is open (openIndex set) and the gallery
+ * has images. Empty and upload states carry no open index. On the post page it
+ * opens full screen over the strip; elsewhere it takes the ribbon's slot. Pure
+ * so it is unit-testable without a DOM renderer.
  */
-export function viewerReplacesRibbon(openIndex: number | null, itemCount: number): boolean {
+export function viewerIsOpen(openIndex: number | null, itemCount: number): boolean {
   return openIndex !== null && itemCount > 0;
 }
 
@@ -1159,51 +1159,58 @@ export function PostGallery({
         })
       : null;
 
-  // When a tile is open the in-place viewer takes the strip's slot (the page
-  // continues below it); closing returns to the strip. The empty and upload
-  // states have no open index, so they always fall through to the strip branch.
+  // Post page (tools): the strip stays and an open tile shows the full-screen
+  // viewer over it, so the picture grows from its tile and closes back to it.
+  // Elsewhere (briefs) the in-flow viewer takes the ribbon's slot, as before.
+  const fullViewer = tools !== undefined;
+  const viewer =
+    viewerIsOpen(openIndex, items.length) && openIndex !== null ? (
+      <PostLightbox
+        items={items}
+        title={title}
+        index={openIndex}
+        presignEnabled={presignEnabled}
+        cache={cache}
+        deps={deps}
+        onIndexChange={setOpenIndex}
+        onClose={() => setOpenIndex(null)}
+        manage={manage}
+        saving={saving}
+        fullScreen={fullViewer}
+      />
+    ) : null;
   return (
     <>
-      {viewerReplacesRibbon(openIndex, items.length) && openIndex !== null ? (
-        <PostLightbox
-          items={items}
-          title={title}
-          index={openIndex}
-          presignEnabled={presignEnabled}
-          cache={cache}
-          deps={deps}
-          onIndexChange={setOpenIndex}
-          onClose={() => setOpenIndex(null)}
-          manage={manage}
-          saving={saving}
-        />
-      ) : (
-        galleryView({
-          items,
-          cache,
-          presignEnabled,
-          onOpen: setOpenIndex,
-          columns,
-          aspect,
-          showIndex,
-          slideGestures,
-          consumeClickSuppression: canArrange ? consumeClickSuppression : undefined,
-          onAddSlide,
-          activeIndex,
-          scrollerRef,
-          onScroll: handleScroll,
-          arrows: columns === 4 ? { ...edges, onStep: stepStrip } : undefined,
-          measuredDimensions,
-          onMeasure: columns === 4 ? handleMeasure : undefined,
-          frame: postFrame,
-          frameNote:
-            postFrame !== null && frame !== undefined ? frameKindNote(frame.platform, items) : null,
-          platformLabel: frame?.platformLabel ?? '',
-          onSeePreview,
-          // One toolbar row under the strip; nothing sits on the picture.
-          toolbar: toolsRow ?? undefined,
-        })
-      )}
+      {viewer}
+      {viewer !== null && !fullViewer
+        ? null
+        : galleryView({
+            items,
+            cache,
+            presignEnabled,
+            onOpen: setOpenIndex,
+            columns,
+            aspect,
+            showIndex,
+            slideGestures,
+            consumeClickSuppression: canArrange ? consumeClickSuppression : undefined,
+            onAddSlide,
+            activeIndex,
+            scrollerRef,
+            onScroll: handleScroll,
+            arrows: columns === 4 ? { ...edges, onStep: stepStrip } : undefined,
+            measuredDimensions,
+            onMeasure: columns === 4 ? handleMeasure : undefined,
+            frame: postFrame,
+            frameNote:
+              postFrame !== null && frame !== undefined
+                ? frameKindNote(frame.platform, items)
+                : null,
+            platformLabel: frame?.platformLabel ?? '',
+            onSeePreview,
+            // One toolbar row under the strip; nothing sits on the picture.
+            toolbar: toolsRow ?? undefined,
+          })}
       {canArrange && tools !== undefined ? (
         <ArrangeSheet
           open={arrangeOpen}

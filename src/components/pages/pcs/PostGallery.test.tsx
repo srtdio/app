@@ -12,7 +12,7 @@ import {
   resolveRibbonTileStyle,
   ribbonTileStyle,
   soloTileStyle,
-  viewerReplacesRibbon,
+  viewerIsOpen,
 } from '@/components/pages/pcs/PostGallery';
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
 import { cutPercent, frameMap } from '@/components/pages/pcs/pin-annotations';
@@ -501,10 +501,10 @@ describe('intrinsicSize ignores unusable natural dimensions', () => {
   });
 });
 
-describe('ribbon <-> in-place viewer swap', () => {
+describe('strip and full-screen viewer', () => {
   it('keeps the ribbon while no tile is open', () => {
-    // openIndex null: the ribbon renders, never the in-place viewer.
-    expect(viewerReplacesRibbon(null, 3)).toBe(false);
+    // openIndex null: no viewer.
+    expect(viewerIsOpen(null, 3)).toBe(false);
     // A galleryView call with no open index still yields the ribbon tiles.
     const tree = galleryView({
       items: [item(0), item(1)],
@@ -515,16 +515,16 @@ describe('ribbon <-> in-place viewer swap', () => {
     expect(elements(tree).some((el) => label(el)?.startsWith('View image'))).toBe(true);
   });
 
-  it('replaces the ribbon with the in-place viewer once a tile is opened', () => {
-    // A non-null open index over a non-empty gallery swaps in the viewer.
-    expect(viewerReplacesRibbon(0, 3)).toBe(true);
-    expect(viewerReplacesRibbon(2, 3)).toBe(true);
+  it('opens the viewer over the strip once a tile is opened', () => {
+    // A non-null open index over a non-empty gallery opens the viewer.
+    expect(viewerIsOpen(0, 3)).toBe(true);
+    expect(viewerIsOpen(2, 3)).toBe(true);
   });
 
-  it('never swaps in the viewer for the empty and upload states', () => {
-    // Empty gallery: even a stray index keeps the ribbon branch (empty/upload UI).
-    expect(viewerReplacesRibbon(0, 0)).toBe(false);
-    expect(viewerReplacesRibbon(null, 0)).toBe(false);
+  it('never opens the viewer for the empty and upload states', () => {
+    // Empty gallery: even a stray index opens nothing (empty/upload UI).
+    expect(viewerIsOpen(0, 0)).toBe(false);
+    expect(viewerIsOpen(null, 0)).toBe(false);
   });
 });
 

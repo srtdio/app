@@ -124,6 +124,8 @@
      media backdrop reads as dark in both themes, so these stay constant across
      light/dark for parity rather than flipping. */
   --overlay: rgba(9, 10, 12, 0.92);
+  /* The same dark with nothing showing through: a full-screen viewer page. */
+  --overlay-solid: #090a0c;
   --overlay-fg: #f4f5f6;
   --overlay-fg-rgb: 244 245 246;
   --overlay-fg-dim: rgba(244, 245, 246, 0.7);
@@ -346,6 +348,7 @@
   /* Overlay scale held constant with :root so the lightbox backdrop reads the
      same dark in light and dark mode (parity). */
   --overlay: rgba(0, 0, 0, 0.94);
+  --overlay-solid: #000;
   --overlay-fg: #f4f5f6;
   --overlay-fg-rgb: 244 245 246;
   --overlay-fg-dim: rgba(244, 245, 246, 0.7);

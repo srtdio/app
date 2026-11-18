@@ -24,6 +24,7 @@ import {
   slideFromScroll,
   intrinsicSize,
   fitFrameStyle,
+  viewerCount,
   createSwipeDismiss,
   slideViewerKind,
   markOpenFailed,
@@ -77,6 +78,10 @@ function strings(tree: ReactNode): string[] {
 
 function byLabel(tree: ReactNode, value: string): ReactElement | undefined {
   return elements(tree).find((el) => ariaLabel(el) === value);
+}
+
+function byAttr(tree: ReactNode, attr: string): ReactElement | undefined {
+  return elements(tree).find((el) => (el.props as Record<string, unknown>)[attr] !== undefined);
 }
 
 function byLabelEq(el: ReactElement, value: string): boolean {
@@ -181,7 +186,12 @@ describe('pure helpers', () => {
   });
 
   it('builds the fit frame as an aspect-ratio box', () => {
-    expect(fitFrameStyle(1080, 1920)).toEqual({ aspectRatio: '1080 / 1920' });
+    // As wide as the stage (its size container) or its height allows: the
+    // frame is exactly the picture, so a tap beside it lands on the stage.
+    expect(fitFrameStyle(1080, 1920)).toEqual({
+      aspectRatio: '1080 / 1920',
+      width: 'min(100cqw, calc(100cqh * 1080 / 1920))',
+    });
   });
 });
 
@@ -319,42 +329,73 @@ describe('lightboxView', () => {
     ).toBe(true);
   });
 
-  it('renders the creator bottom bar: download, Replace, Remove image; no add, no per-tap reorder', () => {
+  it('creator keys are the words Replace and Remove; no icon keys, no add, no per-tap reorder', () => {
     const manage = {
       onReplace: vi.fn(),
       onRemove: vi.fn(),
     };
-    const tree = lightboxView(props({ index: 1, manage }));
-    // Each key fires its prewired handler, and every icon button is a 44px target.
-    for (const [label, fn] of [
-      ['Replace', manage.onReplace],
-      ['Remove image', manage.onRemove],
+    const tree = lightboxView(props({ index: 1, manage, fullScreen: true }));
+    for (const [attr, word, fn] of [
+      ['data-lightbox-replace', 'Replace', manage.onReplace],
+      ['data-lightbox-remove', 'Remove', manage.onRemove],
     ] as const) {
-      const button = byLabel(tree, label)!;
+      const button = byAttr(tree, attr)!;
       expect(button).toBeDefined();
-      expect(className(button)).toContain('h-11');
-      expect(className(button)).toContain('w-11');
+      expect(button.type).toBe(Button);
+      expect((button.props as { children?: ReactNode }).children).toBe(word);
       expect(className(button)).toContain('text-overlay-fg');
       (button.props as { onClick: () => void }).onClick();
       expect(fn).toHaveBeenCalledOnce();
     }
-    // Download sits beside them. New files land last from the tools row's Add,
-    // so the opened picture has no add key; there is one Remove (no "Delete image").
+    // The icon keys are gone; new files land last from the tools row's Add.
+    for (const label of ['Replace', 'Remove image', 'Add image', 'Delete image']) {
+      expect(byLabel(tree, label)).toBeUndefined();
+    }
     expect(byLabel(tree, 'Download')).toBeDefined();
-    expect(byLabel(tree, 'Add image')).toBeUndefined();
-    expect(byLabel(tree, 'Delete image')).toBeUndefined();
     // Without a remove path the Remove key is not drawn.
     const replaceOnly = lightboxView(props({ index: 1, manage: { onReplace: vi.fn() } }));
-    expect(byLabel(replaceOnly, 'Replace')).toBeDefined();
-    expect(byLabel(replaceOnly, 'Remove image')).toBeUndefined();
+    expect(byAttr(replaceOnly, 'data-lightbox-replace')).toBeDefined();
+    expect(byAttr(replaceOnly, 'data-lightbox-remove')).toBeUndefined();
     // A write in flight holds both keys.
     const busy = lightboxView(props({ index: 1, manage, saving: true }));
-    expect((byLabel(busy, 'Replace')!.props as { disabled?: boolean }).disabled).toBe(true);
-    expect((byLabel(busy, 'Remove image')!.props as { disabled?: boolean }).disabled).toBe(true);
+    for (const attr of ['data-lightbox-replace', 'data-lightbox-remove']) {
+      expect((byAttr(busy, attr)!.props as { disabled?: boolean }).disabled).toBe(true);
+    }
     // No per-tap reorder (each tap saved a version); Arrange is the one way.
     for (const label of ['Make first', 'Move left', 'Move right', 'Make last']) {
       expect(byLabel(tree, label)).toBeUndefined();
     }
+  });
+
+  it('post page: opens full screen over the app, on the dock layer, with a top bar', () => {
+    const tree = lightboxView(props({ index: 1, fullScreen: true }));
+    const root = elements(tree)[0]!;
+    expect((root.props as { role?: string }).role).toBe('dialog');
+    expect((root.props as { 'aria-modal'?: unknown })['aria-modal']).toBe('true');
+    // Dock layer: the Replace sheet (z-sheet) and the Undo strip (z-toast) show above it.
+    for (const cls of ['fixed', 'inset-0', 'z-dock', 'bg-overlay-solid']) {
+      expect(className(root).split(' ')).toContain(cls);
+    }
+    // Top bar: "<", the count in the middle, Download last. No X.
+    const bar = byAttr(tree, 'data-lightbox-top')!;
+    const inBar = elements((bar.props as { children?: ReactNode }).children);
+    expect(inBar[0]!.type).toBe(ViewerBackButton);
+    const count = byAttr(tree, 'data-lightbox-count')!;
+    expect((count.props as { children?: ReactNode }).children).toBe('2 of 3');
+    expect(className(count)).toContain('text-center');
+    expect(viewerCount(0, 6)).toBe('1 of 6');
+    expect(inBar.some((el) => byLabelEq(el, 'Download'))).toBe(true);
+    expect(byLabel(tree, 'Close viewer')).toBeUndefined();
+    // The stage is the size container the picture's frame measures against.
+    const stage = byAttr(tree, 'data-lightbox-stage')!;
+    expect((stage.props as { style: { containerType?: string } }).style.containerType).toBe('size');
+    // Approvers and read-only: Download only, no keys bar.
+    expect(byAttr(tree, 'data-lightbox-keys')).toBeUndefined();
+    // One slide: no count text.
+    const solo = lightboxView(props({ items: [item(0)], index: 0, fullScreen: true }));
+    expect((byAttr(solo, 'data-lightbox-count')!.props as { children?: ReactNode }).children).toBe(
+      null,
+    );
   });
 
   it('shows only the download button in the bottom bar for clients and read-only', () => {
@@ -379,7 +420,6 @@ describe('lightboxView', () => {
       const text = strings(lightboxView(props({ items, index: 0, manage: MANAGE })));
       expect(text).not.toContain('Delete the only image?');
       expect(text).not.toContain('Remove this image?');
-      expect(text).not.toContain('Remove');
     }
   });
 
