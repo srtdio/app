@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
@@ -8,16 +9,11 @@ import type {
   Ref,
   SyntheticEvent,
 } from 'react';
-import {
-  ICON_SIZE,
-  IconChevronLeft,
-  IconChevronRight,
-  IconDownload,
-  IconPlus,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft, IconChevronRight, IconDownload } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { textRole } from '@/components/ui/Text';
 import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { wrapIndex, lightboxCounter, dragAxis, shouldDismiss } from '@/components/ui/ImageLightbox';
@@ -29,6 +25,8 @@ import {
 } from '@/components/ui/FileViewer';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { useOptionalToast } from '@/components/ui/toast';
+import { INK_LEADING, INK_TRAILING_LAST } from '@/components/ui/layout';
+import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { riseIn, riseOut } from '@/lib/motion';
 import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
@@ -177,12 +175,16 @@ export function intrinsicSize(
 }
 
 /**
- * The frame style: an aspect-ratio box constrained by the fixed stage
- * (w-full + max-h-full transfer through aspect-ratio), so the WHOLE image is
- * always visible with no scrolling regardless of ratio. Pure.
+ * The frame style: an aspect-ratio box as wide as the stage allows (its
+ * container width, or the width its height allows), so the WHOLE image is
+ * always visible and the frame is exactly the picture: a tap beside it lands on
+ * the stage. Pure.
  */
 export function fitFrameStyle(width: number, height: number): CSSProperties {
-  return { aspectRatio: `${width} / ${height}` };
+  return {
+    aspectRatio: `${width} / ${height}`,
+    width: `min(100cqw, calc(100cqh * ${width} / ${height}))`,
+  };
 }
 
 // Overlay colour skins for the shared IconButton / Button (geometry comes from
@@ -202,18 +204,33 @@ const TOOLBAR_SKIN =
   'text-overlay-fg hover:bg-overlay-surface disabled:text-overlay-fg-dim focus-visible:lit-focus ' +
   'focus-visible:outline-overlay-fg/70';
 
+// The word keys under the picture (Replace, Remove): a translucent chip on the
+// viewer's dark page, the file slide's Open look.
+const KEY_SKIN =
+  'bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg ' +
+  'disabled:text-overlay-fg-dim focus-visible:lit-focus focus-visible:outline-overlay-fg';
+
+// The keys' bottom room: 12, or the home-bar inset when it is larger.
+const SAFE_BOTTOM_KEYS = 'pb-[max(12px,env(safe-area-inset-bottom))]';
+
+/** The top bar's count: "2 of 6". Pure. */
+export function viewerCount(index: number, count: number): string {
+  return `${index + 1} of ${count}`;
+}
+
 /** Lightbox download toasts. */
 export const DOWNLOAD_DONE = 'Downloaded';
 export const DOWNLOAD_FAILED = errorText('download', null);
 
 /**
- * The agency manage actions, prewired to the current slide. #26: no per-tap
- * reorder here; reordering is hold-and-drag in the gallery. No second delete
- * either: removing a picture is the one Remove image (the post ⋯ menu, the
- * slide actions sheet), behind the page's Undo strip.
+ * The creator's keys on the opened picture, prewired to the current slide
+ * (18 Nov 2026): Replace opens the page's add sheet for this place; Remove is
+ * the page's one Remove image, behind its Undo strip. Reordering lives in the
+ * gallery's Arrange sheet.
  */
 export interface LightboxManage {
-  onAddAfter: () => void;
+  onReplace: () => void;
+  onRemove?: (() => void) | undefined;
 }
 
 /** Pointer gesture handlers the zoom layer spreads onto each slide stage. */
@@ -255,7 +272,9 @@ export interface LightboxViewProps {
   trackRef?: Ref<HTMLDivElement> | undefined;
   /** The viewer's root (it grows from the tile and rises out on a swipe down). */
   rootRef?: Ref<HTMLDivElement> | undefined;
-  /** Agency-only manage bar; absent for clients (their bar shows download only). */
+  /** Full screen over the app (the post page); else the in-flow block. */
+  fullScreen?: boolean | undefined;
+  /** Creator-only word keys (Replace, Remove); absent for approvers. */
   manage?: LightboxManage | undefined;
   /** A gallery write is in flight: the bar says "Saving…". */
   saving?: boolean;
@@ -301,16 +320,20 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center"
+      data-lightbox-stage=""
+      className={cn(
+        'absolute inset-0 flex items-center justify-center',
+        props.fullScreen === true && 'p-4',
+      )}
       {...props.stageGestures}
-      style={zoomed ? { touchAction: 'none' } : undefined}
+      style={{ containerType: 'size', ...(zoomed ? { touchAction: 'none' } : {}) }}
     >
       {showImage && dims !== null ? (
         // The frame is an aspect-ratio box constrained directly by this fixed
         // stage (never an auto-height wrapper), so max-h/max-w always resolve
         // and the whole image stays visible at every ratio.
         <div
-          className="relative w-full max-h-full max-w-full"
+          className="relative max-h-full max-w-full"
           style={{ ...fitFrameStyle(dims.width, dims.height), ...zoomStyle }}
         >
           <img
@@ -366,6 +389,167 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const chromeVisible = chrome;
   const saving = props.saving === true;
 
+  // Shown or hidden at once: never a fade (docs/motion.md), no translate or rotate.
+  const chromeMotion = (visible: boolean): string =>
+    visible ? 'opacity-100' : 'pointer-events-none opacity-0';
+  const full = props.fullScreen === true;
+  const dragStyle: CSSProperties | undefined =
+    dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined;
+
+  // The native scroll-snap carousel, one slide per width.
+  const track = (
+    <div
+      ref={props.trackRef}
+      onScroll={props.onTrackScroll}
+      aria-roledescription="carousel"
+      data-motion-axis="x"
+      className={cn(
+        'absolute inset-0 flex overscroll-x-contain',
+        zoom.scale > 1 ? 'overflow-x-hidden' : 'snap-x snap-mandatory overflow-x-auto',
+      )}
+    >
+      {items.map((slide, i) => (
+        <div
+          key={slide.assetAttachmentId}
+          className="relative h-full w-full shrink-0 snap-center overflow-hidden"
+        >
+          {fitSlide(props, slide, i)}
+        </div>
+      ))}
+    </div>
+  );
+
+  // Prev / next overlay arrows for click; swipe still drives the track.
+  // Centred by flex (no translate), edge-disabled.
+  const arrows =
+    count > 1 ? (
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-0 flex items-center justify-between px-2',
+          // Full screen: laptop only (a phone swipes), 24 in from the edges.
+          full && 'max-md:hidden md:px-6',
+          chromeMotion(chromeVisible),
+        )}
+      >
+        <IconButton
+          type="button"
+          label="Previous image"
+          onClick={props.onPrev}
+          className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
+        >
+          <IconChevronLeft size={ICON_SIZE.control} />
+        </IconButton>
+        <IconButton
+          type="button"
+          label="Next image"
+          onClick={props.onNext}
+          className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
+        >
+          <IconChevronRight size={ICON_SIZE.control} />
+        </IconButton>
+      </div>
+    ) : null;
+
+  const download = (
+    <IconButton
+      type="button"
+      label="Download"
+      disabled={busy}
+      onClick={props.onDownload}
+      className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
+    >
+      <IconDownload size={ICON_SIZE.control} />
+    </IconButton>
+  );
+
+  // The creator's keys under the picture, as words: Replace and Remove.
+  const keys =
+    manage !== undefined ? (
+      <div
+        data-lightbox-keys=""
+        className={cn(
+          'flex shrink-0 items-center justify-center gap-2 px-4 pt-3',
+          full ? SAFE_BOTTOM_KEYS : 'pb-3',
+          chromeMotion(chromeVisible),
+        )}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          data-lightbox-replace=""
+          disabled={saving}
+          onClick={manage.onReplace}
+          className={KEY_SKIN}
+        >
+          Replace
+        </Button>
+        {manage.onRemove !== undefined ? (
+          <Button
+            type="button"
+            variant="ghost"
+            data-lightbox-remove=""
+            disabled={saving}
+            onClick={manage.onRemove}
+            className={KEY_SKIN}
+          >
+            Remove
+          </Button>
+        ) : null}
+        {saving ? (
+          <span aria-live="polite" className="text-sm text-overlay-fg-dim">
+            Saving…
+          </span>
+        ) : null}
+      </div>
+    ) : null;
+
+  if (full) {
+    return (
+      // Full screen over the post (18 Nov 2026): a dark page on the dock layer,
+      // so the Replace sheet and the Undo strip still show above it. A swipe
+      // down moves the whole viewer on Y only; it springs back when released
+      // short of the dismiss distance, and rises out past it (motion module).
+      <div
+        ref={props.rootRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image viewer"
+        className="fixed inset-0 z-dock flex flex-col overflow-hidden bg-overlay-solid"
+        style={dragStyle}
+      >
+        {/* Top bar: "<" (never an X), the count in the middle with more than
+            one slide, Download last. No title or filename on this surface. */}
+        <div
+          data-lightbox-top=""
+          className={cn(
+            'relative flex shrink-0 items-center px-1',
+            SAFE_TOP_BAR_CLASS,
+            INK_TRAILING_LAST,
+            chromeMotion(chromeVisible),
+          )}
+        >
+          <ViewerBackButton
+            onClick={props.onClose}
+            className={cn(BACK_SHAPE, TOOLBAR_SKIN, INK_LEADING)}
+          />
+          <span
+            data-lightbox-count=""
+            className={textRole('meta', 'min-w-0 flex-1 text-center text-overlay-fg')}
+          >
+            {count > 1 ? viewerCount(index, count) : null}
+          </span>
+          {download}
+        </div>
+        {/* Stage: the carousel fills the room between the bars. */}
+        <div className="relative min-h-0 w-full flex-1 overflow-hidden">
+          {track}
+          {arrows}
+        </div>
+        {keys}
+      </div>
+    );
+  }
+
   // The image region is a full-width aspect-ratio box following the CURRENT
   // item's ratio (stored dims or measured fallback), so the whole image shows
   // with no letterbox and no viewport clamp. Unknown dims fall back to 4/5 until
@@ -375,51 +559,23 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const ratioStyle: CSSProperties = {
     aspectRatio: dims !== null ? `${dims.width} / ${dims.height}` : '4 / 5',
   };
-  // Shown or hidden at once: never a fade (docs/motion.md), no translate or rotate.
-  const chromeMotion = (visible: boolean): string =>
-    visible ? 'opacity-100' : 'pointer-events-none opacity-0';
 
   return (
-    // In-flow, full-width block (no longer a modal): the viewer replaces the
-    // ribbon in normal page flow, the post content continues below it. It carries
-    // its own dark backdrop and stays dark in both app themes.
-    // A swipe down moves the whole viewer on Y only; it springs back when released
-    // short of the dismiss distance, and rises out past it (motion module).
+    // In-flow, full-width block (briefs, the post sheet in chat): the viewer
+    // takes the ribbon's place in normal page flow, the content continues below
+    // it. It carries its own dark backdrop and stays dark in both app themes.
     <div
       ref={props.rootRef}
       aria-label="Image viewer"
       className="relative w-full overflow-hidden bg-overlay"
-      style={dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined}
+      style={dragStyle}
     >
-      {/* Image region: the native scroll-snap carousel, one slide per width, in a
-          full-width aspect-ratio box that follows the current image's ratio. The
-          counter, close, and prev/next arrows overlay this region. */}
       <div className="relative w-full overflow-hidden" style={ratioStyle}>
-        <div
-          ref={props.trackRef}
-          onScroll={props.onTrackScroll}
-          aria-roledescription="carousel"
-          data-motion-axis="x"
-          className={cn(
-            'absolute inset-0 flex overscroll-x-contain',
-            zoom.scale > 1 ? 'overflow-x-hidden' : 'snap-x snap-mandatory overflow-x-auto',
-          )}
-        >
-          {items.map((slide, i) => (
-            <div
-              key={slide.assetAttachmentId}
-              className="relative h-full w-full shrink-0 snap-center overflow-hidden"
-            >
-              {fitSlide(props, slide, i)}
-            </div>
-          ))}
-        </div>
-
+        {track}
         {/* The viewer's exit: "<" (Back) overlaid top-left on the leading edge,
             never an X; the counter overlaid top-right only with more than one
-            slide. No title here: the post's title sits right above this
-            in-flow viewer, and no filename ever renders on this surface.
-            Translucent chips keep both legible over any photo. */}
+            slide. No title or filename on this surface. Translucent chips keep
+            both legible over any photo. */}
         <ViewerBackButton
           onClick={props.onClose}
           className={cn(
@@ -439,81 +595,17 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             {lightboxCounter(index, count)}
           </span>
         ) : null}
-
-        {/* Prev / next overlay arrows for click; swipe still drives the track.
-            Centred by flex (no translate), edge-disabled. */}
-        {count > 1 ? (
-          <div
-            className={cn(
-              'pointer-events-none absolute inset-0 flex items-center justify-between px-2',
-              chromeMotion(chromeVisible),
-            )}
-          >
-            <IconButton
-              type="button"
-              label="Previous image"
-              onClick={props.onPrev}
-              className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
-            >
-              <IconChevronLeft size={ICON_SIZE.control} />
-            </IconButton>
-            <IconButton
-              type="button"
-              label="Next image"
-              onClick={props.onNext}
-              className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
-            >
-              <IconChevronRight size={ICON_SIZE.control} />
-            </IconButton>
-          </div>
-        ) : null}
+        {arrows}
       </div>
 
       {/* Action bar: a slim full-width bar directly below the image (not
-          overlapping it) with the agency controls (download / add), or download
-          only for clients and read-only. */}
+          overlapping it) with Download. */}
       <div
         className={cn('flex h-12 w-full items-center justify-center', chromeMotion(chromeVisible))}
       >
-        {manage === undefined ? (
-          <IconButton
-            type="button"
-            label="Download"
-            disabled={busy}
-            onClick={props.onDownload}
-            className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
-          >
-            <IconDownload size={ICON_SIZE.control} />
-          </IconButton>
-        ) : (
-          <div className="flex items-center">
-            <IconButton
-              type="button"
-              label="Download"
-              disabled={busy}
-              onClick={props.onDownload}
-              className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
-            >
-              <IconDownload size={ICON_SIZE.control} />
-            </IconButton>
-            <IconButton
-              type="button"
-              label="Add image"
-              onClick={manage.onAddAfter}
-              // cn() merges: text-accent would now beat the overlay ink (it lost by
-              // CSS order before), so the overlay ink stays, as it rendered.
-              className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
-            >
-              <IconPlus size={ICON_SIZE.control} />
-            </IconButton>
-            {saving ? (
-              <span aria-live="polite" className="ml-2 text-sm text-overlay-fg-dim">
-                Saving…
-              </span>
-            ) : null}
-          </div>
-        )}
+        {download}
       </div>
+      {keys}
     </div>
   );
 }
@@ -622,20 +714,25 @@ interface PostLightboxProps {
    */
   manage?:
     | {
-        onAddAfter: (index: number) => void;
+        onReplace: (index: number) => void;
+        onRemove?: ((index: number) => void) | undefined;
       }
     | undefined;
   /** A gallery write is in flight: the bar says "Saving…". */
   saving?: boolean | undefined;
   /** The post's title, for each slide's alt ("{title}, slide N"). */
   title?: string | undefined;
+  /** Full screen over the app (the post page); briefs and chat stay in flow. */
+  fullScreen?: boolean | undefined;
 }
 
 /**
- * In-place post-gallery viewer: a full-width, in-flow block (no modal, no
- * overlay sheet, no body scroll lock) with a native horizontal scroll-snap track
- * (one slide per width), overlaid "<" Back/counter/prev-next, tap-toggled chrome,
- * pinch and double-tap zoom, and the agency manage row below the image.
+ * Post-gallery viewer: a native horizontal scroll-snap track (one slide per
+ * width), "<" Back, count, prev / next, tap-toggled bars, pinch and double-tap
+ * zoom, swipe down to close. Full screen on the post page (18 Nov 2026: a dark
+ * page over the app, top bar with Download, a tap beside the picture closes,
+ * the creator's Replace and Remove words under the picture); an in-flow block
+ * in briefs and the post sheet in chat.
  */
 export function PostLightbox({
   items,
@@ -648,6 +745,7 @@ export function PostLightbox({
   manage,
   saving = false,
   title,
+  fullScreen = false,
 }: PostLightboxProps) {
   const toast = useOptionalToast();
   const [srcs, setSrcs] = useState<Record<string, string>>({});
@@ -684,8 +782,7 @@ export function PostLightbox({
     if (!items.some((it) => it.assetAttachmentId === id)) setViewing(null);
   }, [items, viewing]);
 
-  // The tile that opened the viewer is gone (this viewer replaced the ribbon),
-  // so on close focus lands on the slide's Open instead of the page body.
+  // When the FileViewer closes, focus lands on the slide's Open instead of the page body.
   const wasViewing = useRef(viewing !== null);
   useEffect(() => {
     if (viewing === null && wasViewing.current) {
@@ -803,8 +900,7 @@ export function PostLightbox({
     if (!viewingRef.current) onClose();
   });
 
-  // Arrows nudge the native scroller. The viewer is in-flow now, so it never
-  // locks body scroll.
+  // Arrows nudge the native scroller.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       // The FileViewer owns the keys while it is open.
@@ -956,6 +1052,12 @@ export function PostLightbox({
           movedRef.current = false;
           return;
         }
+        // Full screen: a tap on the dark room beside the picture closes
+        // (never while zoomed).
+        if (fullScreen && event.target === event.currentTarget && zoom.scale <= 1) {
+          onCloseRef.current();
+          return;
+        }
         const now = Date.now();
         const rect = event.currentTarget.getBoundingClientRect();
         const tap = { t: now, x: event.clientX, y: event.clientY };
@@ -984,7 +1086,7 @@ export function PostLightbox({
         }, DOUBLE_TAP_MS);
       },
     }),
-    [zoom, applyZoomAt, clampPan, dismiss],
+    [zoom, applyZoomAt, clampPan, dismiss, fullScreen],
   );
 
   const item = items[index];
@@ -1026,9 +1128,8 @@ export function PostLightbox({
   const manageView: LightboxManage | undefined =
     manage !== undefined
       ? {
-          onAddAfter: () => {
-            manage.onAddAfter(index);
-          },
+          onReplace: () => manage.onReplace(index),
+          ...(manage.onRemove !== undefined ? { onRemove: () => manage.onRemove?.(index) } : {}),
         }
       : undefined;
 
@@ -1063,17 +1164,21 @@ export function PostLightbox({
     trackRef,
     rootRef,
     manage: manageView,
+    fullScreen,
     saving,
     dragY,
     onOpenFile: openFile,
     openFailedFor: (it) => openFailed[it.assetAttachmentId] === true,
   });
 
-  if (viewing === null) return view;
+  // Over the whole app: on the body, so no page box can clip or sit above it.
+  const shown =
+    fullScreen && typeof document !== 'undefined' ? createPortal(view, document.body) : view;
+  if (viewing === null) return shown;
   const viewed = viewing.item;
   return (
     <>
-      {view}
+      {shown}
       {/* The FileViewer carries its own ErrorBoundary (fallback: close +
           Download), so a broken file never blanks the post or brief. */}
       <FileViewer

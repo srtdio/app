@@ -242,7 +242,10 @@ jobs:
   webkit-shard:
     needs: changes
     if: needs.changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    # Pinned (18 Nov 2026): ubuntu-latest moved to 26.04 while the cached
+    # WebKit build and system packages are 24.04's, so no browser started.
+    # Move this and the Playwright version together, in their own PR.
+    runs-on: ubuntu-24.04
     # Room for a slow apt mirror: the system-deps install alone has taken
     # 14 minutes on some runners, which left the tests no time under 15.
     timeout-minutes: 30

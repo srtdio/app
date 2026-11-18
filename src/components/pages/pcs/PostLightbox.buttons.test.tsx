@@ -78,8 +78,10 @@ function expectShared(tag: string): void {
 }
 
 describe('PostLightbox buttons', () => {
-  it('"<" Back, prev, next and the manage bar are 44px buttons on overlay tokens; no X', () => {
-    const html = renderToStaticMarkup(lightboxView(props({ manage: { onAddAfter: vi.fn() } })));
+  it('"<" Back, prev, next and the word keys are 44px buttons on overlay tokens; no X', () => {
+    const html = renderToStaticMarkup(
+      lightboxView(props({ manage: { onReplace: vi.fn(), onRemove: vi.fn() } })),
+    );
     expect(html).not.toContain('aria-label="Close viewer"');
     for (const label of ['Back', 'Previous image', 'Next image']) {
       const tag = tagFor(html, `aria-label="${label}"`);
@@ -88,12 +90,18 @@ describe('PostLightbox buttons', () => {
       expect(classOf(tag)).toContain('bg-overlay-surface');
       expect(classOf(tag)).toContain('text-overlay-fg');
     }
-    for (const label of ['Download', 'Add image']) {
-      const tag = tagFor(html, `aria-label="${label}"`);
+    expectShared(tagFor(html, 'aria-label="Download"'));
+    // Replace and Remove are word keys, not icons.
+    for (const attr of ['data-lightbox-replace', 'data-lightbox-remove']) {
+      const tag = tagFor(html, attr);
       expectShared(tag);
+      expect(tag).not.toContain('aria-label');
+      expect(classOf(tag)).toContain('bg-overlay-surface');
       expect(classOf(tag)).toContain('text-overlay-fg');
     }
-    // The duplicate Delete image is cut (Remove image stays, behind the Undo strip).
+    expect(html).toMatch(/data-lightbox-replace=""[^>]*>Replace</);
+    expect(html).toMatch(/data-lightbox-remove=""[^>]*>Remove</);
+    // The duplicate Delete image is cut (Remove stays, behind the Undo strip).
     expect(html).not.toContain('aria-label="Delete image"');
   });
 });
