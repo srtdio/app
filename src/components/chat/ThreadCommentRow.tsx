@@ -9,8 +9,14 @@
 // comments), else it rubber-bands. A hold (touch) or right-click (laptop),
 // Enter / Space / Shift+F10, or the laptop chevron opens the menu. Pending and
 // failed rows never swipe (chat's rule). Pure render: no reads.
+//
+// A tap on a photo opens chat's one image viewer (ImageLightbox) over the app,
+// at that photo, swiping through the comment's photos (18 Nov 2026: comments
+// lost the viewer when they moved onto chat's row). The viewer renders beside
+// the bubble, never inside it, so its gestures never reach the row's swipe or
+// hold; its presign goes through the row's own shared cache, only on tap.
 
-import { useContext, useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
   SearchCurrentContext,
@@ -31,7 +37,9 @@ import {
   type BubbleSwipe,
   type RowHold,
 } from '@/components/chat/MessageBubble';
+import { threadLightbox } from '@/components/chat/MessageThread';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { createSwipeReplyController, type SwipeReplyController } from '@/lib/chat/swipe-reply';
@@ -77,6 +85,8 @@ export interface ThreadCommentRowProps {
 
 export function ThreadCommentRow(props: ThreadCommentRowProps): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
+  // The photo open in the image viewer (its album index); null: closed.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   // A search's words and its current hit (13 Nov 2026: a thread's own search).
   const searchWords = useContext(SearchWordsContext);
   const searchCurrent = useContext(SearchCurrentContext);
@@ -177,68 +187,108 @@ export function ThreadCommentRow(props: ThreadCommentRowProps): ReactElement {
   };
   const id = props.message.id;
   return (
-    <MessageBubble
-      searchWords={searchWords}
-      searchCurrent={searchCurrent !== null && searchCurrent === props.message.id}
-      message={props.message}
-      profiles={props.profiles}
+    <>
+      <MessageBubble
+        searchWords={searchWords}
+        searchCurrent={searchCurrent !== null && searchCurrent === props.message.id}
+        message={props.message}
+        profiles={props.profiles}
+        cache={sharedCardPresignCache()}
+        presignEnabled={PRESIGN_ENABLED}
+        showTicks={false}
+        isGroup
+        head={props.head}
+        tail={props.tail}
+        afterLabel={props.afterLabel}
+        layout={props.layout}
+        viewerUserId={props.me ?? undefined}
+        mentions={props.mentions}
+        workspaceId={props.workspaceId}
+        personSource={props.personSource}
+        bubbleRef={bubbleRef}
+        rowRef={rowRef}
+        swipe={rowSwipeRef.current}
+        threadPlace={props.threadPlace}
+        timeLabel={props.timeLabel}
+        rowData={props.rowData}
+        onTapOpen={props.onTapOpen}
+        onOpenImage={(index) => setViewerIndex(index)}
+        {...(props.topLine !== undefined ? { topLine: props.topLine } : {})}
+        {...(props.bottomLine !== undefined ? { bottomLine: props.bottomLine } : {})}
+        press={{
+          handlers: pointer,
+          onContextMenu: rowHold.contextMenu,
+          consumeClick: () => {
+            const held = consumeClickSuppression();
+            const swiped = swipe.consumeClickSuppression();
+            return held || swiped;
+          },
+          coarse: props.coarsePointer,
+          onKeyOpen: () => open(bubbleRect()),
+          ...(props.hoverMenu
+            ? {
+                onMore: () => open(bubbleRect()),
+                onReact: () => {
+                  clearClickSuppression();
+                  latest.current.onOpenMenu(bubbleRect(), true);
+                },
+              }
+            : {}),
+        }}
+        {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
+        {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
+        reactionChips={{
+          onToggle: (emoji) => props.reactions.toggle(id, emoji),
+          onPick: (emoji) => props.reactions.pick(id, emoji),
+          who: {
+            targetId: id,
+            viewerId: props.me,
+            load: () =>
+              whoReactedFromRows(supabase, {
+                rows: props.reactions.rowsOf(id),
+                workspaceId: props.workspaceId,
+                known: (uid) => props.profiles.get(uid),
+              }),
+          },
+        }}
+      />
+      {viewerIndex !== null ? (
+        <CommentImageViewer
+          message={props.message}
+          profiles={props.profiles}
+          index={viewerIndex}
+          onIndexChange={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The comment's photos in chat's image viewer: the message's album (a local
+ * preview stands in for an own photo still uploading), sender and short time
+ * in the bottom bar, as chat's thread viewer. Nothing when the comment has no
+ * photo left (removed meanwhile).
+ */
+function CommentImageViewer(props: {
+  message: ThreadMessage;
+  profiles: Map<string, ChatProfile>;
+  index: number;
+  onIndexChange: (index: number) => void;
+  onClose: () => void;
+}): ReactElement | null {
+  const data = threadLightbox(props.message, props.profiles, new Date());
+  if (data.images.length === 0) return null;
+  return (
+    <ImageLightbox
+      images={data.images}
+      index={Math.min(props.index, data.images.length - 1)}
       cache={sharedCardPresignCache()}
       presignEnabled={PRESIGN_ENABLED}
-      showTicks={false}
-      isGroup
-      head={props.head}
-      tail={props.tail}
-      afterLabel={props.afterLabel}
-      layout={props.layout}
-      viewerUserId={props.me ?? undefined}
-      mentions={props.mentions}
-      workspaceId={props.workspaceId}
-      personSource={props.personSource}
-      bubbleRef={bubbleRef}
-      rowRef={rowRef}
-      swipe={rowSwipeRef.current}
-      threadPlace={props.threadPlace}
-      timeLabel={props.timeLabel}
-      rowData={props.rowData}
-      onTapOpen={props.onTapOpen}
-      {...(props.topLine !== undefined ? { topLine: props.topLine } : {})}
-      {...(props.bottomLine !== undefined ? { bottomLine: props.bottomLine } : {})}
-      press={{
-        handlers: pointer,
-        onContextMenu: rowHold.contextMenu,
-        consumeClick: () => {
-          const held = consumeClickSuppression();
-          const swiped = swipe.consumeClickSuppression();
-          return held || swiped;
-        },
-        coarse: props.coarsePointer,
-        onKeyOpen: () => open(bubbleRect()),
-        ...(props.hoverMenu
-          ? {
-              onMore: () => open(bubbleRect()),
-              onReact: () => {
-                clearClickSuppression();
-                latest.current.onOpenMenu(bubbleRect(), true);
-              },
-            }
-          : {}),
-      }}
-      {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
-      {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
-      reactionChips={{
-        onToggle: (emoji) => props.reactions.toggle(id, emoji),
-        onPick: (emoji) => props.reactions.pick(id, emoji),
-        who: {
-          targetId: id,
-          viewerId: props.me,
-          load: () =>
-            whoReactedFromRows(supabase, {
-              rows: props.reactions.rowsOf(id),
-              workspaceId: props.workspaceId,
-              known: (uid) => props.profiles.get(uid),
-            }),
-        },
-      }}
+      details={data.details}
+      onIndexChange={props.onIndexChange}
+      onClose={props.onClose}
     />
   );
 }
