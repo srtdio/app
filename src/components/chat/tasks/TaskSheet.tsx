@@ -70,7 +70,7 @@ import {
   type RowMenu,
   type RowNotice,
 } from '@/components/chat/tasks/TaskRow';
-import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
+import type { SaveOutcome, UseChatTasks } from '@/components/chat/tasks/useChatTasks';
 import { useTaskShare, type TaskShareWiring } from '@/components/chat/tasks/useTaskShare';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
@@ -539,9 +539,17 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
       setSaving(true);
       savingRef.current = true;
       setSaveFailed(false);
-      const outcome = await tasks.saveBatch(payload);
-      savingRef.current = false;
-      setSaving(false);
+      // Saving always ends: a rejected save lands as a failure (Retry), never
+      // leaving `saving` on, which would stop every later save and the close.
+      let outcome: SaveOutcome;
+      try {
+        outcome = await tasks.saveBatch(payload);
+      } catch {
+        outcome = { ok: false };
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
       if (!outcome.ok) {
         setSaveFailed(true);
         return;
@@ -598,16 +606,26 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const save = useCallback((): void => {
     void runSave(draft, sendable);
   }, [runSave, draft, sendable]);
+  // The autosave timer fires the latest save, so a new `tasks` object or list
+  // (a live re-read, a parent render) never restarts its countdown.
+  const saveRef = useRef(save);
+  saveRef.current = save;
 
-  // Autosave: the draft goes out once changes settle; a queued delete waits out
-  // its row's Undo (UNDO_MS) first. After a failure it waits for Retry or the
-  // next change (an edit clears the failure). Closing sends at once.
+  // Autosave: the draft goes out once this person's changes settle; a queued
+  // delete waits out its row's Undo (UNDO_MS) first. The countdown restarts
+  // only on a change to the draft, never on a re-read or re-render (that
+  // starved the 4 s delete hold on a busy chat: deletes never saved and the
+  // header sat on Saving…). After a failure it waits for Retry or the next
+  // change (an edit clears the failure). Closing sends at once.
   const holdsDelete = sendable.deletes.length > 0;
   useEffect(() => {
     if (!props.open || !pending || saving || saveFailed || wantClose) return;
-    const timer = createPausableTimer(save, holdsDelete ? UNDO_MS : TASK_AUTOSAVE_MS);
+    const timer = createPausableTimer(
+      () => saveRef.current(),
+      holdsDelete ? UNDO_MS : TASK_AUTOSAVE_MS,
+    );
     return () => timer.cancel();
-  }, [props.open, pending, holdsDelete, saving, saveFailed, wantClose, save]);
+  }, [props.open, pending, holdsDelete, saving, saveFailed, wantClose, draft]);
 
   const close = props.onClose;
   const requestClose = useCallback((): void => setWantClose(true), []);
