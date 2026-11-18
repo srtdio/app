@@ -13,7 +13,8 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
-  IconPlus,
+  IconSwitch,
+  IconTrash,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
@@ -207,13 +208,14 @@ export const DOWNLOAD_DONE = 'Downloaded';
 export const DOWNLOAD_FAILED = errorText('download', null);
 
 /**
- * The agency manage actions, prewired to the current slide. #26: no per-tap
- * reorder here; reordering is hold-and-drag in the gallery. No second delete
- * either: removing a picture is the one Remove image (the post ⋯ menu, the
- * slide actions sheet), behind the page's Undo strip.
+ * The creator's keys on the opened picture, prewired to the current slide
+ * (18 Nov 2026): Replace opens the page's add sheet for this place; Remove is
+ * the page's one Remove image, behind its Undo strip. Reordering lives in the
+ * gallery's Arrange sheet.
  */
 export interface LightboxManage {
-  onAddAfter: () => void;
+  onReplace: () => void;
+  onRemove?: (() => void) | undefined;
 }
 
 /** Pointer gesture handlers the zoom layer spreads onto each slide stage. */
@@ -470,7 +472,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
       </div>
 
       {/* Action bar: a slim full-width bar directly below the image (not
-          overlapping it) with the agency controls (download / add), or download
+          overlapping it) with the creator's keys (download, replace, remove), or download
           only for clients and read-only. */}
       <div
         className={cn('flex h-12 w-full items-center justify-center', chromeMotion(chromeVisible))}
@@ -498,14 +500,26 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             </IconButton>
             <IconButton
               type="button"
-              label="Add image"
-              onClick={manage.onAddAfter}
-              // cn() merges: text-accent would now beat the overlay ink (it lost by
-              // CSS order before), so the overlay ink stays, as it rendered.
+              label="Replace"
+              data-lightbox-replace=""
+              disabled={saving}
+              onClick={manage.onReplace}
               className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
             >
-              <IconPlus size={ICON_SIZE.control} />
+              <IconSwitch size={ICON_SIZE.control} />
             </IconButton>
+            {manage.onRemove !== undefined ? (
+              <IconButton
+                type="button"
+                label="Remove image"
+                data-lightbox-remove=""
+                disabled={saving}
+                onClick={manage.onRemove}
+                className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
+              >
+                <IconTrash size={ICON_SIZE.control} />
+              </IconButton>
+            ) : null}
             {saving ? (
               <span aria-live="polite" className="ml-2 text-sm text-overlay-fg-dim">
                 Saving…
@@ -622,7 +636,8 @@ interface PostLightboxProps {
    */
   manage?:
     | {
-        onAddAfter: (index: number) => void;
+        onReplace: (index: number) => void;
+        onRemove?: ((index: number) => void) | undefined;
       }
     | undefined;
   /** A gallery write is in flight: the bar says "Saving…". */
@@ -1026,9 +1041,8 @@ export function PostLightbox({
   const manageView: LightboxManage | undefined =
     manage !== undefined
       ? {
-          onAddAfter: () => {
-            manage.onAddAfter(index);
-          },
+          onReplace: () => manage.onReplace(index),
+          ...(manage.onRemove !== undefined ? { onRemove: () => manage.onRemove?.(index) } : {}),
         }
       : undefined;
 

@@ -196,7 +196,8 @@ describe('7. small copy and hit areas', () => {
   it('no em-dashes in the touched files', () => {
     for (const rel of [
       './PostDetailPage.tsx',
-      './pcs/SlideActionsSheet.tsx',
+      './pcs/ArrangeSheet.tsx',
+      './pcs/AddSourceSheet.tsx',
       './pcs/PostDetailsSheet.tsx',
       './pcs/stage-actions.ts',
     ]) {

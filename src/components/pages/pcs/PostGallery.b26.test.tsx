@@ -7,11 +7,14 @@ import {
   PostGallery,
   galleryToolsRow,
   galleryView,
-  reorderView,
-  REORDER_HELPER,
   type GalleryToolsModel,
-  type ReorderModel,
 } from '@/components/pages/pcs/PostGallery';
+import {
+  ARRANGE_HELPER,
+  arrangeChanged,
+  arrangeIndexAt,
+  arrangeSlotOrigin,
+} from '@/components/pages/pcs/ArrangeSheet';
 import {
   dropIndex,
   galleryWriteErrorCopy,
@@ -23,9 +26,9 @@ import { LEADING_PULL, TRAILING_PULL } from '@/components/ui/layout';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
-// #26 regression: the gallery tools row under the picture (Add, Replace,
-// Reorder, v{n}), Replace and Reorder each landing as ONE gallery_set, and no
-// edit tools on an approved post. node environment, no DOM: hookless trees are
+// The gallery tools row under the strip (Add, Arrange, v{n}; 18 Nov 2026),
+// Replace and Arrange each landing as ONE gallery_set, and no edit tools on an
+// approved post. node environment, no DOM: hookless trees are
 // walked, PostGallery is rendered to static markup, and the page wiring that
 // lives inside hooks is pinned against the source.
 
@@ -34,6 +37,7 @@ function read(rel: string): string {
 }
 const PAGE = read('../PostDetailPage.tsx');
 const GALLERY = read('./PostGallery.tsx');
+const ARRANGE = read('./ArrangeSheet.tsx');
 
 function flatten(node: ReactNode, out: ReactElement[]): void {
   if (Array.isArray(node)) {
@@ -93,22 +97,24 @@ function toolsModel(over: Partial<GalleryToolsModel> = {}): GalleryToolsModel {
     saving: false,
     error: null,
     onAdd: vi.fn(),
-    onReplace: vi.fn(),
-    onReorder: vi.fn(),
+    onArrange: vi.fn(),
     onVersions: vi.fn(),
     ...over,
   };
 }
 
-describe('#26 gallery tools row', () => {
-  it('one row: Add, Replace, Reorder on the left, v{n} on the right, all 44px', () => {
+describe('gallery tools row', () => {
+  it('one row: Add and Arrange on the left, v{n} on the right, all 44px', () => {
     const tree = galleryToolsRow(toolsModel());
     expect(tree).not.toBeNull();
     const html = renderToStaticMarkup(tree!);
-    const order = ['>Add<', '>Replace<', '>Reorder<', '>v4<'].map((t) => html.indexOf(t));
+    const order = ['>Add<', '>Arrange<', '>v4<'].map((t) => html.indexOf(t));
     expect(order.every((at) => at > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html.match(/min-h-11/g)?.length).toBe(4);
+    expect(html.match(/min-h-11/g)?.length).toBe(3);
+    // Replace and Remove live on the opened picture, reordering in Arrange.
+    expect(html).not.toContain('>Replace<');
+    expect(html).not.toContain('>Reorder<');
     // One row: the left group never wraps; v{n} stays on the right.
     expect(html).toContain('min-w-0 flex-1 items-center');
     expect(html).not.toContain('flex-wrap');
@@ -134,7 +140,7 @@ describe('#26 gallery tools row', () => {
       galleryToolsRow(toolsModel({ canEdit: false, locked: true }))!,
     );
     expect(lockRow).toMatch(/data-gallery-lock=""[^>]*class="[^"]*max-md:ml-0 max-md:w-auto/);
-    expect(cls(byData(tree, 'data-gallery-replace'))).not.toContain(LEADING_PULL);
+    expect(cls(byData(tree, 'data-gallery-arrange'))).not.toContain(LEADING_PULL);
   });
 
   it('no row without edit tools, a lock or v{n}', () => {
@@ -152,7 +158,7 @@ describe('#26 gallery tools row', () => {
     expect(html).not.toContain('data-gallery-add');
   });
 
-  it('dots sit directly under the picture; the toolbar comes after them', () => {
+  it('no dots and no counter: the toolbar comes right after the strip', () => {
     const html = renderToStaticMarkup(
       galleryView({
         items: [item(0), item(1)],
@@ -163,24 +169,23 @@ describe('#26 gallery tools row', () => {
       }),
     );
     const lastSlide = html.lastIndexOf('View image');
-    const firstDot = html.indexOf('Go to slide 1');
     const toolbar = html.indexOf('data-test-toolbar');
     expect(lastSlide).toBeGreaterThan(-1);
-    expect(firstDot).toBeGreaterThan(lastSlide);
-    expect(toolbar).toBeGreaterThan(firstDot);
+    expect(toolbar).toBeGreaterThan(lastSlide);
+    expect(html).not.toContain('Go to slide');
+    expect(html).not.toContain('>1/2<');
   });
 
-  it('Add inserts after the slide on show (the old slide ⋮ Add image after this)', () => {
-    expect(GALLERY).toContain(
-      'if (onAddAfter !== undefined && items.length > 0) onAddAfter(shownIndex);',
-    );
+  it('Add appends: new files land last (no insert-after path)', () => {
+    expect(GALLERY).toContain('onAdd: tools.onAdd,');
+    expect(GALLERY).not.toContain('onAddAfter');
+    expect(PAGE).not.toContain('insertAfter');
   });
 
   it('approvers and approved posts get only the v{n} button', () => {
     const tree = galleryToolsRow(toolsModel({ canEdit: false }));
     expect(byData(tree, 'data-gallery-add')).toBeUndefined();
-    expect(byData(tree, 'data-gallery-replace')).toBeUndefined();
-    expect(byData(tree, 'data-gallery-reorder')).toBeUndefined();
+    expect(byData(tree, 'data-gallery-arrange')).toBeUndefined();
     const onVersions = vi.fn();
     click(
       byData(galleryToolsRow(toolsModel({ canEdit: false, onVersions })), 'data-gallery-versions'),
@@ -204,12 +209,11 @@ describe('#26 gallery tools row', () => {
         cache={cache}
         deps={{} as PresignDeps}
         presignEnabled={false}
-        onSlideActions={vi.fn()}
         tools={tools}
       />,
     );
     expect(locked).not.toContain('data-gallery-add');
-    expect(locked).not.toContain('data-gallery-reorder');
+    expect(locked).not.toContain('data-gallery-arrange');
     expect(locked).not.toContain('Slide 1 actions');
     expect(locked).toContain('>v2<');
 
@@ -219,13 +223,12 @@ describe('#26 gallery tools row', () => {
         cache={cache}
         deps={{} as PresignDeps}
         presignEnabled={false}
-        onSlideActions={vi.fn()}
         tools={{ ...tools, canEdit: true }}
       />,
     );
     expect(open).toContain('data-gallery-add');
-    expect(open).toContain('data-gallery-replace');
-    expect(open).toContain('data-gallery-reorder');
+    expect(open).toContain('data-gallery-arrange');
+    expect(open).not.toContain('data-gallery-replace');
     expect(open).not.toContain('Slide 1 actions');
     expect(open).not.toContain('rounded-full bg-overlay');
     expect(GALLERY).not.toContain('slideMenuButton');
@@ -251,7 +254,7 @@ describe('#26 gallery tools row', () => {
   });
 });
 
-describe('#26 Replace is one save', () => {
+describe('Replace is one save', () => {
   it('swaps only the current slide, keeping order and length', () => {
     expect(replaceAt(['a', 'b', 'c'], 1, 'n')).toEqual(['a', 'n', 'c']);
     expect(replaceAt(['a'], 5, 'n')).toEqual(['a']);
@@ -259,105 +262,67 @@ describe('#26 Replace is one save', () => {
 
   it('the page replaces the slide in one gallery_set commit after upload', () => {
     expect(PAGE).toContain("onReplace: (index) => openAdd({ mode: 'replace', index }),");
-    const uploaded = PAGE.slice(PAGE.indexOf('async function handleUploaded'));
-    const body = uploaded.slice(0, uploaded.indexOf('\n  }\n'));
+    const apply = PAGE.slice(PAGE.indexOf('async function applyNewVersions'));
+    const body = apply.slice(0, apply.indexOf('\n  }\n'));
     expect(body).toContain('ids = replaceAt(ids, target.index, first);');
     expect(body.split('commitGallery(')).toHaveLength(2);
   });
 });
 
-describe('#26 Reorder: hold and drag only, saved on drop', () => {
-  function reorderModel(over: Partial<ReorderModel> = {}): ReorderModel {
-    return {
-      items: [item(0), item(1), item(2)],
-      cache,
-      presignEnabled: false,
-      ratio: 4 / 5,
-      drag: null,
-      saving: false,
-      error: null,
-      onMove: vi.fn(),
-      onTilePointerDown: vi.fn(),
-      onTilePointerMove: vi.fn(),
-      onTilePointerUp: vi.fn(),
-      onTilePointerCancel: vi.fn(),
-      ...over,
-    };
-  }
+describe('Arrange: one sheet, one save on Done', () => {
+  const grid = { columns: 3, cellWidth: 100, cellHeight: 125, gap: 8, count: 5 };
 
-  it('no reorder buttons: no Make first / last, Move left / right, Save order or Cancel', () => {
-    const tree = reorderView(reorderModel());
-    const html = renderToStaticMarkup(tree);
-    for (const gone of ['Make first', 'Make last', 'Move left', 'Move right', 'Save order']) {
-      expect(html).not.toContain(gone);
-    }
-    expect(html).not.toContain('>Cancel<');
-    for (const hook of ['data-reorder-left', 'data-reorder-right', 'data-reorder-save']) {
-      expect(byData(tree, hook)).toBeUndefined();
-    }
-    expect(elements(tree).filter((el) => el.type === Button)).toHaveLength(0);
+  it('one helper line that teaches both jobs', () => {
+    expect(ARRANGE_HELPER).toBe('Drag to change the order. Drop on Remove to delete.');
+    expect(ARRANGE.split('{ARRANGE_HELPER}')).toHaveLength(2);
   });
 
-  it('one helper line: "Hold and drag a photo to reorder"', () => {
-    expect(REORDER_HELPER).toBe('Hold and drag a photo to reorder');
-    const html = renderToStaticMarkup(reorderView(reorderModel()));
-    expect(html.split(REORDER_HELPER)).toHaveLength(2);
-    expect(html).not.toContain('pick a slide and move it');
+  it('the slot under the pointer, clamped to the pictures there are', () => {
+    expect(arrangeIndexAt(10, 10, grid)).toBe(0);
+    expect(arrangeIndexAt(230, 10, grid)).toBe(2);
+    expect(arrangeIndexAt(120, 140, grid)).toBe(4);
+    // Past the last picture, and off the grid's edges.
+    expect(arrangeIndexAt(300, 300, grid)).toBe(4);
+    expect(arrangeIndexAt(-40, -40, grid)).toBe(0);
+    expect(arrangeIndexAt(5, 5, { ...grid, count: 0 })).toBe(0);
   });
 
-  it('arrow keys move the focused tile (keyboard reorder)', () => {
-    const model = reorderModel();
-    const tile = elements(reorderView(model)).filter(
-      (el) => (el.props as Record<string, unknown>)['data-reorder-tile'] !== undefined,
-    )[2];
-    const onKeyDown = (tile?.props as { onKeyDown: (e: unknown) => void }).onKeyDown;
-    onKeyDown({ key: 'ArrowLeft', preventDefault: () => {} });
-    expect(model.onMove).toHaveBeenCalledWith('aa-2', -1);
+  it('a slot sits one cell plus one gap from its neighbour', () => {
+    expect(arrangeSlotOrigin(0, grid)).toEqual({ x: 0, y: 0 });
+    expect(arrangeSlotOrigin(2, grid)).toEqual({ x: 216, y: 0 });
+    expect(arrangeSlotOrigin(4, grid)).toEqual({ x: 108, y: 133 });
   });
 
-  it('the lifted tile moves on X only (translateX); the row still scrolls', () => {
-    const tree = reorderView(reorderModel({ drag: { id: 'aa-0', dx: 42 } }));
-    const html = renderToStaticMarkup(tree);
-    expect(html).toContain('transform:translateX(42px)');
-    expect(html).toContain('data-reorder-lifted');
-    expect(html).not.toMatch(/rotate|scale\(/);
-    // Hold, not touch: the row scrolls under a finger until a photo is lifted.
-    expect(html).not.toContain('touch-none');
-    // Nothing animates movement, so reduced motion is respected.
+  it('changed means moved or removed, never an untouched list', () => {
+    expect(arrangeChanged(['a', 'b'], ['a', 'b'])).toBe(false);
+    expect(arrangeChanged(['a', 'b'], ['b', 'a'])).toBe(true);
+    expect(arrangeChanged(['a', 'b'], ['a'])).toBe(true);
+  });
+
+  it('the lifted picture follows the pointer only: no rotation, no scale, no transition', () => {
+    expect(ARRANGE).toContain('transform: `translate(');
+    expect(ARRANGE).not.toMatch(/rotate|scale\(|transition-transform|transition-all/);
     expect(GALLERY).not.toMatch(/transition-transform|transition-all/);
   });
 
-  it('the tools row rides under the strip with Reorder pressed (it leaves the mode)', () => {
-    const onReorder = vi.fn();
-    const toolbar = galleryToolsRow(toolsModel({ reordering: true, onReorder }));
-    const tree = reorderView(reorderModel({ toolbar }));
-    const reorder = byData(tree, 'data-gallery-reorder');
-    expect((reorder?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(true);
-    expect((reorder?.props as { disabled?: boolean }).disabled).toBe(false);
-    click(reorder);
-    expect(onReorder).toHaveBeenCalledTimes(1);
-    expect((byData(tree, 'data-gallery-add')?.props as { disabled?: boolean }).disabled).toBe(true);
-  });
-
-  it('drag math lands the tile by whole steps, clamped', () => {
+  it('drag math still moves a picture to its new place', () => {
     expect(dropIndex(0, 130, 100, 3)).toBe(1);
-    expect(dropIndex(0, 900, 100, 3)).toBe(2);
-    expect(dropIndex(2, -260, 100, 3)).toBe(0);
     expect(moveTo(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a']);
   });
 
-  it('a drop saves at once through onSaveOrder (one gallery_set), held by LONG_PRESS_MS', () => {
-    // One save path, called from a drop and from the arrow keys.
-    expect(GALLERY.split('tools.onSaveOrder(')).toHaveLength(2);
-    const up = GALLERY.slice(GALLERY.indexOf('onTilePointerUp: () => {'));
-    expect(up.slice(0, up.indexOf('\n      },\n'))).toContain('saveOrder(moveTo(');
-    // The hold lifts the tile; a refused save puts the saved order back.
-    expect(GALLERY).toContain('const { handlers: holdHandlers } = useLongPress(');
-    expect(GALLERY).toContain(
-      'if (!ok) setReorderIds((current) => (current === null ? current : saved));',
-    );
+  it('nothing is saved until Done: one onSave, wired to the one gallery commit', () => {
+    expect(ARRANGE.split('void onSave(')).toHaveLength(2);
+    expect(ARRANGE).toContain('dirty={changed}');
+    expect(GALLERY).toContain('onSave={tools.onSaveOrder}');
+    expect(GALLERY).not.toContain('reorderView');
     expect(PAGE).toContain('onSaveOrder: commitGallery,');
     const commit = PAGE.slice(PAGE.indexOf('const commitGallery = useCallback('));
     expect(commit.slice(0, commit.indexOf('\n  );\n')).split('gallerySet(')).toHaveLength(2);
+  });
+
+  it('holding a picture or right-clicking it opens Arrange (no slide actions sheet)', () => {
+    expect(GALLERY).toContain('if (canArrange) setArrangeOpen(true);');
+    expect(GALLERY).not.toContain('onSlideActions');
+    expect(PAGE).not.toContain('SlideActionsSheet');
   });
 });

@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import {
-  galleryFrame,
-  galleryToolsRow,
-  galleryView,
-  reorderView,
-  type ReorderModel,
-} from '@/components/pages/pcs/PostGallery';
+import { galleryFrame, galleryToolsRow, galleryView } from '@/components/pages/pcs/PostGallery';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -69,7 +63,7 @@ function item(n: number): GalleryItem {
 }
 
 describe('PostGallery buttons', () => {
-  it('tools row: Add, Replace, Reorder and v{n} are shared buttons', () => {
+  it('tools row: Add, Arrange and v{n} are shared buttons', () => {
     const tree = galleryToolsRow({
       canEdit: true,
       itemCount: 3,
@@ -77,13 +71,12 @@ describe('PostGallery buttons', () => {
       saving: false,
       error: null,
       onAdd: vi.fn(),
-      onReplace: vi.fn(),
-      onReorder: vi.fn(),
+      onArrange: vi.fn(),
       onVersions: vi.fn(),
     });
     if (tree === null) throw new Error('no tools row');
     const tags = buttonTags(renderToStaticMarkup(tree));
-    expect(tags).toHaveLength(4);
+    expect(tags).toHaveLength(3);
     for (const tag of tags) {
       expectShared(tag, true);
       // A row of 3+ actions is the Tool level: no fill, no border, no lighting.
@@ -113,25 +106,5 @@ describe('PostGallery buttons', () => {
     expectShared(tag!);
     expect(classOf(tag!)).toContain('text-fg');
     expect(html).not.toContain('Tap to see full image');
-  });
-
-  it('reorder: no button bar, only the photo tiles (hold and drag, saved on drop)', () => {
-    const model: ReorderModel = {
-      items: [item(0), item(1), item(2)],
-      cache,
-      presignEnabled: false,
-      ratio: 4 / 5,
-      drag: null,
-      saving: false,
-      error: null,
-      onMove: vi.fn(),
-      onTilePointerDown: vi.fn(),
-      onTilePointerMove: vi.fn(),
-      onTilePointerUp: vi.fn(),
-      onTilePointerCancel: vi.fn(),
-    };
-    const tags = buttonTags(renderToStaticMarkup(reorderView(model)));
-    expect(tags).toHaveLength(3);
-    expect(tags.every((tag) => tag.includes('data-reorder-tile'))).toBe(true);
   });
 });

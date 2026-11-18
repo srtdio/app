@@ -275,6 +275,12 @@ interface AssetUploadSheetProps {
    * passes the post title). Still editable.
    */
   defaultBaseName?: string | null;
+  /**
+   * The file chooser's filter (the post's Add sheet passes photos and videos,
+   * or documents). Default: every allowed type. The server allowlist is the
+   * real gate either way.
+   */
+  accept?: string;
 }
 
 /**
@@ -304,6 +310,7 @@ export function AssetUploadSheet({
   onUploaded,
   siblingLabels = [],
   defaultBaseName = null,
+  accept = UPLOAD_ACCEPT,
 }: AssetUploadSheetProps) {
   const [uploads, setUploads] = useState<PendingUpload[]>([]);
   const [statuses, setStatuses] = useState<Record<string, FileStatus>>({});
@@ -625,7 +632,7 @@ export function AssetUploadSheet({
         id={inputId}
         type="file"
         multiple
-        accept={UPLOAD_ACCEPT}
+        accept={accept}
         className="sr-only"
         onChange={(event) => {
           addFiles(event.target.files);

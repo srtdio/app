@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
   PointerEvent as ReactPointerEvent,
   MouseEvent as ReactMouseEvent,
@@ -8,14 +8,15 @@ import type { CSSProperties, ReactElement, ReactNode, Ref } from 'react';
 import {
   ICON_SIZE,
   IconAssets,
+  IconChevronLeft,
+  IconChevronRight,
   IconGrip,
   IconHistory,
   IconImagePlus,
   IconLock,
   IconPlus,
-  IconSwitch,
 } from '@/components/ui/icons';
-import { dropIndex, moveTo } from '@/components/pages/pcs/gallery-transforms';
+import { ArrangeSheet } from '@/components/pages/pcs/ArrangeSheet';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostLightbox } from '@/components/pages/pcs/PostLightbox';
 import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
@@ -528,8 +529,11 @@ interface GalleryViewProps {
   scrollerRef?: Ref<HTMLDivElement> | undefined;
   /** Carousel: native scroll listener that derives the active index. */
   onScroll?: ((event: ReactUIEvent<HTMLDivElement>) => void) | undefined;
-  /** Carousel: a dot tap requests a native smooth scroll to that slide. */
-  onDotClick?: ((index: number) => void) | undefined;
+  /**
+   * Strip (laptop): the round arrow keys on its edges. prev / next say whether
+   * there is more that way; onStep slides the strip one screen.
+   */
+  arrows?: { prev: boolean; next: boolean; onStep: (direction: -1 | 1) => void } | undefined;
   /** Ribbon: dimensions measured from decoded images, keyed by attachment id. */
   measuredDimensions?: MeasuredDimensions;
   /** Ribbon: report a tile's intrinsic size once its image decodes. */
@@ -546,15 +550,15 @@ interface GalleryViewProps {
   /** The warning line's "See preview": opens the platform Preview panel. */
   onSeePreview?: (() => void) | undefined;
   /**
-   * The post gallery's one toolbar row (Add, Replace, Reorder, v{n}), rendered
-   * under the dots. Absent on the brief grid.
+   * The post gallery's one toolbar row (Add, Arrange, v{n}), rendered under
+   * the strip. Absent on the brief grid.
    */
   toolbar?: ReactNode;
 }
 
 /** What the gallery tools row under the picture needs. */
 export interface GalleryToolsModel {
-  /** Creator on draft / review / parked / rejected: Add, Replace, Reorder show. */
+  /** Creator on draft / review / parked / rejected: Add and Arrange show. */
   canEdit: boolean;
   /** Spec B4: a creator on an approved post sees a lock in place of the tools. */
   locked?: boolean;
@@ -565,35 +569,27 @@ export interface GalleryToolsModel {
   /** The one inline error line from the last failed gallery write. */
   error: string | null;
   onAdd: () => void;
-  onReplace: () => void;
-  onReorder: () => void;
+  /** Open the Arrange sheet (reorder and remove, one save on Done). */
+  onArrange: () => void;
   onVersions: () => void;
-  /**
-   * Reorder mode is on: Reorder shows pressed and leaves it (each drop already
-   * saved); Add and Replace wait until it is off.
-   */
-  reordering?: boolean;
 }
 
 /**
- * #26: the one toolbar row under the dots. Left: Add, Replace, Reorder (creators
- * on an editable stage), the first glyph on the page edge (LEADING_PULL over
- * the Tool's 12 padding); a creator on an approved post sees one 14px lock in
- * place of the edit tools. Right: the v{n} button that opens the versions
- * sheet, its text on the page edge (TRAILING_PULL). One row, never wrapping:
- * the tools touch, their own 12 padding keeping 24 between labels. Nothing
- * when there is nothing to show. Pure.
+ * The one toolbar row under the strip (18 Nov 2026). Left: Add and Arrange
+ * (creators on an editable stage), the first glyph on the page edge
+ * (LEADING_PULL over the Tool's 12 padding); a creator on an approved post
+ * sees one 14px lock in place of the edit tools. Right: the v{n} button that
+ * opens the versions sheet, its text on the page edge (TRAILING_PULL). Replace
+ * and Remove live on the opened picture; reordering lives in Arrange. One row,
+ * never wrapping. Nothing when there is nothing to show. Pure.
  */
 export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
   const { canEdit, itemCount, saving, error, versionNumber } = model;
-  const reordering = model.reordering === true;
   const locked = !canEdit && model.locked === true;
   if (!canEdit && !locked && versionNumber === null) return null;
   return (
     <div data-gallery-tools="" className="mt-2 flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        {/* Phone: with the version key the three tools can outgrow a 360 or
-            320 screen; they scroll, every label whole (PHONE_TOOLS_SCROLL). */}
         <div
           data-gallery-tool-keys=""
           className={cn('flex min-w-0 flex-1 items-center', PHONE_TOOLS_SCROLL)}
@@ -618,7 +614,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
               <Button
                 type="button"
                 data-gallery-add=""
-                disabled={saving || reordering}
+                disabled={saving}
                 onClick={model.onAdd}
                 variant="ghost"
                 className={cn('px-3', LEADING_PULL)}
@@ -628,26 +624,15 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
               </Button>
               <Button
                 type="button"
-                data-gallery-replace=""
-                disabled={saving || reordering || itemCount === 0}
-                onClick={model.onReplace}
-                variant="ghost"
-                className="px-3"
-              >
-                <IconSwitch size={ICON_SIZE.inline} />
-                Replace
-              </Button>
-              <Button
-                type="button"
-                data-gallery-reorder=""
-                aria-pressed={reordering}
-                disabled={saving || (!reordering && itemCount < 2)}
-                onClick={model.onReorder}
+                data-gallery-arrange=""
+                aria-haspopup="dialog"
+                disabled={saving || itemCount === 0}
+                onClick={model.onArrange}
                 variant="ghost"
                 className="px-3"
               >
                 <IconGrip size={ICON_SIZE.inline} />
-                Reorder
+                Arrange
               </Button>
             </>
           ) : null}
@@ -678,117 +663,6 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
           {error}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-/** The reorder mode's one helper line. */
-export const REORDER_HELPER = 'Hold and drag a photo to reorder';
-
-/** What the reorder strip needs; the wrapper owns the order and the drag state. */
-export interface ReorderModel {
-  /** The order on show (the saved order, or the one a drop is saving). */
-  items: readonly GalleryItem[];
-  cache: PresignCache;
-  presignEnabled: boolean;
-  /** Platform frame ratio (w / h) for the tiles; 4/5 when the post has none. */
-  ratio: number;
-  /** The tile held and lifted, and how far it has travelled along the row. */
-  drag: { id: string; dx: number } | null;
-  saving: boolean;
-  error: string | null;
-  /** Keyboard: move a tile one place; saved at once, like a drop. */
-  onMove: (id: string, delta: -1 | 1) => void;
-  onTilePointerDown: (id: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
-  onTilePointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  /** Release: a lifted tile drops (and the new order saves). */
-  onTilePointerUp: () => void;
-  /** The browser took the pointer: no drop, nothing saved. */
-  onTilePointerCancel: () => void;
-  /** The scrolling row (the wrapper holds its touch scroll while a tile is lifted). */
-  stripRef?: Ref<HTMLDivElement> | undefined;
-  tileRef?: ((id: string, el: HTMLButtonElement | null) => void) | undefined;
-  /** The tools row under the strip, Reorder pressed (tapping it leaves the mode). */
-  toolbar?: ReactNode;
-}
-
-/**
- * #26 reorder mode, hold-and-drag only. The slides sit in one horizontal row
- * that scrolls natively; holding a photo (LONG_PRESS_MS) lifts it, and it then
- * drags along the row only (translateX, no rotation, no scale). The drop saves
- * the new order at once (one gallery_set); there are no move or save buttons.
- * The arrow keys move a focused tile one place, saved the same way. The lifted
- * tile follows the pointer directly; nothing else animates, so reduced motion
- * needs no special case. Pure.
- */
-export function reorderView(model: ReorderModel): ReactElement {
-  const { items, drag, error, ratio } = model;
-  return (
-    <div data-reorder="" className="flex flex-col gap-2">
-      <p data-reorder-helper="" className="text-base text-fg-2">
-        {REORDER_HELPER}
-      </p>
-      <div
-        ref={model.stripRef}
-        className="flex gap-2 overflow-x-auto overscroll-x-contain py-1"
-        role="list"
-      >
-        {items.map((item, index) => {
-          const dragging = drag !== null && drag.id === item.assetAttachmentId;
-          return (
-            <div key={item.assetAttachmentId} role="listitem" className="shrink-0">
-              <PressableRow
-                inline
-                type="button"
-                buttonRef={
-                  model.tileRef !== undefined
-                    ? (el) => model.tileRef?.(item.assetAttachmentId, el)
-                    : undefined
-                }
-                data-reorder-tile=""
-                {...(dragging ? { 'data-reorder-lifted': '' } : {})}
-                aria-label={`Slide ${index + 1} of ${items.length}. Use the arrow keys to move it.`}
-                onKeyDown={(event) => {
-                  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                    event.preventDefault();
-                    model.onMove(item.assetAttachmentId, event.key === 'ArrowLeft' ? -1 : 1);
-                  }
-                }}
-                onPointerDown={(event) => model.onTilePointerDown(item.assetAttachmentId, event)}
-                onPointerMove={model.onTilePointerMove}
-                onPointerUp={model.onTilePointerUp}
-                onPointerCancel={model.onTilePointerCancel}
-                style={
-                  dragging && drag !== null
-                    ? { aspectRatio: `${ratio}`, transform: `translateX(${drag.dx}px)` }
-                    : { aspectRatio: `${ratio}` }
-                }
-                className={cn(
-                  'relative flex h-24 min-w-11 cursor-grab items-center justify-center overflow-hidden border bg-panel-2 mv-tint',
-                  SLIDE_PRESS_CLASS,
-                  slideEdge(dragging),
-                  dragging && 'z-raised cursor-grabbing lit-float',
-                )}
-              >
-                <GalleryThumb
-                  item={item}
-                  cache={model.cache}
-                  presignEnabled={model.presignEnabled}
-                />
-                <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-overlay px-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
-                  {index + 1}
-                </span>
-              </PressableRow>
-            </div>
-          );
-        })}
-      </div>
-      {error !== null && model.toolbar === undefined ? (
-        <p role="alert" data-gallery-error="" className="text-base text-bad">
-          {error}
-        </p>
-      ) : null}
-      {model.toolbar}
     </div>
   );
 }
@@ -846,15 +720,6 @@ export function SnapshotThumbs({
 const SLIDE_PRESS_CLASS = 'select-none [-webkit-touch-callout:none]';
 
 /**
- * A slide's edge: the selected look (the lifted reorder tile), else the
- * hairline; never both on one slide (guard: outline-rules.test.ts). A lifted
- * slide adds lit-float.
- */
-function slideEdge(selected: boolean): string {
-  return selected ? 'lit-selected' : 'border-border';
-}
-
-/**
  * The gallery's presentational tree, kept hookless so the tree-walking unit tests
  * can exercise it without a DOM renderer. The post gallery default (columns
  * omitted) renders an uncropped horizontal snap ribbon: a native overflow-x
@@ -881,7 +746,7 @@ export function galleryView({
   activeIndex = 0,
   scrollerRef,
   onScroll,
-  onDotClick,
+  arrows,
   measuredDimensions = {},
   onMeasure,
   frame = null,
@@ -961,29 +826,6 @@ export function galleryView({
   // and dots reflect activeIndex, clamped so a shrinking gallery never points
   // past the end while the scroll listener catches up.
   const active = Math.min(Math.max(activeIndex, 0), items.length - 1);
-  const dots =
-    items.length > 1 ? (
-      <div className="flex flex-wrap items-center justify-center">
-        {items.map((item, index) => (
-          <IconButton
-            key={item.assetAttachmentId}
-            type="button"
-            label={`Go to slide ${index + 1}`}
-            aria-current={index === active}
-            onClick={() => {
-              if (onDotClick !== undefined) onDotClick(index);
-            }}
-          >
-            <span
-              className={`h-2 w-2 rounded-full mv-tint ${
-                index === active ? 'bg-accent' : 'bg-border-strong'
-              }`}
-            />
-          </IconButton>
-        ))}
-      </div>
-    ) : null;
-
   // The warning line under the picture: how much the platform cuts the slide on
   // show. The picture itself is never cropped; the Preview panel shows the cut.
   const cut = frameCut(items[active], measuredDimensions, frame);
@@ -995,7 +837,8 @@ export function galleryView({
           ref={scrollerRef}
           onScroll={onScroll}
           aria-roledescription="carousel"
-          className="flex snap-x snap-mandatory items-center gap-3 overflow-x-auto overscroll-x-contain rounded-xl"
+          data-ribbon=""
+          className="flex items-center gap-2 overflow-x-auto overscroll-x-contain rounded-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {items.map((item, index) => {
             // The tile box carries the reserved size; everything inside it is
@@ -1005,7 +848,7 @@ export function galleryView({
                 key={item.assetAttachmentId}
                 data-ribbon-tile=""
                 style={resolveRibbonTileStyle(item, measuredDimensions, solo)}
-                className={cn('relative shrink-0 overflow-hidden', !solo && 'snap-start')}
+                className="relative shrink-0 overflow-hidden rounded-xl"
               >
                 <PressableRow
                   insetFocus
@@ -1045,7 +888,7 @@ export function galleryView({
               <div
                 key={item.assetAttachmentId}
                 data-ribbon-slot=""
-                className="flex w-full shrink-0 snap-start justify-center"
+                className="flex w-full shrink-0 justify-center"
               >
                 {tile}
               </div>
@@ -1054,16 +897,29 @@ export function galleryView({
             );
           })}
         </div>
-        {showIndex ? (
-          <span
-            aria-live="polite"
-            className="pointer-events-none absolute left-2 bottom-2 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media"
+        {arrows !== undefined && !solo && arrows.prev ? (
+          <IconButton
+            type="button"
+            label="Earlier pictures"
+            data-ribbon-prev=""
+            onClick={() => arrows.onStep(-1)}
+            className="absolute left-2 top-1/2 hidden -translate-y-1/2 rounded-full border border-border bg-panel lit-float md:inline-flex"
           >
-            {`${active + 1}/${items.length}`}
-          </span>
+            <IconChevronLeft size={ICON_SIZE.control} />
+          </IconButton>
+        ) : null}
+        {arrows !== undefined && !solo && arrows.next ? (
+          <IconButton
+            type="button"
+            label="More pictures"
+            data-ribbon-next=""
+            onClick={() => arrows.onStep(1)}
+            className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-full border border-border bg-panel lit-float md:inline-flex"
+          >
+            <IconChevronRight size={ICON_SIZE.control} />
+          </IconButton>
         ) : null}
       </div>
-      {dots}
       {cut > 0 ? (
         <div data-frame-cut="" className="mt-1 flex flex-wrap items-center gap-x-1">
           <p className="text-base text-fg-2">{`${platformLabel} cuts ${cut}% of this.`}</p>
@@ -1091,27 +947,21 @@ interface PostGalleryProps {
   cache: PresignCache;
   deps: PresignDeps;
   presignEnabled: boolean;
-  /** Grid columns. Defaults to the post gallery's responsive 4-up grid. */
+  /** Grid columns. Defaults to the post gallery's strip. */
   columns?: number;
   /** Tile aspect ratio token. Defaults to the post gallery's 4/5. */
   aspect?: string;
-  /** Per-tile index badge. Defaults to on, as the post gallery shows it. */
+  /** Per-tile index badge on the brief grid. */
   showIndex?: boolean;
-  /**
-   * F7 (agency-side): open the slide-actions sheet (replace / remove) for a
-   * slide. Reached by right-click on a slide; the lightbox no longer links here.
-   */
-  onSlideActions?: ((index: number) => void) | undefined;
-  /** F7 (agency-side): the append flow, used by the zero-asset empty state. */
+  /** Creator side: the add flow, used by the zero-asset empty state. */
   onAddSlide?: (() => void) | undefined;
   /**
-   * Lightbox manage row: the existing insert-after add/upload flow. #26: the
-   * lightbox has no per-tap reorder (hold-and-drag in Reorder mode) and no
-   * Delete image (Remove image in the post ⋯ menu and the slide actions).
+   * Creator side: remove the picture at this index (the page's one Remove,
+   * behind its Undo strip). The opened picture's Remove key calls it.
    */
-  onAddAfter?: ((index: number) => void) | undefined;
+  onRemove?: ((index: number) => void) | undefined;
   /**
-   * A gallery write is in flight: reorder waits and the lightbox shows
+   * A gallery write is in flight: the tools wait and the opened picture shows
    * "Saving…", so two full-list writes never overlap.
    */
   saving?: boolean | undefined;
@@ -1123,31 +973,20 @@ interface PostGalleryProps {
   /** The warning line's "See preview": opens the platform Preview panel. */
   onSeePreview?: (() => void) | undefined;
   /**
-   * #26: the tools row under the picture (post gallery only). Absent on briefs.
+   * The tools row under the strip (post gallery only). Absent on briefs.
    * canEdit false (approvers, approved posts) leaves only the v{n} button and
-   * also drops every edit path the gallery owns (slide ⋯, lightbox manage row,
-   * the empty-state upload zone).
+   * also drops every edit path the gallery owns (Arrange, the opened picture's
+   * Replace and Remove, the empty-state upload zone).
    */
   tools?: GalleryTools | undefined;
   /**
-   * The slide the carousel currently shows, reported whenever it changes, so the
-   * page can aim the header sheet's Remove image at it.
+   * The picture the strip currently shows first, reported whenever it changes,
+   * so the page can aim the header sheet's Remove image at it.
    */
   onActiveIndexChange?: ((index: number) => void) | undefined;
 }
 
-const EMPTY_EDIT: Pick<PostGalleryProps, 'onAddAfter'> = {};
-
-/** A reorder tile under the finger, before the hold lifts it. */
-interface HeldTile {
-  id: string;
-  el: HTMLButtonElement;
-  pointerId: number;
-  /** The pointer's latest x, where the drag starts once lifted. */
-  x: number;
-}
-
-/** The page's side of the #26 tools row. */
+/** The page's side of the tools row. */
 interface GalleryTools {
   canEdit: boolean;
   /** Spec B4: an approved post, seen by a creator: the tools row shows a lock. */
@@ -1159,15 +998,19 @@ interface GalleryTools {
   onAdd: () => void;
   /** Replace the picture at this index (one gallery_set). */
   onReplace: (index: number) => void;
-  /** Save the whole order with one gallery_set (each drop); resolves true on success. */
+  /** Save the whole list with one gallery_set (Arrange's Done); resolves true on success. */
   onSaveOrder: (assetVersionIds: string[]) => Promise<boolean>;
 }
 
+/** How far one arrow key slides the strip: most of one screen of it. */
+const STRIP_STEP = 0.8;
+
 /**
- * A post's images as an uncropped horizontal snap ribbon (or a brief's as its
- * overview grid, via the columns override). Tapping a tile opens the PCS
- * {@link PostLightbox} at that index. The slide-actions sheet is reachable by
- * long-press or right-click on a tile.
+ * A post's pictures as a strip (18 Nov 2026): side by side, each whole at its
+ * own shape, sliding freely (or a brief's as its overview grid, via the
+ * columns override). Tapping a picture opens the PCS {@link PostLightbox} at
+ * that index. Holding a picture (phone) or right-clicking it (laptop) opens
+ * the Arrange sheet, as the Arrange tool does.
  */
 export function PostGallery({
   items,
@@ -1183,81 +1026,45 @@ export function PostGallery({
   onSeePreview,
   tools,
   onActiveIndexChange,
-  ...editProps
+  onAddSlide: onAddSlideProp,
+  onRemove,
 }: PostGalleryProps) {
-  // #26: an approved post (or an approver) gets no edit path from the gallery,
-  // whatever the page wired: no slide ⋯, no lightbox manage row, no upload zone.
+  // An approved post (or an approver) gets no edit path from the gallery,
+  // whatever the page wired: no Arrange, no Replace or Remove, no upload zone.
   const editLocked = tools !== undefined && !tools.canEdit;
-  const onSlideActions = editLocked ? undefined : editProps.onSlideActions;
-  const onAddSlide = editLocked ? undefined : editProps.onAddSlide;
-  const { onAddAfter } = editLocked ? EMPTY_EDIT : editProps;
+  const canArrange = tools !== undefined && tools.canEdit && columns === 4;
+  const onAddSlide = editLocked ? undefined : onAddSlideProp;
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-  // #26 reorder mode, hold-and-drag only: the order on show (attachment ids;
-  // null when not reordering), the held tile, and the lifted tile's travel.
-  // Each drop saves at once; a refused save puts the saved order back.
-  const [reorderIds, setReorderIds] = useState<string[] | null>(null);
-  const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
-  const dragRef = useRef<{ id: string; startX: number; step: number; dx: number } | null>(null);
-  const pressRef = useRef<HeldTile | null>(null);
-  const stripRef = useRef<HTMLDivElement>(null);
-  const tileEls = useRef(new Map<string, HTMLButtonElement>());
-  const focusAfterMove = useRef<string | null>(null);
+  const [arrangeOpen, setArrangeOpen] = useState(false);
+  // Leaving the editable state (approved, a role change) closes Arrange.
   useEffect(() => {
-    const id = focusAfterMove.current;
-    if (id === null) return;
-    focusAfterMove.current = null;
-    tileEls.current.get(id)?.focus();
-  }, [reorderIds]);
-  // Leaving the editable state (approved, or the gallery emptied) leaves the mode.
-  useEffect(() => {
-    if (editLocked || items.length < 2) setReorderIds(null);
-  }, [editLocked, items.length]);
-  // Holding a photo lifts it (the one LONG_PRESS_MS); a move before that is a
-  // scroll of the row, never a drag.
-  const savingRef = useRef(saving);
-  savingRef.current = saving;
-  const { handlers: holdHandlers } = useLongPress(() => {
-    const press = pressRef.current;
-    if (press === null || savingRef.current) return;
-    try {
-      press.el.setPointerCapture(press.pointerId);
-    } catch {
-      // The pointer already ended; the drop below still runs on release.
-    }
-    // One step is a tile plus the row's gap-2 (8px).
-    dragRef.current = { id: press.id, startX: press.x, step: press.el.offsetWidth + 8, dx: 0 };
-    setDrag({ id: press.id, dx: 0 });
-  });
-  // While a tile is lifted the row's own touch scroll is held, so the finger
-  // drags the tile instead of the row (a non-passive listener; React's are passive).
-  const reordering = reorderIds !== null;
-  useEffect(() => {
-    const el = stripRef.current;
-    if (!reordering || el === null) return;
-    const onTouchMove = (event: TouchEvent): void => {
-      if (dragRef.current !== null && event.cancelable) event.preventDefault();
-    };
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    return () => el.removeEventListener('touchmove', onTouchMove);
-  }, [reordering]);
+    if (!canArrange) setArrangeOpen(false);
+  }, [canArrange]);
 
   // Deleting the last image empties the gallery: the in-place viewer has nothing
-  // to show, so clear the open index and let the ribbon branch fall through to
+  // to show, so clear the open index and let the strip branch fall through to
   // the zero-asset empty state.
   useEffect(() => {
     if (items.length === 0) setOpenIndex(null);
   }, [items.length]);
 
-  // Carousel state: the active slide is derived from the native scroller's
-  // offset (no JS animation, scrolling stays native). A dot tap asks the
-  // scroller for a native smooth scroll to that slide's snap point.
+  // Strip state: the picture on show is derived from the native scroller's
+  // offset (no JS animation, scrolling stays native), and so is whether there
+  // is more to either side (the laptop's arrow keys).
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [edges, setEdges] = useState({ prev: false, next: false });
   const shownIndex = items.length === 0 ? 0 : Math.min(Math.max(activeIndex, 0), items.length - 1);
   useEffect(() => {
     onActiveIndexChange?.(shownIndex);
   }, [shownIndex, onActiveIndexChange]);
+  const readEdges = useCallback((el: HTMLElement): void => {
+    const prev = el.scrollLeft > 4;
+    const next = el.scrollLeft < el.scrollWidth - el.clientWidth - 4;
+    setEdges((current) =>
+      current.prev === prev && current.next === next ? current : { prev, next },
+    );
+  }, []);
   const handleScroll = (event: ReactUIEvent<HTMLDivElement>): void => {
     const el = event.currentTarget;
     // Measure each image tile's left edge; tile widths vary with aspect ratio, so
@@ -1269,19 +1076,17 @@ export function PostGallery({
     }
     const next = nearestTileIndex(el.scrollLeft, offsets);
     setActiveIndex((prev) => (prev === next ? prev : next));
+    readEdges(el);
   };
-  const scrollToSlide = (index: number): void => {
+  const stepStrip = (direction: -1 | 1): void => {
     const el = scrollerRef.current;
     if (el === null) return;
-    const slide = el.children.item(index);
-    if (slide instanceof HTMLElement) {
-      el.scrollTo({ left: slide.offsetLeft - el.offsetLeft, behavior: 'smooth' });
-    }
+    el.scrollBy({ left: direction * el.clientWidth * STRIP_STEP, behavior: 'smooth' });
   };
 
-  // Ribbon: intrinsic sizes recovered from decoded images, keyed by attachment
+  // Strip: intrinsic sizes recovered from decoded images, keyed by attachment
   // id, for tiles whose stored asset_versions.width/height are still null. Set
-  // once per tile on first load so the tile snaps to its true ratio and never
+  // once per tile on first load so the tile takes its true ratio and never
   // resizes again; a zero/NaN natural dimension is filtered upstream in
   // GalleryThumb and never reaches here.
   const [measuredDimensions, setMeasuredDimensions] = useState<MeasuredDimensions>({});
@@ -1292,21 +1097,22 @@ export function PostGallery({
         : { ...prev, [assetAttachmentId]: { width, height } },
     );
   };
+  // The arrows follow the strip's real width: read again whenever the pictures
+  // or their measured shapes change, and when the viewer hands the slot back.
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (el !== null) readEdges(el);
+  }, [items, measuredDimensions, openIndex, readEdges]);
 
-  // One long-press controller for the whole gallery: the pressed tile records
-  // its index on pointer-down, and a fired long-press (the one LONG_PRESS_MS)
-  // opens the slide actions.
-  const pressIndexRef = useRef(0);
+  // One long-press controller for the whole gallery: a fired long-press (the
+  // one LONG_PRESS_MS) opens Arrange.
   const pressPointerTypeRef = useRef('');
   const { handlers, consumeClickSuppression } = useLongPress(() => {
-    if (onSlideActions !== undefined) onSlideActions(pressIndexRef.current);
+    if (canArrange) setArrangeOpen(true);
   });
-
-  const wantsGestures = onSlideActions !== undefined;
-  const slideGestures = wantsGestures
-    ? (index: number): TileGestures => ({
+  const slideGestures = canArrange
+    ? (): TileGestures => ({
         onPointerDown: (event) => {
-          pressIndexRef.current = index;
           pressPointerTypeRef.current = event.pointerType;
           handlers.onPointerDown(event);
         },
@@ -1315,12 +1121,10 @@ export function PostGallery({
         onPointerCancel: () => handlers.onPointerCancel(),
         onContextMenu: (event) => {
           event.preventDefault();
-          // Right-click keeps the slide-actions sheet reachable. Touch
-          // long-presses also emit contextmenu in some browsers; those already
-          // opened the sheet above, so only a real mouse opens it here.
-          if (onSlideActions !== undefined && pressPointerTypeRef.current !== 'touch') {
-            onSlideActions(index);
-          }
+          // Right-click opens Arrange on a laptop. Touch long-presses also emit
+          // contextmenu in some browsers; those already opened it above, so
+          // only a real mouse opens it here.
+          if (pressPointerTypeRef.current !== 'touch') setArrangeOpen(true);
         },
       })
     : undefined;
@@ -1331,43 +1135,12 @@ export function PostGallery({
       ? galleryFrame(frame.platform, frame.format, items, measuredDimensions)
       : null;
 
-  const manage = onAddAfter !== undefined ? { onAddAfter } : undefined;
+  // The opened picture's creator keys, wired to the page's own write paths.
+  const manage =
+    canArrange && tools !== undefined
+      ? { onReplace: tools.onReplace, ...(onRemove !== undefined ? { onRemove } : {}) }
+      : undefined;
 
-  // #26 reorder mode: the order on show as items (unknown ids dropped, new items
-  // appended so a concurrent refresh never loses a slide).
-  const draftItems: GalleryItem[] | null =
-    reorderIds === null
-      ? null
-      : [
-          ...reorderIds
-            .map((id) => items.find((item) => item.assetAttachmentId === id))
-            .filter((item): item is GalleryItem => item !== undefined),
-          ...items.filter((item) => !reorderIds.includes(item.assetAttachmentId)),
-        ];
-  // A drop (or an arrow key) saves the new order at once: one gallery_set. A
-  // refused save puts the saved order back (the tools row shows the error).
-  const saveOrder = (nextIds: string[]): void => {
-    if (tools === undefined) return;
-    const saved = items.map((item) => item.assetAttachmentId);
-    const versionIds = [
-      ...nextIds
-        .map((id) => items.find((item) => item.assetAttachmentId === id))
-        .filter((item): item is GalleryItem => item !== undefined),
-      ...items.filter((item) => !nextIds.includes(item.assetAttachmentId)),
-    ].map((item) => item.assetVersionId);
-    setReorderIds(nextIds);
-    void tools.onSaveOrder(versionIds).then((ok) => {
-      if (!ok) setReorderIds((current) => (current === null ? current : saved));
-    });
-  };
-  const moveBy = (id: string, delta: -1 | 1): void => {
-    if (reorderIds === null || saving) return;
-    const from = reorderIds.indexOf(id);
-    const to = from + delta;
-    if (from < 0 || to < 0 || to >= reorderIds.length) return;
-    focusAfterMove.current = id;
-    saveOrder(moveTo(reorderIds, from, to));
-  };
   const toolsRow =
     tools !== undefined && columns === 4
       ? galleryToolsRow({
@@ -1377,130 +1150,72 @@ export function PostGallery({
           versionNumber: tools.versionNumber,
           saving,
           error: tools.error,
-          // Add inserts after the slide on show (the old slide ⋯ "Add image
-          // after this"); an empty gallery or no insert path appends.
-          onAdd: () => {
-            if (onAddAfter !== undefined && items.length > 0) onAddAfter(shownIndex);
-            else tools.onAdd();
-          },
-          onReplace: () => tools.onReplace(shownIndex),
-          // Reorder enters the mode; pressed, it leaves (every drop is saved).
-          onReorder: () => {
-            if (reorderIds !== null) {
-              setReorderIds(null);
-              setDrag(null);
-              dragRef.current = null;
-              return;
-            }
+          onAdd: tools.onAdd,
+          onArrange: () => {
             setOpenIndex(null);
-            setReorderIds(items.map((item) => item.assetAttachmentId));
+            setArrangeOpen(true);
           },
           onVersions: tools.onVersions,
-          reordering: reorderIds !== null,
         })
       : null;
 
-  if (tools !== undefined && tools.canEdit && draftItems !== null) {
-    return reorderView({
-      items: draftItems,
-      cache,
-      presignEnabled,
-      ratio: postFrame?.ratio ?? 4 / 5,
-      drag,
-      saving,
-      error: tools.error,
-      onMove: moveBy,
-      onTilePointerDown: (id, event) => {
-        if (saving || (event.pointerType === 'mouse' && event.button !== 0)) return;
-        pressRef.current = {
-          id,
-          el: event.currentTarget,
-          pointerId: event.pointerId,
-          x: event.clientX,
-        };
-        holdHandlers.onPointerDown(event);
-      },
-      onTilePointerMove: (event) => {
-        const current = dragRef.current;
-        if (current === null) {
-          // Still holding: a move past the slop is a scroll and cancels the hold.
-          holdHandlers.onPointerMove(event);
-          if (pressRef.current !== null) pressRef.current.x = event.clientX;
-          return;
-        }
-        current.dx = event.clientX - current.startX;
-        setDrag({ id: current.id, dx: current.dx });
-      },
-      onTilePointerUp: () => {
-        holdHandlers.onPointerUp();
-        pressRef.current = null;
-        const current = dragRef.current;
-        dragRef.current = null;
-        setDrag(null);
-        if (current === null || reorderIds === null) return;
-        const from = reorderIds.indexOf(current.id);
-        if (from < 0) return;
-        const to = dropIndex(from, current.dx, current.step, reorderIds.length);
-        if (to !== from) saveOrder(moveTo(reorderIds, from, to));
-      },
-      onTilePointerCancel: () => {
-        holdHandlers.onPointerCancel();
-        pressRef.current = null;
-        dragRef.current = null;
-        setDrag(null);
-      },
-      stripRef,
-      tileRef: (id, el) => {
-        if (el === null) tileEls.current.delete(id);
-        else tileEls.current.set(id, el);
-      },
-      toolbar: toolsRow ?? undefined,
-    });
-  }
-
-  // When a tile is open the in-place viewer takes the ribbon's slot (the page
-  // continues below it); closing returns to the ribbon. The empty and upload
-  // states have no open index, so they always fall through to the ribbon branch.
-  return viewerReplacesRibbon(openIndex, items.length) && openIndex !== null ? (
-    <PostLightbox
-      items={items}
-      title={title}
-      index={openIndex}
-      presignEnabled={presignEnabled}
-      cache={cache}
-      deps={deps}
-      onIndexChange={setOpenIndex}
-      onClose={() => setOpenIndex(null)}
-      manage={manage}
-      saving={saving}
-    />
-  ) : (
+  // When a tile is open the in-place viewer takes the strip's slot (the page
+  // continues below it); closing returns to the strip. The empty and upload
+  // states have no open index, so they always fall through to the strip branch.
+  return (
     <>
-      {galleryView({
-        items,
-        cache,
-        presignEnabled,
-        onOpen: setOpenIndex,
-        columns,
-        aspect,
-        showIndex,
-        slideGestures,
-        consumeClickSuppression: wantsGestures ? consumeClickSuppression : undefined,
-        onAddSlide,
-        activeIndex,
-        scrollerRef,
-        onScroll: handleScroll,
-        onDotClick: scrollToSlide,
-        measuredDimensions,
-        onMeasure: columns === 4 ? handleMeasure : undefined,
-        frame: postFrame,
-        frameNote:
-          postFrame !== null && frame !== undefined ? frameKindNote(frame.platform, items) : null,
-        platformLabel: frame?.platformLabel ?? '',
-        onSeePreview,
-        // One toolbar row under the dots; no ⋮ on the picture.
-        toolbar: toolsRow ?? undefined,
-      })}
+      {viewerReplacesRibbon(openIndex, items.length) && openIndex !== null ? (
+        <PostLightbox
+          items={items}
+          title={title}
+          index={openIndex}
+          presignEnabled={presignEnabled}
+          cache={cache}
+          deps={deps}
+          onIndexChange={setOpenIndex}
+          onClose={() => setOpenIndex(null)}
+          manage={manage}
+          saving={saving}
+        />
+      ) : (
+        galleryView({
+          items,
+          cache,
+          presignEnabled,
+          onOpen: setOpenIndex,
+          columns,
+          aspect,
+          showIndex,
+          slideGestures,
+          consumeClickSuppression: canArrange ? consumeClickSuppression : undefined,
+          onAddSlide,
+          activeIndex,
+          scrollerRef,
+          onScroll: handleScroll,
+          arrows: columns === 4 ? { ...edges, onStep: stepStrip } : undefined,
+          measuredDimensions,
+          onMeasure: columns === 4 ? handleMeasure : undefined,
+          frame: postFrame,
+          frameNote:
+            postFrame !== null && frame !== undefined ? frameKindNote(frame.platform, items) : null,
+          platformLabel: frame?.platformLabel ?? '',
+          onSeePreview,
+          // One toolbar row under the strip; nothing sits on the picture.
+          toolbar: toolsRow ?? undefined,
+        })
+      )}
+      {canArrange && tools !== undefined ? (
+        <ArrangeSheet
+          open={arrangeOpen}
+          onClose={() => setArrangeOpen(false)}
+          items={items}
+          renderThumb={(item) => (
+            <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
+          )}
+          onSave={tools.onSaveOrder}
+          error={tools.error}
+        />
+      ) : null}
     </>
   );
 }

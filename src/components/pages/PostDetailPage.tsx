@@ -53,7 +53,12 @@ import { galleryFrame, PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView, firstHighlightCommentId } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
-import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
+import {
+  ADD_SOURCE_ACCEPT,
+  AddSourceSheet,
+  type AddSource,
+} from '@/components/pages/pcs/AddSourceSheet';
+import { AssetPicker } from '@/components/chat/AssetPicker';
 import {
   VersionHistorySheet,
   type VersionThumbs,
@@ -71,7 +76,6 @@ import { postActionErrorCopy, usePostDecisions } from '@/components/pages/pcs/us
 import {
   append,
   galleryWriteErrorCopy,
-  insertAfter,
   removeAt,
   replaceAt,
 } from '@/components/pages/pcs/gallery-transforms';
@@ -125,10 +129,7 @@ import type { Json } from '@srtdio/schemas';
 import { postSoftDelete } from '@srtdio/rpc';
 
 /** Where an upload run lands in the gallery (#26 adds Replace). */
-type AddTarget =
-  | { mode: 'append' }
-  | { mode: 'insertAfter'; index: number }
-  | { mode: 'replace'; index: number };
+type AddTarget = { mode: 'append' } | { mode: 'replace'; index: number };
 
 // The decision copy and confirms moved to pcs/use-post-decisions (one hook for
 // Post detail and the chat post sheet); re-exported for the page's callers.
@@ -468,8 +469,13 @@ export function PostDetailPage({
 
   // Gallery slide-action state: the open sheet's slide index, the per-run upload
   // target (append vs insert-after), and the version ids collected during a run.
-  const [slideIndex, setSlideIndex] = useState<number | null>(null);
+  // Add and Replace: the source sheet first (sourceTarget), then the upload
+  // sheet (addTarget, with the chosen kind's file filter) or the Assets picker
+  // (pickerTarget). One of the three is open at a time.
+  const [sourceTarget, setSourceTarget] = useState<AddTarget | null>(null);
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
+  const [addAccept, setAddAccept] = useState<string | undefined>(undefined);
+  const [pickerTarget, setPickerTarget] = useState<AddTarget | null>(null);
   // #26: the one inline line the gallery tools row shows after a failed write.
   const [galleryError, setGalleryError] = useState<string | null>(null);
   const uploadedVersionIds = useRef<string[]>([]);
@@ -1143,8 +1149,34 @@ export function PostDetailPage({
     });
   }
   function openAdd(target: AddTarget): void {
+    setSourceTarget(target);
+  }
+  // The source sheet's pick: a device file opens the upload sheet filtered to
+  // that kind; Assets opens the library picker. Either ends in one gallery write.
+  function pickSource(source: AddSource): void {
+    const target = sourceTarget;
+    setSourceTarget(null);
+    if (target === null) return;
+    if (source === 'assets') {
+      setPickerTarget(target);
+      return;
+    }
     uploadedVersionIds.current = [];
+    setAddAccept(ADD_SOURCE_ACCEPT[source]);
     setAddTarget(target);
+  }
+  // New files land last; Replace puts the first one in the picture's place.
+  // One commit for the whole change.
+  async function applyNewVersions(target: AddTarget, versionIds: string[]): Promise<void> {
+    if (versionIds.length === 0) return;
+    let ids = orderedIds;
+    if (target.mode === 'replace') {
+      const [first] = versionIds;
+      if (first !== undefined) ids = replaceAt(ids, target.index, first);
+    } else {
+      for (const versionId of versionIds) ids = append(ids, versionId);
+    }
+    await commitGallery(ids);
   }
 
   // The upload sheet posts each file to the asset-upload worker; capture the
@@ -1208,22 +1240,8 @@ export function PostDetailPage({
     uploadedVersionIds.current = [];
     const target = addTarget;
     setAddTarget(null);
-    if (versionIds.length === 0 || target === null) return;
-    let ids = orderedIds;
-    if (target.mode === 'replace') {
-      // #26 Replace: the first upload takes the slide's place, one save.
-      const [first] = versionIds;
-      if (first !== undefined) ids = replaceAt(ids, target.index, first);
-    } else if (target.mode === 'append') {
-      for (const versionId of versionIds) ids = append(ids, versionId);
-    } else {
-      let at = target.index;
-      for (const versionId of versionIds) {
-        ids = insertAfter(ids, at, versionId);
-        at += 1;
-      }
-    }
-    await commitGallery(ids);
+    if (target === null) return;
+    await applyNewVersions(target, versionIds);
   }
 
   // The post screen's top bar is ui/HeaderBar (Back "<" with the leading
@@ -1833,15 +1851,8 @@ export function PostDetailPage({
                     platformLabel: platformLabel(post.platform),
                   }}
                   onSeePreview={() => setPreviewOpen(true)}
-                  onSlideActions={
-                    canEditContent ? (index: number) => setSlideIndex(index) : undefined
-                  }
                   onAddSlide={canEditContent ? () => openAdd({ mode: 'append' }) : undefined}
-                  onAddAfter={
-                    canEditContent
-                      ? (index: number) => openAdd({ mode: 'insertAfter', index })
-                      : undefined
-                  }
+                  onRemove={canEditContent ? handleRemove : undefined}
                   onActiveIndexChange={setGalleryIndex}
                   saving={gallerySaving}
                   tools={{
@@ -2091,18 +2102,28 @@ export function PostDetailPage({
         presignEnabled={presignEnabled}
       />
 
-      <SlideActionsSheet
-        open={slideIndex !== null && canEditContent}
-        onClose={() => setSlideIndex(null)}
-        index={slideIndex ?? 0}
-        count={gallery.length}
-        onAddAfter={() => {
-          if (slideIndex !== null) openAdd({ mode: 'insertAfter', index: slideIndex });
+      <AddSourceSheet
+        open={sourceTarget !== null && canEditContent}
+        onClose={() => setSourceTarget(null)}
+        replaceIndex={
+          sourceTarget !== null && sourceTarget.mode === 'replace' ? sourceTarget.index : null
+        }
+        onPick={pickSource}
+      />
+
+      <AssetPicker
+        open={pickerTarget !== null && canEditContent}
+        onClose={() => setPickerTarget(null)}
+        onConfirm={(picks) => {
+          const target = pickerTarget;
+          setPickerTarget(null);
+          if (target !== null) {
+            void applyNewVersions(
+              target,
+              picks.map((pick) => pick.versionId),
+            );
+          }
         }}
-        onRemove={() => {
-          if (slideIndex !== null) handleRemove(slideIndex);
-        }}
-        saving={gallerySaving}
       />
 
       <AssetUploadSheet
@@ -2118,6 +2139,7 @@ export function PostDetailPage({
         onUploaded={() => void handleUploaded()}
         siblingLabels={rootLabels}
         defaultBaseName={post.title}
+        {...(addAccept !== undefined ? { accept: addAccept } : {})}
       />
 
       <VersionHistorySheet

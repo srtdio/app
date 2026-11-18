@@ -158,21 +158,22 @@ describe('galleryView', () => {
     expect(all.some((el) => className(el).includes('text-overlay-fg'))).toBe(false);
   });
 
-  it('defaults render the uncropped snap ribbon: native x scroller, snap-start tiles, no aspect crop', () => {
+  it('defaults render the strip: native x scroller, free slide (no snap), no aspect crop', () => {
     const items = [item(0), item(1)];
     const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
     const all = elements(tree);
 
-    // No grid container; a native overflow-x scroller with mandatory x snapping
-    // and centre cross-axis alignment.
+    // No grid container; a native overflow-x scroller that slides freely (no
+    // snap), shows no scroll bar, and centres its tiles on the cross axis.
     expect(all.some((el) => className(el).startsWith('grid '))).toBe(false);
-    const scroller = all.find((el) => className(el).includes('snap-x'))!;
-    expect(className(scroller)).toContain('snap-mandatory');
-    expect(className(scroller)).toContain('overflow-x-auto');
+    const scroller = all.find((el) => className(el).includes('overflow-x-auto'))!;
+    expect(className(scroller)).not.toContain('snap-');
+    expect(className(scroller)).toContain('[scrollbar-width:none]');
+    expect(className(scroller)).toContain('[&::-webkit-scrollbar]:hidden');
     expect(className(scroller)).toContain('items-center');
 
-    // One snapping box per image, hugging its image via a reserved style box:
-    // no full-width slides, no aspect crop classes, snap-align start. The tile
+    // One box per image, hugging its image via a reserved style box: no
+    // full-width slides, no aspect crop classes, no snap point. The tile
     // button fills its box absolutely, so the image never sizes the box.
     const boxes = tileBoxes(tree);
     expect(boxes.length).toBe(2);
@@ -180,7 +181,7 @@ describe('galleryView', () => {
       expect(className(box)).not.toContain('w-full');
       expect(className(box)).not.toContain('aspect-[4/5]');
       expect(className(box)).toContain('shrink-0');
-      expect(className(box)).toContain('snap-start');
+      expect(className(box)).not.toContain('snap-start');
       expect(className(box)).toContain('overflow-hidden');
       expect((box.props as { style?: unknown }).style).toEqual(ribbonTileStyle(800, 1000));
     }
@@ -231,7 +232,7 @@ describe('galleryView', () => {
     expect(all.some((el) => className(el).includes('border-dashed'))).toBe(false);
 
     // The scroller holds exactly the image tiles, with nothing trailing them.
-    const scroller = all.find((el) => className(el).includes('snap-x'))!;
+    const scroller = all.find((el) => className(el).includes('overflow-x-auto'))!;
     const inScroller = elements((scroller.props as { children?: ReactNode }).children);
     const labels = inScroller.map((el) => label(el)).filter((l) => l !== undefined);
     expect(labels).toEqual(['View image 1', 'View image 2']);
@@ -281,37 +282,15 @@ describe('galleryView', () => {
     expect(className(box)).not.toContain('aspect-[4/5]');
     expect(className(box)).toContain('overflow-hidden');
 
-    // The single-image index chip still reads 1/1, exactly as before.
+    // No index chip sits on the strip (18 Nov 2026).
     const chip = all
       .filter((el) => className(el).includes('text-overlay-fg'))
       .map((el) => (el.props as { children?: ReactNode }).children)
       .find((child): child is string => typeof child === 'string' && child.includes('/'));
-    expect(chip).toBe('1/1');
+    expect(chip).toBeUndefined();
   });
 
-  it('shows an n/N counter for the active slide (clamped into range)', () => {
-    const items = [item(0), item(1), item(2)];
-    const counterText = (activeIndex?: number): string | undefined => {
-      const tree = galleryView({
-        items,
-        cache,
-        presignEnabled: true,
-        onOpen: () => {},
-        ...(activeIndex !== undefined ? { activeIndex } : {}),
-      });
-      return elements(tree)
-        .filter((el) => className(el).includes('text-overlay-fg'))
-        .map((el) => (el.props as { children?: ReactNode }).children)
-        .find((child): child is string => typeof child === 'string' && child.includes('/'));
-    };
-    expect(counterText()).toBe('1/3');
-    expect(counterText(1)).toBe('2/3');
-    // A shrunken gallery never points past the end.
-    expect(counterText(9)).toBe('3/3');
-  });
-
-  it('renders one 44px dot per slide, marks the active one, and taps through', () => {
-    const onDotClick = vi.fn();
+  it('shows no n/N counter and no dots on the strip', () => {
     const items = [item(0), item(1), item(2)];
     const tree = galleryView({
       items,
@@ -319,28 +298,51 @@ describe('galleryView', () => {
       presignEnabled: true,
       onOpen: () => {},
       activeIndex: 1,
-      onDotClick,
     });
-    const dots = elements(tree).filter((el) => label(el)?.startsWith('Go to slide'));
-    expect(dots.map((el) => label(el))).toEqual([
-      'Go to slide 1',
-      'Go to slide 2',
-      'Go to slide 3',
-    ]);
-
-    // Every dot is a 44px touch target; only the active slide's dot is current.
-    for (const dot of dots) {
-      expect(className(dot)).toContain('min-h-11');
-      expect(className(dot)).toContain('min-w-11');
-    }
-    const current = dots.map((el) => (el.props as { 'aria-current'?: boolean })['aria-current']);
-    expect(current).toEqual([false, true, false]);
-
-    (dots[2]!.props as { onClick: () => void }).onClick();
-    expect(onDotClick).toHaveBeenCalledWith(2);
+    const all = elements(tree);
+    const counter = all
+      .filter((el) => className(el).includes('text-overlay-fg'))
+      .map((el) => (el.props as { children?: ReactNode }).children)
+      .find((child): child is string => typeof child === 'string' && child.includes('/'));
+    expect(counter).toBeUndefined();
+    expect(all.some((el) => label(el)?.startsWith('Go to slide'))).toBe(false);
   });
 
-  it('omits the dots for a single slide and wires the native scroll listener', () => {
+  it('laptop arrow keys show only where there is more, and slide the strip one step', () => {
+    const onStep = vi.fn();
+    const items = [item(0), item(1), item(2)];
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      arrows: { prev: false, next: true, onStep },
+    });
+    const all = elements(tree);
+    expect(all.some((el) => label(el) === 'Earlier pictures')).toBe(false);
+    const next = all.find((el) => label(el) === 'More pictures')!;
+    // Laptop only: hidden below md; a 44px round key on a floating surface.
+    expect(className(next)).toContain('hidden');
+    expect(className(next)).toContain('md:inline-flex');
+    expect(className(next)).toContain('rounded-full');
+    (next.props as { onClick: () => void }).onClick();
+    expect(onStep).toHaveBeenCalledWith(1);
+
+    const both = elements(
+      galleryView({
+        items,
+        cache,
+        presignEnabled: true,
+        onOpen: () => {},
+        arrows: { prev: true, next: true, onStep },
+      }),
+    );
+    const prev = both.find((el) => label(el) === 'Earlier pictures')!;
+    (prev.props as { onClick: () => void }).onClick();
+    expect(onStep).toHaveBeenLastCalledWith(-1);
+  });
+
+  it('a single picture gets no arrows; the native scroll listener is wired', () => {
     const onScroll = vi.fn();
     const tree = galleryView({
       items: [item(0)],
@@ -348,10 +350,12 @@ describe('galleryView', () => {
       presignEnabled: true,
       onOpen: () => {},
       onScroll,
+      arrows: { prev: true, next: true, onStep: () => {} },
     });
     const all = elements(tree);
-    expect(all.some((el) => label(el)?.startsWith('Go to slide'))).toBe(false);
-    const scroller = all.find((el) => className(el).includes('snap-x'))!;
+    expect(all.some((el) => label(el) === 'More pictures')).toBe(false);
+    expect(all.some((el) => label(el) === 'Earlier pictures')).toBe(false);
+    const scroller = all.find((el) => className(el).includes('overflow-x-auto'))!;
     expect((scroller.props as { onScroll?: unknown }).onScroll).toBe(onScroll);
   });
 });
@@ -631,7 +635,7 @@ describe('the post screen shows every picture whole', () => {
       expect(style.maxWidth).toBe('100%');
     }
     // The real bug: a text post, one 1080x1080 image. The slot is the scroller's
-    // full-width snap item, so the tile's 100% is never a cyclic percentage.
+    // full-width item, so the tile's 100% is never a cyclic percentage.
     const items = [square(0)];
     const tree = galleryView({
       items,
@@ -645,7 +649,6 @@ describe('the post screen shows every picture whole', () => {
     )!;
     expect(className(slot)).toContain('w-full');
     expect(className(slot)).toContain('shrink-0');
-    expect(className(slot)).toContain('snap-start');
     expect(tileBoxes((slot.props as { children?: ReactNode }).children)).toHaveLength(1);
     expect(tileStyle(tree, 0)).toEqual(soloTileStyle(1080, 1080));
     // Multi-image tiles cap at the scroller column too.

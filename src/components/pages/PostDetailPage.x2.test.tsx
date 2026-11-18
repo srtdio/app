@@ -23,7 +23,8 @@ const PAGE = read('./PostDetailPage.tsx');
 // PR B: the decision flow lives in the one hook Post detail and the chat sheet share.
 const DECISIONS = read('./pcs/use-post-decisions.tsx');
 const DETAILS = read('./pcs/PostDetailsSheet.tsx');
-const SLIDE_ACTIONS = read('./pcs/SlideActionsSheet.tsx');
+const ARRANGE = read('./pcs/ArrangeSheet.tsx');
+const LIGHTBOX = read('./pcs/PostLightbox.tsx');
 const VERSION_HISTORY = read('./pcs/VersionHistorySheet.tsx');
 
 function walk(node: ReactNode, out: ReactElement[] = []): ReactElement[] {
@@ -106,16 +107,19 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
   });
 });
 
-describe('6. gallery hints and slide actions', () => {
-  it('the static hint line is gone and the slide sheet has no per-tap reorder (#26: Reorder mode only)', () => {
+describe('6. gallery hints and picture actions', () => {
+  it('the static hint line is gone and nothing reorders per tap (Arrange only, one save)', () => {
     expect(PAGE).not.toContain('Long-press to place a pin.');
     expect(PAGE).not.toContain('handleMakeFirst');
     expect(PAGE).not.toContain('handleMoveLeft');
     for (const label of ['Make first', 'Make last', 'Move left', 'Move right']) {
-      expect(SLIDE_ACTIONS).not.toContain(`label="${label}"`);
+      expect(ARRANGE).not.toContain(`label="${label}"`);
+      expect(LIGHTBOX).not.toContain(`label="${label}"`);
     }
-    expect(SLIDE_ACTIONS).toContain('label="Add image after this"');
-    expect(SLIDE_ACTIONS).toContain('label="Remove image"');
+    // 18 Nov 2026: the slide actions sheet is gone. Remove sits on the opened
+    // picture and in Arrange; new files land last.
+    expect(PAGE).not.toContain('Add image after this');
+    expect(LIGHTBOX).toContain('label="Remove image"');
   });
 });
 

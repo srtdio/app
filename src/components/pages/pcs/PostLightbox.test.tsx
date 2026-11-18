@@ -126,7 +126,8 @@ const GESTURES: StageGestures = {
 };
 
 const MANAGE = {
-  onAddAfter: () => {},
+  onReplace: () => {},
+  onRemove: () => {},
 };
 
 function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
@@ -318,32 +319,39 @@ describe('lightboxView', () => {
     ).toBe(true);
   });
 
-  it('renders the agency bottom bar: download/add, no Delete image, no per-tap reorder (#26)', () => {
+  it('renders the creator bottom bar: download, Replace, Remove image; no add, no per-tap reorder', () => {
     const manage = {
-      onAddAfter: vi.fn(),
+      onReplace: vi.fn(),
+      onRemove: vi.fn(),
     };
     const tree = lightboxView(props({ index: 1, manage }));
-    // The add control fires its prewired handler, and every icon button is a
-    // 44px target.
-    for (const [label, fn] of [['Add image', manage.onAddAfter]] as const) {
+    // Each key fires its prewired handler, and every icon button is a 44px target.
+    for (const [label, fn] of [
+      ['Replace', manage.onReplace],
+      ['Remove image', manage.onRemove],
+    ] as const) {
       const button = byLabel(tree, label)!;
       expect(button).toBeDefined();
       expect(className(button)).toContain('h-11');
       expect(className(button)).toContain('w-11');
+      expect(className(button)).toContain('text-overlay-fg');
       (button.props as { onClick: () => void }).onClick();
       expect(fn).toHaveBeenCalledOnce();
     }
-    // Download lives in the bottom bar next to add. The duplicate Delete image
-    // is cut: Remove image (post ⋯ menu, slide actions) is the one way, behind
-    // the page's Undo strip.
+    // Download sits beside them. New files land last from the tools row's Add,
+    // so the opened picture has no add key; there is one Remove (no "Delete image").
     expect(byLabel(tree, 'Download')).toBeDefined();
+    expect(byLabel(tree, 'Add image')).toBeUndefined();
     expect(byLabel(tree, 'Delete image')).toBeUndefined();
-    // Add keeps the overlay ink it always rendered with (text-accent lost to it
-    // by CSS order; cn() now merges, so it is gone).
-    expect(className(byLabel(tree, 'Add image')!)).toContain('text-overlay-fg');
-    expect(className(byLabel(tree, 'Add image')!)).not.toContain('text-accent');
-    // #26: no per-tap reorder (each tap saved a version); Reorder mode in the
-    // gallery is the one way to reorder.
+    // Without a remove path the Remove key is not drawn.
+    const replaceOnly = lightboxView(props({ index: 1, manage: { onReplace: vi.fn() } }));
+    expect(byLabel(replaceOnly, 'Replace')).toBeDefined();
+    expect(byLabel(replaceOnly, 'Remove image')).toBeUndefined();
+    // A write in flight holds both keys.
+    const busy = lightboxView(props({ index: 1, manage, saving: true }));
+    expect((byLabel(busy, 'Replace')!.props as { disabled?: boolean }).disabled).toBe(true);
+    expect((byLabel(busy, 'Remove image')!.props as { disabled?: boolean }).disabled).toBe(true);
+    // No per-tap reorder (each tap saved a version); Arrange is the one way.
     for (const label of ['Make first', 'Move left', 'Move right', 'Make last']) {
       expect(byLabel(tree, label)).toBeUndefined();
     }
@@ -353,7 +361,8 @@ describe('lightboxView', () => {
     const clientTree = lightboxView(props({ index: 1 }));
     expect(byLabel(clientTree, 'Download')).toBeDefined();
     // No edit actions render without a manage bar.
-    expect(byLabel(clientTree, 'Add image')).toBeUndefined();
+    expect(byLabel(clientTree, 'Replace')).toBeUndefined();
+    expect(byLabel(clientTree, 'Remove image')).toBeUndefined();
     expect(byLabel(clientTree, 'Delete image')).toBeUndefined();
     // Download sits inside the transparent bottom bar, not the top bar.
     const bottomBar = elements(clientTree).find(
@@ -760,18 +769,13 @@ describe('W2 gallery and download', () => {
     expect(strings(idle)).not.toContain('Saving…');
   });
 
-  it('no remove confirm copy is left; the slide actions sheet removes at once (Undo strip)', () => {
+  it('no remove confirm copy is left; Remove goes straight to the page (Undo strip)', () => {
     const src = readFileSync(fileURLToPath(new URL('./PostLightbox.tsx', import.meta.url)), 'utf8');
     expect(src).not.toContain('removeImageConfirmCopy');
     expect(src).not.toContain('Delete image');
-    const sheet = readFileSync(
-      fileURLToPath(new URL('./SlideActionsSheet.tsx', import.meta.url)),
-      'utf8',
-    );
     // PR B delete rule: no confirm; the page's Undo strip is the safety net.
-    expect(sheet).not.toContain('removeImageConfirmCopy');
-    expect(sheet).not.toContain('setConfirming');
-    expect(sheet).toContain('onClick={() => run(onRemove)}');
+    expect(src).not.toContain('setConfirming');
+    expect(src).toContain('onClick={manage.onRemove}');
   });
 
   it('download toasts Downloaded on success and the retry copy on failure', () => {
