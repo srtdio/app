@@ -113,9 +113,10 @@ export interface RowsLayout {
   gapPx: number;
   /**
    * Each row's real height, in order, where it is known (a row on screen;
-   * an Activity row with a 2-line preview is 20 taller). Unknown: rowPx.
+   * an Activity row with a 2-line preview is 20 taller). Unknown (a hole or
+   * past the end): rowPx.
    */
-  rowHeights?: readonly number[] | undefined;
+  rowHeights?: readonly (number | undefined)[] | undefined;
 }
 
 /**

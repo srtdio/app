@@ -183,7 +183,13 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   // event and as the first half of each poll tick. One activity_badge_read per
   // refresh, shared with the Activity page's Mentions count (readActivityBadge).
   // A stale tenant's count is dropped.
+  // Only the newest count read lands: refreshes overlap (the poll tick, a push
+  // nudge, a mark read's change event) and can answer out of order, so an
+  // older answer landing last would flick the badge back (7, 4, 7).
+  const countSeqRef = useRef(0);
   const refreshCount = (ws: string, uid: string): void => {
+    countSeqRef.current += 1;
+    const seq = countSeqRef.current;
     void (async () => {
       const res = await readActivityBadge(supabase, {
         userId: uid,
@@ -192,6 +198,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
         refresh: true,
       });
       if (!stillActive(ws, uid)) return;
+      if (seq !== countSeqRef.current) return;
       if (res.ok) setOwned({ workspaceId: ws, userId: uid, count: res.data.unread });
       else logger.warn('inbox store: count refresh failed', { error: res.error.message });
     })();
