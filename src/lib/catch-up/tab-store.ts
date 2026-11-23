@@ -261,6 +261,8 @@ let active: Active | null = null;
 /** Keys read ok and unchanged since (a tab open joins these, never reads). */
 const current = new Set<string>();
 const running = new Set<string>();
+/** Keys an inbox change hit while their read ran: read again once it lands. */
+const again = new Set<string>();
 const listeners = new Set<() => void>();
 const EMPTY: readonly ActivityItem[] = [];
 
@@ -282,28 +284,40 @@ function heldSnapshot(): readonly ActivityItem[] {
 }
 
 function read(target: Active): void {
-  if (running.has(target.key)) return;
+  if (running.has(target.key)) {
+    again.add(target.key);
+    return;
+  }
   running.add(target.key);
+  again.delete(target.key);
   // Always a promise of a result (a stubbed reader that answers nothing reads as a failure).
   const load = async (): Promise<LoadResult> =>
     ((await fetchActivityEntries(supabase, target.workspaceId, {
       state: 'unread',
       pageSize: CATCH_UP_READ_SIZE,
     })) as LoadResult | undefined) ?? { ok: false, error: 'no result' };
+  const settle = (): void => {
+    running.delete(target.key);
+    // A change came in while this read ran: its answer may be old, read again.
+    if (again.has(target.key) && active?.key === target.key && listeners.size > 0) {
+      current.delete(target.key);
+      read(target);
+    }
+  };
   void sharedRead(target.key, load, { isOk: (res) => res.ok }).then(
     (res) => {
-      running.delete(target.key);
       if (res.ok) {
         current.add(target.key);
         mark('catch-up:tab-read');
       } else {
         logger.warn('catch-up: tab read failed', { error: res.error });
       }
+      settle();
       emit();
     },
     (err: unknown) => {
-      running.delete(target.key);
       logger.warn('catch-up: tab read failed', { error: String(err) });
+      settle();
     },
   );
 }
@@ -441,6 +455,7 @@ export function resetTabCatchUpForTest(): void {
   active = null;
   current.clear();
   running.clear();
+  again.clear();
   emit();
 }
 

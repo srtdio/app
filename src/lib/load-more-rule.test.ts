@@ -145,3 +145,30 @@ describe('loadMoreRule: Bank and the Plan flat list (10 Nov 2026)', () => {
     });
   });
 });
+
+describe('activityLoadMore: a row cut off at the depth keeps its measured height', () => {
+  // 22 Nov 2026: read by position, the row past the depth fell back to the
+  // 72 guess, fit, showed, measured 92, hid, and the last row blinked forever.
+  const decide = (rowHeights: (number | undefined)[]) =>
+    activityLoadMore({
+      layout: { sections: [30], columns: 1, rowPx: 72, headingPx: 32, gapPx: 24, rowHeights },
+      listTop: 120,
+      viewportH: 664,
+      taps: 0,
+      serverMore: false,
+    });
+
+  it('the hidden row measured once stays hidden (no on and off)', () => {
+    const tall = 92;
+    // Only the 8 shown rows known: the 9th guesses 72 and fits.
+    expect(decide(Array<number>(8).fill(tall)).shown).toBe(9);
+    // The 9th measured once (kept by id while hidden): 8, and it stays 8.
+    const kept = Array<number>(9).fill(tall);
+    expect(decide(kept).shown).toBe(8);
+    expect(decide(kept).shown).toBe(8);
+  });
+
+  it('a hole (a row never measured) reads as the guess', () => {
+    expect(decide([92, undefined, 92]).shown).toBeGreaterThan(0);
+  });
+});

@@ -364,9 +364,14 @@ export function NotificationsPage() {
   // The mount and the shell poll's event (`join`) join the bell press's or the
   // tick's read while fresh; every other load (a write) refreshes, and the
   // change event that write dispatches joins that same read.
+  // Only the newest Mentions read lands (reads overlap and can answer out of
+  // order; an older answer landing last would flick the count back).
+  const mentionSeqRef = useRef(0);
   const loadMentionCount = useCallback(
     async (join = false) => {
       if (workspaceId === null || userId === null) return;
+      mentionSeqRef.current += 1;
+      const seq = mentionSeqRef.current;
       const key = mentionCountKey(userId, workspaceId);
       if (!join) invalidateActivityReads(key);
       const res = await sharedMentionCount(key, async () => {
@@ -378,7 +383,7 @@ export function NotificationsPage() {
         });
         return badge.ok ? { ok: true as const, data: badge.data.mentions } : badge;
       });
-      if (res.ok) setMentionCount(res.data);
+      if (res.ok && seq === mentionSeqRef.current) setMentionCount(res.data);
     },
     [workspaceId, userId],
   );
@@ -549,9 +554,26 @@ export function NotificationsPage() {
   // one viewport; a chip short of it reads entry pages silently (one read per
   // landed page, so a failed read stops and the button comes back as Retry).
   const [listTop, setListTop] = useState(ACTIVITY_LIST_TOP_GUESS);
-  // The shown rows' real heights (a 2-line preview row is 20 taller), read
-  // when the list resizes (a row's preview cut lands after its first paint).
-  const [rowHeights, setRowHeights] = useState<readonly number[]>([]);
+  // The rows' real heights (a 2-line preview row is 20 taller), read when the
+  // list resizes (a row's preview cut lands after its first paint), kept by
+  // row id. A row cut off at the depth keeps its measured height: read by
+  // position, the hidden row fell back to the 60/72 guess, fit again, showed,
+  // measured taller, hid, and the list's last row and Load more blinked on
+  // and off without end (22 Nov 2026).
+  const heightByIdRef = useRef(new Map<string, number>());
+  const [heightsSeen, setHeightsSeen] = useState(0);
+  const rowHeights = useMemo(
+    () =>
+      buckets.flatMap((bucket) =>
+        bucket.groups.map((group) => {
+          const id = group[0]?.id;
+          return id !== undefined ? heightByIdRef.current.get(id) : undefined;
+        }),
+      ),
+    // heightsSeen: the map changed (a ref, so it is named here).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buckets, heightsSeen],
+  );
   const [moreTaps, setMoreTaps] = useState(0);
   const [tapsFor, setTapsFor] = useState(state);
   if (tapsFor !== state) {
@@ -607,12 +629,17 @@ export function NotificationsPage() {
     if (top > 0) setListTop((prev) => (Math.abs(top - prev) > 1 ? top : prev));
     if (typeof ResizeObserver === 'undefined') return undefined;
     const read = (): void => {
-      const next = Array.from(el.querySelectorAll<HTMLElement>('[data-list-card]')).map(
-        (row) => row.offsetHeight,
-      );
-      setRowHeights((prev) =>
-        prev.length === next.length && prev.every((h, i) => h === next[i]) ? prev : next,
-      );
+      const known = heightByIdRef.current;
+      let changed = false;
+      for (const row of el.querySelectorAll<HTMLElement>('[data-list-card][data-activity-id]')) {
+        const id = row.dataset.activityId;
+        if (id === undefined || row.offsetHeight <= 0) continue;
+        if (known.get(id) !== row.offsetHeight) {
+          known.set(id, row.offsetHeight);
+          changed = true;
+        }
+      }
+      if (changed) setHeightsSeen((n) => n + 1);
     };
     const observer = new ResizeObserver(read);
     observer.observe(el);
@@ -731,7 +758,6 @@ export function NotificationsPage() {
                     const id = group[0]?.id ?? bucket.key;
                     const card = (
                       <ActivityCard
-                        key={id}
                         group={group}
                         nowMs={nowMs}
                         timeZone={tz}
@@ -743,17 +769,19 @@ export function NotificationsPage() {
                         entering={entering.has(id)}
                       />
                     );
-                    // The newest row is what the induction points at (its own box, not the list).
-                    return bucketIndex === 0 && groupIndex === 0 ? (
+                    // Every row sits in the same box, so a new row arriving on
+                    // top never remounts the one it pushes down (a remount
+                    // re-reads its picture and flashes the row). The newest
+                    // row's box is what the induction points at.
+                    const first = bucketIndex === 0 && groupIndex === 0;
+                    return (
                       <div
                         key={id}
-                        data-induction={INDUCTION_KEYS.activityList}
+                        {...(first ? { 'data-induction': INDUCTION_KEYS.activityList } : {})}
                         className="min-w-0"
                       >
                         {card}
                       </div>
-                    ) : (
-                      card
                     );
                   })}
                 </div>
